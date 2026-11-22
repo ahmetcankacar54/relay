@@ -1,7 +1,7 @@
 import type { Account, DesktopState, Diagnostics, RelaySettings } from "../../shared/types";
 import { USAGE_CLI_VERSION, readsUsage } from "../../shared/cli-version";
+import type { T } from "../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /** What Relay knows of the Claude Code CLI; "unknown" until the first snapshot. */
 export type CliState = "unknown" | "ok" | "missing" | "unreadable" | "outdated";
@@ -22,14 +22,11 @@ export const cliBlocked = (state: CliState) =>
 export function cliDetail(state: CliState, version: string | undefined, t: T) {
   switch (state) {
     case "missing":
-      return t("Bulunamadı", "Not found");
+      return t("common.notFound");
     case "unreadable":
-      return t("Sürümü okunamadı", "Cannot read its version");
+      return t("onboarding.cannotReadItsVersion");
     case "outdated":
-      return t(
-        `${version} · ${USAGE_CLI_VERSION} veya üstü gerekir`,
-        `${version} · needs ${USAGE_CLI_VERSION} or later`,
-      );
+      return t("onboarding.needsOrLater", { version, USAGE_CLI_VERSION });
     default:
       return version ?? "";
   }
@@ -119,41 +116,23 @@ export function desktopBlock(state: {
 export function blockReason(block: Block | undefined, t: T) {
   switch (block) {
     case "no-desktop":
-      return t(
-        "Claude uygulaması bulunamadı; önce onu kur.",
-        "Relay cannot find the Claude app. Install it first.",
-      );
+      return t("onboarding.relayCannotFindTheClaudeApp");
     case "recovery":
-      return t(
-        "Önce Claude uygulaması yedeğini geri yükle.",
-        "Restore the Claude app backup first.",
-      );
+      return t("onboarding.restoreTheClaudeAppBackupFirst");
     case "pending":
-      return t(
-        "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
-        "Finish or cancel the current Claude app sign-in first.",
-      );
+      return t("onboarding.finishOrCancelTheCurrentClaude");
     case "busy":
-      return t(
-        "Claude uygulamasında bir işlem sürüyor.",
-        "A Claude app action is in progress.",
-      );
+      return t("onboarding.aClaudeAppActionIsIn");
     case "limit":
-      return t("En fazla 50 hesap eklenebilir.", "You can add up to 50 accounts.");
+      return t("onboarding.youCanAddUpTo50");
     case "all-linked":
-      return t(
-        "Her profilin Claude uygulaması girişi kayıtlı.",
-        "Every profile already has a Claude app sign-in.",
-      );
+      return t("onboarding.everyProfileAlreadyHasAClaude");
   }
 }
 
 /** The Code-tab step, where a workspace folder is needed and none exists yet. */
 export const codeTabStep = (t: T) =>
-  t(
-    "Claude uygulamasında sol menüden Code’u bir kez aç.",
-    "In the Claude app, open Code once from the sidebar.",
-  );
+  t("onboarding.inTheClaudeAppOpenCode");
 
 /**
  * Overview cards that need connected accounts (a saved Claude app sign-in): Today plans one,

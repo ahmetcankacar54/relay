@@ -66,53 +66,52 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
   const who = active
     ? active.name
     : state.currentAccountUuid
-      ? t(`kayıtlı olmayan bir hesap (${state.currentAccountUuid.slice(0, 8)})`, `an unsaved account (${state.currentAccountUuid.slice(0, 8)})`)
+      ? t("status.anUnsavedAccount", { slice: state.currentAccountUuid.slice(0, 8) })
       : undefined;
   const desktopLine = !state.available
-    ? t("kurulu değil", "not installed")
+    ? t("status.notInstalled")
     : [
-        state.running ? paint(ctx.color, "green", t("açık", "running")) : t("kapalı", "not running"),
-        who ? t(`giriş yapılmış: ${who}`, `signed in as ${who}`) : t("giriş yapılmamış", "not signed in"),
+        state.running ? paint(ctx.color, "green", t("status.running")) : t("status.notRunning"),
+        who ? t("status.signedInAs", { who }) : t("status.notSignedIn"),
       ].join(" · ");
-  const lines = [`${t("Claude uygulaması", "Claude app")}: ${desktopLine}`];
+  const lines = [`${t("common.claudeApp")}: ${desktopLine}`];
   if (pendingSignIn)
     lines.push(
-      paint(ctx.color, "yellow", t(`Yarım kalan giriş: ${pendingSignIn.name}`, `Pending sign-in: ${pendingSignIn.name}`)) +
-        t(" → bitirmek için relay add --resume, iptal için relay add --cancel", " → finish with relay add --resume, cancel with relay add --cancel"),
+      paint(ctx.color, "yellow", t("status.pendingSignIn", { pendingSignInName: pendingSignIn.name })) +
+        t("status.finishWithRelayAddResumeCancel"),
     );
   if (state.recoveryRequired)
-    lines.push(paint(ctx.color, "red", t("Yarıda kalan bir geçiş var → relay recover", "A switch was interrupted → relay recover")));
+    lines.push(paint(ctx.color, "red", t("status.aSwitchWasInterruptedRelayRecover")));
   lines.push(
     `Relay.app: ${
       appRunning
-        ? t(`açık${ctx.appVersion ? ` (${ctx.appVersion})` : ""}`, `running${ctx.appVersion ? ` (${ctx.appVersion})` : ""}`)
+        ? ctx.appVersion
+          ? t("status.running2", { version: ctx.appVersion })
+          : t("status.running")
         : ctx.appVersion
-          ? t(`kurulu (${ctx.appVersion}), kapalı`, `installed (${ctx.appVersion}), not running`)
-          : t("kurulu değil", "not installed")
+          ? t("status.installedNotRunning", { ctxAppVersion: ctx.appVersion })
+          : t("status.notInstalled")
     }`,
   );
   if (holder)
     lines.push(
-      t(
-        `Kilit: ${lockHolderText(holder, t)} (${seconds(holder.startedAt, io.now())} sn)`,
-        `Lock: ${lockHolderText(holder, t)} (${seconds(holder.startedAt, io.now())} s)`,
-      ),
+      t("status.lockS", { lockHolderText: lockHolderText(holder, t), seconds: seconds(holder.startedAt, io.now()) }),
     );
   if (ctx.vault.kind === "legacy")
-    lines.push(t("Kasa: eski biçimde → Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç", "Vault: old format → update Relay.app to 0.12 or later and open it once"));
+    lines.push(t("status.vaultOldFormatUpdateRelayApp"));
   if (ctx.vault.kind === "newer")
-    lines.push(t("Kasa: daha yeni bir Relay yazmış → relay’i güncelle", "Vault: written by a newer Relay → update relay"));
-  lines.push(t(`Code geçmişi: ${historyModeText(historyMode, t)}`, `Code history: ${historyModeText(historyMode, t)}`));
+    lines.push(t("status.vaultWrittenByANewerRelay"));
+  lines.push(t("status.codeHistory", { historyModeText: historyModeText(historyMode, t) }));
   // A worker's result is shown once, after it ends; while it runs, every time.
   if (last && !last.shown) {
     const what = `relay ${last.argv.join(" ")}`;
     if (last.status === "pending" || last.status === "running")
-      lines.push(t(`Ayrı süreçte sürüyor: ${what}`, `Running in a separate process: ${what}`));
+      lines.push(t("status.runningInASeparateProcess", { what }));
     else {
       lines.push(
         last.status === "done"
-          ? paint(ctx.color, "green", t(`${what}: tamamlandı`, `${what}: done`))
-          : paint(ctx.color, "red", t(`${what}: başarısız — ${last.error ?? ""}`, `${what}: failed — ${last.error ?? ""}`)),
+          ? paint(ctx.color, "green", t("status.done", { what }))
+          : paint(ctx.color, "red", t("status.failed", { what, p1: last.error ?? "" })),
       );
       try {
         writeWorkerRecord(ctx.paths.cliOperations, { ...last, shown: true });

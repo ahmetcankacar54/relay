@@ -7,7 +7,7 @@ import { redact } from "../../electron/core/redact";
 import type { CliContext } from "./context";
 import type { CliDeps } from "./deps";
 import { probeWritable } from "./guards";
-import type { Lang } from "./i18n";
+import type { Locale } from "../../shared/i18n/locales";
 import { CliError, EXIT, type CliIO } from "./io";
 
 /** A Claude-quitting command handed to a detached worker, and what became of it. */
@@ -15,7 +15,7 @@ export interface WorkerRecord {
   id: string;
   /** The command's arguments, without --yes and --lang. */
   argv: string[];
-  lang: Lang;
+  lang: Locale;
   createdAt: string;
   status: "pending" | "running" | "done" | "failed";
   error?: string;
@@ -98,7 +98,7 @@ export async function insideDesktop(ctx: CliContext): Promise<boolean> {
 
 /** The line the prompt adds when this terminal lives inside Claude Desktop. */
 export const sessionEndsLine = (ctx: CliContext) =>
-  ctx.t("Bu oturum da kapanacak.", "This session will end too.");
+  ctx.t("insideDesktop.thisSessionWillEndToo");
 
 /** The arguments a worker re-runs: the user's, without --yes and --lang. */
 function workerArgv(argv: string[]): string[] {
@@ -124,10 +124,7 @@ export function detach(ctx: CliContext, argv: string[]): number {
   const { t } = ctx;
   if (!probeWritable(ctx.paths.cliOperations))
     throw new CliError(
-      t(
-        "Bu oturum korumalı alanda (sandbox) çalışıyor; komutu normal bir terminalden çalıştır.",
-        "This session runs in a sandbox; run the command from a normal terminal.",
-      ),
+      t("insideDesktop.thisSessionRunsInASandbox"),
       EXIT.environment,
     );
   const record: WorkerRecord = {
@@ -140,10 +137,7 @@ export function detach(ctx: CliContext, argv: string[]): number {
   writeWorkerRecord(ctx.paths.cliOperations, record);
   startWorker(ctx.deps, ctx.io, record.id);
   ctx.io.stdout(
-    t(
-      "Claude uygulaması kapanınca işlem ayrı bir süreçte sürecek. Claude yeniden açılınca sonucunu relay status gösterir.",
-      "The operation continues in a separate process when the Claude app quits. Once Claude reopens, relay status shows how it went.",
-    ),
+    t("insideDesktop.theOperationContinuesInASeparate"),
   );
   return EXIT.ok;
 }

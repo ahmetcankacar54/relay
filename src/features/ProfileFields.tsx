@@ -6,6 +6,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { historyCopy } from "../pages/accounts/historyCopy";
 import { groupName } from "@/lib/profile-suggestion";
+import type { T } from "../../shared/i18n/translate";
 
 export interface ProfileValue {
   name: string;
@@ -60,18 +61,18 @@ export function ProfileFields({
   return (
     <div className="grid gap-4">
       <div className="grid gap-1.5">
-        <Label htmlFor={`${id}-name`}>{t("Hesap adı", "Account name")}</Label>
+        <Label htmlFor={`${id}-name`}>{t("profileFields.accountName")}</Label>
         <Input
           id={`${id}-name`}
           required
           maxLength={64}
-          placeholder={t("Örn. Kişisel Max", "e.g. Personal Max")}
+          placeholder={t("profileFields.eGPersonalMax")}
           value={value.name}
           onChange={(e) => onChange({ ...value, name: e.target.value })}
         />
       </div>
       <div className="grid gap-1.5">
-        <Label id={`${id}-kind`}>{t("Tür", "Type")}</Label>
+        <Label id={`${id}-kind`}>{t("profileFields.type")}</Label>
         <ToggleGroup
           type="single"
           variant="outline"
@@ -81,17 +82,17 @@ export function ProfileFields({
           className="w-full"
         >
           <ToggleGroupItem value="personal" className="flex-1">
-            {t("Kişisel", "Personal")}
+            {t("common.personal")}
           </ToggleGroupItem>
           <ToggleGroupItem value="work" className="flex-1">
-            {t("Şirket", "Work")}
+            {t("common.work")}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
       {value.kind === "work" && history.groupPlaceholder && (
         <div className="grid gap-1.5">
           <Label htmlFor={`${id}-group`}>
-            {t("Paylaşım grubu · isteğe bağlı", "Sharing group · optional")}
+            {t("profileFields.sharingGroupOptional")}
           </Label>
           <Input
             id={`${id}-group`}
@@ -117,5 +118,5 @@ export function ProfileFields({
 export const groupsShown = (
   transfer: Parameters<typeof historyCopy>[0],
   kind: ProfileValue["kind"],
-  t: (tr: string, en: string) => string,
+  t: T,
 ) => !!historyCopy(transfer, kind, t).groupPlaceholder;

@@ -40,8 +40,8 @@ export function ExtensionConnection({
   return (
     <ConnectionRow
       icon={<AppWindow />}
-      title={t("Tarayıcı eklentisi", "Browser extension")}
-      purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
+      title={t("extensionConnection.browserExtension")}
+      purpose={t("extensionConnection.switchesToThisAccountToo")}
       optional
       tone={guide.tone}
       status={guide.label}
@@ -53,8 +53,8 @@ export function ExtensionConnection({
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label={t("Eklentiyi yeniden kontrol et", "Check the extension again")}
-            title={t("Eklentiyi yeniden kontrol et", "Check the extension again")}
+            aria-label={t("extensionConnection.checkTheExtensionAgain")}
+            title={t("extensionConnection.checkTheExtensionAgain")}
             disabled={checking}
             onClick={() => void check()}
           >
@@ -67,11 +67,11 @@ export function ExtensionConnection({
           <Button
             size="sm"
             disabled={checking || !accountUuids(a).length}
-            title={accountUuids(a).length ? undefined : t("Önce Claude uygulaması girişini kaydet.", "Save the Claude app sign-in first.")}
+            title={accountUuids(a).length ? undefined : t("extensionConnection.saveTheClaudeAppSignIn")}
             onClick={() => void link(a.id)}
           >
             {checking ? <LoaderCircle className="animate-spin" /> : <Link2 />}
-            {t("Bu hesap olarak bağla", "Link as this account")}
+            {t("extensionConnection.linkAsThisAccount")}
           </Button>
         ) : guide.action === "check" ? (
           <Button
@@ -81,11 +81,11 @@ export function ExtensionConnection({
             onClick={() => void check()}
           >
             {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
-            {t("Kontrol et", "Check")}
+            {t("common.check")}
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("gecis")}>{t("Geçiş", "Switching")}</a>
+            <a href={routeHash("gecis")}>{t("common.switching")}</a>
           </Button>
         ) : undefined
       }

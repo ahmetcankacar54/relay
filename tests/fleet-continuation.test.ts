@@ -20,6 +20,7 @@ import {
   type DesktopState,
 } from "../shared/types";
 import { SOURCE_FRESH_MS, sourceExhausted } from "../shared/usage";
+import "./i18n";
 
 const NOW = Date.parse("2026-10-13T20:00:00.000Z");
 function account(name: string, plan: "max5" | "pro" = "max5"): Account {

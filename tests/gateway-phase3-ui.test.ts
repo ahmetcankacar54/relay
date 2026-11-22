@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { classShareLine, requestDetail, sessionCacheLine } from "../src/lib/proxy-ui";
+import { testT } from "./i18n";
 
-const tr = (a: string) => a;
-const en = (_a: string, b: string) => b;
+const tr = testT("tr");
+const en = testT("en");
 const MINUTE = 60_000;
 
 test("a session's cache reads as warm with its minutes left, or cold with what coming back writes", () => {

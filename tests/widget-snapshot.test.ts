@@ -18,6 +18,7 @@ import {
 } from "../shared/widget-snapshot";
 import { WIDGET_RELOAD_MS, WidgetFile } from "../electron/core/widget-file";
 import { loadWidgetCenter } from "../electron/core/widget-center";
+import "./i18n";
 
 const ZONE = "Europe/Istanbul";
 // 20:24 in Istanbul.

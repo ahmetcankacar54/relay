@@ -63,12 +63,9 @@ export function PanelAutomation({ now }: { now: number }) {
         )
       : undefined;
   const planLabel = !planning.autoStart
-    ? t("Kapalı", "Off")
+    ? t("common.off")
     : deferred
-      ? t(
-          `Plan uyarlandı · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
-          `Plan adapted · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
-        )
+      ? t("panelAutomation.planAdapted", { name: name(deferred.accountId), clock: clock(deferred.startAt) })
       : next
         ? nextStartLabel(
             name(next.accountId),
@@ -77,27 +74,27 @@ export function PanelAutomation({ now }: { now: number }) {
             planning.timeZone,
             language,
           )
-        : t("Açık", "On");
+        : t("panelAutomation.on");
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
-        <span>{t("Otomasyon", "Automation")}</span>
+        <span>{t("panelAutomation.automation")}</span>
       </div>
       <div className={`${panelCard} grid px-1.5 py-1`}>
         <Row
           tone={AUTOMATION_DOT[automation.status.tone]}
-          name={t("Otomatik geçiş", "Automatic switching")}
-          value={t(...automationModeCopy(automation.mode).label)}
-          title={t(...automation.status.text)}
+          name={t("panelAutomation.automaticSwitching")}
+          value={t(automationModeCopy(automation.mode).label)}
+          title={automation.status.text}
           page="gecis"
         />
         <Row
           tone={planning.autoStart ? "ok" : "off"}
-          name={t("Önceden başlatma", "Early start")}
+          name={t("panelAutomation.earlyStart")}
           value={planLabel}
           title={
             planning.autoStart && !deferred && next
-              ? t(`Sonraki başlatma: ${planLabel}`, `Next start: ${planLabel}`)
+              ? t("panelAutomation.nextStart", { planLabel })
               : undefined
           }
           page="planlama"

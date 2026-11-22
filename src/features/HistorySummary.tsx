@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Account, DesktopHistorySummary, RelayAPI } from "../../shared/types";
 import { Button } from "@/components/ui/button";
+import type { T } from "../../shared/i18n/translate";
 
 export function HistorySummary({
   account,
@@ -11,7 +12,7 @@ export function HistorySummary({
   account: Account;
   sources: Account[];
   api: RelayAPI;
-  t: (tr: string, en: string) => string;
+  t: T;
 }) {
   const [value, setValue] = useState<DesktopHistorySummary>();
   const [failed, setFailed] = useState(false);
@@ -41,7 +42,7 @@ export function HistorySummary({
     <div className="grid gap-1 rounded-lg border p-3 text-sm">
       <div className="flex items-center justify-between gap-2">
         <strong className="font-semibold">
-          {t("Yerel Code geçmişi", "Local Code history")}
+          {t("historySummary.localCodeHistory")}
         </strong>
         <Button
           size="sm"
@@ -49,42 +50,30 @@ export function HistorySummary({
           className="h-auto px-0"
           onClick={load}
         >
-          {t("Kontrol et", "Check")}
+          {t("common.check")}
         </Button>
       </div>
       <p className="text-muted-foreground">
         {failed
-          ? t("Geçmiş okunamadı. Yeniden kontrol et.", "Cannot read the history. Check again.")
+          ? t("historySummary.cannotReadTheHistoryCheckAgain")
           : value
-            ? t(
-                `${value.indexed} oturum · ${value.projects} yerel proje · ${value.archived} arşivlenmiş`,
-                `${value.indexed} ${value.indexed === 1 ? "session" : "sessions"} · ${value.projects} local ${value.projects === 1 ? "project" : "projects"} · ${value.archived} archived`,
-              )
-            : t("Okunuyor…", "Read in progress…")}
+            ? t("historySummary.sessionsLocalProjectsArchived", { valueIndexed: value.indexed, valueProjects: value.projects, valueArchived: value.archived })
+            : t("historySummary.readInProgress")}
       </p>
       {value && (
         <p className="text-muted-foreground">
-          {t(
-            `${value.transcriptsFound} konuşma dosyası · ${value.missingTranscripts} eksik · ${value.unknownTranscripts} doğrulanamadı`,
-            `${value.transcriptsFound} conversation ${value.transcriptsFound === 1 ? "file" : "files"} · ${value.missingTranscripts} missing · ${value.unknownTranscripts} unverified`,
-          )}
+          {t("historySummary.conversationFilesMissingUnverified", { valueTranscriptsFound: value.transcriptsFound, valueMissingTranscripts: value.missingTranscripts, valueUnknownTranscripts: value.unknownTranscripts })}
         </p>
       )}
       {value && value.duplicates > 0 && (
         <p className="text-muted-foreground">
-          {t(
-            `Sonraki geçiş veya birleştirmede ${value.duplicates} yinelenen kart kaldırılır.`,
-            `Relay removes ${value.duplicates} duplicate ${value.duplicates === 1 ? "card" : "cards"} at the next switch or merge.`,
-          )}
+          {t("historySummary.relayRemovesDuplicateCardsAtThe", { valueDuplicates: value.duplicates })}
         </p>
       )}
       <small className="text-xs text-muted-foreground">
         {sources.length
-          ? t(
-              `Sonraki birleştirmede geçmiş alınacak hesaplar: ${sources.map((a) => a.name).join(", ")}`,
-              `History sources for the next merge: ${sources.map((a) => a.name).join(", ")}`,
-            )
-          : t("Geçmiş alınacak hesap yok", "No history sources")}
+          ? t("historySummary.historySourcesForTheNextMerge", { join: sources.map((a) => a.name).join(", ") })
+          : t("historySummary.noHistorySources")}
       </small>
     </div>
   );

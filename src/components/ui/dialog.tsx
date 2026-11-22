@@ -57,7 +57,7 @@ function DialogContent({
   showCloseButton?: boolean
 }) {
   // Outside an I18nProvider (a test, a stray portal) the label stays English instead of throwing.
-  const close = React.useContext(I18nContext)?.t("Kapat", "Close") ?? "Close"
+  const close = React.useContext(I18nContext)?.t("common.close") ?? "Close"
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -102,7 +102,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
-  const close = React.useContext(I18nContext)?.t("Kapat", "Close") ?? "Close"
+  const close = React.useContext(I18nContext)?.t("common.close") ?? "Close"
   return (
     <div
       data-slot="dialog-footer"

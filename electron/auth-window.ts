@@ -8,6 +8,7 @@ import {
   signInNavigationAllowed,
   signInPartition,
 } from "./core/auth-page-policy";
+import type { T } from "../shared/i18n/translate";
 
 /** Writes the page the CLI hands to BROWSER into the file Relay named for that attempt. */
 const HANDOFF_SCRIPT = `#!/bin/sh
@@ -30,7 +31,7 @@ function isHttps(target: string): boolean {
  */
 export function authWindows(
   dataDir: string,
-  t: (tr: string, en: string) => string,
+  t: T,
   icon?: string,
 ): AuthBrowser {
   const dir = path.join(dataDir, "auth-pages");
@@ -62,7 +63,7 @@ export function authWindows(
       const win = new BrowserWindow({
         width: 520,
         height: 720,
-        title: t("Claude ile giriş", "Sign in with Claude"),
+        title: t("authWindow.signInWithClaude"),
         ...(icon ? { icon } : {}),
         autoHideMenuBar: true,
         webPreferences: {

@@ -65,11 +65,12 @@ export function AccountDetail({
     a,
     relay,
     t,
+    language,
     (id) => {
       relay.setSetupId(id);
       relay.cancelDesktopRequest();
     },
-    { remove, edit, language },
+    { remove, edit },
   );
   const usage = relay.data?.usage[a.id];
   const waiting = pendingFlow(
@@ -83,6 +84,7 @@ export function AccountDetail({
       desktopRunning: !!relay.desktop?.running,
       waiting,
       platform: relay.data?.diagnostics?.platform,
+      language,
     },
     t,
   );
@@ -111,7 +113,7 @@ export function AccountDetail({
       back={
         <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-muted-foreground" onClick={back}>
           <BackIcon />
-          {t("Hesaplar", "Accounts")}
+          {t("common.accounts")}
         </Button>
       }
       actions={
@@ -137,7 +139,7 @@ export function AccountDetail({
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={t(`${a.name} işlemleri`, `${a.name} actions`)}
+                aria-label={t("accountDetail.actions", { aName: a.name })}
               >
                 <MoreHorizontal />
               </Button>

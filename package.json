@@ -14,6 +14,7 @@
     "icons": "node scripts/icon.mjs && node --import tsx scripts/mascot.ts",
     "mascot": "node --import tsx scripts/mascot.ts",
     "mascot:placeholders": "node --import tsx scripts/mascot-placeholders.ts",
+    "i18n:widget": "node --import tsx scripts/i18n/widget-strings.ts",
     "build": "tsc --noEmit && vite build && node scripts/build.mjs",
     "build:cli": "node scripts/build-cli.mjs",
     "start": "electron .",
@@ -92,7 +93,20 @@
     ],
     "electronLanguages": [
       "en",
-      "tr"
+      "tr",
+      "de",
+      "fr",
+      "es",
+      "pt-BR",
+      "it",
+      "ja",
+      "ko",
+      "zh-CN",
+      "zh-TW",
+      "ru",
+      "uk",
+      "pl",
+      "nl"
     ],
     "asarUnpack": [
       "node_modules/node-pty/**/*",
@@ -121,7 +135,26 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "CFBundleLocalizations": [
+          "en",
+          "tr",
+          "de",
+          "fr",
+          "es",
+          "pt-BR",
+          "it",
+          "ja",
+          "ko",
+          "zh-Hans",
+          "zh-Hant",
+          "ru",
+          "uk",
+          "pl",
+          "nl"
+        ]
+      }
     },
     "publish": [
       {

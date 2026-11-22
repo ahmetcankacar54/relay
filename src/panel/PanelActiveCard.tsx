@@ -48,7 +48,7 @@ export function PanelActiveCard({ now }: { now: number }) {
     accountHealth(
       active,
       usage,
-      { active: true, desktopRunning: running, waiting, platform: relay.data?.diagnostics?.platform },
+      { active: true, desktopRunning: running, waiting, platform: relay.data?.diagnostics?.platform, language },
       t,
     );
   // A plain refresh cannot clear a locked Keychain or a connection to renew: it has to prompt.
@@ -68,7 +68,7 @@ export function PanelActiveCard({ now }: { now: number }) {
         aria-label={
           renewalIssue(usage) === "keychain-locked"
             ? keychainWords(relay.data?.diagnostics?.platform, t).allow
-            : t("Yenilemeye izin ver", "Allow renewal")
+            : t("common.allowRenewal")
         }
         disabled={relay.usageBusy.has(active.id)}
         onClick={() => void relay.refreshUsage(active, true)}
@@ -79,7 +79,7 @@ export function PanelActiveCard({ now }: { now: number }) {
       <Button
         variant="ghost"
         size="icon-xs"
-        aria-label={t("Limitleri yenile", "Refresh limits")}
+        aria-label={t("common.refreshLimits")}
         disabled={relay.usageBusy.has(active.id)}
         onClick={() => void relay.refreshUsage(active)}
       >
@@ -94,10 +94,10 @@ export function PanelActiveCard({ now }: { now: number }) {
       {plan && <Badge variant="secondary">{plan}</Badge>}
       <span
         className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
-        title={t("Claude uygulamasında açık hesap", "The account open in the Claude app")}
+        title={t("panelActiveCard.theAccountOpenInTheClaude")}
       >
         <StatusDot tone={running ? "ok" : "off"} />
-        {running ? t("Claude açık", "Claude open") : t("Claude kapalı", "Claude closed")}
+        {running ? t("panelActiveCard.claudeOpen") : t("common.claudeClosed")}
       </span>
     </div>
   );
@@ -106,10 +106,7 @@ export function PanelActiveCard({ now }: { now: number }) {
       <div className={panelCard}>
         {!active ? (
           <div className="flex flex-wrap items-center gap-1 text-muted-foreground">
-            {t(
-              "Claude uygulamasında kayıtlı hesap açık değil",
-              "No saved account is open in the Claude app",
-            )}{" "}
+            {t("panelActiveCard.noSavedAccountIsOpenIn")}{" "}
             ·
             <Button
               variant="link"
@@ -117,7 +114,7 @@ export function PanelActiveCard({ now }: { now: number }) {
               className="h-auto px-0 text-xs"
               onClick={openRelay}
             >
-              {t("Relay’i aç", "Open Relay")}
+              {t("common.openRelay")}
             </Button>
           </div>
         ) : fresh ? (
@@ -132,10 +129,7 @@ export function PanelActiveCard({ now }: { now: number }) {
             <div className="flex items-center gap-1 text-2xs text-muted-foreground">
               {waiting && health
                 ? health.label
-                : t(
-                    `Limit verisi eski · ${formatRelative(readAt!, now, language)} okundu`,
-                    `Usage data is out of date · read ${formatRelative(readAt!, now, language)}`,
-                  )}{" "}
+                : t("panelActiveCard.usageDataIsOutOfDate", { formatRelative: formatRelative(readAt!, now, language) })}{" "}
               · {usageButton}
             </div>
           </div>
@@ -145,7 +139,7 @@ export function PanelActiveCard({ now }: { now: number }) {
             <div className="mt-1 flex items-center gap-1 text-muted-foreground">
               {health && health.tone !== "ok"
                 ? health.label
-                : t("Limit verisi eski", "Usage data is out of date")}{" "}
+                : t("panelActiveCard.usageDataIsOutOfDate2")}{" "}
               ·{usageButton}
             </div>
           </>
@@ -153,14 +147,11 @@ export function PanelActiveCard({ now }: { now: number }) {
       </div>
       {relay.desktopBusy ? (
         <p className="mt-1.5 text-xs text-muted-foreground">
-          {t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running")}
+          {t("panelActiveCard.aClaudeAppActionIsRunning")}
         </p>
       ) : desktop?.recoveryRequired ? (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-          {t(
-            "Önce yedeği geri yükle",
-            "Restore the backup first",
-          )}{" "}
+          {t("panelActiveCard.restoreTheBackupFirst")}{" "}
           ·
           <Button
             variant="link"
@@ -168,15 +159,12 @@ export function PanelActiveCard({ now }: { now: number }) {
             className="h-auto px-0 text-xs"
             onClick={openRelay}
           >
-            {t("Relay’i aç", "Open Relay")}
+            {t("common.openRelay")}
           </Button>
         </p>
       ) : relay.pendingDesktop ? (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-          {t(
-            "Claude uygulaması girişini tamamla",
-            "Finish the Claude app sign-in",
-          )}{" "}
+          {t("panelActiveCard.finishTheClaudeAppSignIn")}{" "}
           ·
           <Button
             variant="link"
@@ -184,7 +172,7 @@ export function PanelActiveCard({ now }: { now: number }) {
             className="h-auto px-0 text-xs"
             onClick={() => openPendingDesktop(relay)}
           >
-            {t("Relay’i aç", "Open Relay")}
+            {t("common.openRelay")}
           </Button>
         </p>
       ) : null}

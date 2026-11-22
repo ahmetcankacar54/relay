@@ -87,7 +87,7 @@ export function Panel({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={t("Limitleri yenile", "Refresh limits")}
+              aria-label={t("common.refreshLimits")}
               disabled={refreshing || !accounts.length}
               onClick={(e) =>
                 offerAfter(prank, "wheel", e, () => {
@@ -100,8 +100,8 @@ export function Panel({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={t("Ayarlar", "Settings")}
-              title={t("Ayarlar", "Settings")}
+              aria-label={t("common.settings")}
+              title={t("common.settings")}
               onClick={() => void relay.report(() => api.openPage("ayarlar"))}
             >
               <Settings2 />
@@ -116,7 +116,7 @@ export function Panel({
               tone="info"
               role="status"
               onDismiss={() => relay.setNotice("")}
-              dismissLabel={t("Bildirimi kapat", "Dismiss notification")}
+              dismissLabel={t("panel.dismissNotification")}
             >
               <span>{relay.notice}</span>
             </Banner>
@@ -147,14 +147,11 @@ export function Panel({
             className="h-auto px-0 text-xs font-semibold text-foreground"
             onClick={() => void relay.report(() => api.openPage("genel"))}
           >
-            {t("Relay’i aç", "Open Relay")}
+            {t("common.openRelay")}
           </Button>
           {latest && (
             <span className="truncate text-xs">
-              {t(
-                `${formatRelative(latest, now, language)} güncellendi`,
-                `Updated ${formatRelative(latest, now, language)}`,
-              )}
+              {t("panel.updated", { formatRelative: formatRelative(latest, now, language) })}
             </span>
           )}
           <Button
@@ -163,7 +160,7 @@ export function Panel({
             className="h-auto px-0 text-xs text-muted-foreground"
             onClick={() => void relay.report(() => api.quit())}
           >
-            {t("Çık", "Quit")}
+            {t("panel.quit")}
           </Button>
         </footer>
       </div>

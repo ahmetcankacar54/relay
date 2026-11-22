@@ -6,10 +6,11 @@ import { AccountsTable } from "../src/pages/accounts/AccountsTable";
 import { groupAccounts, readAccountsView, workGroupKey, type AccountSort } from "../src/pages/accounts/accountGroups";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountProvider, type AccountUsage, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
-const en = (_tr: string, english: string) => english;
+const en = testT("en");
 
 const account = (id: string, extra: Partial<Account> = {}): Account => ({
   id,
@@ -107,7 +108,7 @@ const render = (accounts: Account[], props: Partial<Parameters<typeof AccountsTa
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "en", setLanguage() {}, t: en } },
+      { value: i18nValue("en") },
       createElement(
         RelayContext.Provider,
         { value: relayFor(accounts) },

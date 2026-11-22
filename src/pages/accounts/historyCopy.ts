@@ -1,6 +1,6 @@
 import type { RelaySettings } from "../../../shared/types";
+import type { T } from "../../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /**
  * What the add-account dialog says about Code history, by the current sharing mode. Only
@@ -14,41 +14,23 @@ export function historyCopy(
   switch (mode) {
     case "all":
       return {
-        note: t(
-          "Code geçmişi bağlı tüm hesaplar arasında ortak.",
-          "All connected accounts share Code history.",
-        ),
+        note: t("historyCopy.allConnectedAccountsShareCodeHistory"),
       };
     case "selected":
       return {
-        note: t(
-          "Code geçmişi yalnızca Ayarlar → Geçiş’te seçtiğin hesaplar arasında ortak.",
-          "Only the accounts you select in Settings → Switching share Code history.",
-        ),
+        note: t("historyCopy.onlyTheAccountsYouSelectIn"),
       };
     case "off":
       return {
-        note: t(
-          "Code geçmişi hesaplar arasında paylaşılmıyor.",
-          "Accounts do not share Code history.",
-        ),
+        note: t("historyCopy.accountsDoNotShareCodeHistory"),
       };
     case "same-group":
       return {
-        groupPlaceholder: t(
-          "Aynı gruptaki şirket hesapları Code geçmişini paylaşır",
-          "Work accounts in the same group share Code history",
-        ),
+        groupPlaceholder: t("historyCopy.workAccountsInTheSameGroup"),
         note:
           kind === "personal"
-            ? t(
-                "Kişisel hesaplar yerel Code geçmişini paylaşır.",
-                "Personal accounts share their local Code history.",
-              )
-            : t(
-                "Boş bırakırsan bu şirket hesabı ayrı tutulur.",
-                "Leave blank to keep this work account separate.",
-              ),
+            ? t("historyCopy.personalAccountsShareTheirLocalCode")
+            : t("historyCopy.leaveBlankToKeepThisWork"),
       };
   }
 }

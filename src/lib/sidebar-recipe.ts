@@ -9,30 +9,21 @@ import type { SidebarGapSummary } from "../../shared/types";
 
 /** What the account lacks, in one line: "Alto hesabında 9 bölüm eksik, 157 oturum bir bölümde değil". */
 export function sidebarGapLine(gap: SidebarGapSummary, t: T): string {
-  const { missingSections: n, sessions: m } = gap;
-  const tr = [
-    ...(n > 0 ? [`${n} bölüm eksik`] : []),
-    ...(m > 0 ? [`${m} oturum bir bölümde değil`] : []),
-  ].join(", ");
-  const en = [
-    ...(n > 0 ? [`${n} ${n === 1 ? "section" : "sections"} missing`] : []),
-    ...(m > 0 ? [`${m} ${m === 1 ? "session" : "sessions"} unfiled`] : []),
-  ].join(", ");
-  return t(`${gap.to} hesabında ${tr}`, `On ${gap.to}: ${en}`);
+  const { missingSections: sections, sessions } = gap;
+  if (sections > 0 && sessions > 0) return t("sidebarRecipe.gapSectionsAndSessions", { gapTo: gap.to, sections, sessions });
+  return sections > 0
+    ? t("sidebarRecipe.gapSections", { gapTo: gap.to, sections })
+    : t("sidebarRecipe.gapSessions", { gapTo: gap.to, sessions });
 }
 
 /** Where the sections come from and what the recipe does, or where to paste it once copied. */
 export function sidebarRecipeHint(gap: SidebarGapSummary, copied: boolean, t: T): string {
   const from = gap.from.join(", ");
   return copied
-    ? t(
-        `Kopyalandı. ${gap.to} hesabında bir Code oturumuna yapıştır. Claude her taşımadan önce sorar.`,
-        `Copied. Paste it into a Code session on ${gap.to}. Claude asks before each move.`,
-      )
-    : t(
-        `${from ? `Kaynak: ${from}. ` : ""}Claude bölümleri bir Code oturumunda talimatla kurar.`,
-        `${from ? `From ${from}. ` : ""}Claude rebuilds the sections from the recipe in a Code session.`,
-      );
+    ? t("sidebarRecipe.copiedPasteItIntoACode", { gapTo: gap.to })
+    : from
+      ? t("sidebarRecipe.fromClaudeRebuildsTheSections", { from })
+      : t("sidebarRecipe.claudeRebuildsTheSectionsFromThe");
 }
 
 /** The busy keys of an offer's two actions; either one running disables both buttons. */

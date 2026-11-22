@@ -19,7 +19,7 @@ async function chosen(ctx: CliContext, query: string | undefined) {
   const account = ctx.store.state.accounts.find((a) => a.id === active);
   if (!account)
     throw new CliError(
-      ctx.t("Claude uygulamasında kayıtlı bir hesap açık değil; bir hesap adı ver.", "No saved account is signed in to the Claude app; name an account."),
+      ctx.t("history.noSavedAccountIsSignedIn"),
       EXIT.usage,
     );
   return account;
@@ -30,24 +30,24 @@ export const history: Command = async ({ io, deps, parsed, t, argv }) => {
   if (sub === "mode") {
     const mode = args[0] as RelaySettings["desktopHistoryTransfer"];
     if (!MODES.includes(mode) || args.length > 1)
-      throw new CliError(t("Kullanım: relay history mode <all|same-group|selected|off> [--accounts a,b]", "Usage: relay history mode <all|same-group|selected|off> [--accounts a,b]"), EXIT.usage);
+      throw new CliError(t("history.usageRelayHistoryModeAllSame"), EXIT.usage);
     const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: false });
     let selected: string[] | undefined;
     if (mode === "selected") {
       const names = String(ctx.flags.accounts ?? "").split(",").map((n) => n.trim()).filter(Boolean);
       selected = [...new Set(names.map((n) => resolveAccount(ctx.store.state.accounts, n, t).id))];
       if (selected.length < 2)
-        throw new CliError(t("Seçili paylaşım en az iki hesap ister: --accounts A,B", "Selected sharing needs at least two accounts: --accounts A,B"), EXIT.usage);
+        throw new CliError(t("history.selectedSharingNeedsAtLeastTwo"), EXIT.usage);
     }
     ctx.store.update((s) => {
       s.settings.desktopHistoryTransfer = mode;
       if (selected) s.settings.desktopHistoryAccounts = selected;
     });
-    io.stdout(t(`Code geçmişi artık ${historyModeText(mode, t)}.`, `Code history is now ${historyModeText(mode, t)}.`));
+    io.stdout(t("history.codeHistoryIsNow", { historyModeText: historyModeText(mode, t) }));
     return EXIT.ok;
   }
   if (sub === "sync") {
-    if (args.length > 1) throw new CliError(t("Kullanım: relay history sync [<ad>]", "Usage: relay history sync [<name>]"), EXIT.usage);
+    if (args.length > 1) throw new CliError(t("history.usageRelayHistorySyncName"), EXIT.usage);
     const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: true });
     const account = await chosen(ctx, args[0]);
     await assertCanQuitClaude(ctx);
@@ -56,7 +56,7 @@ export const history: Command = async ({ io, deps, parsed, t, argv }) => {
       io,
       t,
       [
-        t(`${account.name} hesabına diğer hesapların Code geçmişi şimdi taşınacak; Claude uygulaması kapanıp yeniden açılacak.`, `Code history from the other accounts will be brought into ${account.name} now; the Claude app will quit and reopen.`),
+        t("history.codeHistoryFromTheOtherAccounts", { accountName: account.name }),
         ...quitLines(ctx),
         ...(inside ? [sessionEndsLine(ctx)] : []),
       ],
@@ -65,10 +65,10 @@ export const history: Command = async ({ io, deps, parsed, t, argv }) => {
     if (inside) return detach(ctx, argv);
     await runDesktopOperation(ctx, () => ctx.desktop.syncHistory(account.id));
     const n = ctx.desktop.carriedCount;
-    io.stdout(t(`${n} konuşma taşındı.`, `${n} conversation${n === 1 ? "" : "s"} carried.`));
+    io.stdout(t("history.conversationSCarried", { n }));
     return EXIT.ok;
   }
-  if (args.length) throw new CliError(t("Kullanım: relay history [<ad>]", "Usage: relay history [<name>]"), EXIT.usage);
+  if (args.length) throw new CliError(t("history.usageRelayHistoryName"), EXIT.usage);
   const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
   const account = await chosen(ctx, sub);
   const settings = ctx.store.state.settings;
@@ -83,17 +83,14 @@ export const history: Command = async ({ io, deps, parsed, t, argv }) => {
     });
     return EXIT.ok;
   }
-  io.stdout(t(`Code geçmişi: ${historyModeText(settings.desktopHistoryTransfer, t)}`, `Code history: ${historyModeText(settings.desktopHistoryTransfer, t)}`));
+  io.stdout(t("history.codeHistory", { historyModeText: historyModeText(settings.desktopHistoryTransfer, t) }));
   io.stdout(
     sources.length
-      ? t(`${account.name} şu hesaplardan geçmiş alır: ${sources.map((a) => a.name).join(", ")}`, `${account.name} gets history from: ${sources.map((a) => a.name).join(", ")}`)
-      : t(`${account.name} başka hesaptan geçmiş almaz.`, `${account.name} gets no history from other accounts.`),
+      ? t("history.getsHistoryFrom", { accountName: account.name, join: sources.map((a) => a.name).join(", ") })
+      : t("history.getsNoHistoryFromOtherAccounts", { accountName: account.name }),
   );
   io.stdout(
-    t(
-      `${summary.indexed} konuşma (${summary.archived} arşivli), ${summary.projects} proje, ${summary.transcriptsFound} konuşma kaydı bulundu, ${summary.missingTranscripts} eksik, ${summary.duplicates} kopya kart.`,
-      `${summary.indexed} conversations (${summary.archived} archived), ${summary.projects} projects, ${summary.transcriptsFound} transcripts found, ${summary.missingTranscripts} missing, ${summary.duplicates} duplicate cards.`,
-    ),
+    t("history.conversationsArchivedProjectsTranscripts", { summaryIndexed: summary.indexed, summaryArchived: summary.archived, summaryProjects: summary.projects, summaryTranscriptsFound: summary.transcriptsFound, summaryMissingTranscripts: summary.missingTranscripts, summaryDuplicates: summary.duplicates }),
   );
   return EXIT.ok;
 };

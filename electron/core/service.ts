@@ -91,7 +91,7 @@ export class Service {
   async linkTerminal(id: string) {
     const account = this.store.account(id);
     if ((account.provider ?? "claude") !== "claude")
-      throw new Error("Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.");
+      throw new Error("This account is not a Claude account; it connects through its own provider.");
     if (!account.desktop && !(account.auth?.accountUuid && account.auth.orgId))
       throw new Error("Save the Claude app sign-in first.");
     const waiting = this.terminalAuth
@@ -280,13 +280,13 @@ export class Service {
     // The Claude Code sign-in is a Claude account's: a Codex or Antigravity account signs in
     // with its own provider, never through Claude's.
     if ((this.store.account(id).provider ?? "claude") !== "claude")
-      throw new Error("Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.");
+      throw new Error("This account is not a Claude account; it connects through its own provider.");
     if (
       this.runner
         .list()
         .some((r) => r.accountId === id && r.status === "running")
     )
-      throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+      throw new Error("Stop the running session for this account first.");
     // Resolved before anything is looked at: nothing may change between the checks and the start.
     const executable = await this.executable();
     // A renewal Relay runs by itself in the background gives way to the user's own sign-in.
@@ -394,44 +394,36 @@ export class Service {
     // A renewal the user cannot see never blocks what they do.
     await this.cancelBackgroundSignIn(account.id);
     if (this.auth.active(account.id))
-      throw new Error("Önce bu hesabın limit okuma girişini tamamla ya da iptal et.");
+      throw new Error("Finish or cancel this account’s usage sign-in first.");
     if (account.cooldownUntil && Date.parse(account.cooldownUntil) > Date.now())
-      throw new Error(
-        "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
-      );
+      throw new Error("This account is on hold. Remove the hold on Accounts, or select another account.");
     const source = input.sessionKey
       ? this.session(input.sessionKey)
       : undefined;
     const cwd = source?.projectDir ?? input.cwd;
     if (!cwd || !path.isAbsolute(cwd) || !(await fs.stat(cwd)).isDirectory())
-      throw new Error("Proje klasörü bulunamadı. Klasörü yeniden seç.");
+      throw new Error("Relay cannot find the project folder. Select it again.");
     const actualCwd = await fs.realpath(cwd);
     if (
       this.runner
         .list()
         .some((r) => r.status === "running" && r.cwd === actualCwd)
     )
-      throw new Error(
-        "Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.",
-      );
+      throw new Error("Stop this project’s running session on the Live tab first.");
     if (input.desktop && !input.desktopConsent)
-      throw new Error("Claude uygulamasında doğru hesabın açık olduğunu doğrula.");
+      throw new Error("Check that the right account is open in the Claude app.");
     if (
       input.desktop &&
       !(await this.currentDiagnostics()).desktopSupported
     )
-      throw new Error(
-        "Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.",
-      );
+      throw new Error("Sending to the Claude app is not supported on this platform or CLI version.");
     if (
       input.desktop &&
       source &&
       source.accountId !== account.id &&
       source.accountId !== "imported"
     )
-      throw new Error(
-        "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.",
-      );
+      throw new Error("Continue with the chosen account in Relay first, then send that session to the Claude app.");
     const auth = await this.checkAuth(account.id);
     if (!auth.auth?.loggedIn)
       throw new Error(auth.auth?.error || "Önce bu hesapla giriş yap.");
@@ -442,15 +434,11 @@ export class Service {
       if (source.accountId !== account.id) {
         if (source.accountId === "imported") {
           if (!input.importConsent)
-            throw new Error(
-              "İçe aktarılan oturum için hedef hesap onayı gerekiyor.",
-            );
+            throw new Error("An imported session needs the target account confirmed.");
         } else if (
           this.store.account(source.accountId).group !== account.group
         ) {
-          throw new Error(
-            "Bu hesaplar aynı paylaşım grubunda değil. Şirket oturumları yalnızca aynı gruptaki hesaplara aktarılabilir.",
-          );
+          throw new Error("These accounts are not in the same sharing group. Work sessions can move only to accounts in the same group.");
         }
         resumeId = await copyTranscript(source, this.store.profile(account.id));
         const copiedKey = `${account.id}:${resumeId}`;
@@ -486,15 +474,15 @@ export class Service {
   async switchAccount(runId: string, targetId: string) {
     const run = this.runner.list().find((r) => r.id === runId);
     if (!run || run.kind !== "session" || !run.sessionKey)
-      throw new Error("Yalnızca çalışma oturumlarında hesap değiştirilebilir.");
+      throw new Error("Only work sessions can change accounts.");
     if (run.accountId === targetId) throw new Error("Oturum zaten bu hesapta.");
     const target = this.store.account(targetId);
     if (this.store.account(run.accountId).group !== target.group)
-      throw new Error("Hesaplar aynı paylaşım grubunda olmalı.");
+      throw new Error("The accounts must be in the same sharing group.");
     if (target.cooldownUntil && Date.parse(target.cooldownUntil) > Date.now())
-      throw new Error("Hedef hesap beklemede. Önce beklemeyi kaldır.");
+      throw new Error("The target account is on hold. Remove the hold first.");
     if (!(await this.checkAuth(targetId)).auth?.loggedIn)
-      throw new Error("Hedef hesaba giriş yap. Mevcut çalışma durdurulmadı.");
+      throw new Error("Sign in to the target account. The current work was not stopped.");
     await this.snapshot();
     this.session(run.sessionKey); // Do not stop an unsaved/new terminal.
     await this.runner.stop(runId);
@@ -523,10 +511,10 @@ export class Service {
         .list()
         .some((r) => r.accountId === id && r.status === "running")
     )
-      throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+      throw new Error("Stop the running session for this account first.");
     await this.cancelBackgroundSignIn(id);
     if (this.auth.active(id))
-      throw new Error("Önce bu hesabın limit okuma girişini tamamla ya da iptal et.");
+      throw new Error("Finish or cancel this account’s usage sign-in first.");
     const executable = await this.executable().catch(() => undefined);
     return removeAccount(id, {
       ...options,
@@ -549,7 +537,7 @@ export class Service {
   }
   private session(key: string) {
     const s = this.index.get(key);
-    if (!s) throw new Error("Oturum bulunamadı. Kataloğu yenile.");
+    if (!s) throw new Error("Session not found. Refresh the catalog.");
     return s;
   }
   private async executable() {

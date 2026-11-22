@@ -1,5 +1,5 @@
 import { dayPlan, planContext } from "../../../shared/day-plan";
-import { automationModeCopy, useAutomation } from "../../features/useAutomation";
+import { useAutomation } from "../../features/useAutomation";
 import { localDate, wallTime } from "../../../shared/planning";
 import { isWeekend } from "../../../shared/work-hours";
 import { fallbackTempo } from "../../../shared/tempo";
@@ -59,25 +59,23 @@ export function TodayCard({
   const today = localDate(now, zone);
   const hours = isWeekend(today) ? settings.weekend : settings.weekday;
   const work = hours.enabled
-    ? t(`Çalışma ${hours.start}–${hours.end}`, `Work ${hours.start}–${hours.end}`)
-    : t("Bugün çalışma yok", "No work today");
+    ? t("todayCard.work", { hoursStart: hours.start, hoursEnd: hours.end })
+    : t("todayCard.noWorkToday");
   const early = !settings.autoStart
-    ? t("önceden başlatma kapalı", "early start off")
+    ? t("todayCard.earlyStartOff")
     : !planned.accounts.length
-      ? t("plana hesap eklenmedi", "no accounts in the plan")
+      ? t("todayCard.noAccountsInThePlan")
       : upcoming
-        ? t(
-            `sonraki başlatma ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
-            `next start ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
-          )
-        : t(
-            `bugün ${plannedToday} başlatma planlı`,
-            `${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
-          );
+        ? t("todayCard.nextStart", { clock: clock(upcoming.at), name: name(upcoming.accountId) })
+        : t("todayCard.startsPlannedToday", { plannedToday });
   // The Automation card's place: how switching runs, in the same line as the day.
   const automation = useAutomation(now);
-  const mode = automationModeCopy(automation.mode).label;
-  const switching = automation.mode === "off" ? t("otomatik geçiş kapalı", "automatic switching off") : t(`geçiş: ${mode[0].charAt(0).toLocaleLowerCase("tr")}${mode[0].slice(1)}`, `switching: ${mode[1].charAt(0).toLowerCase()}${mode[1].slice(1)}`);
+  const switching =
+    automation.mode === "off"
+      ? t("todayCard.automaticSwitchingOff")
+      : automation.mode === "after-exit"
+        ? t("todayCard.switchingWhenTheClaudeAppQuits")
+        : t("todayCard.switchingWhenTheLimitIsReached");
   const summary = `${work} · ${switching} · ${early}`;
   // The hour axis under the rows; 24 is the day's end, wherever DST puts it.
   const ticks = ["00", "06", "12", "18", "24"].map((hour) => ({
@@ -97,12 +95,12 @@ export function TodayCard({
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold">{t("Bugün", "Today")}</span>
+        <span className="text-sm font-semibold">{t("common.today")}</span>
         <Button variant="ghost" size="xs" className="ml-auto" onClick={() => go("gecis")}>
-          {t("Geçiş →", "Switching →")}
+          {t("todayCard.switching2")}
         </Button>
         <Button variant="ghost" size="xs" onClick={() => go("planlama")}>
-          {t("Planlama →", "Planning →")}
+          {t("todayCard.planning")}
         </Button>
       </div>
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -112,7 +110,7 @@ export function TodayCard({
       <div className="grid gap-1.5 text-xs">
         <div className="grid grid-cols-[84px_1fr] items-center gap-2">
           <span className="truncate text-muted-foreground">
-            {t("Çalışma", "Work")}
+            {t("todayCard.work2")}
           </span>
           <div className="relative h-3.5 rounded bg-track">
             {intervals.map((i) => (

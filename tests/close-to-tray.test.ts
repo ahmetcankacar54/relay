@@ -22,13 +22,13 @@ test("Cmd+Q closes the window to the menu bar and Alt+Cmd+Q quits Relay", () => 
   // The template itself is tested in tests/app-menu.test.ts; main hands it these actions.
   assert.match(
     main,
-    /appMenuTemplate\(trayLanguage, \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
+    /appMenuTemplate\(getAppLocale\(\), \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
   );
 });
 
 test("the menu is rebuilt when the language changes", () => {
-  const handler = main.slice(main.indexOf('handle("tray-language"'));
-  assert.match(handler, /if \(changed\) applyAppMenu\(\);/);
+  const handler = main.slice(main.indexOf('handle("set-language"'));
+  assert.match(handler, /if \(setAppLocale\([^\n]*\)\) \{\s*applyAppMenu\(\);/);
   assert.ok(handler.indexOf("applyAppMenu()") < handler.indexOf("\n  });"));
 });
 

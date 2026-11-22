@@ -3,6 +3,7 @@ import { localDate } from "../../../shared/planning";
 import type { Account } from "../../../shared/types";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import type { TokenUsageView } from "../../../shared/token-usage-view";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import { Card } from "@/components/ui/card";
 import { DailyTrend } from "./DailyTrend";
 import { accountColor } from "@/components/AccountDot";
@@ -16,7 +17,6 @@ import {
   formatNumber,
   formatTokens,
   formatPeriods,
-  locale,
   rowKey,
   rowName,
   toneIndex,
@@ -66,7 +66,7 @@ const guideFormats = new Map<Language, Intl.NumberFormat>();
 export function guideLabel(value: number, language: Language) {
   let f = guideFormats.get(language);
   if (!f) {
-    f = new Intl.NumberFormat(locale(language), {
+    f = new Intl.NumberFormat(FORMAT_LOCALE[language], {
       style: "currency",
       currency: "USD",
       currencyDisplay: "narrowSymbol",
@@ -175,7 +175,7 @@ export function DailyChart({
     measure === "cost"
       ? formatCost(value, language)
       : measure === "tokens"
-        ? `${formatTokens(value, language)} ${t("token", value === 1 ? "token" : "tokens")}`
+        ? t("dailyChart.tokensSpoken", { count: value, tokens: formatTokens(value, language) })
         : formatPeriods(value, language, t);
   const busiest = days.reduce<Day | undefined>(
     (best, day) => (day.total > (best?.total ?? 0) ? day : best),
@@ -185,28 +185,17 @@ export function DailyChart({
   const total = days.reduce((sum, day) => sum + day.total, 0);
   const estimatedRange = days.some((day) => approx(day));
   const labels: Record<DailyMeasure, string> = {
-    limit: t("Limit", "Limit"),
-    tokens: t("Token", "Tokens"),
+    limit: t("dailyChart.limit"),
+    tokens: t("dailyChart.tokens"),
     cost: "$",
   };
   const footer = !busiest
     ? measure === "limit"
-      ? t("Bu aralıkta kullanım yok.", "No usage in this range.")
-      : t("Bu aralıkta token yok.", "No tokens in this range.")
-    : measure === "limit"
-      ? t(
-          `${view.range} günde ${spoken(total)}. En yoğun gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
-          `${spoken(total)} over ${view.range} days. Busiest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
-        )
-      : measure === "tokens"
-        ? t(
-            `${view.range} günde ${estimatedRange ? "≈" : ""}${spoken(total)}. En yoğun gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
-            `${estimatedRange ? "≈" : ""}${spoken(total)} over ${view.range} days. Busiest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
-          )
-        : t(
-            `${view.range} günde API karşılığı ${estimatedRange ? "≈" : ""}${spoken(total)}. En yüksek gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
-            `API value over ${view.range} days: ${estimatedRange ? "≈" : ""}${spoken(total)}. Highest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
-          );
+      ? t("dailyChart.noUsageInThisRange")
+      : t("dailyChart.noTokensInThisRange")
+    : measure === "cost"
+      ? t("dailyChart.apiValueOverDaysHighestDay", { viewRange: view.range, spoken: `${estimatedRange ? "≈" : ""}${spoken(total)}`, formatDay: formatDay(busiest.date, language), format: format(busiest.total) })
+      : t("dailyChart.overDaysBusiestDay", { spoken: `${estimatedRange ? "≈" : ""}${spoken(total)}`, viewRange: view.range, formatDay: formatDay(busiest.date, language), format: format(busiest.total) });
   // Each series in its account's own colour (the dot's), the rows that are no account in grey.
   const colorOf = (s: Series) =>
     s.muted ? "var(--account-none)" : accountColor(accounts.find((a) => a.id === s.key)?.color);
@@ -221,10 +210,10 @@ export function DailyChart({
     const estimated = days.some((day) => day.parts.some((p) => p.key === s.key && p.estimated));
     return { key: s.key, name: s.name, color: colorOf(s), total: `${estimated ? "≈" : ""}${format(sum)}` };
   });
-  const hitLabel = t("limite takıldı", "limit hit");
+  const hitLabel = t("dailyChart.limitHit");
   return (
     <PageSection
-      title={t("Günlük", "Daily")}
+      title={t("dailyChart.daily")}
       slot="daily-chart"
       aside={
         tokens && (
@@ -232,12 +221,12 @@ export function DailyChart({
             type="single"
             variant="outline"
             size="sm"
-            aria-label={t("Ölçü", "Measure")}
+            aria-label={t("dailyChart.measure")}
             value={measure}
             onValueChange={(v) => v && setChosen(v as DailyMeasure)}
           >
             {MEASURES.map((m) => (
-              <ToggleGroupItem key={m} value={m} aria-label={m === "cost" ? t("API karşılığı", "API value") : undefined}>
+              <ToggleGroupItem key={m} value={m} aria-label={m === "cost" ? t("common.apiValue") : undefined}>
                 {labels[m]}
               </ToggleGroupItem>
             ))}
@@ -265,7 +254,7 @@ export function DailyChart({
                   {hit && <span className="font-normal text-crit"> · ▲ {hitLabel}</span>}
                 </div>
                 <div className="flex items-baseline justify-between gap-4 border-b pb-1">
-                  <span className="text-muted-foreground">{t("Toplam", "Total")}</span>
+                  <span className="text-muted-foreground">{t("common.total")}</span>
                   <b className="tabular-nums">{approx(day)}{format(day.total)}</b>
                 </div>
                 <ul className="grid gap-1">
@@ -283,10 +272,10 @@ export function DailyChart({
         />
         <p className="text-xs text-muted-foreground">{footer}</p>
         {/* The same days as a list, for screen readers and as the chart's table view. */}
-        <ul className="sr-only" aria-label={t("Günlük değerler", "Daily values")}>
+        <ul className="sr-only" aria-label={t("dailyChart.dailyValues")}>
           {days.map((day) => (
             <li key={day.date}>
-              {`${formatDayLong(day.date, language)}: ${approx(day)}${spoken(day.total)}${hitDays.has(day.date) ? t(", limite takıldı", ", limit hit") : ""}`}
+              {t("dailyChart.dayValue", { day: formatDayLong(day.date, language), value: `${approx(day)}${spoken(day.total)}`, hit: hitDays.has(day.date) ? "yes" : "no" })}
             </li>
           ))}
         </ul>

@@ -27,7 +27,8 @@ import {
   type CollectionFinds,
   type KeptFind,
 } from "@/data/lost-found-collection";
-import { useI18n, type Language, type T } from "@/data/i18n";
+import { useI18n, type Language, type MessageId, type T } from "@/data/i18n";
+import { formatPercent } from "@/lib/meter";
 import { useRelay } from "@/data/relay-context";
 import { cn } from "@/lib/utils";
 import { Swatch } from "./DayHover";
@@ -35,7 +36,6 @@ import {
   formatDay,
   formatDayLong,
   formatDuration,
-  locale,
   toneFill,
   toneIndex,
 } from "./format";
@@ -43,17 +43,7 @@ import { LostPin } from "./LostPins";
 import { METALS, PLATINUM } from "./lost-pin-palette";
 import { formatCount } from "./panda-facts";
 import { formatCost, formatTokens } from "../../../shared/number-format";
-
-type Copy = [tr: string, en: string];
-
-const COUNT_WORDS: Record<number, Copy> = {
-  2: ["İki", "Two"],
-  3: ["Üç", "Three"],
-  4: ["Dört", "Four"],
-  5: ["Beş", "Five"],
-  6: ["Altı", "Six"],
-  7: ["Yedi", "Seven"],
-};
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 
 // Building an Intl formatter costs more than formatting with it, and a shelf tells up to 40 items.
 const timeFormats = new Map<string, Intl.DateTimeFormat>();
@@ -61,7 +51,7 @@ function timeFormat(language: Language, zone: string, weekday: boolean) {
   const key = `${language}|${zone}|${weekday}`;
   let format = timeFormats.get(key);
   if (!format) {
-    format = new Intl.DateTimeFormat(locale(language), {
+    format = new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
       ...(weekday ? { weekday: "long" as const } : {}),
       hour: "2-digit",
       minute: "2-digit",
@@ -83,19 +73,10 @@ export function weekLabel(start: string, end: string, language: Language) {
     ? `${Number(start.slice(8))}–${formatDay(end, language)}`
     : `${formatDay(start, language)} – ${formatDay(end, language)}`;
 }
-
-/** "1 minute" / "8 minutes". */
-const minutesEn = (n: number) => `${n} ${n === 1 ? "minute" : "minutes"}`;
-/** "once", "twice", "3 times". */
-const timesEn = (n: number) =>
-  n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
-
 /** An item's name: all a shelf tile needs besides its pin. */
 export function lookOf(item: LostItem, t: T): { title: string } {
   if (item.kind === "scarf") {
-    const n = item.accountIds.length;
-    const word = COUNT_WORDS[n] ?? [String(n), String(n)];
-    return { title: t(`${word[0]} renkli atkı`, `${word[1]}-colour scarf`) };
+    return { title: t("lostFound.colourScarf", { count: item.accountIds.length }) };
   }
   return { title: kindTitle(item.kind, t) };
 }
@@ -104,53 +85,50 @@ export function lookOf(item: LostItem, t: T): { title: string } {
 export function kindTitle(kind: LostItemKind, t: T): string {
   switch (kind) {
     case "hourglass":
-      return t("Kum saati", "Hourglass");
+      return t("lostFound.hourglass");
     case "baton":
-      return t("Bayrak sopası", "Relay baton");
+      return t("lostFound.relayBaton");
     case "boomerang":
-      return t("Bumerang", "Boomerang");
+      return t("lostFound.boomerang");
     case "trophy":
-      return t("Rekor kupası", "Trophy");
+      return t("lostFound.trophy");
     case "scroll":
-      return t("Uzun parşömen", "Long scroll");
+      return t("lostFound.longScroll");
     case "tally":
-      return t("Yedi çentikli bambu", "Seven-notch bamboo");
+      return t("lostFound.sevenNotchBamboo");
     case "compass":
-      return t("Pusula", "Compass");
+      return t("lostFound.compass");
     case "scarf":
-      return t("Renkli atkı", "Striped scarf");
+      return t("lostFound.stripedScarf");
     case "clocks":
-      return t("Çift çalar saat", "Twin alarm clocks");
+      return t("lostFound.twinAlarmClocks");
     case "spare":
-      return t("Yedek lastik", "Spare tyre");
+      return t("lostFound.spareTyre");
     case "feather":
-      return t("Gece kuşu tüyü", "Night owl feather");
+      return t("lostFound.nightOwlFeather");
     case "teaglass":
-      return t("Sabah çayı", "Morning tea");
+      return t("lostFound.morningTea");
     case "tightrope":
-      return t("İp cambazı", "Tightrope");
+      return t("lostFound.tightrope");
     case "lantern":
-      return t("Hafta sonu nöbeti", "Weekend watch");
+      return t("lostFound.weekendWatch");
     case "hammock":
-      return t("Hamak molası", "Hammock break");
+      return t("lostFound.hammockBreak");
     case "scales":
-      return t("Terazi", "Scales");
+      return t("lostFound.scales");
     case "chest":
-      return t("Hazine sandığı", "Treasure chest");
+      return t("lostFound.treasureChest");
     case "piggy":
-      return t("Kumbara", "Piggy bank");
+      return t("lostFound.piggyBank");
     case "fan":
-      return t("Model yelpazesi", "Model fan");
+      return t("lostFound.modelFan");
   }
 }
 
 /** How a kind not found yet is earned, as the collection tells it; secret kinds keep it to themselves. */
 export function hintOf(kind: LostItemKind, t: T): string {
   if (SECRET_LOST_KINDS.includes(kind))
-    return t(
-      "Gizli rozet. Panda ipucu vermiyor.",
-      "A secret pin. The panda gives no hints.",
-    );
+    return t("lostFound.aSecretPinThePandaGives");
   return howToEarn(kind, t);
 }
 
@@ -158,107 +136,53 @@ export function hintOf(kind: LostItemKind, t: T): string {
 export function howToEarn(kind: LostItemKind, t: T): string {
   switch (kind) {
     case "hourglass":
-      return t(
-        "Bir 5 saatlik dönem, başlamasından en geç 2,5 saat sonra dolsun.",
-        "Fill a 5-hour period within 2.5 hours of its start.",
-      );
+      return t("lostFound.fillA5HourPeriodWithin");
     case "baton":
-      return t(
-        "Bir hesap limite takılınca 30 dakika içinde başka hesapla devam et.",
-        "When an account hits its limit, continue on another account within 30 minutes.",
-      );
+      return t("lostFound.whenAnAccountHitsItsLimit");
     case "trophy":
-      return t(
-        `Son ${TROPHY_DAYS} günün açık ara en yoğun gününü yaşa.`,
-        `Have the busiest day of the last ${TROPHY_DAYS} days by a clear margin.`,
-      );
+      return t("lostFound.haveTheBusiestDayOfThe", { TROPHY_DAYS });
     case "scroll":
-      return t(
-        `En az ${SCROLL_MIN_HOURS} saat aralıksız çalış.`,
-        `Work ${SCROLL_MIN_HOURS} hours or more without a break.`,
-      );
+      return t("lostFound.workHoursOrMoreWithoutA", { SCROLL_MIN_HOURS });
     case "tally":
-      return t(
-        "Bir haftanın 7 gününde de çalış.",
-        "Work on all 7 days of one week.",
-      );
+      return t("lostFound.workOnAll7DaysOf");
     case "compass":
-      return t(
-        `Bir haftada en az ${COMPASS_MIN_HOURS} saat çalış ve hiç limite takılma.`,
-        `Work ${COMPASS_MIN_HOURS} hours or more in a week without hitting a limit.`,
-      );
+      return t("lostFound.workHoursOrMoreInA", { COMPASS_MIN_HOURS });
     case "scarf":
-      return t(
-        "Aynı gün en az 3 hesap kullan.",
-        "Use 3 or more accounts on the same day.",
-      );
+      return t("lostFound.use3OrMoreAccountsOn");
     case "spare":
-      return t(
-        "Diğer hesaplar limite takılırken bir hesap bütün hafta kenarda kalsın.",
-        "Leave an account unused all week while the others hit limits.",
-      );
+      return t("lostFound.leaveAnAccountUnusedAllWeek");
     case "feather":
-      return t("Gece yarısından sonra çalış.", "Work after midnight.");
+      return t("lostFound.workAfterMidnight");
     case "teaglass":
-      return t(
-        "Sabah 05:00 ile 08:00 arasında çalış.",
-        "Work between 05:00 and 08:00.",
-      );
+      return t("lostFound.workBetween0500And08");
     case "boomerang":
-      return t(
-        "Başka bir hesaba geç ve 15 dakika içinde ilk hesaba dön.",
-        "Switch to another account and come back within 15 minutes.",
-      );
+      return t("lostFound.switchToAnotherAccountAndCome");
     case "clocks":
-      return t(
-        "İki hesabın 5 saatlik dönemi en fazla 10 dakika arayla yenilensin.",
-        "Have the 5-hour periods of 2 accounts reset within 10 minutes of each other.",
-      );
+      return t("lostFound.haveThe5HourPeriodsOf");
     case "tightrope":
-      return t(
-        `Bir 5 saatlik dönemi limite takılmadan en az %${TIGHTROPE_MIN_PERCENT} doldur.`,
-        `Fill a 5-hour period to ${TIGHTROPE_MIN_PERCENT}% or more, but do not hit its limit.`,
-      );
+      return t("lostFound.fillA5HourPeriodTo", { TIGHTROPE_MIN_PERCENT });
     case "lantern":
-      return t(
-        `Bir hafta sonunun iki gününde de çalış, toplam en az ${LANTERN_MIN_HOURS} saat.`,
-        `Work on both days of a weekend, ${LANTERN_MIN_HOURS} hours or more in all.`,
-      );
+      return t("lostFound.workOnBothDaysOfA", { LANTERN_MIN_HOURS });
     case "hammock":
-      return t(
-        `En az ${HAMMOCK_MIN_DAYS} gün çalıştığın bir haftada, iki iş gününün arasındaki bir günü tamamen boş bırak.`,
-        `In a week with ${HAMMOCK_MIN_DAYS} or more work days, take 1 weekday fully off between 2 busy days.`,
-      );
+      return t("lostFound.inAWeekWithOrMore", { HAMMOCK_MIN_DAYS });
     case "scales":
-      return t(
-        `En az ${SCALES_MIN_HOURS} saatlik bir haftada hesapların paylarını birbirine yakın tut: aralarında en fazla ${SCALES_MAX_SPREAD} puan.`,
-        `In a week of ${SCALES_MIN_HOURS} hours or more, keep the accounts’ shares within ${SCALES_MAX_SPREAD} points of each other.`,
-      );
+      return t("lostFound.inAWeekOfHoursOr", { SCALES_MIN_HOURS, SCALES_MAX_SPREAD });
     case "chest":
-      return t(
-        "Bir haftanın API karşılığı, önceki haftaların hepsini açık ara geçsin.",
-        "Have a week whose API value clearly beats every week before it.",
-      );
+      return t("lostFound.haveAWeekWhoseApiValue");
     case "piggy":
-      return t(
-        "Bir hesabın tek haftalık API karşılığı, planının aylık ücretini geçsin (Pro, Max 5x ya da Max 20x).",
-        "Have one account’s API value in a week pass its plan’s monthly price (Pro, Max 5x or Max 20x).",
-      );
+      return t("lostFound.haveOneAccountSApiValue");
     case "fan":
-      return t(
-        "Aynı hafta en az 3 model ailesiyle çalış (Opus, Sonnet, Haiku, Fable).",
-        "Work with 3 or more model families in one week (Opus, Sonnet, Haiku, Fable).",
-      );
+      return t("lostFound.workWith3OrMoreModel");
   }
 }
 
 /** A finish's name. */
 export const tierName = (tier: LostTier, t: T) =>
   tier === "gold"
-    ? t("Altın", "Gold")
+    ? t("lostFound.gold")
     : tier === "silver"
-      ? t("Gümüş", "Silver")
-      : t("Bronz", "Bronze");
+      ? t("lostFound.silver")
+      : t("lostFound.bronze");
 
 /** How an item reads: its picture, name, what happened, when and to whom, and what the panda thinks. */
 export interface Described {
@@ -281,7 +205,7 @@ export function describe(
   language: Language,
 ): Described {
   const told = describeMoment(item, week, zone, t, language);
-  const spend = spendLine(item, language);
+  const spend = spendLine(item, t, language);
   return spend ? { ...told, spend } : told;
 }
 
@@ -295,75 +219,51 @@ function describeMoment(
   const look = lookOf(item, t);
   switch (item.kind) {
     case "hourglass": {
-      const took = formatDuration(item.minutes * 60_000, language);
+      const took = formatDuration(item.minutes * 60_000, t);
       return {
         ...look,
-        story: t(
-          `Bir 5 saatlik dönem, başlamasından yalnızca ${took} sonra doldu.`,
-          `A 5-hour period was full only ${took} after it started.`,
-        ),
+        story: t("lostFound.a5HourPeriodWasFull", { took }),
         when: formatWhen(item.at, zone, language),
         accounts: item.accountId ? [item.accountId] : [],
-        quip: t(
-          "Kumu bu kadar hızlı akan bir saat görmedim.",
-          "I have never seen sand run that fast.",
-        ),
+        quip: t("lostFound.iHaveNeverSeenSandRun"),
       };
     }
     case "boomerang":
       return {
         ...look,
-        story: t(
-          `Başladığın hesaba ${item.minutes} dakika içinde geri döndün.`,
-          `You were back on the account you started with within ${minutesEn(item.minutes)}.`,
-        ),
+        story: t("lostFound.youWereBackOnTheAccount", { minutes: item.minutes }),
         when: formatWhen(item.at, zone, language),
         accounts: [item.accountIds[0], item.accountIds[1], item.accountIds[0]],
-        quip: t("Geri geleceğini biliyordum.", "I knew it. You came back."),
+        quip: t("lostFound.iKnewItYouCameBack"),
       };
     case "baton": {
       const took =
         item.minutes === 0
-          ? t(
-              "Bir hesap limite takılınca öbür hesap hemen devraldı.",
-              "An account hit its limit and another took over at once.",
-            )
-          : t(
-              `Bir hesap limite takılınca öbür hesap ${item.minutes} dakika içinde devraldı.`,
-              `An account hit its limit and another took over within ${minutesEn(item.minutes)}.`,
-            );
+          ? t("lostFound.anAccountHitItsLimitAnd")
+          : t("lostFound.anAccountHitItsLimitAnd2", { minutes: item.minutes });
       const again =
         item.count > 1
-          ? t(
-              ` O hafta ${item.count} kez oldu.`,
-              ` It happened ${timesEn(item.count)} that week.`,
-            )
+          ? t("lostFound.itHappenedThatWeek", { count: item.count })
           : "";
       return {
         ...look,
         story: took + again,
         when: formatWhen(item.at, zone, language),
         accounts: item.accountIds,
-        quip: t(
-          "Bayrağı düşürmeden koşmaya devam ettik.",
-          "We ran on and did not drop the baton.",
-        ),
+        quip: t("lostFound.weRanOnAndDidNot"),
       };
     }
     case "trophy": {
       const count = formatCount(item.tokens, language);
-      const times = new Intl.NumberFormat(locale(language), {
+      const times = new Intl.NumberFormat(FORMAT_LOCALE[language], {
         maximumFractionDigits: 1,
       }).format(item.times);
       return {
         ...look,
-        story: t(
-          `Son 30 günün en yoğun günü: sıradan bir günün ${times} katı, ${count} token.`,
-          `The busiest of the last 30 days: ${times}× an ordinary day, ${count} tokens.`,
-        ),
+        story: t("lostFound.theBusiestOfTheLast30", { times, count }),
         when: formatDayLong(item.date, language),
         accounts: [],
-        quip: t("Rafın en üstüne koydum.", "It goes on the top shelf."),
+        quip: t("lostFound.itGoesOnTheTopShelf"),
       };
     }
     case "scroll": {
@@ -372,93 +272,63 @@ function describeMoment(
       ).toISOString();
       return {
         ...look,
-        story: t(
-          `${item.hours} saat aralıksız çalıştın.`,
-          `You worked ${item.hours} hours without a break.`,
-        ),
+        story: t("lostFound.youWorkedHoursWithoutABreak", { itemHours: item.hours }),
         when: `${formatWhen(item.at, zone, language)} → ${formatWhen(until, zone, language)}`,
         accounts: [],
-        quip: t(
-          "Ucunu bulana kadar açtım.",
-          "I unrolled it until I found the end.",
-        ),
+        quip: t("lostFound.iUnrolledItUntilIFound"),
       };
     }
     case "tally":
       return {
         ...look,
-        story: t(
-          `Haftanın 7 gününün her birinde çalıştın; toplam ${item.hours} saat.`,
-          `You worked on all 7 days of the week, ${item.hours} hours in all.`,
-        ),
+        story: t("lostFound.youWorkedOnAll7Days", { itemHours: item.hours }),
         when: weekLabel(week.start, week.end, language),
         accounts: [],
-        quip: t("Her gün bir çentik attım.", "I cut a notch for every day."),
+        quip: t("lostFound.iCutANotchForEvery"),
       };
     case "compass":
       return {
         ...look,
-        story: t(
-          `O hafta ${item.hours} saat çalıştın ve hiç limite takılmadın.`,
-          `That week you worked ${item.hours} hours and never hit a limit.`,
-        ),
+        story: t("lostFound.thatWeekYouWorkedHoursAnd", { itemHours: item.hours }),
         when: weekLabel(week.start, week.end, language),
         accounts: [],
-        quip: t("Rotadan hiç çıkmadık.", "We never went off course."),
+        quip: t("lostFound.weNeverWentOffCourse"),
       };
     case "scarf": {
       const n = item.accountIds.length;
       return {
         ...look,
-        story: t(
-          `Aynı gün ${n} hesabın her biri iş başındaydı.`,
-          `${n} accounts were all in use on the same day.`,
-        ),
+        story: t("lostFound.accountsWereAllInUseOn", { n }),
         when: formatDayLong(item.date, language),
         accounts: item.accountIds,
-        quip: t("Her hesaptan bir ilmek.", "One stitch from every account."),
+        quip: t("lostFound.oneStitchFromEveryAccount"),
       };
     }
     case "clocks": {
       const together =
         item.gapMinutes === 0
-          ? t(
-              "İki hesabın 5 saatlik dönemi aynı anda yenilendi.",
-              "The 5-hour periods of 2 accounts reset at the same moment.",
-            )
-          : t(
-              `İki hesabın 5 saatlik dönemi ${item.gapMinutes} dakika arayla yenilendi.`,
-              `The 5-hour periods of 2 accounts reset ${minutesEn(item.gapMinutes)} apart.`,
-            );
+          ? t("lostFound.the5HourPeriodsOf2")
+          : t("lostFound.the5HourPeriodsOf22", { minutes: item.gapMinutes });
       const again =
         item.count > 1
-          ? t(
-              ` O hafta ${item.count} kez oldu.`,
-              ` It happened ${timesEn(item.count)} that week.`,
-            )
+          ? t("lostFound.itHappenedThatWeek", { count: item.count })
           : "";
       return {
         ...look,
         story: together + again,
         when: formatWhen(item.at, zone, language),
         accounts: item.accountIds,
-        quip: t(
-          "İkisi birden çaldı; hangisine koşacağımı şaşırdım.",
-          "Both rang at once. I did not know which one to run to.",
-        ),
+        quip: t("lostFound.bothRangAtOnceIDid"),
       };
     }
     case "spare": {
       const many = item.accountIds.length > 1;
       return {
         ...look,
-        story: t(
-          `${many ? "Bazı hesaplar" : "Bir hesap"} bütün hafta kenarda bekledi; bu arada ${item.hits} kez limite takıldın.`,
-          `${many ? "Some accounts" : "An account"} sat out the whole week while you hit a limit ${timesEn(item.hits)}.`,
-        ),
+        story: t("lostFound.satOutTheWholeWeekWhile", { many: many ? "yes" : "no", hits: item.hits }),
         when: weekLabel(week.start, week.end, language),
         accounts: item.accountIds,
-        quip: t("Bagajdaydı, kimse bakmadı.", "It was in the boot all along."),
+        quip: t("lostFound.itWasInTheBootAll"),
       };
     }
     case "feather": {
@@ -468,16 +338,10 @@ function describeMoment(
       );
       return {
         ...look,
-        story: t(
-          `O hafta gece yarısından sonra toplam ${item.hours} saat çalıştın.`,
-          `That week you worked ${item.hours} ${item.hours === 1 ? "hour" : "hours"} after midnight in all.`,
-        ),
-        when: t(`En geç: ${from}–${to}`, `Latest: ${from}–${to}`),
+        story: t("lostFound.thatWeekYouWorkedHoursAfter", { itemHours: item.hours }),
+        when: t("lostFound.latest", { from, to }),
         accounts: [],
-        quip: t(
-          "Ben uyuyordum; tüyü sabah buldum.",
-          "I was asleep; I found the feather in the morning.",
-        ),
+        quip: t("lostFound.iWasAsleepIFoundThe"),
       };
     }
     case "teaglass": {
@@ -487,116 +351,85 @@ function describeMoment(
       );
       return {
         ...look,
-        story: t(
-          `O hafta sabah 05:00 ile 08:00 arasında toplam ${item.hours} saat çalıştın.`,
-          `That week you worked ${item.hours} ${item.hours === 1 ? "hour" : "hours"} between 05:00 and 08:00 in all.`,
-        ),
-        when: t(`En erken: ${from}–${to}`, `Earliest: ${from}–${to}`),
+        story: t("lostFound.thatWeekYouWorkedHoursBetween", { itemHours: item.hours }),
+        when: t("lostFound.earliest", { from, to }),
         accounts: [],
-        quip: t(
-          "Çay demlenmeden işe koyulmuşsun.",
-          "You were at work before the tea was ready.",
-        ),
+        quip: t("lostFound.youWereAtWorkBeforeThe"),
       };
     }
     case "tightrope":
       return {
         ...look,
-        story: t(
-          `Bir 5 saatlik dönem limite takılmadan %${item.percent} doluluğa ulaştı.`,
-          `A 5-hour period got to ${item.percent}% full and never hit its limit.`,
-        ),
-        when: t(
-          `Yenilendi: ${formatWhen(item.at, zone, language)}`,
-          `Reset: ${formatWhen(item.at, zone, language)}`,
-        ),
+        story: t("lostFound.a5HourPeriodGotTo", { itemPercent: item.percent }),
+        when: t("lostFound.reset", { formatWhen: formatWhen(item.at, zone, language) }),
         accounts: item.accountId ? [item.accountId] : [],
-        quip: t("Aşağı hiç bakmadım.", "I never looked down."),
+        quip: t("lostFound.iNeverLookedDown"),
       };
     case "lantern":
       return {
         ...look,
-        story: t(
-          `Cumartesi ve pazar toplam ${item.hours} saat çalıştın.`,
-          `You worked ${item.hours} hours over Saturday and Sunday.`,
-        ),
+        story: t("lostFound.youWorkedHoursOverSaturdayAnd", { itemHours: item.hours }),
         when: weekLabel(addDays(week.start, 5), week.end, language),
         accounts: [],
-        quip: t("Feneri ben tuttum.", "I held the lantern."),
+        quip: t("lostFound.iHeldTheLantern"),
       };
     case "hammock":
       return {
         ...look,
-        story: t(
-          `Haftanın ${item.activeDays} günü çalıştın; arada bir günü tamamen dinlenerek geçirdin.`,
-          `You worked ${item.activeDays} days that week and took 1 whole day off in between.`,
-        ),
+        story: t("lostFound.youWorkedDaysThatWeekAnd", { itemActiveDays: item.activeDays }),
         when: formatDayLong(item.date, language),
         accounts: [],
-        quip: t("Ben de yanına uzandım.", "I lay down next to you."),
+        quip: t("lostFound.iLayDownNextToYou"),
       };
     case "scales": {
       const n = item.accountIds.length;
       return {
         ...look,
-        story: t(
-          `Hafta boyunca ${n} hesap işi neredeyse eşit paylaştı: her biri %${item.low} ile %${item.high} arasında.`,
-          `${n} accounts shared the week almost evenly: each did ${item.low}–${item.high}%.`,
-        ),
+        story: t("lostFound.accountsSharedTheWeekAlmostEvenly", { n, itemLow: item.low, itemHigh: item.high }),
         when: weekLabel(week.start, week.end, language),
         accounts: item.accountIds,
-        quip: t("Kefeler hiç sallanmadı.", "The pans never tipped."),
+        quip: t("lostFound.thePansNeverTipped"),
       };
     }
     case "chest": {
-      const times = new Intl.NumberFormat(locale(language), {
+      const times = new Intl.NumberFormat(FORMAT_LOCALE[language], {
         maximumFractionDigits: 1,
       }).format(item.times);
       return {
         ...look,
-        story: t(
-          `Haftanın API karşılığı ${formatCost(item.cost, language)}: önceki haftaların hepsinden yüksek, sıradan bir haftanın ${times} katı, ${formatCount(item.tokens, language)} token.`,
-          `The week’s API value was ${formatCost(item.cost, language)}: higher than every week before it, ${times}× an ordinary one, ${formatCount(item.tokens, language)} tokens.`,
-        ),
+        story: t("lostFound.theWeekSApiValueWas", { formatCost: formatCost(item.cost, language), times, formatCount: formatCount(item.tokens, language) }),
         when: weekLabel(week.start, week.end, language),
         accounts: [],
-        quip: t("Sandığın kapağı zor kapandı.", "The lid barely closed."),
+        quip: t("lostFound.theLidBarelyClosed"),
       };
     }
     case "piggy":
       return {
         ...look,
-        story: t(
-          `Bir hesabın o haftaki API karşılığı ${formatCost(item.cost, language)} oldu; planının aylık ücreti ${formatCost(item.price, language)}. Abonelik bedelini tek haftada çıkardı.`,
-          `An account’s API value that week was ${formatCost(item.cost, language)}, against its plan’s ${formatCost(item.price, language)} a month: it paid for itself in a week.`,
-        ),
+        story: t("lostFound.anAccountSApiValueThat", { formatCost: formatCost(item.cost, language), formatCost2: formatCost(item.price, language) }),
         when: weekLabel(week.start, week.end, language),
         accounts: [item.accountId],
-        quip: t("Kumbara ağırlaştı.", "The piggy bank got heavy."),
+        quip: t("lostFound.thePiggyBankGotHeavy"),
       };
     case "fan":
       return {
         ...look,
-        story: t(
-          `O hafta ${item.families.length} model ailesiyle çalıştın: ${item.families.join(", ")}.`,
-          `That week you worked with ${item.families.length} model families: ${item.families.join(", ")}.`,
-        ),
+        story: t("lostFound.thatWeekYouWorkedWithModel", { familiesLength: item.families.length, join: item.families.join(", ") }),
         when: weekLabel(week.start, week.end, language),
         accounts: [],
-        quip: t("Her birine bir yaprak açtım.", "One fold for each."),
+        quip: t("lostFound.oneFoldForEach"),
       };
   }
 }
 
 /** What a moment used, "12,4 Mn token · $38,20 API karşılığı"; undefined when the ledger cannot tell. */
-export function spendLine(item: LostItem, language: Language) {
+export function spendLine(item: LostItem, t: T, language: Language) {
   if (!item.spend || item.kind === "chest" || item.kind === "piggy")
     return undefined;
-  const tokens = formatTokens(item.spend.tokens, language);
-  const cost = formatCost(item.spend.cost, language);
-  return language === "tr"
-    ? `${tokens} token · ${cost} API karşılığı`
-    : `${tokens} tokens · ${cost} API value`;
+  return t("lostFound.spendLine", {
+    tokens: formatTokens(item.spend.tokens, language),
+    cost: formatCost(item.spend.cost, language),
+  });
 }
 
 /** Account chips: colour and name; a name the collection kept wins over a removed account. */
@@ -619,7 +452,7 @@ function AccountChips({
       {ids.map((id, i) => {
         const account = accounts.find((a) => a.id === id);
         const name =
-          account?.name ?? names?.[id] ?? t("Eski hesap", "Former account");
+          account?.name ?? names?.[id] ?? t("lostFound.formerAccount");
         return (
           <span key={`${id}-${i}`} className="inline-flex items-center gap-1">
             {arrows && i > 0 && (
@@ -670,7 +503,7 @@ export function finishOf(finds: KeptFind[] | undefined): Finish {
 
 /** "4 hafta" / "4 weeks". */
 const weeksLabel = (n: number, t: T) =>
-  t(`${n} hafta`, `${n} ${n === 1 ? "week" : "weeks"}`);
+  t("lostFound.weeks", { n });
 
 /** "Gümüş · 4 hafta" / "Silver · 4 weeks". */
 function finishLabel(finish: Finish, t: T) {
@@ -681,46 +514,40 @@ function finishLabel(finish: Finish, t: T) {
 /** The way to the next finish: "Gümüş için 1 hafta daha", or that gold is the last. */
 function nextLabel(finish: Finish, t: T) {
   const next = nextTier(finish.weeks);
-  if (!next) return t("En üst seviye", "Top finish");
+  if (!next) return t("lostFound.topFinish");
   const left = next.weeks - finish.weeks;
-  return t(
-    `${tierName(next.tier, t)} için ${left} hafta daha`,
-    `${left} more ${left === 1 ? "week" : "weeks"} to ${tierName(next.tier, t).toLowerCase()}`,
-  );
+  return t("lostFound.moreWeeksTo", { left, tier: next.tier });
 }
 
 /** What a find did for its pin: earned it, raised its finish, or found it once more. */
 function stepLabel(count: number, t: T) {
-  if (count === 1) return t("Yeni rozet", "New pin");
+  if (count === 1) return t("lostFound.newPin");
   const raised = LOST_TIERS.find((step) => step.weeks === count);
   if (raised)
-    return t(
-      `${tierName(raised.tier, t)} seviyeye çıktı`,
-      `Reached ${tierName(raised.tier, t).toLowerCase()}`,
-    );
-  return t(`${count}. kez bulundu`, `Found ${timesEn(count)}`);
+    return t("lostFound.reached", { tier: raised.tier });
+  return t("lostFound.found", { count });
 }
 
 /** The pins, grouped like an awards library. */
-const CATEGORIES: { id: string; title: Copy; kinds: LostItemKind[] }[] = [
+const CATEGORIES: { id: string; title: MessageId; kinds: LostItemKind[] }[] = [
   {
     id: "pace",
-    title: ["Tempo ve rekorlar", "Pace and records"],
+    title: "lostFound.paceAndRecords",
     kinds: ["hourglass", "tightrope", "scroll", "compass"],
   },
   {
     id: "time",
-    title: ["Gün ve saat", "Days and hours"],
+    title: "lostFound.daysAndHours",
     kinds: ["tally", "lantern", "hammock", "feather", "teaglass"],
   },
   {
     id: "accounts",
-    title: ["Hesaplar arasında", "Across accounts"],
+    title: "lostFound.acrossAccounts",
     kinds: ["baton", "boomerang", "scales", "scarf", "clocks", "spare"],
   },
   {
     id: "tokens",
-    title: ["Token ve maliyet", "Tokens and cost"],
+    title: "lostFound.tokensAndCost",
     kinds: ["trophy", "chest", "piggy", "fan"],
   },
 ];
@@ -732,15 +559,15 @@ export function recordOf(
   language: Language,
 ): { value: number; lower?: boolean; label: string } {
   const hoursLabel = (n: number) =>
-    t(`${n} saat`, `${n} ${n === 1 ? "hour" : "hours"}`);
+    t("lostFound.hours", { n });
   const minutesLabel = (n: number) =>
-    n === 0 ? t("hemen", "at once") : t(`${n} dk`, `${n} min`);
+    n === 0 ? t("lostFound.atOnce") : t("lostFound.min", { n });
   switch (item.kind) {
     case "hourglass":
       return {
         value: item.minutes,
         lower: true,
-        label: formatDuration(item.minutes * 60_000, language),
+        label: formatDuration(item.minutes * 60_000, t),
       };
     case "baton":
     case "boomerang":
@@ -755,63 +582,48 @@ export function recordOf(
         lower: true,
         label:
           item.gapMinutes === 0
-            ? t("aynı anda", "at the same moment")
-            : t(`${item.gapMinutes} dk arayla`, `${item.gapMinutes} min apart`),
+            ? t("lostFound.atTheSameMoment")
+            : t("lostFound.minApart", { itemGapMinutes: item.gapMinutes }),
       };
     case "trophy":
       return {
         value: item.tokens,
-        label: `${formatCount(item.tokens, language)} token`,
+        label: t("lostFound.tokens", { tokens: formatCount(item.tokens, language) }),
       };
     case "chest":
       return { value: item.cost, label: formatCost(item.cost, language) };
     case "piggy":
       return {
         value: item.cost / item.price,
-        label: t(
-          `${formatCost(item.cost, language)} / ${formatCost(item.price, language)}`,
-          `${formatCost(item.cost, language)} of ${formatCost(item.price, language)}`,
-        ),
+        label: t("lostFound.of", { formatCost: formatCost(item.cost, language), formatCost2: formatCost(item.price, language) }),
       };
     case "tightrope":
-      return { value: item.percent, label: `%${item.percent}` };
+      return { value: item.percent, label: formatPercent(item.percent, language) };
     case "scales":
       return {
         value: item.high - item.low,
         lower: true,
-        label: t(
-          `${item.high - item.low} puan fark`,
-          `${item.high - item.low} points apart`,
-        ),
+        label: t("lostFound.pointsApart", { points: item.high - item.low }),
       };
     case "scarf":
       return {
         value: item.accountIds.length,
-        label: t(
-          `${item.accountIds.length} hesap`,
-          `${item.accountIds.length} accounts`,
-        ),
+        label: t("lostFound.accounts", { accountIdsLength: item.accountIds.length }),
       };
     case "fan":
       return {
         value: item.families.length,
-        label: t(
-          `${item.families.length} model ailesi`,
-          `${item.families.length} model families`,
-        ),
+        label: t("lostFound.modelFamilies", { familiesLength: item.families.length }),
       };
     case "spare":
       return {
         value: item.hits,
-        label: t(`${item.hits} limit`, `${item.hits} limits`),
+        label: t("lostFound.limits", { itemHits: item.hits }),
       };
     case "hammock":
       return {
         value: item.activeDays,
-        label: t(
-          `${item.activeDays} aktif gün`,
-          `${item.activeDays} active days`,
-        ),
+        label: t("lostFound.activeDays", { itemActiveDays: item.activeDays }),
       };
     case "scroll":
     case "tally":
@@ -862,10 +674,10 @@ export function rarityOf(
     weeks,
     label:
       share >= 0.5
-        ? t("Sık", "Common")
+        ? t("lostFound.common")
         : share >= 0.2
-          ? t("Ara sıra", "Now and then")
-          : t("Nadir", "Rare"),
+          ? t("lostFound.nowAndThen")
+          : t("lostFound.rare"),
   };
 }
 
@@ -876,27 +688,27 @@ function milestones(finishes: { kind: LostItemKind; finish: Finish }[], t: T) {
   return [
     {
       id: "first",
-      label: t("İlk rozet", "First pin"),
+      label: t("lostFound.firstPin"),
       done: finishes.some(({ finish }) => finish.tier),
     },
     {
       id: "every-category",
-      label: t("Her kategoriden bir rozet", "A pin in every category"),
+      label: t("lostFound.aPinInEveryCategory"),
       done: CATEGORIES.every((c) => c.kinds.some(found)),
     },
     {
       id: "first-gold",
-      label: t("İlk altın", "First gold"),
+      label: t("lostFound.firstGold"),
       done: finishes.some(({ finish }) => finish.tier === "gold"),
     },
     {
       id: "category",
-      label: t("Bir kategoriyi tamamla", "Complete a category"),
+      label: t("lostFound.completeACategory"),
       done: CATEGORIES.some((c) => c.kinds.every(found)),
     },
     {
       id: "platinum",
-      label: t("Platin: tüm rozetler", "Platinum: every pin"),
+      label: t("lostFound.platinumEveryPin"),
       done: finishes.every(({ finish }) => finish.tier),
     },
   ];
@@ -967,10 +779,7 @@ function ProgressRing({ found, total }: { found: number; total: number }) {
       <div
         className="text-center"
         role="img"
-        aria-label={t(
-          `${total} rozetten ${found} tanesi bulundu`,
-          `${found} of ${total} pins found`,
-        )}
+        aria-label={t("lostFound.ofPinsFound", { found, total })}
       >
         <div className="font-display text-2xl leading-none font-semibold tabular-nums">
           {found}
@@ -1023,17 +832,14 @@ function Overview({
       <ProgressRing found={found} total={finishes.length} />
       <div className="min-w-0 flex-1 basis-56">
         <h3 className="font-display text-lg font-semibold">
-          {t("Rozet koleksiyonu", "Pin collection")}
+          {t("lostFound.pinCollection")}
         </h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {t(
-            "Panda her hafta kullanımından anları rozet olarak toplar.",
-            "Every week the panda collects moments from your usage as pins.",
-          )}
+          {t("lostFound.everyWeekThePandaCollectsMoments")}
         </p>
         <ul
           className="mt-3 flex flex-wrap gap-2"
-          aria-label={t("Seviyeler", "Finishes")}
+          aria-label={t("lostFound.finishes")}
         >
           {(["gold", "silver", "bronze"] as const).map((tier) => (
             <li
@@ -1051,7 +857,7 @@ function Overview({
       <div className="basis-full border-t pt-3" data-slot="lost-milestones">
         <div className="mb-2 flex items-baseline justify-between text-xs">
           <span className="font-semibold tracking-wider text-muted-foreground uppercase">
-            {t("Kilometre taşları", "Milestones")}
+            {t("lostFound.milestones")}
           </span>
           <span className="text-muted-foreground tabular-nums">
             {steps.filter((step) => step.done).length}/{steps.length}
@@ -1077,8 +883,8 @@ function Overview({
               {step.label}
               <span className="sr-only">
                 {step.done
-                  ? t(" (tamam)", " (done)")
-                  : t(" (henüz değil)", " (not yet)")}
+                  ? t("lostFound.done")
+                  : t("lostFound.notYet")}
               </span>
             </li>
           ))}
@@ -1135,14 +941,11 @@ function RecentStrip({
           id="lost-recent"
           className="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
         >
-          {t("Son kazanılanlar", "Recently earned")}
+          {t("lostFound.recentlyEarned")}
         </h4>
         {recent.some(({ find }) => find.start === latest) && (
           <span className="text-2xs text-muted-foreground">
-            {t(
-              "Vurgulananlar geçen haftadan",
-              "Highlighted pins are from last week",
-            )}
+            {t("lostFound.highlightedPinsAreFromLastWeek")}
           </span>
         )}
       </div>
@@ -1187,10 +990,7 @@ function RecentStrip({
         <div className="flex items-center gap-3 rounded-lg border border-dashed p-3">
           <PandaRig pose="curl" expression="closed" props={["z"]} size={44} />
           <p className="text-sm text-muted-foreground">
-            {t(
-              "Henüz rozet yok. Panda her pazartesi geçen haftaya bakar.",
-              "No pins yet. The panda checks the last week every Monday.",
-            )}
+            {t("lostFound.noPinsYetThePandaChecks")}
           </p>
         </div>
       )}
@@ -1227,7 +1027,7 @@ function NextGoals({
         id="lost-next"
         className="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
       >
-        {t("Sıradaki hedefler", "Up next")}
+        {t("lostFound.upNext")}
       </h4>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2">
         {goals.map(({ kind, finish }) => {
@@ -1284,11 +1084,11 @@ function Library({
     return filter === "all" || (filter === "earned") === found;
   };
   const filters: { id: Filter; label: string; count: number }[] = [
-    { id: "all", label: t("Tümü", "All"), count: finishes.length },
-    { id: "earned", label: t("Kazanılan", "Earned"), count: earned },
+    { id: "all", label: t("lostFound.all"), count: finishes.length },
+    { id: "earned", label: t("lostFound.earned"), count: earned },
     {
       id: "locked",
-      label: t("Kilitli", "Locked"),
+      label: t("lostFound.locked"),
       count: finishes.length - earned,
     },
   ];
@@ -1303,12 +1103,12 @@ function Library({
           id="lost-library"
           className="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
         >
-          {t("Tüm rozetler", "All pins")}
+          {t("lostFound.allPins")}
         </h4>
         <div
           className="flex rounded-lg border p-0.5"
           role="group"
-          aria-label={t("Göster", "Show")}
+          aria-label={t("common.show")}
         >
           {filters.map(({ id, label, count }) => (
             <Button
@@ -1339,7 +1139,7 @@ function Library({
             data-category={category.id}
           >
             <div className="flex items-baseline justify-between text-sm">
-              <span className="font-semibold">{t(...category.title)}</span>
+              <span className="font-semibold">{t(category.title)}</span>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {done}/{category.kinds.length}
               </span>
@@ -1370,13 +1170,13 @@ function Library({
                       />
                       <span className="mt-2 block text-xs leading-tight font-semibold">
                         {sealed
-                          ? t("Gizli rozet", "Secret pin")
+                          ? t("lostFound.secretPin")
                           : kindTitle(kind, t)}
                       </span>
                       <span className="mt-0.5 block text-2xs text-muted-foreground">
                         {finish.tier
                           ? finishLabel(finish, t)
-                          : t("Kilitli", "Locked")}
+                          : t("lostFound.locked")}
                       </span>
                       {finish.tier && (
                         <Meter
@@ -1404,7 +1204,7 @@ function TierLadder({ finish }: { finish: Finish }) {
   return (
     <ol
       className="grid grid-cols-3 gap-1.5"
-      aria-label={t("Seviyeler", "Finishes")}
+      aria-label={t("lostFound.finishes")}
     >
       {LOST_TIERS.map((step) => {
         const reached = finish.weeks >= step.weeks;
@@ -1478,7 +1278,7 @@ function Details({
           shine
         />
         <h4 className="mt-1 font-display text-lg font-semibold">
-          {sealed ? t("Gizli rozet", "Secret pin") : kindTitle(kind, t)}
+          {sealed ? t("lostFound.secretPin") : kindTitle(kind, t)}
         </h4>
         <span
           className={cn(
@@ -1488,12 +1288,12 @@ function Details({
         >
           {found
             ? finishLabel(finish, t)
-            : t("Henüz bulunmadı", "Not found yet")}
+            : t("lostFound.notFoundYet")}
         </span>
       </div>
       <div className="grid gap-1">
         <div className="text-xs font-semibold text-muted-foreground">
-          {t("Nasıl kazanılır", "How to earn it")}
+          {t("lostFound.howToEarnIt")}
         </div>
         <p className="text-sm">
           {found ? howToEarn(kind, t) : hintOf(kind, t)}
@@ -1513,7 +1313,7 @@ function Details({
         <dl className="grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-lg border px-2.5 py-2">
             <dt className="text-muted-foreground">
-              {t("İlk bulunduğu hafta", "First found")}
+              {t("lostFound.firstFound")}
             </dt>
             <dd className="mt-0.5 font-semibold tabular-nums">
               {weekLabel(finish.first!, addDays(finish.first!, 6), language)}
@@ -1521,7 +1321,7 @@ function Details({
           </div>
           <div className="rounded-lg border px-2.5 py-2">
             <dt className="text-muted-foreground">
-              {t("Son bulunduğu hafta", "Last found")}
+              {t("lostFound.lastFound")}
             </dt>
             <dd className="mt-0.5 font-semibold tabular-nums">
               {weekLabel(finish.last!, addDays(finish.last!, 6), language)}
@@ -1533,7 +1333,7 @@ function Details({
               data-slot="lost-record"
             >
               <dt className="text-muted-foreground">
-                {t("Kişisel rekor", "Personal best")}
+                {t("lostFound.personalBest")}
               </dt>
               <dd className="mt-0.5 font-semibold tabular-nums">
                 {best.record.label}
@@ -1549,14 +1349,11 @@ function Details({
               data-slot="lost-rarity"
             >
               <dt className="text-muted-foreground">
-                {t("Sıklık", "How often")}
+                {t("lostFound.howOften")}
               </dt>
               <dd className="mt-0.5 font-semibold">{rarity.label}</dd>
               <dd className="text-2xs text-muted-foreground tabular-nums">
-                {t(
-                  `Son ${rarity.weeks} haftada ${rarity.seen} kez`,
-                  `${rarity.seen} of the last ${rarity.weeks} weeks`,
-                )}
+                {t("lostFound.ofTheLastWeeks", { raritySeen: rarity.seen, rarityWeeks: rarity.weeks })}
               </dd>
             </div>
           )}
@@ -1565,7 +1362,7 @@ function Details({
       {latestStory && (
         <p className="text-xs text-muted-foreground italic">
           <span className="sr-only">
-            {t("Panda diyor ki: ", "The panda says: ")}
+            {t("lostFound.thePandaSays")}
           </span>
           “{latestStory.quip}”
         </p>
@@ -1577,7 +1374,7 @@ function Details({
             id="lost-history"
             className="cursor-pointer text-xs font-semibold text-muted-foreground"
           >
-            {t(`Geçmiş (${finds.length})`, `History (${finds.length})`)}
+            {t("lostFound.history", { findsLength: finds.length })}
           </summary>
           <ol className="grid gap-2">
             {rows.map((find) => {
@@ -1596,7 +1393,7 @@ function Details({
                       finds.length > 1 &&
                       best.find.start === find.start && (
                         <span className="rounded-full bg-primary/10 px-1.5 font-medium text-primary">
-                          {t("Rekor", "Best")}
+                          {t("lostFound.best")}
                         </span>
                       )}
                   </div>
@@ -1632,10 +1429,7 @@ function Details({
                     </>
                   ) : (
                     <p className="mt-0.5 text-sm text-muted-foreground">
-                      {t(
-                        "Bu hafta bulundu. Ayrıntısı yok.",
-                        "Found this week. No details.",
-                      )}
+                      {t("lostFound.foundThisWeekNoDetails")}
                     </p>
                   )}
                 </li>
@@ -1650,11 +1444,8 @@ function Details({
               onClick={() => setAll(!all)}
             >
               {all
-                ? t("Daha az göster", "Show fewer")
-                : t(
-                    `Tümünü göster (${finds.length})`,
-                    `Show all (${finds.length})`,
-                  )}
+                ? t("lostFound.showFewer")
+                : t("lostFound.showAll", { findsLength: finds.length })}
             </Button>
           )}
         </details>
@@ -1708,14 +1499,8 @@ export function LostFound() {
             />
             <p className="text-2xs text-muted-foreground">
               {collection.loading
-                ? t(
-                    "Panda haftaları tarıyor…",
-                    "The panda checks the weeks…",
-                  )
-                : t(
-                    `Bir rozet bulunduğu ilk hafta bronz, ${LOST_TIERS[1].weeks} haftada gümüş, ${LOST_TIERS[2].weeks} haftada altın olur. Panda son 12 haftaya bakar.`,
-                    `A pin is bronze when found, silver after ${LOST_TIERS[1].weeks} weeks and gold after ${LOST_TIERS[2].weeks} weeks. The panda looks back 12 weeks.`,
-                  )}
+                ? t("lostFound.thePandaChecksTheWeeks")
+                : t("lostFound.aPinIsBronzeWhenFound", { weeks: LOST_TIERS[1].weeks, weeks2: LOST_TIERS[2].weeks })}
             </p>
           </Card>
           <Card

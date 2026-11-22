@@ -4,20 +4,22 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { UsageCard } from "../src/features/UsageCard";
 import { DEFAULT_SETTINGS, type AccountUsage } from "../shared/types";
+import type { Locale } from "../shared/i18n/locales";
+import { testT } from "./i18n";
 
 const now = Date.parse("2026-10-13T10:00:00.000Z");
 const earlier = "2026-10-13T09:00:00.000Z";
 const later = "2026-10-13T13:00:00.000Z";
 const checkedAt = "2026-10-13T08:00:00.000Z";
 
-function render(usage: AccountUsage, language = "en") {
+function render(usage: AccountUsage, language: Locale = "en") {
   return renderToStaticMarkup(
     createElement(UsageCard, {
       usage,
       settings: DEFAULT_SETTINGS,
       now,
       language,
-      t: (tr, en) => (language === "tr" ? tr : en),
+      t: testT(language),
       refresh: () => {},
       connect: () => {},
     }),
@@ -146,7 +148,7 @@ test("the reset line and the used word are set in text-xs, not 11 px", () => {
     checkedAt,
     fiveHour: { usedPercent: 20, resetsAt: later },
   };
-  for (const language of ["en", "tr"]) {
+  for (const language of ["en", "tr"] as const) {
     const html = render(usage, language);
     assert.match(html, /<div class="mt-1 text-xs text-muted-foreground">(Resets|Yenilenir)/, language);
     assert.match(html, /<small class="text-xs font-normal text-muted-foreground">(used|kullanıldı)<\/small>/, language);
@@ -163,7 +165,7 @@ test("the status phrase may wrap, and only the percentage stays on one line", ()
     checkedAt,
     fiveHour: { usedPercent: 20, resetsAt: later },
   };
-  for (const language of ["en", "tr"]) {
+  for (const language of ["en", "tr"] as const) {
     const html = render(usage, language);
     const strongs = html.match(/<strong[^>]*>/g) ?? [];
     assert.equal(strongs.length, 2, language);

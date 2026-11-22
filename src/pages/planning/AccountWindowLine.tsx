@@ -2,8 +2,8 @@ import type { Account } from "../../../shared/types";
 import { planCapacity } from "../../../shared/planning";
 import type { LaneSegment } from "@/lib/day-timeline";
 import { formatDuration, windowMinutes } from "@/lib/window-duration";
+import type { T } from "../../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /**
  * When the account works on the lane, as `[from, to]` ranges. Pieces that
@@ -43,10 +43,7 @@ export function AccountWindowLine({
   if (!account.planning || account.planning.plan === "unknown")
     return (
       <small className="text-xs text-warn-foreground">
-        {t(
-          `Plan türünü seç; ${capacity}× sayılıyor`,
-          `Select the plan type. Counted as ${capacity}×`,
-        )}
+        {t("accountWindowLine.selectThePlanTypeCountedAs", { capacity })}
       </small>
     );
   const minutes = windowMinutes(capacity, rate);
@@ -57,8 +54,8 @@ export function AccountWindowLine({
     .join(", ");
   return (
     <small className="text-xs text-muted-foreground">
-      {t(`Bir dönem ${duration} yeter`, `A period lasts ${duration}`) +
-        (ranges ? t(` · bugün ${ranges}`, ` · today ${ranges}`) : "")}
+      {t("accountWindowLine.aPeriodLasts", { duration }) +
+        (ranges ? t("accountWindowLine.today", { ranges }) : "")}
     </small>
   );
 }

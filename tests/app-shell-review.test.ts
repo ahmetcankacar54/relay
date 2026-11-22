@@ -17,6 +17,7 @@ import { forgetSetupOnLeave } from "../src/pages/Accounts";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { clockLocative } from "../shared/tr-dative";
 import { I18nContext, type Language } from "../src/data/i18n";
+import { i18nValue } from "./i18n";
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -52,16 +53,11 @@ function relayFor(extra: Partial<Relay> = {}, usage: Record<string, AccountUsage
     ...extra,
   } as unknown as Relay;
 }
-const i18n = (language: Language) => ({
-  language,
-  setLanguage() {},
-  t: (tr: string, en: string) => (language === "tr" ? tr : en),
-});
 const wrap = (relay: Relay, child: ReactElement, language: Language = "tr") =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: i18n(language) },
+      { value: i18nValue(language) },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );

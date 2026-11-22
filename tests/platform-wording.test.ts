@@ -9,16 +9,17 @@ import { UsageCard } from "../src/features/UsageCard";
 import { removedNotice } from "../src/pages/accounts/RemoveAccountDialog";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage } from "../shared/types";
 import { accountHealth, usageSignInStatus } from "../src/lib/account-health";
+import { testT } from "./i18n";
 
-const en = (_tr: string, en: string) => en;
+const en = testT("en");
 
 test("Mac and Keychain wording stays on macOS, the preview and before the platform is known", () => {
   for (const p of [undefined, "darwin", "preview"]) assert.equal(macWording(p), true, String(p));
   for (const p of ["linux", "win32"]) assert.equal(macWording(p), false, p);
   assert.equal(keychainWords("darwin", en).allow, "Allow Keychain access");
   assert.equal(keychainWords("linux", en).allow, "Allow keyring access");
-  assert.match(keychainHint("linux")[1], /KWallet or Secret Service/);
-  assert.match(keychainHint(undefined)[1], /Relay Safe Storage/);
+  assert.match(en(keychainHint("linux")), /KWallet or Secret Service/);
+  assert.match(en(keychainHint(undefined)), /Relay Safe Storage/);
   assert.match(removedNotice("C", { signedOut: false }, en, "linux"), /Its saved sign-in can stay\.$/);
   assert.match(removedNotice("C", { signedOut: false }, en), /Its Keychain item can stay\.$/);
 });
@@ -32,7 +33,7 @@ test("a locked keyring is the account's status on Linux, the Keychain on macOS",
   } as Account;
   const usage: AccountUsage = { accountId: "a", status: "error", stale: true, issue: "keychain-locked" };
   const status = (platform?: string) =>
-    accountHealth(account, usage, { active: false, desktopRunning: false, waiting: false, platform }, en).label;
+    accountHealth(account, usage, { active: false, desktopRunning: false, waiting: false, platform, language: "en" }, en).label;
   assert.equal(status(), "Keychain access needed");
   assert.equal(status("darwin"), "Keychain access needed");
   assert.equal(status("linux"), "Keyring access needed");

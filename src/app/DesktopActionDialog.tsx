@@ -24,13 +24,10 @@ export function DesktopActionDialog() {
     >
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
         <DialogTitle className="sr-only">
-          {t("Claude uygulaması işlemini onayla", "Confirm Claude app action")}
+          {t("desktopActionDialog.confirmClaudeAppAction")}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {t(
-            "Claude uygulaması yeniden başlamadan önce onayla.",
-            "Confirm before the Claude app restarts.",
-          )}
+          {t("desktopActionDialog.confirmBeforeTheClaudeAppRestarts")}
         </DialogDescription>
         <DesktopActionBody />
       </DialogContent>

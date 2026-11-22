@@ -73,7 +73,7 @@ export function Private({ children, className }: { children: ReactNode; classNam
       role="button"
       tabIndex={0}
       data-private={shown ? "shown" : "hidden"}
-      title={shown ? t("Gizlemek için tıkla", "Click to hide") : t("Göstermek için tıkla", "Click to show")}
+      title={shown ? t("private.clickToHide") : t("private.clickToShow")}
       onClick={toggle}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggle(e)}
       className={cn(
@@ -83,7 +83,7 @@ export function Private({ children, className }: { children: ReactNode; classNam
       )}
       style={shown ? undefined : SOFT_EDGES}
     >
-      {!shown && <span className="sr-only">{t("Gizli bilgi, göstermek için tıkla", "Hidden, click to show")}</span>}
+      {!shown && <span className="sr-only">{t("private.hiddenClickToShow")}</span>}
       <span aria-hidden={!shown || undefined}>{children}</span>
     </span>
   );

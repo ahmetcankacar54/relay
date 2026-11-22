@@ -1,3 +1,5 @@
+import type { Locale } from "./i18n/locales";
+import { tFor } from "./i18n/translate";
 import type { DesktopOperationKind, DesktopRestartEvent } from "./types";
 
 export const LEAVING_MS = 1_200;
@@ -108,40 +110,26 @@ export function switchScene(
   return current;
 }
 
-export type SwitchLanguage = "tr" | "en";
-const LINES = {
-  tr: {
-    restarting: "Claude uygulaması yeniden başlatılıyor…",
-    switching: (name: string) => `${name} hesabına geçiliyor`,
-    switched: (name: string) => `${name} hesabındasın`,
-    back: "Claude uygulaması yeniden açıldı",
-    failed: "İşlem tamamlanamadı · ayrıntılar Relay’de",
-  },
-  en: {
-    restarting: "The Claude app restarts…",
-    switching: (name: string) => `Relay switches to ${name}`,
-    switched: (name: string) => `You are on ${name}`,
-    back: "The Claude app reopened",
-    failed: "Did not finish · details in Relay",
-  },
-};
-
 const returned = (state: SwitchSceneState) => state.stage === "returning" || state.stage === "closing";
 
 /** The line under the scene; an account that is gone falls back to the general lines. */
 export function sceneLine(
   state: SwitchSceneState,
-  language: SwitchLanguage,
+  language: Locale,
   name: (profileId: string) => string | undefined,
 ): string {
-  const t = LINES[language];
+  const t = tFor(language);
   const target = state.profileId ? name(state.profileId) : undefined;
   if (returned(state)) {
-    if (state.outcome === "failed") return t.failed;
-    return state.outcome === "switched" && target ? t.switched(target) : t.back;
+    if (state.outcome === "failed") return t("switchScene.didNotFinishDetailsInRelay");
+    return state.outcome === "switched" && target
+      ? t("switchScene.youAreOn", { name: target })
+      : t("switchScene.theClaudeAppReopened");
   }
   if (state.stage === "hidden" || state.stage === "stalled") return "";
-  return state.kind === "switch" && target ? t.switching(target) : t.restarting;
+  return state.kind === "switch" && target
+    ? t("switchScene.relaySwitchesTo", { name: target })
+    : t("switchScene.theClaudeAppRestarts");
 }
 
 /** One side of a switch: the account's name and its five-hour percent used, when known. */
@@ -159,6 +147,8 @@ export interface SwitchSceneView {
   outcome?: SwitchOutcome;
   disguise?: Disguise;
   line: string;
+  /** The language `line` is in; the page formats its figures in it too. */
+  locale: Locale;
   /** For a switch: where it goes, and from where when that is another known account. */
   accounts?: { from?: SceneAccount; to: SceneAccount };
   /** Animate; otherwise each stage is one still image. */
@@ -187,7 +177,7 @@ function sceneAccounts(
 export function sceneView(
   state: SwitchSceneState,
   context: {
-    language: SwitchLanguage;
+    language: Locale;
     name: (profileId: string) => string | undefined;
     /** The five-hour percent used of an account, when known. */
     percent?: (profileId: string) => number | undefined;
@@ -202,6 +192,7 @@ export function sceneView(
     outcome: returned(state) ? state.outcome : undefined,
     disguise: returned(state) ? state.disguise : undefined,
     line: sceneLine(state, context.language, context.name),
+    locale: context.language,
     ...(accounts ? { accounts } : {}),
     motion: context.motion,
   };

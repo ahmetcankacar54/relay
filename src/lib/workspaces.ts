@@ -1,6 +1,6 @@
 import type { Account } from "../../shared/types";
+import type { T } from "../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 export interface WorkspaceOption {
   id: string;
@@ -28,11 +28,11 @@ export function workspaceOptions(
       (a) => a.auth?.orgName && a.auth.orgId?.toLowerCase() === id.toLowerCase(),
     )?.auth?.orgName;
     if (!name) unnamed += 1;
-    const label = name ?? t(`Çalışma alanı ${unnamed}`, `Workspace ${unnamed}`);
+    const label = name ?? t("workspaces.workspace", { unnamed });
     const current = !!suggested && suggested.toLowerCase() === id.toLowerCase();
     return {
       id,
-      label: current ? t(`${label} · Claude’da açık olan`, `${label} · open in Claude`) : label,
+      label: current ? t("workspaces.openInClaude", { label }) : label,
       short: id.slice(0, 8),
       current,
     };

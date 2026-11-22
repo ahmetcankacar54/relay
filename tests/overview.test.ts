@@ -13,6 +13,7 @@ import type { PageId } from "../src/app/routes";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue } from "./i18n";
 import { DEFAULT_PLANNING, DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type Diagnostics, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.now();
@@ -56,7 +57,7 @@ const render = (relay: Relay) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, createElement(Overview, { go: () => {}, now: NOW })),
     ),
   );
@@ -166,7 +167,7 @@ async function openRow(relay: Relay, id: string): Promise<string> {
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(RelayContext.Provider, { value: relay }, createElement(AccountsBoard, { now: NOW })),
         ),
       ),
@@ -204,7 +205,7 @@ test("the Overview says how switching runs and leaves the choice to its page, an
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(
             RelayContext.Provider,
             { value: relayFor(active, accounts, { active: use("active", 10, 10) }) },
@@ -347,7 +348,7 @@ test("today's card names the day's work hours and early start, with an hour axis
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        { value: i18nValue("tr") },
         createElement(
           RelayContext.Provider,
           { value: relayFor(active, [active], usage, { settings }) },
@@ -415,13 +416,7 @@ test("today's card calls automatic start early start in both languages", () => {
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      {
-        value: {
-          language: "en",
-          setLanguage() {},
-          t: (_tr: string, en: string) => en,
-        },
-      },
+      { value: i18nValue("en") },
       createElement(
         RelayContext.Provider,
         { value: relay },
@@ -475,7 +470,7 @@ const renderIn = (language: "tr" | "en", relay: Relay) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+      { value: i18nValue(language) },
       createElement(RelayContext.Provider, { value: relay }, createElement(Overview, { go: () => {}, now: NOW })),
     ),
   );
@@ -696,7 +691,7 @@ test("the Overview's one Geç is the suggestion's, filled, and every other accou
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(RelayContext.Provider, { value: relay }, createElement(ActiveAccountCard, { go: () => {}, now: NOW })),
         ),
       ),
@@ -727,7 +722,7 @@ test("a full account's row says when its limit opens and leads to its page, and 
   const review = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(
         RelayContext.Provider,
         { value: relayFor(active, [active, full], usage, { desktopRequest: { accountId: "full", kind: "switch" } }) },
@@ -739,7 +734,7 @@ test("a full account's row says when its limit opens and leads to its page, and 
   const plain = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(
         RelayContext.Provider,
         { value: relayFor(active, [active, full], { ...usage, full: use("full", 20, 40) }, { desktopRequest: { accountId: "full", kind: "switch" } }) },
@@ -859,7 +854,7 @@ test("the Overview lists Antigravity's accounts on the board: the account the ap
   const pane = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(
         RelayContext.Provider,
         { value: plainRelay },
@@ -913,7 +908,7 @@ test("on macOS an Antigravity account's button asks first, and the confirmation 
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(RelayContext.Provider, { value: relay }, createElement(AccountsBoard, { now: NOW })),
         ),
       ),

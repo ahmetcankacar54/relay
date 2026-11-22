@@ -19,6 +19,8 @@ import {
   type PlanningSettings,
 } from "../shared/types";
 import { planningAccount, planningUsage } from "./planning-fixtures";
+// Registers the real catalogs: start labels read in the language asked for.
+import "./i18n";
 
 const ZONE = "Europe/Istanbul";
 const H = 3_600_000;

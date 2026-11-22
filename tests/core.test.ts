@@ -167,7 +167,7 @@ test("incomplete transcripts refuse transfer without creating a target", async (
   await fs.appendFile(file, '{"incomplete":');
   await assert.rejects(
     copyTranscript(source, store.profile(b.id)),
-    /eksik veya bozuk/,
+    /missing or damaged record/,
   );
   assert.equal(
     (await scanSessions(store.profile(b.id), b.id, [], {})).sessions.length,
@@ -179,7 +179,7 @@ test("source and target symlinks cannot escape profile boundaries", async (t) =>
     return t.skip("Symlink creation requires Windows developer privileges.");
   const { store, a, b, source, root, file } = await fixture(t);
   await fs.symlink(root, path.join(store.profile(b.id), "projects"));
-  await assert.rejects(copyTranscript(source, store.profile(b.id)), /geçersiz/);
+  await assert.rejects(copyTranscript(source, store.profile(b.id)), /invalid/);
   const outside = path.join(root, "outside.jsonl");
   await fs.copyFile(file, outside);
   await fs.rm(file);
@@ -190,7 +190,7 @@ test("source and target symlinks cannot escape profile boundaries", async (t) =>
   );
   await assert.rejects(
     copyTranscript(source, store.profile(b.id)),
-    /dışında|bağlantı/,
+    /outside the profile folder|Symbolic links/,
   );
 });
 test("foreign session identities are not silently cloned", async (t) => {
@@ -201,7 +201,7 @@ test("foreign session identities are not silently cloned", async (t) => {
   );
   await assert.rejects(
     copyTranscript(source, store.profile(b.id)),
-    /farklı bir oturum/,
+    /different session ID/,
   );
 });
 test("ambient credentials and alternate routing cannot leak into another account", () => {

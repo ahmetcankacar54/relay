@@ -1,41 +1,40 @@
 import type { Account, RelaySettings } from "../../shared/types";
-import type { Translate } from "./i18n";
+import type { MessageId, T } from "../../shared/i18n/translate";
 import { RELAY_APPS } from "./deps";
 import type { LockInfo } from "../../electron/core/process-lock";
 
 /** What a lock's holder is doing, in words: "Relay.app is switching accounts" and so on. */
-export function lockHolderText(holder: LockInfo, t: Translate): string {
+export function lockHolderText(holder: LockInfo, t: T): string {
   const who =
     holder.by === "app"
       ? "Relay.app"
       : holder.by === "cli"
-        ? t("Başka bir relay komutu", "Another relay command")
-        : t("Başka bir Relay işlemi", "Another Relay process");
-  const doing: Record<string, [string, string]> = {
-    switch: ["hesap değiştiriyor", "is switching accounts"],
-    save: ["bir hesabı kaydediyor", "is saving an account"],
-    link: ["yeni bir giriş başlatıyor", "is starting a sign-in"],
-    "cancel-link": ["bir girişi iptal ediyor", "is cancelling a sign-in"],
-    merge: ["Code geçmişini taşıyor", "is bringing Code history over"],
-    restore: ["yarıda kalan geçişin yedeğini geri yüklüyor", "is restoring an interrupted switch’s backup"],
-    reset: ["kasayı sıfırlıyor", "is resetting the vault"],
-    "desktop-task": ["Claude uygulamasında bir iş yapıyor", "is doing a task in the Claude app"],
-    "draft-retype": ["bir taslağı yeniden yazıyor", "is re-typing a draft"],
+        ? t("describe.anotherRelayCommand")
+        : t("describe.anotherRelayProcess");
+  const doing: Record<string, MessageId> = {
+    switch: "describe.isSwitchingAccounts",
+    save: "describe.isSavingAnAccount",
+    link: "describe.isStartingASignIn",
+    "cancel-link": "describe.isCancellingASignIn",
+    merge: "describe.isBringingCodeHistoryOver",
+    restore: "describe.isRestoringAnInterruptedSwitchS",
+    reset: "describe.isResettingTheVault",
+    "desktop-task": "describe.isDoingATaskInThe",
+    "draft-retype": "describe.isReTypingADraft",
   };
-  const [tr, en] = doing[holder.kind] ?? ["Claude uygulamasında bir işlem yapıyor", "is running a Claude app operation"];
-  return `${who} ${t(tr, en)}`;
+  return t(doing[holder.kind] ?? "describe.isRunningAClaudeAppOperation", { who });
 }
 
-export function historyModeText(mode: RelaySettings["desktopHistoryTransfer"], t: Translate): string {
+export function historyModeText(mode: RelaySettings["desktopHistoryTransfer"], t: T): string {
   switch (mode) {
     case "all":
-      return t("tüm hesaplar arasında paylaşılıyor", "shared across all accounts");
+      return t("describe.sharedAcrossAllAccounts");
     case "same-group":
-      return t("her grubun hesapları arasında paylaşılıyor", "shared within each group");
+      return t("describe.sharedWithinEachGroup");
     case "selected":
-      return t("seçili hesaplar arasında paylaşılıyor", "shared between the selected accounts");
+      return t("describe.sharedBetweenTheSelectedAccounts");
     case "off":
-      return t("paylaşılmıyor", "not shared");
+      return t("describe.notShared");
   }
 }
 
@@ -46,10 +45,10 @@ export function groupName(account: Account): string | undefined {
   return name === account.id ? undefined : name;
 }
 
-export function kindText(account: Account, t: Translate): string {
-  if (account.kind === "personal") return t("kişisel", "personal");
+export function kindText(account: Account, t: T): string {
+  if (account.kind === "personal") return t("describe.personal");
   const group = groupName(account);
-  return group ? `${t("iş", "work")} · ${group}` : t("iş", "work");
+  return group ? `${t("describe.work")} · ${group}` : t("describe.work");
 }
 
 export type LimitsState = "connected" | "not-connected" | "error";
@@ -58,12 +57,12 @@ export function limitsState(account: Account): LimitsState {
   return account.auth?.loggedIn ? "connected" : "not-connected";
 }
 
-export function limitsText(state: LimitsState, t: Translate): string {
+export function limitsText(state: LimitsState, t: T): string {
   return state === "connected"
-    ? t("var", "signed in")
+    ? t("describe.signedIn")
     : state === "error"
-      ? t("bağlantı yenilenmeli", "connection needs renewing")
-      : t("yok", "none");
+      ? t("describe.connectionNeedsRenewing")
+      : t("describe.none");
 }
 
 /** Whether a process inside a Relay.app bundle is in a `ps -axo pid=,ppid=,comm=` listing. */

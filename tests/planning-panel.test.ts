@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { PlanSettings, PlanningPanel, planningModel, type PlanningPanelProps } from "../src/features/PlanningPanel";
 import { TooltipProvider } from "../src/components/ui/tooltip";
 import { I18nContext } from "../src/data/i18n";
+import type { Locale } from "../shared/i18n/locales";
+import { i18nValue, testT } from "./i18n";
 import { AdaptiveRow } from "../src/pages/planning/AdaptiveRow";
 import { Switch } from "../src/components/ui/switch";
 import { wallTime } from "../shared/planning";
@@ -74,7 +76,7 @@ const shell = (props: PlanningPanelProps, child: ReactElement) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: props.t } },
+      { value: i18nValue(props.language) },
       createElement(TooltipProvider, null, child),
     ),
   );
@@ -98,7 +100,8 @@ const panelProps = (settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot
   accounts: [a, b],
   usage: {},
   disabled: false,
-  t: (tr: string) => tr,
+  t: testT("tr"),
+  language: "tr",
   now: NOW,
   update: () => {},
   updateAccount: () => {},
@@ -268,7 +271,8 @@ test("a day whose midnight is skipped by DST renders", () => {
     accounts: [a, b],
     usage: {},
     disabled: false,
-    t: (tr: string) => tr,
+    t: testT("tr"),
+    language: "tr",
     now: wallTime("2026-04-24", "12:00", zone)!,
     update: () => {},
     updateAccount: () => {},
@@ -338,7 +342,7 @@ const scenarioSettings = (accounts: PlanningSettings["accounts"]) =>
     accounts,
   });
 const automatic = scenarioAccounts.map(({ id }) => ({ id }));
-const tr = (text: string) => text;
+const tr = testT("tr");
 // The even spread's warm-ups, fixed by hand: the plan is the even spread.
 const evenByHand = [
   { id: a.id, firstStart: "04:50" },
@@ -365,6 +369,7 @@ const scenarioProps = (
   activeId,
   disabled: false,
   t: tr,
+  language: "tr",
   now,
   update: () => {},
   updateAccount: () => {},
@@ -530,7 +535,7 @@ function renderPlanning({
   tempo,
   choice,
   settings,
-  t = tr,
+  language = "tr",
 }: {
   planned: Account[];
   now?: number;
@@ -538,9 +543,9 @@ function renderPlanning({
   tempo?: Tempo;
   choice?: TempoChoice;
   settings?: Partial<PlanningSettings>;
-  t?: (tr: string, en: string) => string;
+  language?: Locale;
 }) {
-  return page(planningProps({ planned, now, tempo, choice, settings, t }));
+  return page(planningProps({ planned, now, tempo, choice, settings, language }));
 }
 function planningProps({
   planned,
@@ -548,7 +553,7 @@ function planningProps({
   tempo,
   choice,
   settings,
-  t = tr,
+  language = "tr",
 }: Parameters<typeof renderPlanning>[0]): PlanningPanelProps {
   return {
     settings: {
@@ -568,7 +573,8 @@ function planningProps({
     usage: {},
     activeId: a.id,
     disabled: false,
-    t,
+    t: testT(language),
+    language,
     now,
     update: () => {},
     updateAccount: () => {},
@@ -746,8 +752,10 @@ test("the notes wait behind an ⓘ: the order in the list, the overnight hours i
   assert.doesNotMatch(settings, /Bitiş başlangıçtan önceyse aralık ertesi güne uzar\./);
   // The notes' words are the tooltips'.
   const source = readFileSync(new URL("../src/features/PlanningPanel.tsx", import.meta.url), "utf8");
-  assert.ok(source.includes("Sıra yalnızca eşitlikte öncelik verir"));
-  assert.ok(source.includes("Bitiş başlangıçtan önceyse aralık ertesi güne uzar."));
+  for (const id of ["planningPanel.relaySetsTheStartTimesFrom", "planningPanel.anEndBeforeTheStartRuns"] as const)
+    assert.ok(source.includes(`info={t("${id}")}`), id);
+  assert.match(tr("planningPanel.relaySetsTheStartTimesFrom"), /Sıra yalnızca eşitlikte öncelik verir/);
+  assert.equal(tr("planningPanel.anEndBeforeTheStartRuns"), "Bitiş başlangıçtan önceyse aralık ertesi güne uzar.");
 });
 
 // Saturday work with a learned weekend rate well below the weekday one.
@@ -859,7 +867,6 @@ test("a fixed tempo applies at once, before the keeper reports it", () => {
 });
 
 test("a pill for a later day says which day it forecasts", () => {
-  const en = (_: string, text: string) => text;
   // Friday 23:30 with Saturday work: tomorrow.
   const friday = wallTime("2026-10-16", "23:30", ZONE)!;
   assert.match(
@@ -868,7 +875,7 @@ test("a pill for a later day says which day it forecasts", () => {
       tempo: weekendTempo,
       now: friday,
       settings: weekendHours,
-      t: en,
+      language: "en",
     }),
     /<\/span>Tomorrow: No gaps · no switches</,
   );
@@ -892,7 +899,7 @@ test("a pill for a later day says which day it forecasts", () => {
       planned: scenarioAccounts,
       tempo: busyTempo,
       now: friday,
-      t: en,
+      language: "en",
     }),
     /<\/span>Monday: No gaps · 3 switches</,
   );
@@ -923,7 +930,7 @@ const adaptedProps = ({
     },
   ],
   usage = {},
-  t = tr,
+  language = "tr" as Locale,
   update = () => {},
 }: {
   now?: number;
@@ -931,7 +938,7 @@ const adaptedProps = ({
   adaptation?: KeeperAdaptation;
   statuses?: KeeperAccountStatus[];
   usage?: Record<string, AccountUsage>;
-  t?: (tr: string, en: string) => string;
+  language?: Locale;
   update?: (patch: Partial<PlanningSettings>) => void;
 } = {}) => ({
   settings: { ...scenarioSettings(automatic), ...settings },
@@ -948,7 +955,8 @@ const adaptedProps = ({
   usage,
   activeId: a.id,
   disabled: false,
-  t,
+  t: testT(language),
+  language,
   now,
   update,
   updateAccount: () => {},
@@ -1125,12 +1133,12 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   // In English, with one decimal.
   const en = renderAdapted({
     adaptation: adapted(2, [[pro, "13:30"]]),
-    t: (_, text) => text,
+    language: "en",
   });
   assert.ok(badgeClass(en, "Today: 2.0× the planned pace"));
   assert.ok(badgeClass(en, "Plan adapted"));
   assert.deepEqual(statusOf(en, "Plan adapted · starts at 13:30"), ["warn", "Adapted · 13:30"]);
-  const enSheet = renderAdaptedSheet({ adaptation: adapted(2, [[pro, "13:30"]]), t: (_, text) => text });
+  const enSheet = renderAdaptedSheet({ adaptation: adapted(2, [[pro, "13:30"]]), language: "en" });
   assert.match(enSheet, />Adapt</);
   assert.match(enSheet, />Update the plan for today’s pace</);
 });

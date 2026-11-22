@@ -27,7 +27,7 @@ interface Line {
 
 /** One share line: the account's dot, name, share and amount over a thin bar, as every limit is drawn. */
 function Lines({ lines, total }: { lines: Line[]; total: number }) {
-  const { language } = useI18n();
+  const { t, language } = useI18n();
   return (
     <ul className="grid gap-2">
       {lines.map((line) => {
@@ -38,7 +38,7 @@ function Lines({ lines, total }: { lines: Line[]; total: number }) {
               {line.account && <AccountDot color={line.dot} />}
               <span className="min-w-0 flex-1 truncate">{line.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                {share > 0 && share < 1 ? (language === "tr" ? "<%1" : "<1%") : formatPercent(share, language)}
+                {share > 0 && share < 1 ? t("tokenUsage.under", { percent: formatPercent(1, language) }) : formatPercent(share, language)}
               </span>
               <span className="w-20 shrink-0 text-right font-semibold tabular-nums">
                 {line.estimated ? "≈" : ""}
@@ -104,7 +104,7 @@ export function CostBreakdown({
         ...priced.slice(0, MODELS),
         {
           key: "other",
-          name: t(`Diğer ${rest.length} model`, `${rest.length} other ${rest.length === 1 ? "model" : "models"}`),
+          name: t("costBreakdown.otherModels", { restLength: rest.length }),
           cost: rest.reduce((sum, line) => sum + line.cost, 0),
           estimated: rest.some((line) => line.estimated),
           quiet: true,
@@ -112,24 +112,21 @@ export function CostBreakdown({
       ]
     : priced;
   return (
-    <PageSection slot="cost-breakdown" title={t("API karşılığı", "API value")}>
+    <PageSection slot="cost-breakdown" title={t("common.apiValue")}>
       <Card className="min-w-0 gap-3 px-4 py-3.5">
         <p className="text-xs text-muted-foreground">
-          {t(
-            "Bu token’ların API liste fiyatıyla tutarı. Aboneliğinin ücreti değildir.",
-            "The cost of these tokens at API list prices. It is not your subscription price.",
-          )}
+          {t("costBreakdown.theCostOfTheseTokensAt")}
         </p>
         <div className={cn("grid gap-4", byAccount.length > 0 && byModel.length > 0 && "@4xl:grid-cols-2")}>
           {byAccount.length > 0 && (
             <section className="grid content-start gap-2">
-              <h4 className="text-xs font-semibold text-muted-foreground">{t("Hesaba göre", "By account")}</h4>
+              <h4 className="text-xs font-semibold text-muted-foreground">{t("costBreakdown.byAccount")}</h4>
               <Lines lines={byAccount} total={total} />
             </section>
           )}
           {byModel.length > 0 && (
             <section className="grid content-start gap-2">
-              <h4 className="text-xs font-semibold text-muted-foreground">{t("Modele göre", "By model")}</h4>
+              <h4 className="text-xs font-semibold text-muted-foreground">{t("costBreakdown.byModel")}</h4>
               <Lines lines={byModel} total={total} />
             </section>
           )}

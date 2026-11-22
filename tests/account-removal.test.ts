@@ -17,6 +17,7 @@ import { Store } from "../electron/core/store";
 import { UsageManager } from "../electron/core/usage";
 import { localizeError } from "../shared/error-text";
 import type { Account, DesktopState } from "../shared/types";
+import "./i18n";
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
@@ -188,11 +189,13 @@ test("the app's removal refuses a running terminal and a usage sign-in in progre
   const options = { vault: f.vault, locks: f.locks, desktop: async () => ({ activeProfileId: f.a.id }) };
   const list = service.runner.list.bind(service.runner);
   service.runner.list = () => [{ accountId: f.b.id, status: "running" } as ReturnType<typeof list>[number]];
-  await assert.rejects(service.remove(f.b.id, options), /Bu hesapta çalışan oturumu önce durdur\./);
+  await assert.rejects(service.remove(f.b.id, options), /^Error: Stop the running session for this account first\.$/);
+  assert.equal(localizeError("Stop the running session for this account first.", "tr"), "Bu hesapta çalışan oturumu önce durdur.");
   service.runner.list = list;
   const active = service.auth.active.bind(service.auth);
   service.auth.active = (id: string) => id === f.b.id;
-  await assert.rejects(service.remove(f.b.id, options), /limit okuma girişini tamamla ya da iptal et/);
+  await assert.rejects(service.remove(f.b.id, options), /Finish or cancel this account’s usage sign-in first\./);
+  assert.match(localizeError("Finish or cancel this account’s usage sign-in first.", "tr"), /limit okuma girişini tamamla ya da iptal et/);
   service.auth.active = active;
   await assert.rejects(service.remove(f.a.id, options), AccountRemovalRefused);
   assert.equal(fs.existsSync(log), false);

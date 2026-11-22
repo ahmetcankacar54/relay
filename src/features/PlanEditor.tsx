@@ -14,7 +14,7 @@ import {
   detectedClaudePlan,
   type AccountPlanInfo,
 } from "../pages/accounts/accountLabels";
-type T = (tr: string, en: string) => string;
+import type { T } from "../../shared/i18n/translate";
 
 /** A plan Relay read from the account: shown, never asked. In a list, its label alone. */
 function ReadPlan({ plan, t, compact }: { plan?: AccountPlanInfo; t: T; compact?: boolean }) {
@@ -23,15 +23,15 @@ function ReadPlan({ plan, t, compact }: { plan?: AccountPlanInfo; t: T; compact?
       <span
         data-slot="plan"
         className="truncate text-xs text-muted-foreground"
-        title={plan ? t(`${plan.label} · hesaptan algılandı`, `${plan.label} · detected`) : undefined}
+        title={plan ? t("planEditor.detected", { planLabel: plan.label }) : undefined}
       >
-        {plan?.label ?? t("Plan okunmadı", "Plan not read")}
+        {plan?.label ?? t("planEditor.planNotRead")}
       </span>
     );
   if (!plan)
     return (
       <p data-slot="plan" className="text-sm text-muted-foreground">
-        {t("Plan henüz okunmadı", "Plan not read yet")}
+        {t("planEditor.planNotReadYet")}
       </p>
     );
   return (
@@ -40,7 +40,7 @@ function ReadPlan({ plan, t, compact }: { plan?: AccountPlanInfo; t: T; compact?
         Plan: <span className="font-medium">{plan.label}</span>
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">
-        {t("algılandı", "detected")}
+        {t("planEditor.detected2")}
       </span>
     </div>
   );
@@ -74,7 +74,7 @@ export function PlanEditor({
   if (accountProvider(account) !== "claude")
     return <ReadPlan plan={accountPlan(account)} t={t} compact={compact} />;
   const plans: { value: AccountPlanning["plan"]; label: string }[] = [
-    { value: "unknown", label: t("Plan seç", "Select plan") },
+    { value: "unknown", label: t("planEditor.selectPlan") },
     { value: "pro", label: "Pro · 1×" },
     { value: "max5", label: "Max · 5×" },
     { value: "max20", label: "Max · 20×" },
@@ -93,8 +93,8 @@ export function PlanEditor({
   const capacityInput = (className: string) => (
     <Input
       id={capacityId}
-      aria-label={t(`${account.name} göreli kapasitesi`, `${account.name} relative capacity`)}
-      title={compact ? t("Göreli kapasite", "Relative capacity") : undefined}
+      aria-label={t("planEditor.relativeCapacity", { accountName: account.name })}
+      title={compact ? t("planEditor.relativeCapacity2") : undefined}
       className={className}
       type="number"
       min={1}
@@ -117,7 +117,7 @@ export function PlanEditor({
             disabled={disabled}
             onValueChange={(plan) => update({ ...current, plan: plan as AccountPlanning["plan"] })}
           >
-            <SelectTrigger size="sm" aria-label={t(`${account.name} planı`, `${account.name} plan`)} className="min-w-0 flex-1">
+            <SelectTrigger size="sm" aria-label={t("planEditor.plan", { accountName: account.name })} className="min-w-0 flex-1">
               <SelectValue>{plans.find((p) => p.value === current.plan)?.label}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -145,7 +145,7 @@ export function PlanEditor({
         }
       >
         <SelectTrigger
-          aria-label={t(`${account.name} planı`, `${account.name} plan`)}
+          aria-label={t("planEditor.plan", { accountName: account.name })}
           className="w-full"
         >
           {/* Children keep the label in static markup, before Radix measures items. */}
@@ -168,7 +168,7 @@ export function PlanEditor({
             htmlFor={capacityId}
             className="block text-xs text-muted-foreground"
           >
-            {t("Göreli kapasite", "Relative capacity")}
+            {t("planEditor.relativeCapacity2")}
           </label>
           {capacityInput("h-8 w-16 px-2 tabular-nums")}
         </div>

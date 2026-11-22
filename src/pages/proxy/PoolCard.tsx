@@ -10,6 +10,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/data/i18n";
+import { FORMAT_LOCALE, type Locale } from "../../../shared/i18n/locales";
 import { macWording, usePlatform } from "@/data/platform";
 import { useRelay } from "@/data/relay-context";
 import { compactCount, moveWithinProvider, pickReasonLabel, quotaAtRisk, resetLabel, usd } from "@/lib/proxy-ui";
@@ -17,31 +18,23 @@ import { cn } from "@/lib/utils";
 import type { ProxyAccountStatus, ProxyStatus } from "../../../shared/types";
 import { limitColumns, modelOnlyUsage } from "../../../shared/quota-windows";
 import type { Patch } from "./shared";
+import type { T } from "../../../shared/i18n/translate";
 
 /** The wall-clock time a wait of `minutes` ends at. */
-function untilClock(minutes: number, language: string): string {
-  return new Date(Date.now() + minutes * 60_000).toLocaleTimeString(language === "tr" ? "tr-TR" : "en-US", {
+function untilClock(minutes: number, language: Locale): string {
+  return new Date(Date.now() + minutes * 60_000).toLocaleTimeString(FORMAT_LOCALE[language], {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
 /** Why the gateway is leaving an account out, for the badge's tooltip. */
-function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en: string) => string): string {
+function waitingTitle(reason: "limit" | "auth" | "transient", t: T): string {
   if (reason === "auth")
-    return t(
-      "Giriş reddedildi ya da okunamadı; Relay yeniliyor. Bu hesaptaki oturumlar giriş dönünce aynı hesaba döner.",
-      "Its sign-in was refused or could not be read; Relay is renewing it. Sessions on this account come back to it once it works.",
-    );
+    return t("poolCard.itsSignInWasRefusedOr");
   if (reason === "transient")
-    return t(
-      "Anthropic yoğun ya da araya bir engel girdi; birkaç saniye beklenir. Oturumlar hesabında kalır.",
-      "Anthropic is busy or something in front of it refused; a few seconds' wait. Sessions stay on the account.",
-    );
-  return t(
-    "Bir limit dönemi doldu; sıfırlanınca yeniden kullanılır. Oturumları başka hesaba geçti.",
-    "A limit window is spent; it is used again when it resets. Its sessions moved to another account.",
-  );
+    return t("poolCard.anthropicIsBusyOrSomethingIn");
+  return t("poolCard.aLimitWindowIsSpentIt");
 }
 
 /**
@@ -61,63 +54,48 @@ function PoolNote({ account }: { account: ProxyAccountStatus }) {
       </span>
     </span>
   );
-  if (!account.inPool) return note("off", t("Havuz dışı", "Out of pool"));
-  if (!account.signedIn) return note("crit", t("Giriş yok", "Not signed in"));
+  if (!account.inPool) return note("off", t("poolCard.outOfPool"));
+  if (!account.signedIn) return note("crit", t("poolCard.notSignedIn"));
   // Saved, but the gateway could not read it: the page must not call the account ready.
   if (account.gatewaySignIn === "missing")
     return (
       <a href={`#/hesaplar/${account.id}`} data-slot="gateway-sign-in" className="flex min-w-0 shrink items-center gap-1 text-2xs text-crit underline-offset-2 hover:underline"
         title={
           mac
-            ? t(
-                "Ağ geçidi bu hesabın girişini okuyamadı (Keychain'de yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
-                "The gateway could not read this account's sign-in (not in the Keychain); requests go to other accounts. Renew its usage sign-in on the account's page.",
-              )
-            : t(
-                "Ağ geçidi bu hesabın girişini okuyamadı (kayıtlı giriş yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
-                "The gateway could not read this account's sign-in (no saved sign-in); requests go to other accounts. Renew its usage sign-in on the account's page.",
-              )
+            ? t("poolCard.theGatewayCouldNotReadThis")
+            : t("poolCard.theGatewayCouldNotReadThis2")
         }
       >
         <StatusDot tone="crit" />
-        <span className="truncate">{t("Ağ geçidi girişi okuyamıyor", "Gateway can't read sign-in")}</span>
+        <span className="truncate">{t("poolCard.gatewayCanTReadSignIn")}</span>
       </a>
     );
-  if (account.extraUsage?.kind === "billed") return note("crit", t("Ekstra kullanım", "Extra usage"));
+  if (account.extraUsage?.kind === "billed") return note("crit", t("poolCard.extraUsage"));
   if (account.waiting) {
     const when = resetLabel(account.waiting.minutes, t);
     const label =
       account.waiting.reason === "auth"
-        ? t(`Giriş yenileniyor · ${when}`, `Renewing sign-in · ${when}`)
+        ? t("poolCard.renewingSignIn", { when })
         : account.waiting.reason === "transient"
-          ? t(`Kısa ara · ${when}`, `Short pause · ${when}`)
-          : t(`Limitte · ${when}`, `At its limit · ${when}`);
+          ? t("poolCard.shortPause", { when })
+          : t("poolCard.atItsLimit", { when });
     return note("warn", label, {
       slot: "waiting",
-      title: `${waitingTitle(account.waiting.reason, t)} ${t(
-        `Bitiş: ${untilClock(account.waiting.minutes, language)}.`,
-        `Until ${untilClock(account.waiting.minutes, language)}.`,
-      )}`,
+      title: `${waitingTitle(account.waiting.reason, t)} ${t("poolCard.until", { untilClock: untilClock(account.waiting.minutes, language) })}`,
     });
   }
-  if ((account.quotaPercent ?? 0) >= 100) return note("crit", t("Dolu", "Full"));
+  if ((account.quotaPercent ?? 0) >= 100) return note("crit", t("common.full"));
   if (risk)
-    return note("warn", t(`%${risk.percent} yanacak`, `${risk.percent}% expiring`), {
+    return note("warn", t("poolCard.expiring", { riskPercent: risk.percent }), {
       slot: "at-risk",
-      title: t(
-        `Haftalık limit ${resetLabel(risk.minutes, t)} içinde sıfırlanıyor; kalan %${risk.percent} o zamana kadar kullanılmazsa boşa gider.`,
-        `The weekly limit resets in ${resetLabel(risk.minutes, t)}; the ${risk.percent}% left is lost unless it is used by then.`,
-      ),
+      title: t("poolCard.theWeeklyLimitResetsInThe", { resetLabel: resetLabel(risk.minutes, t), riskPercent: risk.percent }),
     });
   if (account.gatewaySignIn === "expired")
-    return note("warn", t("Giriş yenileniyor", "Renewing sign-in"), {
+    return note("warn", t("poolCard.renewingSignIn2"), {
       slot: "gateway-sign-in",
-      title: t(
-        "Girişinin süresi doldu; Relay limit okurken yeniliyor. O zamana kadar istekler başka hesaplara gider.",
-        "Its sign-in expired; Relay renews it when it reads the limits. Until then requests go to other accounts.",
-      ),
+      title: t("poolCard.itsSignInExpiredRelayRenews"),
     });
-  if (account.active) return note("ok", t("Son istek", "Last request"));
+  if (account.active) return note("ok", t("poolCard.lastRequest"));
   return null;
 }
 
@@ -150,7 +128,7 @@ export function PoolCard({
 }) {
   const { t, language } = useI18n();
   const relay = useRelay();
-  const locale = language === "tr" ? "tr-TR" : "en-US";
+  const locale = FORMAT_LOCALE[language];
   const accounts = status.accounts;
   const excluded = accounts.filter((a) => !a.inPool).map((a) => a.id);
   const strict = status.routingStrategy === "strict-priority";
@@ -167,28 +145,22 @@ export function PoolCard({
   return (
     <PageSection
       slot="pool"
-      title={t("Havuz", "Pool")}
+      title={t("poolCard.pool")}
       info={
         strict
-          ? t(
-              "Hesaplar bu sırayla kullanılır; biri dolunca sıradaki başlar. Okla sırala, anahtarla havuzdan çıkar.",
-              "Accounts are used in this order; the next starts when one is full. Reorder with the arrows; the switch takes one out.",
-            )
-          : t(
-              "Her istek kendi sağlayıcısının hesaplarından birine gider. Anahtar hesabı silmeden havuzdan çıkarır.",
-              "Each request goes to an account of its own provider. The switch takes an account out without removing it.",
-            )
+          ? t("poolCard.accountsAreUsedInThisOrder")
+          : t("poolCard.eachRequestGoesToAnAccount")
       }
     >
-      <ListCard label={t("Havuzdaki hesaplar", "Accounts in the pool")}>
+      <ListCard label={t("poolCard.accountsInThePool")}>
         {accounts.length ? (
           <>
             <ListHead columns="pool">
               <span />
-              <span>{t("Hesap", "Account")}</span>
-              <span>{t("5 saat", "5 hours")}</span>
-              <span className={narrowHidden}>{t("Hafta", "Week")}</span>
-              <span className="text-right">{t("Havuzda", "In pool")}</span>
+              <span>{t("common.account")}</span>
+              <span>{t("common.n5Hours")}</span>
+              <span className={narrowHidden}>{t("common.week")}</span>
+              <span className="text-right">{t("poolCard.inPool")}</span>
             </ListHead>
             {groups.map(({ provider, own }) => (
               <Fragment key={provider}>
@@ -215,25 +187,19 @@ export function PoolCard({
                       ? new Date(account.fullAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
                       : undefined;
                     const served = [
-                      account.requests ? t(`${account.requests} istek`, `${account.requests} requests`) : undefined,
-                      cache ? t(`önbellek ${compactCount(cache, locale)}`, `cache ${compactCount(cache, locale)}`) : undefined,
-                      account.live ? t("canlı", "live") : undefined,
+                      account.requests ? t("poolCard.requests", { accountRequests: account.requests }) : undefined,
+                      cache ? t("poolCard.cache", { compactCount: compactCount(cache, locale) }) : undefined,
+                      account.live ? t("poolCard.live") : undefined,
                       account.percentCost
-                        ? t(`%1 ≈ ${usd(account.percentCost.dollars, locale)}`, `1% ≈ ${usd(account.percentCost.dollars, locale)}`)
+                        ? t("poolCard.n1", { usd: usd(account.percentCost.dollars, locale) })
                         : undefined,
                     ].filter(Boolean);
                     const details = [
                       account.live
-                        ? t(
-                            "Yüzdeler bu hesabın son yanıtındaki limit başlıklarından okundu.",
-                            "The percents are from the limit headers of this account's last answer.",
-                          )
+                        ? t("poolCard.thePercentsAreFromTheLimit")
                         : undefined,
                       account.percentCost
-                        ? t(
-                            `5 saatlik limitin %1'i son 7 günde ${account.percentCost.windows} dönemde ortalama ${usd(account.percentCost.dollars, locale)} tuttu (Claude Code kullanımı, API fiyatıyla). claude.ai sohbetleri bu hesapta yoksa oran daha güvenilirdir.`,
-                            `1% of the 5-hour limit took ${usd(account.percentCost.dollars, locale)} on average over ${account.percentCost.windows} windows in the last 7 days (Claude Code use, at API prices). It is more reliable when the account is not also used for claude.ai chats.`,
-                          )
+                        ? t("poolCard.n1OfThe5HourLimit", { usd: usd(account.percentCost.dollars, locale), percentCostWindows: account.percentCost.windows })
                         : undefined,
                     ]
                       .filter(Boolean)
@@ -245,7 +211,7 @@ export function PoolCard({
                           ariaLabel={name}
                           usedPercent={window.usedPercent}
                           resetsAt={window.resetsAt}
-                          period={pools ? undefined : name === t("Hafta", "Week") ? "seven_day" : "five_hour"}
+                          period={pools ? undefined : name === t("common.week") ? "seven_day" : "five_hour"}
                           now={now}
                           t={t}
                         />
@@ -268,7 +234,7 @@ export function PoolCard({
                             variant="ghost"
                             size="icon-xs"
                             disabled={disabled || index === 0}
-                            aria-label={t(`${account.name} yukarı`, `Move ${account.name} up`)}
+                            aria-label={t("poolCard.moveUp", { accountName: account.name })}
                             onClick={() => move(account.id, -1)}
                           >
                             <ArrowUp />
@@ -277,7 +243,7 @@ export function PoolCard({
                             variant="ghost"
                             size="icon-xs"
                             disabled={disabled || index === own.length - 1}
-                            aria-label={t(`${account.name} aşağı`, `Move ${account.name} down`)}
+                            aria-label={t("poolCard.moveDown", { accountName: account.name })}
                             onClick={() => move(account.id, 1)}
                           >
                             <ArrowDown />
@@ -298,12 +264,9 @@ export function PoolCard({
                                 <span
                                   data-slot="full-at"
                                   className="text-warn-foreground"
-                                  title={t(
-                                    "Son yarım saatin hızıyla bu dönem sıfırlanmadan dolar.",
-                                    "At the last half hour's pace this window fills before it resets.",
-                                  )}
+                                  title={t("poolCard.atTheLastHalfHourS")}
                                 >
-                                  {t(` · ${clock} gibi dolar`, ` · full by ${clock}`)}
+                                  {t("poolCard.fullBy", { clock })}
                                 </span>
                               )}
                             </span>
@@ -314,23 +277,23 @@ export function PoolCard({
                             className="text-2xs text-muted-foreground"
                             title={
                               account.provider === undefined || account.provider === "claude"
-                                ? t("Limitler henüz okunmadı", "Limits not read yet")
-                                : t("Relay bu sağlayıcının limitini okuyamıyor", "Relay cannot read this provider's limits")
+                                ? t("poolCard.limitsNotReadYet")
+                                : t("poolCard.relayCannotReadThisProviderS")
                             }
                           >
                             {account.provider === undefined || account.provider === "claude"
-                              ? t("Henüz okunmadı", "Not read yet")
-                              : t("Okunamıyor", "Not readable")}
+                              ? t("poolCard.notReadYet")
+                              : t("poolCard.notReadable")}
                           </span>
                         ) : (
-                          <div className={cn("min-w-0", quiet && "opacity-60")}>{cell(five, t("5 saat", "5 hours"))}</div>
+                          <div className={cn("min-w-0", quiet && "opacity-60")}>{cell(five, t("common.n5Hours"))}</div>
                         )}
-                        <div className={cn("min-w-0", narrowHidden, quiet && "opacity-60")}>{unread ? null : cell(week, t("Hafta", "Week"))}</div>
+                        <div className={cn("min-w-0", narrowHidden, quiet && "opacity-60")}>{unread ? null : cell(week, t("common.week"))}</div>
                         <Switch
                           className="justify-self-end"
                           checked={account.inPool}
                           disabled={disabled}
-                          aria-label={t(`${account.name} havuzda`, `${account.name} in the pool`)}
+                          aria-label={t("poolCard.inThePool", { accountName: account.name })}
                           onCheckedChange={(on) => setInPool(account.id, on)}
                         />
                       </ListRow>
@@ -344,23 +307,20 @@ export function PoolCard({
                 {Object.entries(status.nextPick).map(([provider, pick], index, all) => {
                   const nameOf = (id: string) => accounts.find((a) => a.id === id)?.name ?? "?";
                   const skipped = pick.nearlyFull?.length
-                    ? t(
-                        `; ${pick.nearlyFull.map(nameOf).join(", ")} limite yakın, atlanıyor`,
-                        `; ${pick.nearlyFull.map(nameOf).join(", ")} near the limit, passed over`,
-                      )
+                    ? t("poolCard.nearTheLimitPassedOver", { join: pick.nearlyFull.map(nameOf).join(", ") })
                     : "";
                   const who = all.length > 1 ? `${provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : "Antigravity"}: ` : "";
                   return (
                     <span key={provider} className="block">
                       {who}
-                      {t("Yeni oturum şimdi → ", "A new session now → ")}
+                      {t("poolCard.aNewSessionNow")}
                       <span className="font-medium text-foreground">{nameOf(pick.accountId)}</span>
                       {` (${pickReasonLabel(pick.reason, t)})${skipped}`}
                       {pick.byModel?.map((scoped) => (
                         <span key={scoped.model} className="block">
-                          {t(`${scoped.label} oturumu → `, `A ${scoped.label} session → `)}
+                          {t("poolCard.aSession", { scopedLabel: scoped.label })}
                           <span className="font-medium text-foreground">
-                            {scoped.accountId ? nameOf(scoped.accountId) : t("hiçbiri (her hesapta limit dolu)", "none (its limit is spent everywhere)")}
+                            {scoped.accountId ? nameOf(scoped.accountId) : t("poolCard.noneItsLimitIsSpentEverywhere")}
                           </span>
                         </span>
                       ))}
@@ -373,15 +333,12 @@ export function PoolCard({
         ) : (
           <div className="grid justify-items-start gap-2 px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              {t(
-                "Havuz boş. Bir hesap ekle; ağ geçidi istekleri onunla karşılar.",
-                "The pool is empty. Add an account and the gateway answers with it.",
-              )}
+              {t("poolCard.thePoolIsEmptyAddAn")}
             </p>
             <Button asChild size="sm">
               <a href={intentHash("hesaplar", "ekle")}>
                 <Plus />
-                {t("Hesap ekle", "Add account")}
+                {t("common.addAccount")}
               </a>
             </Button>
           </div>

@@ -70,7 +70,7 @@ export function AddAccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>{t("Hesap ekle", "Add account")}</DialogTitle>
+          <DialogTitle>{t("common.addAccount")}</DialogTitle>
         </DialogHeader>
         {/* Radix unmounts the content when closed, so each opening starts at the first provider. */}
         <AddAccountFlow close={() => onOpenChange(false)} start={provider} />
@@ -138,7 +138,7 @@ export function AddAccountFlow({ close, start }: { close: () => void; start?: Ad
   const back = !busy && (
     <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={home}>
       <ArrowLeft />
-      {t("Geri", "Back")}
+      {t("addAccountDialog.back")}
     </Button>
   );
 
@@ -152,10 +152,7 @@ export function AddAccountFlow({ close, start }: { close: () => void; start?: Ad
         {outcomes?.some((o) => "result" in o && o.provider !== "claude") && (
           <p role="status" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
             <Check aria-hidden="true" className="size-4 text-ok" />
-            {t(
-              `${outcomes.flatMap((o) => ("result" in o && o.provider !== "claude" ? [o.result.account.name] : [])).join(", ")} eklendi. Sırada Claude hesabı var.`,
-              `${outcomes.flatMap((o) => ("result" in o && o.provider !== "claude" ? [o.result.account.name] : [])).join(", ")} added. The Claude account is next.`,
-            )}
+            {t("addAccountDialog.addedTheClaudeAccountIsNext", { join: outcomes.flatMap((o) => ("result" in o && o.provider !== "claude" ? [o.result.account.name] : [])).join(", ") })}
           </p>
         )}
         <AddAccountSteps
@@ -198,24 +195,21 @@ export function AddAccountFlow({ close, start }: { close: () => void; start?: Ad
     {
       view: "claude",
       provider: "claude",
-      title: t("Başka bir Claude hesabıyla giriş yap", "Sign in with another Claude account"),
-      hint: t(
-        "Claude uygulaması giriş ekranıyla yeniden açılır; giriş yapınca Relay hesabı kendisi kaydeder.",
-        "The Claude app reopens at its sign-in; once you sign in, Relay saves the account by itself.",
-      ),
+      title: t("addAccountDialog.signInWithAnotherClaudeAccount"),
+      hint: t("addAccountDialog.theClaudeAppReopensAtIts"),
       ...(desktopLock && blockReason(desktopLock, t) ? { disabled: blockReason(desktopLock, t) } : {}),
     },
     {
       view: "codex",
       provider: "codex",
-      title: t("OpenAI / Codex", "OpenAI / Codex"),
-      hint: t("Codex CLI girişi ya da bir OpenAI API anahtarı.", "A Codex CLI sign-in, or an OpenAI API key."),
+      title: t("addAccountDialog.openaiCodex"),
+      hint: t("addAccountDialog.aCodexCliSignInOr"),
     },
     {
       view: "antigravity",
       provider: "antigravity",
-      title: t("Google Antigravity", "Google Antigravity"),
-      hint: t("Google ile giriş; API anahtarı gerekmez.", "Sign in with Google; no API key needed."),
+      title: t("addAccountDialog.googleAntigravity"),
+      hint: t("addAccountDialog.signInWithGoogleNoApi"),
     },
   ];
   return (
@@ -224,7 +218,7 @@ export function AddAccountFlow({ close, start }: { close: () => void; start?: Ad
       {sessions.length > 0 && <DetectedImport sessions={sessions} onDone={imported} />}
       <section aria-labelledby="add-other-title" className="grid gap-1.5">
         <h3 id="add-other-title" className="text-xs font-semibold text-muted-foreground">
-          {sessions.length ? t("Başka bir hesap ekle", "Add another account") : t("Nasıl eklemek istersin?", "How do you want to add it?")}
+          {sessions.length ? t("addAccountDialog.addAnotherAccount") : t("addAccountDialog.howDoYouWantToAdd")}
         </h3>
         <ul className="grid gap-1.5">
           {ways.map((way) => (
@@ -249,7 +243,7 @@ export function AddAccountFlow({ close, start }: { close: () => void; start?: Ad
       </section>
       <div className="flex justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={close}>
-          {t("Kapat", "Close")}
+          {t("common.close")}
         </Button>
       </div>
     </div>
@@ -271,7 +265,7 @@ function ImportDone({
   return (
     <div className="grid gap-3" data-slot="import-done">
       <h3 className="text-lg leading-snug font-semibold">
-        {added === 1 ? t("1 hesap eklendi", "1 account added") : t(`${added} hesap eklendi`, `${added} accounts added`)}
+        {t("addAccountDialog.accountsAdded", { count: added })}
       </h3>
       <ul className="grid gap-1.5">
         {outcomes.map((outcome, index) => (
@@ -295,10 +289,10 @@ function ImportDone({
       </ul>
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onAnother}>
-          {t("Başka hesap ekle", "Add another account")}
+          {t("addAccountDialog.addAnotherAccount2")}
         </Button>
         <Button type="button" onClick={close}>
-          {t("Bitti", "Done")}
+          {t("addAccountDialog.done")}
         </Button>
       </div>
     </div>
@@ -312,15 +306,15 @@ function ImportDone({
 function StepIndicator({ step }: { step: Step }) {
   const { t } = useI18n();
   const titles = [
-    t("Claude uygulaması", "Claude app"),
-    t("Claude Code girişi", "Claude Code sign-in"),
-    t("Hazır", "Ready"),
+    t("common.claudeApp"),
+    t("addAccountDialog.claudeCodeSignIn"),
+    t("common.ready"),
   ];
   return (
     <div className="grid gap-2">
       <ol
         className="grid grid-cols-3 gap-1.5 text-xs"
-        aria-label={t("Adımlar", "Steps")}
+        aria-label={t("addAccountDialog.steps")}
       >
         {titles.map((title, index) => {
           const n = (index + 1) as Step;
@@ -477,7 +471,7 @@ export function AddAccountSteps({
   const [profile, setProfile] = useState<ProfileValue>();
   useEffect(() => {
     if (step !== 3 || !account || profile) return;
-    const suggestion = isProvisionalName(account.name) ? suggestProfile(account, accounts) : undefined;
+    const suggestion = isProvisionalName(account.name, t) ? suggestProfile(account, accounts, language) : undefined;
     setProfile(
       suggestion
         ? { name: suggestion.name, kind: suggestion.kind, group: suggestion.group ?? "" }
@@ -528,15 +522,15 @@ export function AddAccountSteps({
               <Button variant="outline" size="sm" disabled={!!busy || !!desktopLock} onClick={begin}>
                 {busy === "create" && <LoaderCircle className="animate-spin" />}
                 {current
-                  ? t("Bu hesabı ekle…", "Add this account…")
-                  : t("Claude uygulamasında giriş ekranını aç…", "Open sign-in in the Claude app…")}
+                  ? t("addAccountDialog.addThisAccount")
+                  : t("addAccountDialog.openSignInInTheClaude")}
               </Button>
               {desktopLock && blockReason(desktopLock, t) && (
                 <small className="text-xs text-muted-foreground">{blockReason(desktopLock, t)}</small>
               )}
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={close}>
-              {t("Vazgeç", "Cancel")}
+              {t("common.cancel")}
             </Button>
           </div>
         </>
@@ -549,13 +543,13 @@ export function AddAccountSteps({
             <>
               <StepTitle>
                 {current
-                  ? t("Claude uygulamasında açık hesabı ekle", "Add the account open in the Claude app")
-                  : t("Yeni hesapla giriş yap", "Sign in with the new account")}
+                  ? t("addAccountDialog.addTheAccountOpenInThe")
+                  : t("addAccountDialog.signInWithTheNewAccount")}
               </StepTitle>
               {account && pendingDesktop?.id === account.id ? (
                 <div className="grid gap-3">
                   <StatusLine tone="warn" icon={<Monitor />}>
-                    {t("Claude uygulamasına giriş yap", "Sign in to the Claude app")}
+                    {t("common.signInToTheClaudeApp")}
                   </StatusLine>
                   <DesktopPendingActions />
                 </div>
@@ -584,7 +578,7 @@ export function AddAccountSteps({
                         disabled={desktopBusy}
                         onClick={() => void action("open", () => api.openCodeTab())}
                       >
-                        {t("Code’u aç", "Open Code")}
+                        {t("common.openCode")}
                       </Button>
                     </div>
                   )}
@@ -600,8 +594,8 @@ export function AddAccountSteps({
                     <Button disabled={!!busy || !!desktopLock} onClick={begin}>
                       {busy === "create" && <LoaderCircle className="animate-spin" />}
                       {current
-                        ? t("Bu hesabı ekle…", "Add this account…")
-                        : t("Claude uygulamasında giriş ekranını aç…", "Open sign-in in the Claude app…")}
+                        ? t("addAccountDialog.addThisAccount")
+                        : t("addAccountDialog.openSignInInTheClaude")}
                     </Button>
                     {desktopLock && blockReason(desktopLock, t) && (
                       <small className="text-xs text-muted-foreground">{blockReason(desktopLock, t)}</small>
@@ -611,7 +605,7 @@ export function AddAccountSteps({
               )}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={close}>
-                  {t("Vazgeç", "Cancel")}
+                  {t("common.cancel")}
                 </Button>
               </div>
             </>
@@ -621,20 +615,17 @@ export function AddAccountSteps({
       {step === 2 && account && (
         <>
           <StepTitle>
-            {t(`“${account.name}” için Claude Code girişi`, `Claude Code sign-in for “${account.name}”`)}
+            {t("addAccountDialog.claudeCodeSignInFor", { accountName: account.name })}
           </StepTitle>
           <p className="text-sm text-muted-foreground">
-            {t(
-              "Ağ geçidi, terminal ve limit okuma bu girişi kullanır. Claude uygulamasından ayrıdır; tarayıcıda resmi Claude Code ile bir kez onaylanır.",
-              "The gateway, the terminal and limit reading use this sign-in. It is separate from the Claude app and approved once in the browser with the official Claude Code.",
-            )}
+            {t("addAccountDialog.theGatewayTheTerminalAndLimit")}
           </p>
           {/* The page-frame panel sits under the overlay; finish the sign-in here. */}
           {flow ? (
             <CliFlowPanel embedded />
           ) : connected ? (
             <StatusLine tone="ok" icon={<Globe2 />}>
-              {t("Bağlı", "Connected")}
+              {t("addAccountDialog.connected")}
               {account.auth?.email ? ` · ${account.auth.email}` : ""}
             </StatusLine>
           ) : cliBlocked(cli) ? (
@@ -643,10 +634,7 @@ export function AddAccountSteps({
                 {`Claude Code · ${cliDetail(cli, relay.data?.diagnostics.version, t)}`}
               </StatusLine>
               <p className="text-sm text-muted-foreground">
-                {t(
-                  "Limitleri okumak için Claude Code gerekir. Claude uygulamasında Code’u aç ya da CLI’yi kur.",
-                  "Relay needs Claude Code to read limits. Open Code in the Claude app, or install the CLI.",
-                )}
+                {t("addAccountDialog.relayNeedsClaudeCodeToRead")}
               </p>
               <CliSetupActions />
             </div>
@@ -659,11 +647,11 @@ export function AddAccountSteps({
                 onClick={() => void relay.startCli(account)}
               >
                 <Globe2 />
-                {t("Claude Code ile giriş yap", "Sign in with Claude Code")}
+                {t("addAccountDialog.signInWithClaudeCode")}
               </Button>
             )}
             <Button variant={connected ? "default" : "ghost"} onClick={() => setStep(3)}>
-              {connected ? t("Devam", "Continue") : t("Sonra yap", "Do it later")}
+              {connected ? t("addAccountDialog.continue") : t("addAccountDialog.doItLater")}
             </Button>
           </div>
         </>
@@ -676,17 +664,19 @@ export function AddAccountSteps({
             save(close);
           }}
         >
-          <StepTitle>{t("Hesap hazır", "Account ready")}</StepTitle>
+          <StepTitle>{t("addAccountDialog.accountReady")}</StepTitle>
           <div className="grid gap-2">
             <StatusLine tone={linked ? "ok" : "warn"} icon={<Monitor />} static>
               {linked
-                ? t("Claude uygulaması girişi kaydedildi", "Claude app sign-in saved")
-                : t("Claude uygulaması girişi henüz kaydedilmedi", "Claude app sign-in not saved yet")}
+                ? t("addAccountDialog.claudeAppSignInSaved")
+                : t("addAccountDialog.claudeAppSignInNotSaved")}
             </StatusLine>
             <StatusLine tone={connected ? "ok" : "warn"} icon={<Globe2 />} static>
               {connected
-                ? t(`Claude Code girişi bağlı${account.auth?.email ? ` · ${account.auth.email}` : ""}`, `Claude Code sign-in connected${account.auth?.email ? ` · ${account.auth.email}` : ""}`)
-                : t("Claude Code girişi yok: ağ geçidi bu hesabı kullanamaz", "No Claude Code sign-in: the gateway cannot use this account")}
+                ? account.auth?.email
+                  ? t("addAccountDialog.claudeCodeSignInConnectedEmail", { email: account.auth.email })
+                  : t("addAccountDialog.claudeCodeSignInConnected")
+                : t("addAccountDialog.noClaudeCodeSignInThe")}
             </StatusLine>
           </div>
           {profile && (
@@ -694,11 +684,11 @@ export function AddAccountSteps({
           )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="ghost" disabled={!!busy || !profile?.name.trim()} onClick={another}>
-              {t("Başka hesap ekle", "Add another account")}
+              {t("addAccountDialog.addAnotherAccount2")}
             </Button>
             <Button type="submit" disabled={!!busy || !profile?.name.trim()}>
               {busy === "profile" && <LoaderCircle className="animate-spin" />}
-              {t("Kaydet ve bitir", "Save and finish")}
+              {t("addAccountDialog.saveAndFinish")}
             </Button>
           </div>
         </form>

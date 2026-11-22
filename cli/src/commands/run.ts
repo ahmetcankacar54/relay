@@ -15,21 +15,18 @@ import { CliError, EXIT } from "../io";
 export const run: Command = async ({ io, deps, parsed, t }) => {
   const query = parsed.positionals[0];
   if (!query || parsed.positionals.length > 1)
-    throw new CliError(t("Kullanım: relay run <ad> [-- claude seçenekleri]", "Usage: relay run <name> [-- claude options]"), EXIT.usage);
+    throw new CliError(t("run.usageRelayRunNameClaudeOptions"), EXIT.usage);
   const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
   const account = resolveAccount(ctx.store.state.accounts, query, t);
   if (!account.auth?.loggedIn)
     throw new CliError(
-      t(
-        `${account.name} hesabının Claude Code profili bağlı değil. Önce: relay connect "${account.name}"`,
-        `${account.name}’s Claude Code profile is not connected. First: relay connect "${account.name}"`,
-      ),
+      t("run.sClaudeCodeProfileIsNot", { accountName: account.name }),
       EXIT.failed,
     );
   const claude = ctx.deps.claude(ctx.store.state.executable);
   if (!claude)
     throw new CliError(
-      t(`Claude Code CLI bulunamadı. Kurmak için: ${EXTERNAL_LINKS.cliSetup}`, `The Claude Code CLI was not found. To install it: ${EXTERNAL_LINKS.cliSetup}`),
+      t("run.theClaudeCodeCliWasNot", { EXTERNAL_LINKSCliSetup: EXTERNAL_LINKS.cliSetup }),
       EXIT.environment,
     );
   const release = acquireProfileLock(ctx.paths.locks, account.id, "shared");

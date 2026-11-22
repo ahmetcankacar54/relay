@@ -4,12 +4,12 @@ import fs from "node:fs";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Private } from "../src/components/Private";
-import { I18nContext, type T } from "../src/data/i18n";
+import { I18nContext } from "../src/data/i18n";
 import { fakeDom, find, readableText, type Fake } from "./fake-dom";
+import { i18nValue } from "./i18n";
 
-const t: T = (tr: string) => tr;
 const wrap = (child: ReturnType<typeof createElement>) =>
-  createElement(I18nContext.Provider, { value: { language: "tr", setLanguage() {}, t } }, child);
+  createElement(I18nContext.Provider, { value: i18nValue("tr") }, child);
 
 test("an account detail starts blurred, with a hidden-text label and the text kept for search", () => {
   const html = renderToStaticMarkup(wrap(createElement(Private, null, "a@example.com")));
@@ -66,7 +66,7 @@ test("turned off in Settings, details show plainly", async () => {
     g.window = previous;
   }
   const settings = fs.readFileSync(new URL("../src/pages/Settings.tsx", import.meta.url), "utf8");
-  assert.match(settings, /Hesap bilgilerini bulanıklaştır[\s\S]*?<Switch id="privacy-blur" checked=\{privacyBlur\}/);
+  assert.match(settings, /t\("settings\.blurAccountDetails"\)[\s\S]*?<Switch id="privacy-blur" checked=\{privacyBlur\}/);
 });
 
 test("the places that show an account's e-mail blur it", () => {

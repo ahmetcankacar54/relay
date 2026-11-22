@@ -10,8 +10,10 @@ import { TooltipProvider } from "../src/components/ui/tooltip";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account } from "../shared/types";
+import { i18nValue, testT } from "./i18n";
 
-const t = (tr: string) => tr;
+const t = testT("tr");
+const language = "tr";
 // The shell owns the single TooltipProvider; the compact rail's tooltips need it.
 const inShell = (child: ReturnType<typeof createElement>) =>
   createElement(TooltipProvider, null, child);
@@ -22,6 +24,7 @@ test("sidebar lists the pages, marks the current one and puts the automation dot
       page: "ayarlar",
       go: () => {},
       t,
+      language,
       compact: false,
       status: { accounts: 4, planning: true, switching: false },
       summary: { name: "Kişisel · Max", running: true, fiveHour: 38 },
@@ -50,6 +53,7 @@ test("compact sidebar keeps accessible names", () => {
       page: "genel",
       go: () => {},
       t,
+      language,
       compact: true,
       status: { accounts: 0, planning: false, switching: false },
     })),
@@ -88,11 +92,7 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
       authFlows: [],
     },
   } as unknown as Relay;
-  const i18n = {
-    language: "tr" as const,
-    setLanguage() {},
-    t: (tr: string) => tr,
-  };
+  const i18n = i18nValue("tr");
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
@@ -117,6 +117,7 @@ test("sidebar buttons override the legacy centred button style and the summary c
         page: "genel",
         go: () => {},
         t,
+        language,
         compact: false,
         status: { accounts: 2, planning: false, switching: false },
         summary: { name: "Kişisel · Max", running, fiveHour: 94 },
@@ -186,6 +187,7 @@ const withRelay = (relay: Relay, page: "genel" | "hesaplar", running = true, com
           page,
           go: () => {},
           t,
+          language,
           compact,
           status: { accounts: 2, planning: false, switching: false },
           summary: { name: "Kişisel · Max", running, fiveHour: 94 },
@@ -232,6 +234,7 @@ test("compact rail centres its icon buttons", () => {
       page: "genel",
       go: () => {},
       t,
+      language,
       compact: true,
       status: { accounts: 0, planning: false, switching: false },
     })),

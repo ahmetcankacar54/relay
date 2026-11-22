@@ -128,6 +128,8 @@ struct Snapshot: Decodable {
   }
   let version: Int
   let generatedAt: Double
+  /** The language Relay wrote the texts in (shared/i18n/locales.ts); the widget's own words follow it. */
+  let locale: String?
   let date: String
   let zone: String
   let state: String
@@ -758,8 +760,28 @@ struct WeekBars: View {
 
 // MARK: - Pieces
 
-private let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") == true
-private func say(_ tr: String, _ en: String) -> String { turkish ? tr : en }
+/** The supported language a system tag means, as shared/i18n/locales.ts `matchLocale` reads it. */
+private func matchLocale(_ tag: String) -> String? {
+  let base = tag.split(separator: ".").first.map(String.init) ?? tag
+  let clean = (base.split(separator: "@").first.map(String.init) ?? base)
+    .replacingOccurrences(of: "_", with: "-").lowercased()
+  let parts = clean.split(separator: "-").map(String.init)
+  guard let language = parts.first, language != "c", language != "posix" else { return nil }
+  if language == "zh" {
+    return parts.dropFirst().contains { ["hant", "tw", "hk", "mo"].contains($0) } ? "zh-Hant" : "zh-Hans"
+  }
+  if language == "pt" { return "pt-BR" }
+  return widgetStrings[language] == nil ? nil : language
+}
+
+/** The system's language for the widget's own words: the first one Relay speaks, else English. */
+private let systemLocale = Locale.preferredLanguages.lazy.compactMap(matchLocale).first ?? "en"
+
+/** One of the widget's own words (WidgetStrings.swift), in the snapshot's language when there is one. */
+private func say(_ id: String, _ snapshot: Snapshot? = nil) -> String {
+  let locale = snapshot?.locale.flatMap { widgetStrings[$0] == nil ? nil : $0 } ?? systemLocale
+  return widgetStrings[locale]?[id] ?? widgetStrings["en"]?[id] ?? id
+}
 
 /** `whole` without `part` and the separators around it: "Bugün toplam" from the today line. */
 private func without(_ whole: String, _ part: String) -> String {
@@ -796,7 +818,7 @@ private struct Message: View {
 /** What the account widgets show before their content: nil when they can draw it. */
 private func blocked(_ entry: TodayEntry) -> Message? {
   guard let snapshot = entry.snapshot else {
-    return Message(title: "Relay", line: say("Relay’i aç", "Open Relay"), mood: "sleeping")
+    return Message(title: "Relay", line: say("widget.openRelay"), mood: "sleeping")
   }
   if entry.newDay { return Message(title: snapshot.text.title, line: snapshot.text.empty, mood: entry.mood) }
   if snapshot.state == "scanning" {
@@ -1138,9 +1160,9 @@ struct AccountsContent: View {
       Rectangle().fill(look.hairline).frame(width: 1).padding(.vertical, 2)
       VStack(alignment: .leading, spacing: 3) {
         HStack(spacing: 7) {
-          Text(snapshot.text.others ?? say("Diğer hesaplar", "Other accounts"))
+          Text(snapshot.text.others ?? say("widget.otherAccounts", snapshot))
           Spacer(minLength: 0)
-          Text(snapshot.text.todayWord ?? say("bugün", "today"))
+          Text(snapshot.text.todayWord ?? say("widget.today", snapshot))
           // Over the cost column: a hidden Geç takes the room the rows' buttons take.
           SwitchButton(title: snapshot.text.switchWord, suggested: false).hidden().frame(height: 12)
         }
@@ -1172,7 +1194,7 @@ struct AccountsContent: View {
           }
           VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center) {
-              Text(snapshot.text.inClaude ?? say("Claude’da açık", "Open in Claude"))
+              Text(snapshot.text.inClaude ?? say("widget.openInClaude", snapshot))
                 .font(.system(size: 11)).foregroundStyle(look.secondary)
               Spacer(minLength: 4)
               Panda(mood: entry.mood, size: 26)
@@ -1283,7 +1305,7 @@ struct TodayContent: View {
         medium(snapshot)
       }
     } else {
-      Message(title: "Relay", line: say("Relay’i aç", "Open Relay"), mood: "sleeping")
+      Message(title: "Relay", line: say("widget.openRelay"), mood: "sleeping")
     }
   }
 
@@ -1430,7 +1452,7 @@ struct WeekContent: View {
     } else if let snapshot = entry.snapshot, let week = snapshot.week {
       content(snapshot, week)
     } else {
-      Message(title: "Relay", line: say("Relay’i aç", "Open Relay"), mood: "sleeping")
+      Message(title: "Relay", line: say("widget.openRelay", entry.snapshot), mood: "sleeping")
     }
   }
 
@@ -1520,11 +1542,8 @@ struct RelayAccount: Widget {
     StaticConfiguration(kind: "RelayAccount", provider: TodayProvider()) { entry in
       AccountView(entry: entry)
     }
-    .configurationDisplayName(say("Relay · Hesap", "Relay · Account"))
-    .description(
-      say(
-        "Açık hesabın limitleri, bugünkü maliyeti ve tokenları",
-        "The open account’s limits, cost and tokens today"))
+    .configurationDisplayName(say("widget.accountName"))
+    .description(say("widget.accountDescription"))
     .supportedFamilies([.systemSmall])
     .contentMarginsDisabled()
   }
@@ -1535,11 +1554,8 @@ struct RelayAccounts: Widget {
     StaticConfiguration(kind: "RelayAccounts", provider: TodayProvider()) { entry in
       AccountsView(entry: entry)
     }
-    .configurationDisplayName(say("Relay · Hesaplar", "Relay · Accounts"))
-    .description(
-      say(
-        "Hesapların limitleri ve bugünkü maliyeti; Geç düğmesi Relay’de geçiş onayını açar",
-        "Your accounts’ limits and cost today; Switch opens the switch review in Relay"))
+    .configurationDisplayName(say("widget.accountsName"))
+    .description(say("widget.accountsDescription"))
     .supportedFamilies([.systemMedium])
     .contentMarginsDisabled()
   }
@@ -1550,11 +1566,8 @@ struct RelayAccountsToday: Widget {
     StaticConfiguration(kind: "RelayAccountsToday", provider: TodayProvider()) { entry in
       AccountsView(entry: entry)
     }
-    .configurationDisplayName(say("Relay · Hesaplar ve bugün", "Relay · Accounts and today"))
-    .description(
-      say(
-        "Hesapların limitleri, bugünkü maliyeti, tokenları ve hesaplara dağılımı",
-        "Your accounts’ limits, and today’s cost, tokens and split by account"))
+    .configurationDisplayName(say("widget.accountsTodayName"))
+    .description(say("widget.accountsTodayDescription"))
     .supportedFamilies([.systemLarge])
     .contentMarginsDisabled()
   }
@@ -1565,11 +1578,8 @@ struct RelayToday: Widget {
     StaticConfiguration(kind: "RelayToday", provider: TodayProvider()) { entry in
       TodayView(entry: entry)
     }
-    .configurationDisplayName(say("Relay · Bugün", "Relay · Today"))
-    .description(
-      say(
-        "Bugünkü Claude Code tokenları ve API karşılığı",
-        "Today’s Claude Code tokens and their API value"))
+    .configurationDisplayName(say("widget.todayName"))
+    .description(say("widget.todayDescription"))
     .supportedFamilies([.systemSmall, .systemMedium])
     .contentMarginsDisabled()
   }
@@ -1580,11 +1590,8 @@ struct RelayWeek: Widget {
     StaticConfiguration(kind: "RelayWeek", provider: TodayProvider()) { entry in
       WeekView(entry: entry)
     }
-    .configurationDisplayName(say("Relay · Son 7 gün", "Relay · Last 7 days"))
-    .description(
-      say(
-        "Son yedi günün maliyeti, tokenları ve hesaplara dağılımı",
-        "The last seven days’ cost, tokens and split by account"))
+    .configurationDisplayName(say("widget.weekName"))
+    .description(say("widget.weekDescription"))
     .supportedFamilies([.systemMedium])
     .contentMarginsDisabled()
   }

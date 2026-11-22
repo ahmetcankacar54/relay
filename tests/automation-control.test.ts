@@ -16,6 +16,7 @@ const Switching = () => createElement(Fragment, null, createElement(SwitchingTab
 import { Banners } from "../src/app/Banners";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue } from "./i18n";
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -271,7 +272,7 @@ const render = (
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, element),
     ),
   );

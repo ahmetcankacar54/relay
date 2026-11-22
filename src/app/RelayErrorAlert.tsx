@@ -14,7 +14,7 @@ export function RelayErrorAlert() {
       tone="error"
       role="alert"
       onDismiss={() => void relay.dismissError()}
-      dismissLabel={t("Hatayı kapat", "Dismiss error")}
+      dismissLabel={t("relayErrorAlert.dismissError")}
     >
       <span>{localizeError(message, language)}</span>
     </Banner>

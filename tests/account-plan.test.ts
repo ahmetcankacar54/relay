@@ -10,6 +10,7 @@ import { accountPlan, planLabel, planTitle, providerPlan } from "../src/pages/ac
 import { accountTileLine } from "../src/lib/account-row";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountProvider, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-11-14T10:00:00Z");
@@ -21,9 +22,8 @@ const account = (provider: AccountProvider, extra: Partial<Account> = {}): Accou
 const signedIn = (subscription?: string, plan?: "pro" | "max5" | "max20" | "team"): Account["auth"] => ({
   loggedIn: true, checkedAt, ...(subscription ? { subscription } : {}), ...(plan ? { plan } : {}),
 });
-type T = (tr: string, en: string) => string;
-const tr: T = (tr) => tr;
-const en: T = (_tr, en) => en;
+const tr = testT("tr");
+const en = testT("en");
 
 test("Codex accounts are named by their ChatGPT plan, never by a Claude plan", () => {
   const words: Record<string, string> = {
@@ -117,7 +117,7 @@ const wrap = (relay: Relay, child: ReturnType<typeof createElement>) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );

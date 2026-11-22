@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { CliError, EXIT } from "./io";
-import type { Translate } from "./i18n";
+import type { T } from "../../shared/i18n/translate";
 import type { CliDeps } from "./deps";
 
 /** Whether dotted version `version` is below `floor`. */
@@ -13,27 +13,18 @@ export function olderThan(version: string, floor: string): boolean {
   return false;
 }
 
-export const updateAppMessage = (t: Translate) =>
-  t(
-    "Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.",
-    "Update Relay.app to 0.12 or later and open it once.",
-  );
+export const updateAppMessage = (t: T) =>
+  t("guards.updateRelayAppTo012");
 
 /** The installed Relay.app writes an older account list than this relay: not the "older than 0.12" case. */
-export const appOlderMessage = (t: Translate) =>
-  t(
-    "Relay.app’in yazdığı hesap listesi bu relay’inkinden eski. Relay.app’i relay ile aynı sürüme güncelleyip bir kez aç ya da Relay.app’e uyan relay sürümünü kur.",
-    "Relay.app writes an older account list than this relay. Update Relay.app to the same version as relay and open it once, or install the relay version that matches Relay.app.",
-  );
+export const appOlderMessage = (t: T) =>
+  t("guards.relayAppWritesAnOlderAccount");
 
 /** Refuses to quit or open Claude without a macOS desktop session (over SSH, for example). */
-export function guiSessionGuard(deps: CliDeps, t: Translate): void {
+export function guiSessionGuard(deps: CliDeps, t: T): void {
   if (!deps.guiSession())
     throw new CliError(
-      t(
-        "Bu oturumda macOS masaüstü yok (örneğin SSH): Claude uygulaması buradan kapatılıp açılamaz.",
-        "This session has no macOS desktop (over SSH, for example): the Claude app cannot be quit or opened from here.",
-      ),
+      t("guards.thisSessionHasNoMacosDesktop"),
       EXIT.environment,
     );
 }

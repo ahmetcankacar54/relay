@@ -119,15 +119,13 @@ export class AuthManager {
       throw new SignInBusyError("another sign-in runs on this account");
     }
     if (this.list().filter(authPending).length >= 4)
-      throw new Error("Önce yarım kalan limit okuma girişlerinden birini tamamla.");
+      throw new Error("Finish one of the pending usage sign-ins first.");
     let releaseProfile: (() => void) | undefined;
     try {
       releaseProfile = this.profileLock?.(accountId);
     } catch (error) {
       if (error instanceof ProfileLockBusyError)
-        throw new Error(
-          "Bu hesap şu an başka bir Relay işleminde (terminalde) kullanılıyor; o bitince yeniden dene.",
-        );
+        throw new Error("Another Relay process (in a terminal) is using this account. Try again when it ends.");
       throw error;
     }
     const attemptId = randomUUID();
@@ -275,9 +273,7 @@ export class AuthManager {
   async reopen(accountId: string, attemptId: string, where: "window" | "browser" = "browser") {
     const e = this.get(accountId, attemptId);
     if (e.stopping || e.flow.status !== "waiting" || !e.url)
-      throw new Error(
-        "Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.",
-      );
+      throw new Error("The sign-in page isn’t ready yet or has expired. Start the sign-in again.");
     if (where === "window" && this.browser) {
       // From now on the flow owns that window: it closes when the sign-in ends.
       if (!e.flow.inWindow) this.update(e, { inWindow: true });
@@ -287,9 +283,9 @@ export class AuthManager {
   submitCode(accountId: string, attemptId: string, code: string) {
     const e = this.get(accountId, attemptId);
     if (!authPending(e.flow) || e.stopping || !e.flow.codeRequested)
-      throw new Error("Bu giriş işlemi kod beklemiyor.");
+      throw new Error("This sign-in attempt is not waiting for a code.");
     if (!code.trim() || code.length > 4096 || /[\r\n\x00-\x1f\x7f]/.test(code))
-      throw new Error("Tarayıcının verdiği tek satırlık kodu yapıştır.");
+      throw new Error("Paste the single-line code from the browser.");
     e.child.stdin.write(code.trim() + "\n");
     this.update(e, { codeRequested: false });
   }
@@ -350,7 +346,7 @@ export class AuthManager {
   private get(accountId: string, attemptId: string) {
     const e = this.entries.get(accountId);
     if (!e || e.flow.id !== attemptId)
-      throw new Error("Bu giriş denemesi artık geçerli değil.");
+      throw new Error("This sign-in attempt is no longer valid.");
     return e;
   }
   private update(e: Entry, patch: Partial<AuthFlow>) {

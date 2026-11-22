@@ -1,5 +1,6 @@
 import type { MenuItemConstructorOptions } from "electron";
-import { pick, type AppLanguage } from "./language";
+import type { Locale } from "../shared/i18n/locales";
+import { tFor } from "../shared/i18n/translate";
 
 const separator: MenuItemConstructorOptions = { type: "separator" };
 
@@ -9,27 +10,27 @@ const separator: MenuItemConstructorOptions = { type: "separator" };
  * rebuilds it whenever the language changes and the tests read it in both languages.
  */
 export function appMenuTemplate(
-  language: AppLanguage,
+  language: Locale,
   actions: { closeToTray(): void; quit(): void; closeWindow(): void },
   platform: NodeJS.Platform = process.platform,
 ): MenuItemConstructorOptions[] {
-  const t = pick(language);
+  const t = tFor(language);
   return [
     ...(platform === "darwin"
       ? [
           {
             label: "Relay",
             submenu: [
-              { role: "about", label: t("Relay hakkında", "About Relay") },
+              { role: "about", label: t("appMenu.aboutRelay") },
               separator,
-              { role: "hide", label: t("Relay’i gizle", "Hide Relay") },
+              { role: "hide", label: t("appMenu.hideRelay") },
               {
-                label: t("Relay penceresini kapat", "Close Relay window"),
+                label: t("appMenu.closeRelayWindow"),
                 accelerator: "CmdOrCtrl+Q",
                 click: () => actions.closeToTray(),
               },
               {
-                label: t("Relay’den çık", "Quit Relay"),
+                label: t("appMenu.quitRelay"),
                 accelerator: "Alt+CmdOrCtrl+Q",
                 click: () => actions.quit(),
               },
@@ -38,39 +39,39 @@ export function appMenuTemplate(
         ]
       : []),
     {
-      label: t("Düzen", "Edit"),
+      label: t("appMenu.edit"),
       submenu: [
-        { role: "undo", label: t("Geri al", "Undo") },
-        { role: "redo", label: t("Yinele", "Redo") },
+        { role: "undo", label: t("appMenu.undo") },
+        { role: "redo", label: t("appMenu.redo") },
         separator,
-        { role: "cut", label: t("Kes", "Cut") },
-        { role: "copy", label: t("Kopyala", "Copy") },
-        { role: "paste", label: t("Yapıştır", "Paste") },
-        { role: "selectAll", label: t("Tümünü seç", "Select All") },
+        { role: "cut", label: t("appMenu.cut") },
+        { role: "copy", label: t("common.copy") },
+        { role: "paste", label: t("appMenu.paste") },
+        { role: "selectAll", label: t("appMenu.selectAll") },
       ],
     },
     {
-      label: t("Görüntü", "View"),
+      label: t("appMenu.view"),
       submenu: [
-        { role: "resetZoom", label: t("Gerçek boyut", "Actual Size") },
-        { role: "zoomIn", label: t("Yakınlaştır", "Zoom In") },
-        { role: "zoomOut", label: t("Uzaklaştır", "Zoom Out") },
+        { role: "resetZoom", label: t("appMenu.actualSize") },
+        { role: "zoomIn", label: t("appMenu.zoomIn") },
+        { role: "zoomOut", label: t("appMenu.zoomOut") },
         separator,
         {
           role: "togglefullscreen",
-          label: t("Tam ekran", "Toggle Full Screen"),
+          label: t("appMenu.toggleFullScreen"),
         },
       ],
     },
     {
-      label: t("Pencere", "Window"),
+      label: t("appMenu.window"),
       role: "window",
       submenu: [
-        { role: "minimize", label: t("Küçült", "Minimize") },
-        { role: "zoom", label: t("Büyüt", "Zoom") },
+        { role: "minimize", label: t("appMenu.minimize") },
+        { role: "zoom", label: t("appMenu.zoom") },
         separator,
         {
-          label: t("Pencereyi kapat", "Close Window"),
+          label: t("appMenu.closeWindow"),
           accelerator: "CmdOrCtrl+W",
           click: () => actions.closeWindow(),
         },

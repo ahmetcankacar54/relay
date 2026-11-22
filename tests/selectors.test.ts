@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { overviewAccounts, sidebarStatus, tempoRateNow, usageWindowRows } from "../src/data/selectors";
+import { overviewAccounts, sidebarStatus, tempoRateNow, usageRowLabel, usageWindowRows } from "../src/data/selectors";
 import { presetTempo } from "../shared/tempo";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
+import { testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -77,7 +78,7 @@ test("sidebar status reflects automation switches", () => {
 
 test("usage rows include model windows after the main ones", () => {
   const rows = usageWindowRows({ ...use("a", 38, 78), modelWindows: [{ key: "seven_day_opus", label: "Opus", usedPercent: 7 }] });
-  assert.deepEqual(rows.map((r) => [r.key, r.label.tr, r.usedPercent]), [
+  assert.deepEqual(rows.map((r) => [r.key, usageRowLabel(r, testT("tr")), r.usedPercent]), [
     ["five_hour", "5 saatlik dönem", 38],
     ["seven_day", "Haftalık · tüm modeller", 78],
     ["seven_day_opus", "Opus · haftalık", 7],

@@ -14,6 +14,7 @@ import { UsageManager } from "../electron/core/usage";
 import { Store } from "../electron/core/store";
 import type { Account } from "../shared/types";
 import type { ProxyRequestLog } from "../shared/proxy-types";
+import { testT } from "./i18n";
 
 /** The rate-limit headers of a real answer through the gateway (2026-11-13), request id shortened. */
 const ALLOWED = {
@@ -320,8 +321,8 @@ test("an answer's windows make the account fresh for everything that reads limit
 
 test("the feed says who asked, what kind of request, how long and how much was cached", async () => {
   const { requestDetail } = await import("../src/lib/proxy-ui");
-  const tr = (a: string) => a;
-  const en = (_a: string, b: string) => b;
+  const tr = testT("tr");
+  const en = testT("en");
   const entry = {
     client: "claude-code",
     requestClass: "subagent",
@@ -336,7 +337,7 @@ test("the feed says who asked, what kind of request, how long and how much was c
 
 test("the Overview says which tools go through the gateway and where the last request went", async () => {
   const { gatewayLine } = await import("../src/lib/proxy-ui");
-  const en = (_a: string, b: string) => b;
+  const en = testT("en");
   const now = Date.UTC(2026, 10, 13, 12);
   const accounts = [{ id: "a", name: "Alto" }];
   const recent = [{ at: now - 120_000, accountId: "a" }];

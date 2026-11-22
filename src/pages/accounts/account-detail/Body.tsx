@@ -35,6 +35,7 @@ import { accountPlan, groupName, providerLabel } from "../accountLabels";
 import { ConnectionList, ConnectionRow } from "./Connections";
 import { ExtensionConnection } from "./ExtensionConnection";
 import { TerminalConnection } from "./TerminalConnection";
+import type { T } from "../../../../shared/i18n/translate";
 
 /**
  * The closed Code history row's summary: how many other accounts' history the next merge brings
@@ -43,12 +44,12 @@ import { TerminalConnection } from "./TerminalConnection";
 export function historyLine(
   sources: number,
   transfer: RelaySettings["desktopHistoryTransfer"],
-  t: (tr: string, en: string) => string,
+  t: T,
 ): string {
-  if (!sources) return t("paylaşılmıyor", "not shared");
+  if (!sources) return t("body.notShared");
   return transfer === "same-group"
-    ? t(`aynı gruptaki ${sources} hesapla paylaşılıyor`, `shared with ${sources} ${sources === 1 ? "account" : "accounts"} in the same group`)
-    : t(`${sources} hesapla paylaşılıyor`, `shared with ${sources} ${sources === 1 ? "account" : "accounts"}`);
+    ? t("body.sharedWithAccountsInTheSame", { sources })
+    : t("body.sharedWithAccounts", { sources });
 }
 
 /** The page's contents under its header; rendered apart so it can be tested statically. */
@@ -121,10 +122,7 @@ export function AccountDetailBody({
           role="status"
           className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm"
         >
-          {t(
-            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı limitleri paylaşır.`,
-            `This account is also connected to ${duplicate.name}. Both profiles share the same limits.`,
-          )}
+          {t("body.thisAccountIsAlsoConnectedTo", { duplicateName: duplicate.name })}
         </p>
       )}
       {a.desktop?.rejectedAt && (
@@ -134,17 +132,14 @@ export function AccountDetailBody({
           className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
         >
           <p className="min-w-0 flex-1">
-            {t(
-              "Bu hesabın kayıtlı Claude girişi sona ermiş: Claude hesabı açınca oturumu kapattı ya da hesap uzun süre kullanılmadığı için girişin süresi doldu. Yeniden giriş yapana kadar Relay bu hesaba kendiliğinden geçmez. Hesap eklerken Claude’un içinden çıkış yapma; çıkış, kayıtlı girişi de bitirir.",
-              "This account’s saved Claude sign-in has ended: Claude signed out when it opened the account, or the sign-in expired because the account was not used for a long time. Relay does not switch to it by itself until you sign in again. Do not sign out inside Claude to add an account; signing out also ends the saved sign-in.",
-            )}
+            {t("body.thisAccountSSavedClaudeSign")}
           </p>
           <Button
             size="sm"
             disabled={desktopBusy || !!pendingDesktop}
             onClick={() => relay.requestDesktop(a, "reconnect")}
           >
-            {t("Yeniden giriş yap", "Sign in again")}
+            {t("body.signInAgain")}
           </Button>
         </div>
       )}
@@ -154,27 +149,18 @@ export function AccountDetailBody({
           className="rounded-lg border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
         >
           {desktopCliWorkspaceMismatch(a)
-            ? t(
-                "Limit okuma girişi bu hesabın başka bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç; Relay profili oraya kendisi taşır.",
-                "The usage sign-in belongs to another workspace of this account. Open Code in that workspace in the Claude app; Relay then moves the profile there.",
-              )
-            : t(
-                "Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Limit okuma girişini bu profilin hesabıyla yenile.",
-                "The Claude app sign-in and the usage sign-in are for different accounts. Renew the usage sign-in with this profile’s account.",
-              )}
+            ? t("body.theUsageSignInBelongsTo")
+            : t("body.theClaudeAppSignInAnd")}
         </p>
       )}
       <div className="grid gap-5">
-        <PageSection title={t("Limitler", "Limits")} aside={freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
+        <PageSection title={t("body.limits")} aside={freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
                   <span className="flex items-center gap-1">
-                    {t(
-                      `${formatRelative(usage.checkedAt, now ?? Date.now(), language)} güncellendi`,
-                      `Updated ${formatRelative(usage.checkedAt, now ?? Date.now(), language)}`,
-                    )}
+                    {t("body.updated", { formatRelative: formatRelative(usage.checkedAt, now ?? Date.now(), language) })}
                     <Button
                       size="icon-xs"
                       variant="ghost"
-                      aria-label={t("Limitleri yenile", "Refresh limits")}
+                      aria-label={t("common.refreshLimits")}
                       disabled={usageBusy.has(a.id)}
                       onClick={() => void relay.refreshUsage(a)}
                     >
@@ -188,10 +174,7 @@ export function AccountDetailBody({
             ) : !claude ? (
               // No Claude sign-in to offer: Relay has no limit reader for this provider yet.
               <p data-slot="no-limit-reader" className="text-xs text-muted-foreground">
-                {t(
-                  `Relay ${providerLabel(a.provider)} hesaplarının limitini okuyamıyor; ağ geçidi bu hesabı limit bilgisi olmadan kullanır.`,
-                  `Relay cannot read ${providerLabel(a.provider)} limits; the gateway uses this account without them.`,
-                )}
+                {t("body.relayCannotReadLimitsTheGateway", { providerLabel: providerLabel(a.provider) })}
               </p>
             ) : (
             <UsageCard
@@ -210,10 +193,7 @@ export function AccountDetailBody({
             )}
           </Card>
         </PageSection>
-        <PageSection title={t("Bağlantılar", "Connections")} aside={<span className="text-xs text-muted-foreground">{t(
-                `${ready} / ${connections.length} hazır`,
-                `${ready} / ${connections.length} ready`,
-              )}</span>}>
+        <PageSection title={t("body.connections")} aside={<span className="text-xs text-muted-foreground">{t("body.ready", { ready, connectionsLength: connections.length })}</span>}>
           <Card padded data-slot="connections">
             <ConnectionList>
             {!claude && (
@@ -221,17 +201,17 @@ export function AccountDetailBody({
                 {appRow && (
                   <ConnectionRow
                     icon={<Monitor />}
-                    title={t("Antigravity uygulaması", "Antigravity app")}
-                    purpose={t("Uygulama ve agy bu hesapla çalışır.", "The app and agy run on this account.")}
+                    title={t("body.antigravityApp")}
+                    purpose={t("body.theAppAndAgyRunOn")}
                     tone={appState === "current" || appState === "saved" ? "ok" : "warn"}
                     status={
                       appState === "current"
-                        ? t("Şu an açık", "Open now")
+                        ? t("body.openNow")
                         : appState === "saved"
-                          ? t("Giriş kayıtlı", "Sign-in saved")
+                          ? t("body.signInSaved")
                           : appState === "waiting"
-                            ? t("Giriş bekleniyor", "Waiting for sign-in")
-                            : t("Giriş kayıtlı değil", "Sign-in not saved")
+                            ? t("body.waitingForSignIn")
+                            : t("body.signInNotSaved")
                     }
                     action={<AntigravityAction account={a} onAsk={setAntigravityAsk} primary />}
                   >
@@ -242,27 +222,27 @@ export function AccountDetailBody({
                 )}
                 <ConnectionRow
                   icon={<KeyRound />}
-                  title={t("Ağ geçidi girişi", "Gateway sign-in")}
-                  purpose={t("Ağ geçidi bu girişle istek gönderir.", "The gateway sends requests with it.")}
+                  title={t("body.gatewaySignIn")}
+                  purpose={t("body.theGatewaySendsRequestsWithIt")}
                   tone={signedIn ? "ok" : "warn"}
-                  status={signedIn ? t("Kayıtlı", "Saved") : t("Giriş yok: hesabı yeniden ekle", "Not signed in: add the account again")}
+                  status={signedIn ? t("body.saved") : t("body.notSignedInAddTheAccount")}
                   where={signedIn && a.auth?.email ? <Private>{a.auth.email}</Private> : undefined}
                 />
                 <ConnectionRow
                   icon={<Network />}
-                  title={t("Ağ geçidi", "Gateway")}
-                  purpose={t("İstekleri hesaplara dağıtır.", "Spreads requests over the accounts.")}
+                  title={t("common.gateway")}
+                  purpose={t("body.spreadsRequestsOverTheAccounts")}
                   tone={inPool ? "ok" : "off"}
                   status={
                     gateway?.running
                       ? inPool
-                        ? t("Havuzda", "In the pool")
-                        : t("Girişi olmadığı için havuzda değil", "Not in the pool: no sign-in")
-                      : t("Proxy kapalı", "Gateway off")
+                        ? t("body.inThePool")
+                        : t("body.notInThePoolNoSign")
+                      : t("body.gatewayOff")
                   }
                   action={
                     <Button size="sm" variant="outline" asChild>
-                      <a href={routeHash("proxy")}>{t("Aç", "Open")}</a>
+                      <a href={routeHash("proxy")}>{t("body.open")}</a>
                     </Button>
                   }
                 />
@@ -272,15 +252,15 @@ export function AccountDetailBody({
             <>
             <ConnectionRow
               icon={<Monitor />}
-              title={t("Claude uygulaması", "Claude app")}
-              purpose={t("Claude uygulamasını bu hesapla açar.", "Opens the Claude app with this account.")}
+              title={t("common.claudeApp")}
+              purpose={t("body.opensTheClaudeAppWithThis")}
               tone={a.desktop ? (a.desktop.rejectedAt ? "crit" : "ok") : "off"}
               status={
                 a.desktop
                   ? a.desktop.rejectedAt
-                    ? t("Sona ermiş", "Ended")
-                    : t("Kayıtlı", "Saved")
-                  : t("Kayıtlı değil", "Not saved")
+                    ? t("body.ended")
+                    : t("body.saved")
+                  : t("body.notSaved")
               }
               action={
                 a.desktop ? (
@@ -290,7 +270,7 @@ export function AccountDetailBody({
                     disabled={desktopBusy || !!pendingDesktop}
                     onClick={() => relay.requestDesktop(a, "reconnect")}
                   >
-                    {t("Yenile…", "Renew…")}
+                    {t("body.renew")}
                   </Button>
                 ) : (
                   <Button
@@ -306,7 +286,7 @@ export function AccountDetailBody({
                       relay.cancelDesktopRequest();
                     }}
                   >
-                    {t("Girişi kaydet", "Save sign-in")}
+                    {t("common.saveSignIn")}
                   </Button>
                 )
               }
@@ -330,8 +310,8 @@ export function AccountDetailBody({
             </ConnectionRow>
             <ConnectionRow
               icon={<Globe2 />}
-              title={t("Limit okuma girişi", "Usage sign-in")}
-              purpose={t("Limitleri okur.", "Reads the limits.")}
+              title={t("body.usageSignIn")}
+              purpose={t("body.readsTheLimits")}
               tone={signIn.tone}
               status={signIn.label}
               action={
@@ -341,7 +321,7 @@ export function AccountDetailBody({
                   disabled={!!busy || waiting}
                   onClick={() => void relay.startCli(a)}
                 >
-                  {a.auth?.email ? t("Yenile", "Renew") : t("Giriş yap", "Sign in")}
+                  {a.auth?.email ? t("body.renew2") : t("body.signIn")}
                 </Button>
               }
               refresh={
@@ -349,28 +329,16 @@ export function AccountDetailBody({
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={t(
-                        "Limit okuma girişini doğrula",
-                        "Verify usage sign-in",
-                      )}
-                      title={t(
-                        "Limit okuma girişini doğrula",
-                        "Verify usage sign-in",
-                      )}
+                      aria-label={t("body.verifyUsageSignIn")}
+                      title={t("body.verifyUsageSignIn")}
                       disabled={!!busy || waiting}
                       onClick={() =>
                         void action(`verify:${a.id}`, async () => {
                           const checked = await api.checkAuth(a.id);
                           setNotice(
                             checked.auth?.loggedIn
-                              ? t(
-                                  `${a.name} · ${checked.auth.email ?? ""} limit okuma girişi doğrulandı.`,
-                                  `${a.name} · ${checked.auth.email ?? ""} usage sign-in verified.`,
-                                )
-                              : t(
-                                  "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
-                                  "Relay cannot verify the usage sign-in. Renew it.",
-                                ),
+                              ? t("body.usageSignInVerified", { aName: a.name, email: checked.auth.email ?? "" })
+                              : t("body.relayCannotVerifyTheUsageSign"),
                           );
                         })
                       }
@@ -393,25 +361,16 @@ export function AccountDetailBody({
                       const outcome = await api.renewSignInNow(a.id);
                       setNotice(
                         outcome.result === "connected"
-                          ? t(
-                              `${a.name} · Claude Code girişi arka planda yenilendi.`,
-                              `${a.name} · the Claude Code sign-in was renewed in the background.`,
-                            )
+                          ? t("body.theClaudeCodeSignInWas", { aName: a.name })
                           : outcome.result === "waiting"
-                            ? t(
-                                `${a.name} · claude.ai yeni bir giriş istiyor (${outcome.detail ?? ""}). Claude uygulamasında bu hesaba yeniden gir ya da “Yenile” ile tarayıcıdan gir.`,
-                                `${a.name} · claude.ai asks for a recent sign-in (${outcome.detail ?? ""}). Sign in to this account again in the Claude app, or use “Renew” to sign in through the browser.`,
-                              )
-                            : t(
-                              `${a.name} · arka planda yenilenemedi (${outcome.detail ?? outcome.result}). “Yenile” ile tarayıcıdan giriş yap.`,
-                              `${a.name} · could not be renewed in the background (${outcome.detail ?? outcome.result}). Use “Renew” to sign in through the browser.`,
-                            ),
+                            ? t("body.claudeAiAsksForARecent", { aName: a.name, detail: outcome.detail ?? "" })
+                            : t("body.couldNotBeRenewedInThe", { aName: a.name, detail: outcome.detail ?? outcome.result }),
                       );
                       await relay.refreshUsage(a);
                     })
                   }
                 >
-                  {t("Girişi şimdi arka planda yenile", "Renew the sign-in in the background now")}
+                  {t("body.renewTheSignInInThe")}
                 </Button>
               )}
             </ConnectionRow>
@@ -423,25 +382,25 @@ export function AccountDetailBody({
             </ConnectionList>
           </Card>
         </PageSection>
-        <PageSection title={t("Hesap", "Account")}>
+        <PageSection title={t("common.account")}>
           <Card padded>
             <dl className="-mx-1 grid text-sm @xl:grid-cols-2 @xl:gap-x-8">
               {([
-                [t("Sağlayıcı", "Provider"), providerLabel(a.provider)],
-                [t("E-posta", "Email"), (a.desktop?.email ?? a.auth?.email) ? <Private>{a.desktop?.email ?? a.auth?.email}</Private> : "—"],
-                [t("Kuruluş", "Organization"), a.auth?.orgName ? <Private>{a.auth.orgName}</Private> : "—"],
+                [t("common.provider"), providerLabel(a.provider)],
+                [t("body.email"), (a.desktop?.email ?? a.auth?.email) ? <Private>{a.desktop?.email ?? a.auth?.email}</Private> : "—"],
+                [t("body.organization"), a.auth?.orgName ? <Private>{a.auth.orgName}</Private> : "—"],
                 [
-                  t("Tür · grup", "Type · group"),
-                  (a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")) +
+                  t("body.typeGroup"),
+                  (a.kind === "personal" ? t("common.personal") : t("common.work")) +
                     (a.kind === "work" ? ` · ${groupName(a, t)}` : ""),
                 ],
-                ...(plan ? [[t("Abonelik", "Subscription"), plan.label]] : []),
+                ...(plan ? [[t("body.subscription"), plan.label]] : []),
                 // The plan is set on the Planning page; here it only says whether the account is in it.
                 ...(claude
                   ? [[
-                      t("Planda", "In the plan"),
+                      t("body.inThePlan"),
                       <a key="plan" href={routeHash("planlama")} className="text-primary hover:underline">
-                        {a.planning?.plan ? t("Evet · Planlama ›", "Yes · Planning ›") : t("Hayır · Planlama ›", "No · Planning ›")}
+                        {a.planning?.plan ? t("body.yesPlanning") : t("body.noPlanning")}
                       </a>,
                     ]]
                   : []),
@@ -458,7 +417,7 @@ export function AccountDetailBody({
           {a.desktop && (
             <Card padded>
               <Disclosure
-                title={t("Code geçmişi", "Code history")}
+                title={t("body.codeHistory")}
                 summary={historyLine(history.length, settings.desktopHistoryTransfer, t)}
               >
                 <HistorySummary

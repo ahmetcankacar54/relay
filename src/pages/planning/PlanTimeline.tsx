@@ -15,13 +15,14 @@ import {
 } from "@/lib/day-timeline";
 import { forecastSummary } from "@/lib/forecast-text";
 import { formatClock } from "@/lib/time";
-import { parseLanguage } from "@/data/language";
+import { useI18n } from "@/data/i18n";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AccountDot } from "@/components/AccountDot";
 import { cn } from "@/lib/utils";
+import type { T } from "../../../shared/i18n/translate";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 
-type T = (tr: string, en: string) => string;
 
 const RULER = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 const rowClass =
@@ -107,10 +108,10 @@ export function PlanTimeline({
   next?: NextStat;
   t: T;
 }) {
+  const { language } = useI18n();
   const [offset, setOffset] = useState(0);
   const zone = settings.timeZone;
-  const clock = (time: number) =>
-    formatClock(time, parseLanguage(t("tr", "en")), zone);
+  const clock = (time: number) => formatClock(time, language, zone);
   const { dayBegin, pct, intervals, rows, showNow, lane, compare } =
     dayTimeline({
       settings,
@@ -122,7 +123,7 @@ export function PlanTimeline({
       activeId,
       adaptation,
     });
-  const label = new Intl.DateTimeFormat(t("tr-TR", "en-GB"), {
+  const label = new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
     timeZone: zone,
     weekday: "long",
     day: "numeric",
@@ -130,11 +131,11 @@ export function PlanTimeline({
   }).format(new Date(dayBegin + 12 * 3_600_000));
   const title =
     offset === 0
-      ? t("Bugün", "Today")
+      ? t("common.today")
       : offset === 1
-        ? t("Yarın", "Tomorrow")
+        ? t("planTimeline.tomorrow")
         : offset === -1
-          ? t("Dün", "Yesterday")
+          ? t("planTimeline.yesterday")
           : label;
   const position = (start: number, end: number) => ({
     left: `${pct(start)}%`,
@@ -151,26 +152,26 @@ export function PlanTimeline({
   /** Who warms up when, by name; nothing is warmed up while auto start is off. */
   const warmUpLine = (ids: string[], times: number[]) => {
     if (!settings.autoStart)
-      return t("Önceden başlatma kapalı", "Early start is off");
+      return t("planTimeline.earlyStartIsOff");
     const list = times
       .map((time, i) => `${name(ids[i])} ${clock(time)}`)
       .join(" · ");
-    return t(`Önceden başlatma: ${list}`, `Early start: ${list}`);
+    return t("planTimeline.earlyStart", { list });
   };
   // What the lanes' marks mean: work hours, the faded forecast, no quota and a switch.
   const legend = [
     {
-      label: t("Çalışma", "Work"),
+      label: t("planTimeline.work"),
       swatch: <i aria-hidden="true" className="h-2.5 w-4 rounded-sm bg-brand/20" />,
     },
     {
-      label: t("Tahmin", "Forecast"),
+      label: t("planTimeline.forecast"),
       swatch: (
         <i aria-hidden="true" className="h-2.5 w-4 rounded-sm bg-meter opacity-50 dark:opacity-65" />
       ),
     },
     {
-      label: t("Limit dolu", "No quota"),
+      label: t("planTimeline.noQuota"),
       swatch: (
         <i
           aria-hidden="true"
@@ -179,7 +180,7 @@ export function PlanTimeline({
       ),
     },
     {
-      label: t("Geçiş", "Switch"),
+      label: t("planTimeline.switch"),
       swatch: <i aria-hidden="true" className="h-3 w-0.5 rounded-[1px] bg-foreground/55" />,
     },
   ];
@@ -189,10 +190,7 @@ export function PlanTimeline({
     value: forecastSummary(compare.plan, t, clock),
     valueTitle: warmUpLine(compare.warmUps.accountIds, compare.warmUps.plan),
     crit: hasGap(compare.plan),
-    note: t(
-      `Eşit dağıtımda: ${forecastSummary(compare.even, t, clock)}`,
-      `Spread evenly: ${forecastSummary(compare.even, t, clock)}`,
-    ),
+    note: t("planTimeline.spreadEvenly", { forecastSummary: forecastSummary(compare.even, t, clock) }),
     noteTitle: warmUpLine(compare.warmUps.accountIds, compare.warmUps.even),
   };
   const nextStat = offset === 0 ? next : undefined;
@@ -216,14 +214,14 @@ export function PlanTimeline({
               className="h-auto px-1 text-xs"
               onClick={() => setOffset(0)}
             >
-              {t("Bugüne dön", "Back to today")}
+              {t("planTimeline.backToToday")}
             </Button>
           )}
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={t("Önceki gün", "Previous day")}
+            aria-label={t("planTimeline.previousDay")}
             onClick={() => setOffset(offset - 1)}
           >
             <ChevronLeft />
@@ -232,7 +230,7 @@ export function PlanTimeline({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={t("Sonraki gün", "Next day")}
+            aria-label={t("planTimeline.nextDay")}
             onClick={() => setOffset(offset + 1)}
           >
             <ChevronRight />
@@ -264,7 +262,7 @@ export function PlanTimeline({
         </div>
         <div className={rowClass}>
           <span className="truncate pr-2.5 text-muted-foreground">
-            {t("Çalışma", "Work")}
+            {t("planTimeline.work")}
           </span>
           <div className="relative h-[18px] rounded-md bg-track">
             {intervals.map((i) => (
@@ -280,9 +278,9 @@ export function PlanTimeline({
         </div>
         <div className={rowClass}>
           <span className="flex min-w-0 items-baseline gap-1 pr-2.5">
-            <span className="font-semibold">{t("Kullanım", "Usage")}</span>
+            <span className="font-semibold">{t("planTimeline.usage")}</span>
             <span className="truncate text-muted-foreground">
-              {t("tahmin", "forecast")}
+              {t("planTimeline.forecast2")}
             </span>
           </span>
           <div className="relative h-5 rounded-md bg-track">
@@ -292,7 +290,7 @@ export function PlanTimeline({
                 (r) => r.account.id === segment.accountId,
               );
               const name =
-                index < 0 ? t("Limit dolu", "No quota") : rows[index].account.name;
+                index < 0 ? t("planTimeline.noQuota") : rows[index].account.name;
               const text = `${name} ${clock(segment.from)}–${clock(segment.to)}`;
               return (
                 <div
@@ -361,7 +359,7 @@ export function PlanTimeline({
       </div>
       {!intervals.length && (
         <p className={cn(noteClass, "mt-2")}>
-          {t("Bu gün için plan yok.", "No plan for this day.")}
+          {t("planTimeline.noPlanForThisDay")}
         </p>
       )}
       <ul
@@ -377,8 +375,8 @@ export function PlanTimeline({
       </ul>
       {(planStat || nextStat) && (
         <div className="mt-3 grid gap-3 border-t pt-3 @xl:grid-cols-2">
-          {planStat && <Stat slot="plan-stat" label={t("Bu plan", "This plan")} {...planStat} />}
-          {nextStat && <Stat slot="next-stat" label={t("Sıradaki", "Next")} {...nextStat} />}
+          {planStat && <Stat slot="plan-stat" label={t("planTimeline.thisPlan")} {...planStat} />}
+          {nextStat && <Stat slot="next-stat" label={t("planTimeline.next")} {...nextStat} />}
         </div>
       )}
     </Card>

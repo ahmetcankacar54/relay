@@ -21,6 +21,7 @@ import {
 } from "../shared/tray";
 import { mascotPose, mascotRest } from "../shared/mascot";
 import type { Account, AccountUsage, DesktopState, MenuBarItem } from "../shared/types";
+import "./i18n";
 
 const now = Date.parse("2026-10-13T10:00:00Z");
 const account = (id: string, name = id): Account => ({

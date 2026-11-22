@@ -24,7 +24,7 @@ import { useSidebarSize } from "./useSidebarSize";
 
 export function Shell() {
   const relay = useRelay();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [page, go] = useHashRoute();
   // A narrow window always shows the icon rail; a wider one shows what the user chose.
   const narrow = useMediaQuery("(max-width: 899px)");
@@ -122,6 +122,7 @@ export function Shell() {
             page={page}
             go={go}
             t={t}
+            language={language}
             compact={compact}
             width={sidebar.width}
             collapsed={compact}

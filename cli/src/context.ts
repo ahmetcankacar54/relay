@@ -15,7 +15,9 @@ import {
 import type { Flags } from "./args";
 import { defaultDeps, type CliDeps } from "./deps";
 import { appOlderMessage, olderThan, updateAppMessage } from "./guards";
-import { pickLang, translator, type Lang, type Translate } from "./i18n";
+import { pickLang, translator } from "./i18n";
+import type { Locale } from "../../shared/i18n/locales";
+import type { T } from "../../shared/i18n/translate";
 import { CliError, EXIT, type CliIO } from "./io";
 import { colorEnabled } from "./output";
 
@@ -25,8 +27,8 @@ export interface CliContext {
   desktop: DesktopManager;
   /** The operation lock shared with Relay.app. */
   lock: ProcessLock;
-  t: Translate;
-  lang: Lang;
+  t: T;
+  lang: Locale;
   io: CliIO;
   deps: CliDeps;
   flags: Flags;
@@ -38,9 +40,9 @@ export interface CliContext {
 }
 
 /** A sealer for commands that never open the vault. */
-const closedSealer = (t: Translate): Sealer => {
+const closedSealer = (t: T): Sealer => {
   const refuse = () => {
-    throw new Error(t("Kasa bu komut için açılmadı.", "The vault is not open for this command."));
+    throw new Error(t("srcContext.theVaultIsNotOpenFor"));
   };
   return { seal: refuse, unseal: refuse };
 };
@@ -60,7 +62,7 @@ export async function openContext(
   const lang = pickLang(flags.lang as string | undefined, io.env);
   const t = translator(lang);
   if (deps.platform !== "darwin")
-    throw new CliError(t("relay yalnızca macOS’ta çalışır.", "relay works on macOS only."), EXIT.environment);
+    throw new CliError(t("srcContext.relayWorksOnMacosOnly"), EXIT.environment);
   const paths = relayPaths(io.env);
   const appVersion = await deps.relayAppVersion();
   const stateExisted = fs.existsSync(path.join(paths.data, "state.json"));
@@ -78,29 +80,20 @@ export async function openContext(
       throw new CliError(appOlderMessage(t), EXIT.environment);
     if (store.fileSchema > STATE_SCHEMA)
       throw new CliError(
-        t(
-          "Hesap listesini daha yeni bir Relay yazmış. relay’i güncelle: npm i -g @ahmetcankacar/relay",
-          "A newer Relay wrote the account list. Update relay: npm i -g @ahmetcankacar/relay",
-        ),
+        t("srcContext.aNewerRelayWroteTheAccount"),
         EXIT.environment,
       );
   }
   const vault = await vaultState(paths.vault);
   if (needs.desktop && vault.kind === "newer")
     throw new CliError(
-      t(
-        "Kasayı daha yeni bir Relay yazmış. relay’i güncelle: npm i -g @ahmetcankacar/relay",
-        "A newer Relay wrote the vault. Update relay: npm i -g @ahmetcankacar/relay",
-      ),
+      t("srcContext.aNewerRelayWroteTheVault"),
       EXIT.environment,
     );
   if (needs.desktop && needs.write && vault.kind === "legacy")
     throw new CliError(
       appVersion !== undefined && !olderThan(appVersion, "0.12.0")
-        ? t(
-            "Relay.app kasayı henüz yeni biçime taşımadı. Relay.app’i aç ve Anahtarlık sorusuna (\"Relay Safe Storage\") izin ver; sorun sürerse uygulamadaki uyarıya bak.",
-            "Relay.app has not moved the vault to the new format yet. Open Relay.app and allow its Keychain prompt (\"Relay Safe Storage\"); if it persists, see the warning the app shows.",
-          )
+        ? t("srcContext.relayAppHasNotMovedThe")
         : updateAppMessage(t),
       EXIT.environment,
     );
@@ -114,19 +107,10 @@ export async function openContext(
       if (!(error instanceof VaultKeyError)) throw error;
       throw new CliError(
         error.reason === "missing"
-          ? t(
-              `Anahtarlık’ta "${VAULT_KEY_SERVICE}" öğesi yok, bu yüzden kayıtlı girişler açılamıyor. Baştan başlamak için: relay reset-vault`,
-              `The Keychain item "${VAULT_KEY_SERVICE}" is missing, so saved sign-ins cannot be opened. To start over: relay reset-vault`,
-            )
+          ? t("srcContext.theKeychainItemIsMissingSo", { VAULT_KEY_SERVICE })
           : error.reason === "locked"
-            ? t(
-                `Anahtarlık’taki "${VAULT_KEY_SERVICE}" öğesi okunamadı. Mac’in kilidini (giriş anahtarlığını) açıp yeniden dene.`,
-                `The Keychain item "${VAULT_KEY_SERVICE}" could not be read. Unlock the Mac’s login keychain and try again.`,
-              )
-            : t(
-                `Anahtarlık’taki "${VAULT_KEY_SERVICE}" öğesi bir kasa anahtarı değil.`,
-                `The Keychain item "${VAULT_KEY_SERVICE}" does not hold a vault key.`,
-              ),
+            ? t("srcContext.theKeychainItemCouldNotBe", { VAULT_KEY_SERVICE })
+            : t("srcContext.theKeychainItemDoesNotHold", { VAULT_KEY_SERVICE }),
         EXIT.environment,
       );
     }

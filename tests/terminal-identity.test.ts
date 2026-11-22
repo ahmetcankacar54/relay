@@ -23,6 +23,7 @@ import {
 } from "../electron/core/cli-refresh-lock";
 import { createSealer } from "../electron/core/vault-crypto";
 import { terminalIdentities, terminalLine } from "../shared/terminal-identity";
+import { testT } from "./i18n";
 
 const oauth = (n: number) => ({
   accessToken: `sk-ant-oat01-access-${n}`,
@@ -329,7 +330,7 @@ test("an account's identities are its Desktop one and its own, lowercase and onc
 });
 
 test("the outcome lines name the account and what to do", () => {
-  const t = (_tr: string, en: string) => en;
+  const t = testT("en");
   const at = new Date().toISOString();
   assert.match(
     terminalLine({ result: "switched", saved: true, at }, t, "Work")!,
@@ -597,7 +598,7 @@ test("a copy saved while in use is put back flagged; one taken away at a switch 
   assert.equal(toA.result, "switched");
   assert.equal(toA.unconfirmed, true);
   assert.match(
-    terminalLine(toA, (_tr, en) => en, "A")!,
+    terminalLine(toA, testT("en"), "A")!,
     /claude auth login/,
   );
   // B was taken away at that switch: still good, and listed so.
@@ -693,7 +694,7 @@ test("a config write that fails leaves both the Keychain item and the config as 
 });
 
 test("a step that cannot run here, or fails for no named reason, says so", () => {
-  const t = (_tr: string, en: string) => en;
+  const t = testT("en");
   const at = new Date().toISOString();
   assert.match(
     terminalLine(

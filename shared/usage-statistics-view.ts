@@ -1,5 +1,5 @@
 import type { Account, PlanningHours } from "./types";
-import { formatPercent } from "./percent";
+import type { MessageId } from "./i18n/translate";
 import { localDate, planCapacity, wallTime } from "./planning";
 import { historyIdentity, identityOwners } from "./usage-statistics";
 import type { UsageRollups } from "./usage-rollups";
@@ -57,7 +57,8 @@ export interface UsageStatisticsView {
     at: string;
     until?: string;
   }[];
-  insight?: { tr: string; en: string };
+  /** One suggestion about the accounts' balance, as a message for the reader's language. */
+  insight?: { id: MessageId; params: Record<string, string | number> };
 }
 
 export interface StatisticsInput {
@@ -430,11 +431,9 @@ function buildInsight(
     )
     .sort((a, b) => b.row.capacity - a.row.capacity)[0];
   if (sparse) {
-    const fill = sparse.view.averageFill;
-    return {
-      tr: `${label(sparse)} dönemlerinin ortalama yalnızca ${formatPercent(fill, "tr")} kadarını dolduruyor.`,
-      en: `${label(sparse)} fills only ${formatPercent(fill, "en")} of its periods on average.`,
-    };
+    // The view crosses IPC as data: the percent is a fraction the message formats per language.
+    const fill = Math.round(sparse.view.averageFill!) / 100;
+    return { id: "usageStatisticsView.fillsOnlyOfItsPeriods", params: { label: label(sparse), fill } };
   }
   const full = candidates
     .filter(({ view }) => view.averageFill! > 80)
@@ -450,15 +449,11 @@ function buildInsight(
       )
       .sort((a, b) => idle.get(b.row)! - idle.get(a.row)!)[0];
   if (full && spare) {
-    const days = idle.get(spare.row)!;
     return {
-      tr: `${spare.view.name} ${days} gündür boşta; ${full.view.name} ise dönemi açıldığında neredeyse hep doluyor. 5 saatlik limite daha az takılmak için ${spare.view.name} hesabını sırada öne al.`,
-      en: `${spare.view.name} was idle for the last ${days} days; ${full.view.name} is almost always full when it opens. Move ${spare.view.name} up the order to hit the 5-hour limit less often.`,
+      id: "usageStatisticsView.wasIdleMoveUpTheOrder",
+      params: { spare: spare.view.name, full: full.view.name, days: idle.get(spare.row)! },
     };
   }
   if (full)
-    return {
-      tr: `${label(full)} açıldığında neredeyse hep doluyor.`,
-      en: `${label(full)} is almost always full when it opens.`,
-    };
+    return { id: "usageStatisticsView.isAlmostAlwaysFull", params: { label: label(full) } };
 }

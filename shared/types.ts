@@ -26,6 +26,7 @@ import type { DesktopContinuationSnapshot } from "../electron/core/desktop-conti
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
+import type { LanguagePref, Locale } from "./i18n/locales";
 import {
   DEFAULT_PROXY_CONFIG,
   type ProxyClassShare,
@@ -597,7 +598,10 @@ export interface RelayAPI {
   /** Starts, or brings back, a sign-in for the terminal with the account. */
   linkTerminal(accountId: string): Promise<AuthFlow>;
   cancelTerminalLink(accountId: string, attemptId: string): Promise<void>;
-  setTrayLanguage(language: "tr" | "en"): Promise<void>;
+  /** Saves the language choice; main's menus, tray and widget switch at once. */
+  setLanguage(pref: LanguagePref): Promise<void>;
+  /** The saved language choice and the language it resolves to on this Mac. */
+  getLanguage(): Promise<{ pref: LanguagePref; locale: Locale }>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
   /**

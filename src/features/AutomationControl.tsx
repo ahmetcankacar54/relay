@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Banner } from "@/components/Banner";
 import { Note } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
-import { useI18n } from "@/data/i18n";
+import { useI18n, type MessageId } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import {
   AUTOMATION_MODES,
@@ -50,7 +50,7 @@ export function SwitchNowButton({
       }
       onClick={() => relay.requestDesktop(target, "switch")}
     >
-      {t(...switchNowLabel(target.name))}
+      {switchNowLabel(target.name, t)}
     </Button>
   );
 }
@@ -60,13 +60,11 @@ export function SwitchNowButton({
  * region, so a usage refresh alone is not announced again.
  */
 function StatusText({ status }: { status: AutomationStatus }) {
-  const { t } = useI18n();
-  const prefix = t(...status.prefix);
   return (
     <>
-      {prefix}
+      {status.prefix}
       <span role="status" aria-live="polite">
-        {t(...status.text).slice(prefix.length)}
+        {status.text.slice(status.prefix.length)}
       </span>
     </>
   );
@@ -166,11 +164,11 @@ export function afterExitChips({
   }));
 }
 
-const CHIP_STATE: Record<AfterExitChipState, [tr: string, en: string]> = {
-  open: ["şu an açık", "open now"],
-  next: ["sıradaki", "next"],
-  stale: ["limit verisi eski · seçilmez", "usage data is out of date · not used"],
-  "sign-in": ["Claude uygulaması girişi gerekli", "Claude app sign-in needed"],
+const CHIP_STATE: Record<AfterExitChipState, MessageId> = {
+  open: "automationControl.openNow",
+  next: "automationControl.next",
+  stale: "automationControl.usageDataIsOutOfDate",
+  "sign-in": "switchPreferences.claudeAppSignInNeeded",
 };
 
 /** The always-visible account chips for "Claude uygulamasını kapatınca": a press selects or drops one. */
@@ -192,7 +190,7 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
   return (
     <fieldset className="grid gap-2 rounded-lg border border-border p-3 disabled:opacity-60" disabled={disabled}>
       <legend className="px-1 text-sm font-medium">
-        {t("Otomatik geçişe dahil hesaplar", "Accounts eligible for automatic switching")}{" "}
+        {t("automationControl.accountsEligibleForAutomaticSwitching")}{" "}
         <span className="text-muted-foreground">
           {chips.filter((c) => c.selected).length} / {accounts.length}
         </span>
@@ -221,12 +219,12 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
                   state === "next" ? "text-primary" : state === "open" ? "text-muted-foreground" : "text-warn-foreground",
                 )}
               >
-                · {t(...CHIP_STATE[state])}
+                · {t(CHIP_STATE[state])}
               </span>
             )}
           </button>
         ))}
-        {!accounts.length && <Note>{t("Önce hesap ekle.", "Add an account first.")}</Note>}
+        {!accounts.length && <Note>{t("automationControl.addAnAccountFirst")}</Note>}
       </div>
     </fieldset>
   );
@@ -234,10 +232,10 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
 
 /** Each choice's card: an icon and a title that says who acts. */
 const MODE_ICON: Record<AutomationMode, LucideIcon> = { off: Hand, "after-exit": Power, quota: Zap };
-export const MODE_TITLE: Record<AutomationMode, [tr: string, en: string]> = {
-  off: ["Kendim geçerim", "I switch myself"],
-  "after-exit": ["Claude uygulamasını kapatınca", "When I quit the Claude app"],
-  quota: ["Limit dolunca", "When the limit is reached"],
+export const MODE_TITLE: Record<AutomationMode, MessageId> = {
+  off: "automationControl.iSwitchMyself",
+  "after-exit": "automationControl.whenIQuitTheClaudeApp",
+  quota: "automationMode.whenTheLimitIsReached",
 };
 
 /** The Switching page card: one choice, what it does, and its status. */
@@ -251,7 +249,7 @@ export function AutomationSettings() {
   return (
     <section aria-labelledby="automation-title" className="grid gap-3">
       <h2 id="automation-title" className="px-1 text-sm font-semibold">
-        {t("Ne zaman geçilsin?", "When to switch?")}
+        {t("automationControl.whenToSwitch")}
       </h2>
       <div
         role="radiogroup"
@@ -294,9 +292,9 @@ export function AutomationSettings() {
                   )}
                 />
               </span>
-              <span className="text-sm font-semibold">{t(...MODE_TITLE[m.value])}</span>
+              <span className="text-sm font-semibold">{t(MODE_TITLE[m.value])}</span>
               <span className="text-xs leading-snug text-muted-foreground">
-                {t(...m.description)}
+                {t(m.description)}
               </span>
             </button>
           );
@@ -305,18 +303,12 @@ export function AutomationSettings() {
       <AutomationStatusLine status={status} />
       {!supports("after-exit") ? (
         <Note>
-          {t(
-            "Otomatik geçiş yalnızca macOS’ta ve Linux’ta kullanılabilir.",
-            "Automatic switching is available only on macOS and Linux.",
-          )}
+          {t("automationControl.automaticSwitchingIsAvailableOnlyOn")}
         </Note>
       ) : (
         !supports("quota") && (
           <Note>
-            {t(
-              "Limit dolunca geçip konuşmaları sürdürmek Claude uygulamasına yazar; bu yalnızca macOS’ta var. Burada Relay, Claude uygulamasını kapattığında sıradaki hesabı hazırlar.",
-              "Switching and continuing conversations at the limit types into the Claude app, which needs macOS. Here, Relay prepares the next account when you quit the Claude app.",
-            )}
+            {t("automationControl.switchingAndContinuingConversationsAtThe")}
           </Note>
         )
       )}
@@ -324,17 +316,11 @@ export function AutomationSettings() {
         <div className="grid gap-1">
           <AfterExitAccounts disabled={disabled} />
           <Note>
-            {t(
-              "Açık ve hedef hesapları seç. Hedefte limitin en fazla %90’ı kullanılmış olmalı.",
-              "Select the current and target accounts. A target must be at 90% or less of its limit.",
-            )}
+            {t("automationControl.selectTheCurrentAndTargetAccounts")}
           </Note>
           {settings.usageRefreshMinutes === 0 && (
             <Note>
-              {t(
-                "Otomatik geçiş için Genel’de “Limitleri otomatik yenile”yi aç.",
-                "For automatic switching, turn on “Refresh limits automatically” in General.",
-              )}
+              {t("automationControl.forAutomaticSwitchingTurnOnRefresh")}
             </Note>
           )}
         </div>
@@ -352,17 +338,11 @@ export function AutomationSettings() {
                 )
               }
             >
-              {t(
-                "macOS Erişilebilirlik iznini aç",
-                "Open macOS Accessibility permission",
-              )}
+              {t("automationControl.openMacosAccessibilityPermission")}
             </Button>
           )}
           <Note>
-            {t(
-              "Relay açık kalmalı. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz. Her konuşmaya en fazla bir devam mesajı gider.",
-              "Relay must stay open. Relay does not restart the Claude app while work runs. Each conversation gets one continue message at most.",
-            )}
+            {t("automationControl.relayMustStayOpenRelayDoes")}
           </Note>
         </div>
       )}
@@ -385,7 +365,7 @@ export function AutomationBanner() {
       }
     >
       <span>
-        {`${t("Otomatik geçiş", "Automatic switching")} · `}
+        {`${t("automationControl.automaticSwitching")} · `}
         <StatusText status={status} />
       </span>
     </Banner>

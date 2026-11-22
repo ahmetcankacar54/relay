@@ -97,7 +97,7 @@ export function ConnectionRow({
           <span className="text-sm font-semibold" title={purpose}>
             {title}
           </span>
-          {optional && <span className="text-2xs text-muted-foreground">{t("isteğe bağlı", "optional")}</span>}
+          {optional && <span className="text-2xs text-muted-foreground">{t("connections.optional")}</span>}
           <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <StatusDot tone={tone} />
             <span className="min-w-0 break-words">{status}</span>
@@ -119,7 +119,7 @@ export function ConnectionRow({
         <div className="col-span-3 col-start-2 grid gap-2">
           {/* The steps and the explanation wait behind one closed line, so the list stays short. */}
           {(steps || detail) && (
-            <Disclosure title={steps ? t("Nasıl bağlanır?", "How to connect") : t("Nasıl çalışır?", "How it works")}>
+            <Disclosure title={steps ? t("connections.howToConnect") : t("connections.howItWorks")}>
               <div className="grid gap-2">
                 {steps && <Steps steps={steps} />}
                 {detail && <p className="text-xs text-muted-foreground">{detail}</p>}

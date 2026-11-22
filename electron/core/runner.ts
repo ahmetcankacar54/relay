@@ -38,23 +38,19 @@ export class Runner {
       (r) => r.status === "running" && r.cwd === input.cwd,
     );
     if (busy)
-      throw new Error(
-        "Bu hesapta giriş işlemi veya bu projede canlı bir oturum var. Önce Canlı çalışma sekmesinden durdur.",
-      );
+      throw new Error("This account has a sign-in in progress or this project has a live session. Stop it on the Live tab first.");
     // Bound retained terminal memory; active runs are never evicted.
     for (const [id, entry] of this.entries)
       if (this.entries.size >= 20 && entry.run.status === "exited")
         this.entries.delete(id);
     if (this.entries.size >= 20)
-      throw new Error("En fazla 20 canlı terminal açılabilir.");
+      throw new Error("You can open up to 20 live terminals.");
     let releaseProfile: (() => void) | undefined;
     try {
       releaseProfile = this.profileLock?.(input.accountId);
     } catch (error) {
       if (error instanceof ProfileLockBusyError)
-        throw new Error(
-          "Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.",
-        );
+        throw new Error("Another Relay process is renewing this account’s connection. Try again in a moment.");
       throw error;
     }
     let proc: Pty.IPty;
@@ -131,12 +127,12 @@ export class Runner {
   }
   close(id: string) {
     if (this.get(id).run.status === "running")
-      throw new Error("Önce çalışan oturumu durdur.");
+      throw new Error("Stop the running session first.");
     this.entries.delete(id);
   }
   private get(id: string) {
     const e = this.entries.get(id);
-    if (!e) throw new Error("Terminal bulunamadı.");
+    if (!e) throw new Error("Terminal not found.");
     return e;
   }
 }

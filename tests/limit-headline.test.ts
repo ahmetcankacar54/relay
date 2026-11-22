@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fullestByPeriod, limitHeadline, modelOnlyUsage } from "../shared/quota-windows";
-import { overviewAccounts, usageWindowRows } from "../src/data/selectors";
+import { overviewAccounts, usageRowLabel, usageWindowRows } from "../src/data/selectors";
 import { panelRowLine, panelRowState, ringState } from "../src/lib/account-row";
 import type { Account, AccountUsage } from "../shared/types";
+import { testT } from "./i18n";
 
 const NOW = Date.parse("2026-11-19T15:00:00Z");
 const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString();
-const t = (tr: string, _en: string) => tr;
+const t = testT("tr");
 
 /** An Antigravity reading as the reader stores it: the five hours are the roomiest model. */
 const antigravity: AccountUsage = {
@@ -64,7 +65,7 @@ test("Antigravity's limits list its models only, and it has no five-hour period 
   assert.equal(row.state, "ready");
   assert.equal(ringState(antigravity, NOW), "full");
   // The panel line names the spent model and when it opens, and shows its percent, not the roomiest model's.
-  const line = panelRowLine(row, t as never, "tr", "Europe/Istanbul", NOW);
+  const line = panelRowLine(row, t, "tr", "Europe/Istanbul", NOW);
   assert.match(line, /^Gemini 4 Carbon \(High\) limiti dolu · 18:25/);
   assert.match(line, /%100$/);
 });
@@ -98,7 +99,7 @@ test("Antigravity pools: the table's columns take the fullest five hours and the
   assert.deepEqual([cols.seven_day?.label, cols.seven_day?.usedPercent], ["Gemini", 98]);
   // Rows read in the reader's order, each with its length.
   assert.deepEqual(
-    usageWindowRows(usage).map((r) => [r.label.tr, r.period]),
+    usageWindowRows(usage).map((r) => [usageRowLabel(r, t), r.period]),
     [
       ["Gemini · 5 saat", "five_hour"],
       ["Gemini · haftalık", "seven_day"],

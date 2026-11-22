@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { targetWorkspace, workspaceOptions } from "../src/lib/workspaces";
 import type { Account } from "../shared/types";
+import { testT } from "./i18n";
 
-const tr = (tr: string) => tr;
-const en = (_: string, en: string) => en;
+const tr = testT("tr");
+const en = testT("en");
 const A = "6f1c2d3e-4b5a-4c6d-8e7f-001122334455";
 const B = "a1b2c3d4-0000-4000-8000-000000000002";
 const C = "c0ffee00-0000-4000-8000-000000000003";

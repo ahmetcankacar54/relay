@@ -17,13 +17,16 @@ import {
 import { extensionLine } from "../shared/extension-text";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import type { Locale } from "../shared/i18n/locales";
+import type { T } from "../shared/i18n/translate";
+import { i18nValue, testT } from "./i18n";
 import { FOCUS_CHECK_MS, focusChecks, useExtensionStatus } from "../src/data/useExtension";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 import { BROWSER_APPS, BROWSERS, chooseInstance, type ExtensionOutcome, type ExtensionStatus } from "../shared/browser-extension";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
-const tr = (text: string) => text;
-const en = (_: string, text: string) => text;
+const tr = testT("tr");
+const en = testT("en");
 const NOW = "2026-10-21T10:00:00.000Z";
 const base = { kind: "personal", group: "personal", color: "olive", createdAt: NOW } as const;
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -47,7 +50,7 @@ const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
 
 const ALTO = "33333333-3333-4333-8333-333333333333";
 const altoLinked: Account = { ...alto, desktop: { accountUuid: ALTO, orgId: ID, savedAt: NOW, email: "alto@example.com" } };
-const guide = (account: Account, over: Partial<ExtensionStatus> = {}, t: (tr: string, en: string) => string = tr, language: "tr" | "en" = "tr") =>
+const guide = (account: Account, over: Partial<ExtensionStatus> = {}, t: T = tr, language: Locale = "tr") =>
   extensionGuide(account, status(over), [vertex, altoLinked], t, language);
 const signedIn = (accountUuid: string) => ({ state: "signed-in" as const, accountUuid, known: true, at: NOW });
 
@@ -226,11 +229,11 @@ function relayFor(platform: string, list: Account[], extension?: ExtensionStatus
     startCli: async () => {}, refreshUsage: async () => {}, action: async () => {},
   } as unknown as Relay;
 }
-const render = (relay: Relay, child: ReturnType<typeof createElement>, language: "tr" | "en" = "tr") =>
+const render = (relay: Relay, child: ReturnType<typeof createElement>, language: Locale = "tr") =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language, setLanguage() {}, t: language === "tr" ? tr : en } },
+      { value: i18nValue(language) },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );
@@ -265,7 +268,7 @@ test("the account row shows the state and its steps, and no browser profile pick
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "en", setLanguage() {}, t: en } },
+          { value: i18nValue("en") },
           createElement(
             RelayContext.Provider,
             { value: relayFor("darwin", [vertex, altoLinked]) },

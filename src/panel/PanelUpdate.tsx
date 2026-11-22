@@ -21,7 +21,7 @@ export function PanelUpdate() {
             disabled={busy}
             onClick={() => void relay.action(UPDATE_INSTALL_KEY, () => relay.api.installUpdate())}
           >
-            {t("Güncelle", "Update")}
+            {t("panelUpdate.update")}
           </Button>
         )}
         {update.status === "manual" && (
@@ -30,7 +30,7 @@ export function PanelUpdate() {
             variant="outline"
             onClick={() => void relay.report(() => relay.api.openUpdateNotes())}
           >
-            {t("İndir", "Download")}
+            {t("panelUpdate.download")}
           </Button>
         )}
       </div>

@@ -20,6 +20,7 @@ import {
 import type { ClaudeWindowProcess } from "../electron/core/desktop-instances";
 import { jsonBytes, readBytes, readObject, writeBytes } from "../electron/core/desktop-files";
 import { localizeError } from "../src/messages";
+import "./i18n";
 
 /** A main Claude and its separate windows, as a fake host runs them. */
 async function fixture(t: any) {

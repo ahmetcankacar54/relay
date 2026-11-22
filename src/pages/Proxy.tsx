@@ -9,6 +9,7 @@ import { useRelay } from "@/data/relay-context";
 import { quotaAtRisk } from "@/lib/proxy-ui";
 import { cn } from "@/lib/utils";
 import type { ProxyClientId } from "../../shared/types";
+import { FORMAT_LOCALE } from "../../shared/i18n/locales";
 import { GatewayHeader } from "./proxy/GatewayHeader";
 import { useCopy, useProxyStatus, useTab, type Copy, type ProxyTab } from "./proxy/hooks";
 import { PoolCard } from "./proxy/PoolCard";
@@ -17,10 +18,6 @@ import { RulesTab } from "./proxy/RulesTab";
 import { SessionsCard } from "./proxy/SessionsCard";
 import { CLIENT_NAMES, CLIENT_PROVIDER, providerName, usableFor, type Patch } from "./proxy/shared";
 import { ToolsTab } from "./proxy/ToolsTab";
-
-/** "A, B and C". */
-const listNames = (names: string[], and: string) =>
-  names.length > 1 ? `${names.slice(0, -1).join(", ")}${and}${names[names.length - 1]}` : names.join("");
 
 /** An address or key as a compact chip; the button copies the real value. */
 export function CopyChip({
@@ -50,7 +47,7 @@ export function CopyChip({
         variant="ghost"
         size="icon-sm"
         disabled={!value}
-        aria-label={t(`${label} kopyala`, `Copy ${label}`)}
+        aria-label={t("proxy.copy", { label })}
         onClick={() => value && copy.copy(id, value)}
       >
         {copy.copied === id ? <Check className="text-ok" /> : <CopyIcon />}
@@ -82,7 +79,7 @@ function Attention({ tone, children, action }: { tone: "warn" | "crit"; children
  * requests), Tools (connect Claude Code and Codex in one click) and Rules (routing and network).
  */
 export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { api, busy, desktop, action } = useRelay();
   const proxy = useProxyStatus();
   const { setStatus, unreadable } = proxy;
@@ -115,13 +112,13 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
   return (
     <PageFrame
       automationInline
-      title={t("Proxy & Gateway", "Proxy & Gateway")}
-      description={t("Tek adres; her istek en uygun hesaba gider", "One address; each request goes to the account with room")}
+      title={t("proxy.proxyGateway")}
+      description={t("proxy.oneAddressEachRequestGoesTo")}
       actions={
         <Button asChild variant="outline" size="sm">
           <a href={intentHash("hesaplar", "ekle")}>
             <Plus />
-            {t("Hesap ekle", "Add account")}
+            {t("common.addAccount")}
           </a>
         </Button>
       }
@@ -143,19 +140,16 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
               <span className="flex flex-wrap gap-2">
                 <Button asChild size="sm">
                   <a href={addAccountHash(CLIENT_PROVIDER(client.id))}>
-                    {t(`${providerName(client.id)} hesabı ekle`, `Add a ${providerName(client.id)} account`)}
+                    {t("proxy.addAAccount", { providerName: providerName(client.id) })}
                   </a>
                 </Button>
                 <Button size="sm" variant="outline" disabled={disabled} onClick={() => unbind(client.id)}>
-                  {t("Ayır", "Disconnect")}
+                  {t("proxy.disconnect")}
                 </Button>
               </span>
             }
           >
-            {t(
-              `${CLIENT_NAMES[client.id]} bu geçide bağlı ama havuzda kullanılabilir ${providerName(client.id)} hesabı yok: istekleri başarısız olur.`,
-              `${CLIENT_NAMES[client.id]} is connected to this gateway, but the pool has no usable ${providerName(client.id)} account: its requests fail.`,
-            )}
+            {t("proxy.isConnectedToThisGatewayBut", { client: CLIENT_NAMES[client.id], providerName: providerName(client.id) })}
           </Attention>
         ))}
         {boundOff.length > 0 && (
@@ -163,14 +157,14 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             tone="crit"
             action={
               <Button size="sm" disabled={disabled} onClick={() => toggle(true)}>
-                {t("Geçidi aç", "Turn on")}
+                {t("proxy.turnOn")}
               </Button>
             }
           >
-            {t(
-              `${listNames(boundOff.map((c) => CLIENT_NAMES[c.id]), " ve ")} bu geçide bağlı ama geçit kapalı: istek gönderemez.`,
-              `${listNames(boundOff.map((c) => CLIENT_NAMES[c.id]), " and ")} ${boundOff.length > 1 ? "are" : "is"} connected to this gateway, but it is off: no requests go through.`,
-            )}
+            {t("proxy.connectedToThisGatewayButIt", {
+              names: new Intl.ListFormat(FORMAT_LOCALE[language]).format(boundOff.map((c) => CLIENT_NAMES[c.id])),
+              count: boundOff.length,
+            })}
           </Attention>
         )}
         {signedOut.length > 0 && (
@@ -178,33 +172,31 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             tone="warn"
             action={
               <Button asChild size="sm" variant="outline">
-                <a href={intentHash("hesaplar", "ekle")}>{t("Hesaplara git", "Go to accounts")}</a>
+                <a href={intentHash("hesaplar", "ekle")}>{t("proxy.goToAccounts")}</a>
               </Button>
             }
           >
-            {t(
-              `${signedOut.map((a) => a.name).join(", ")}: giriş yok, ağ geçidi bu hesabı kullanamaz.`,
-              `${signedOut.map((a) => a.name).join(", ")}: not signed in, the gateway cannot use it.`,
-            )}
+            {t("proxy.notSignedInTheGatewayCannot", { join: signedOut.map((a) => a.name).join(", ") })}
           </Attention>
         )}
         {(status?.alarms ?? []).slice(0, 1).map((alarm) => {
           const on = status?.accounts.find((a) => a.id === alarm.accountId)?.name;
           return (
             <Attention key={alarm.id} tone="warn">
-              {t(
-                `Bir istem durmadan istek gönderiyor: ${alarm.requests} istek, ${alarm.subagents} alt ajan${on ? ` · ${on}` : ""}${alarm.sessionId ? ` · oturum ${alarm.sessionId}` : ""}. Döngüde olabilir; Claude Code'da Esc ile durdurabilirsin.`,
-                `A prompt keeps sending requests: ${alarm.requests} requests, ${alarm.subagents} subagents${on ? ` · ${on}` : ""}${alarm.sessionId ? ` · session ${alarm.sessionId}` : ""}. It may be in a loop; Esc in Claude Code stops it.`,
-              )}
+              {t("proxy.aPromptKeepsSendingRequestsRequests", {
+                requests: alarm.requests,
+                subagents: alarm.subagents,
+                hasAccount: on ? "yes" : "no",
+                account: on ?? "",
+                hasSession: alarm.sessionId ? "yes" : "no",
+                session: alarm.sessionId ?? "",
+              })}
             </Attention>
           );
         })}
         {billed.length > 0 && (
           <Attention tone="crit">
-            {t(
-              `${billed.map((a) => a.name).join(", ")}: son yanıt plan yerine ekstra kullanımdan (ücretli) karşılandı. Ağ geçidi bu hesabı limiti sıfırlanana kadar kullanmıyor.`,
-              `${billed.map((a) => a.name).join(", ")}: the latest answer was billed as extra usage (paid), not to the plan. The gateway leaves this account out until its limit resets.`,
-            )}
+            {t("proxy.theLatestAnswerWasBilledAs", { join: billed.map((a) => a.name).join(", ") })}
           </Attention>
         )}
         {risky.length > 0 && status?.routingStrategy !== "soonest-reset" && (
@@ -212,21 +204,18 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             tone="warn"
             action={
               <Button size="sm" variant="outline" disabled={disabled} onClick={() => void configure({ routingStrategy: "soonest-reset" })}>
-                {t("Önce yanacak olanı kullan", "Use expiring first")}
+                {t("proxy.useExpiringFirst")}
               </Button>
             }
           >
-            {t(
-              `${risky.map((a) => a.name).join(", ")}: haftalık limit yakında sıfırlanıyor ve kalan kota boşa gidecek.`,
-              `${risky.map((a) => a.name).join(", ")}: the weekly limit resets soon and the room left will be lost.`,
-            )}
+            {t("proxy.theWeeklyLimitResetsSoonAnd", { join: risky.map((a) => a.name).join(", ") })}
           </Attention>
         )}
         <Tabs value={tab} onValueChange={(v) => setTab(v as ProxyTab)} className="grid gap-4">
-          <TabsList aria-label={t("Ağ geçidi bölümleri", "Gateway sections")}>
-            <TabsTrigger value="canli">{t("Canlı", "Live")}</TabsTrigger>
-            <TabsTrigger value="araclar">{t("Araçlar", "Tools")}</TabsTrigger>
-            <TabsTrigger value="kurallar">{t("Kurallar", "Rules")}</TabsTrigger>
+          <TabsList aria-label={t("proxy.gatewaySections")}>
+            <TabsTrigger value="canli">{t("proxy.live")}</TabsTrigger>
+            <TabsTrigger value="araclar">{t("proxy.tools")}</TabsTrigger>
+            <TabsTrigger value="kurallar">{t("proxy.rules")}</TabsTrigger>
           </TabsList>
           {status && (
             <>

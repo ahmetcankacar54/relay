@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TimePicker } from "../src/features/TimePicker";
+import { testT } from "./i18n";
 import {
   clockFieldKey,
   clockStart,
@@ -83,7 +84,7 @@ test("the inline field is a labelled spinbutton with no popover", () => {
       value: "09:17",
       disabled: true,
       onChange: () => commits++,
-      t: (_tr, en) => en,
+      t: testT("en"),
     }),
   );
   assert.match(markup, /for="start"/);
@@ -106,7 +107,7 @@ test("a disabled picker that is not focused is a real disabled input", () => {
         value: "18:00",
         disabled,
         onChange: () => {},
-        t: (_tr, en) => en,
+        t: testT("en"),
       }),
     );
   assert.match(html(true), /\sdisabled=""/);

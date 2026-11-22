@@ -30,7 +30,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { MiniMeter } from "@/components/LimitLine";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import { timeLeft } from "@/lib/account-row";
-import type { T } from "@/data/i18n";
+import type { Locale, T } from "@/data/i18n";
 import { RelayContext } from "@/data/relay-context";
 import { macWording } from "@/data/platform";
 import { type sidebarStatus } from "@/data/selectors";
@@ -49,6 +49,7 @@ export interface SidebarProps {
   page: PageId;
   go(page: PageId): void;
   t: T;
+  language: Locale;
   compact: boolean;
   status: Status;
   summary?: SidebarSummary;
@@ -171,7 +172,7 @@ function ResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={t("Kenar çubuğu genişliği", "Sidebar width")}
+      aria-label={t("sidebar.sidebarWidth")}
       aria-valuemin={SIDEBAR.rail}
       aria-valuemax={SIDEBAR.max}
       aria-valuenow={shown}
@@ -200,6 +201,7 @@ export function Sidebar({
   page,
   go,
   t,
+  language,
   compact,
   status,
   summary,
@@ -226,54 +228,54 @@ export function Sidebar({
         )
       : undefined;
   const items: Item[] = [
-    { id: "genel", icon: OverviewIcon, label: t("Genel bakış", "Overview") },
+    { id: "genel", icon: OverviewIcon, label: t("sidebar.overview") },
     {
       id: "hesaplar",
       icon: AccountsIcon,
-      label: t("Hesaplar", "Accounts"),
+      label: t("common.accounts"),
       tail: status.accounts,
     },
     // A green dot says the page's automation runs by itself.
     {
       id: "gecis",
       icon: SwitchingIcon,
-      label: t("Geçiş", "Switching"),
+      label: t("common.switching"),
       on: status.switching,
-      onLabel: t("Otomatik geçiş açık", "Automatic switching on"),
+      onLabel: t("sidebar.automaticSwitchingOn"),
     },
     {
       id: "planlama",
       icon: PlanningIcon,
-      label: t("Planlama", "Planning"),
+      label: t("sidebar.planning"),
       on: status.planning,
-      onLabel: t("Önceden başlatma açık", "Early start on"),
+      onLabel: t("sidebar.earlyStartOn"),
     },
   ];
   // After the usage pages, so ⌘3–⌘5 still open them as before the gateway had a page.
   const proxy: Item = {
     id: "proxy",
     icon: ProxyIcon,
-    label: t("Proxy & Gateway", "Proxy & Gateway"),
+    label: t("sidebar.proxyGateway"),
     on: status.proxyRunning,
     onLabel: status.proxyAddress
-      ? t(`Proxy çalışıyor · ${status.proxyAddress}`, `Gateway running · ${status.proxyAddress}`)
-      : t("Proxy çalışıyor", "Gateway running"),
+      ? t("sidebar.gatewayRunning", { statusProxyAddress: status.proxyAddress })
+      : t("sidebar.gatewayRunning2"),
   };
   // Usage is three pages, grouped under one heading.
   const usage: Item[] = [
-    { id: "kullanim", icon: UsageIcon, label: t("Limit geçmişi", "Limit history") },
-    { id: "tokenlar", icon: TokensIcon, label: t("Token ve ücret", "Tokens and cost") },
-    { id: "rozetler", icon: PinsIcon, label: t("Rozetler", "Pins") },
+    { id: "kullanim", icon: UsageIcon, label: t("sidebar.limitHistory") },
+    { id: "tokenlar", icon: TokensIcon, label: t("sidebar.tokensAndCost") },
+    { id: "rozetler", icon: PinsIcon, label: t("sidebar.pins") },
   ];
   const settings: Item = {
     id: "ayarlar",
     icon: SettingsIcon,
-    label: t("Ayarlar", "Settings"),
+    label: t("common.settings"),
   };
 
   const toggleLabel = compact
-    ? t("Kenar çubuğunu göster", "Show the sidebar")
-    : t("Kenar çubuğunu gizle", "Hide the sidebar");
+    ? t("sidebar.showTheSidebar")
+    : t("sidebar.hideTheSidebar");
   const toggle = onToggle && (
     <Button
       variant="ghost"
@@ -301,7 +303,7 @@ export function Sidebar({
         {!compact && toggle && <div className="absolute top-2.75 left-17.5">{toggle}</div>}
       </div>
       <nav
-        aria-label={t("Sayfalar", "Pages")}
+        aria-label={t("sidebar.pages")}
         className={cn("flex min-h-0 w-full flex-col gap-0.5", compact && "items-center")}
       >
         {compact && toggle && <div className="mb-1">{toggle}</div>}
@@ -318,7 +320,7 @@ export function Sidebar({
         <div
           role="group"
           aria-labelledby={compact ? undefined : "sidebar-usage"}
-          aria-label={compact ? t("Kullanım", "Usage") : undefined}
+          aria-label={compact ? t("sidebar.usage") : undefined}
           className={cn(
             "flex w-full flex-col gap-0.5",
             compact ? "mt-2 items-center border-t pt-2" : "mt-4",
@@ -326,7 +328,7 @@ export function Sidebar({
         >
           {!compact && (
             <h2 id="sidebar-usage" className="px-2.5 pb-1 text-xs font-medium text-sidebar-muted">
-              {t("Kullanım", "Usage")}
+              {t("sidebar.usage")}
             </h2>
           )}
           {usage.map((item) => (
@@ -363,25 +365,27 @@ export function Sidebar({
               <span className="truncate text-muted-foreground">
                 {summary.fiveHour === undefined
                   ? summary.running
-                    ? t("Claude’da açık", "Open in Claude")
-                    : t("Claude kapalı", "Claude closed")
-                  : t(
-                      `${formatPercent(percentUsed(summary.fiveHour), "tr")}${left ? ` · ${left}` : ""}${summary.running ? "" : " · Claude kapalı"}`,
-                      `${formatPercent(percentUsed(summary.fiveHour), "en")}${left ? ` · ${left}` : ""}${summary.running ? "" : " · Claude closed"}`,
-                    )}
+                    ? t("sidebar.openInClaude")
+                    : t("common.claudeClosed")
+                  : t("sidebar.fiveHourSummary", {
+                      percent: formatPercent(percentUsed(summary.fiveHour), language),
+                      hasLeft: left ? "yes" : "no",
+                      left: left ?? "",
+                      running: summary.running ? "yes" : "no",
+                    })}
               </span>
               {/* The same bar as every limit in Relay: the active account's five hours. */}
               {summary.fiveHour !== undefined && (
                 <MiniMeter
                   usedPercent={summary.fiveHour}
-                  label={t(`5 saatlik dönem ${formatUsed(summary.fiveHour, "tr")}`, `5-hour period ${formatUsed(summary.fiveHour, "en")}`)}
+                  label={t("sidebar.n5HourPeriod", { used: formatUsed(summary.fiveHour, language) })}
                 />
               )}
             </span>
           </button>
         </div>
       )}
-      <SidebarUpdate compact={compact} t={t} />
+      <SidebarUpdate compact={compact} t={t} language={language} />
       <div className={cn("w-full", compact && "flex justify-center")}>
         <NavItem
           item={settings}

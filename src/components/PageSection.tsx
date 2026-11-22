@@ -39,7 +39,7 @@ export function PageSection({
 
 /** An ⓘ that explains on hover or focus: the place for "how it works" text. */
 export function InfoTip({ children }: { children: ReactNode }) {
-  const label = useContext(I18nContext)?.t("Nasıl çalışır", "How it works") ?? "How it works";
+  const label = useContext(I18nContext)?.t("pageSection.howItWorks") ?? "How it works";
   // Its own provider, so a section explains itself wherever it is drawn (the tray, a test, a page).
   return (
     <TooltipProvider>

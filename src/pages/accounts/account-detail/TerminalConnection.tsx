@@ -36,13 +36,13 @@ export function TerminalConnection({
   return (
     <ConnectionRow
       icon={<SquareTerminal />}
-      title={t("Terminal", "Terminal")}
-      purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
+      title={t("terminalConnection.terminal")}
+      purpose={t("terminalConnection.switchesToThisAccountToo")}
       optional
       tone={guide.tone}
       status={
         guide.action === "link" && linking
-          ? t("Tarayıcıda onay bekleniyor…", "Waiting for approval in the browser…")
+          ? t("terminalConnection.waitingForApprovalInTheBrowser")
           : guide.label
       }
       steps={guide.steps}
@@ -52,8 +52,8 @@ export function TerminalConnection({
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label={t("Terminali yeniden kontrol et", "Check the terminal again")}
-            title={t("Terminali yeniden kontrol et", "Check the terminal again")}
+            aria-label={t("terminalConnection.checkTheTerminalAgain")}
+            title={t("terminalConnection.checkTheTerminalAgain")}
             disabled={checking}
             onClick={() => void check()}
           >
@@ -70,14 +70,14 @@ export function TerminalConnection({
                 variant="outline"
                 onClick={() => void relay.action("terminal-link", () => relay.api.linkTerminal(a.id))}
               >
-                {t("Sayfayı yeniden aç", "Reopen the page")}
+                {t("terminalConnection.reopenThePage")}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => void relay.action("terminal-cancel", () => relay.api.cancelTerminalLink(a.id, flow.id))}
               >
-                {t("Vazgeç", "Cancel")}
+                {t("common.cancel")}
               </Button>
             </span>
           ) : (
@@ -88,12 +88,12 @@ export function TerminalConnection({
               onClick={() => void relay.action("terminal-link", () => relay.api.linkTerminal(a.id))}
             >
               <Link2 />
-              {t("Bağla", "Link")}
+              {t("terminalConnection.link")}
             </Button>
           )
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("gecis")}>{t("Geçiş", "Switching")}</a>
+            <a href={routeHash("gecis")}>{t("common.switching")}</a>
           </Button>
         ) : undefined
       }

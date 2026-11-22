@@ -13,7 +13,10 @@ import {
 } from "electron";
 import { themeSource } from "./core/appearance";
 import { appMenuTemplate } from "./app-menu";
-import { pick } from "./language";
+import { getAppLocale, say, setAppLocale } from "./i18n";
+import { LOCALES, resolveLocale, type LanguagePref } from "../shared/i18n/locales";
+import { tFor } from "../shared/i18n/translate";
+import { loadLanguagePref, writeLanguagePref } from "./core/language-file";
 import { routineFailureNotice } from "../shared/routine-failure";
 import { localizeError } from "../shared/error-text";
 import {
@@ -411,9 +414,8 @@ let widgetFile: WidgetFile | undefined;
 let widgetMidnight: ReturnType<typeof setTimeout> | undefined;
 /** The account open in Claude when the widget file was last written. */
 let widgetActiveId: string | undefined;
-let trayLanguage: "tr" | "en" = "tr";
-/** Main's own copy (menus, dialogs, notifications) in the app's language. */
-const say = (tr: string, en: string) => pick(trayLanguage)(tr, en);
+/** The saved language choice (language.json); `appLocale` is what it resolves to. */
+let languagePref: LanguagePref = "system";
 let keeper: WindowKeeper;
 let observedDesktop: DesktopState | undefined;
 let initialized = false;
@@ -637,7 +639,7 @@ function writeWidget(force = false) {
         today: tokens.today,
         days: tokens.days,
         progress: { complete, percent },
-        language: trayLanguage,
+        language: getAppLocale(),
         zone,
         now,
         limits: {
@@ -818,6 +820,10 @@ else {
         (url) => shell.openExternal(url),
         (accountId, kind) => acquireProfileLock(profileLocks(), accountId, kind),
       );
+      // Main speaks before any window opens (tray, menu, widget): the saved language, which
+      // installs from before the setting get as Turkish (what they saw), new ones as the system's.
+      languagePref = loadLanguagePref(service.store.root, service.store.state.accounts.length > 0);
+      setAppLocale(resolveLocale(languagePref, app.getPreferredSystemLanguages()));
       // A browser login may finish after its dialog closed or Relay restarted.
       // Recover only credentials that CLIProxyAPI actually saved and validated.
       for (const account of service.store.state.accounts) {
@@ -1470,8 +1476,8 @@ else {
         notify: (account, reason) => {
           if (!Notification.isSupported()) return;
           new Notification({
-            title: say("Önceden başlatılamadı", "Early start failed"),
-            body: routineFailureNotice(account.name, reason, trayLanguage),
+            title: say("electronMain.earlyStartFailed"),
+            body: routineFailureNotice(account.name, reason, getAppLocale()),
           }).show();
         },
         adapted: notifyAdapted,
@@ -1548,7 +1554,7 @@ else {
         showWindow,
         requestSwitch: (profileId) => void traySwitch(profileId),
         quit: () => app.quit(),
-        language: () => trayLanguage,
+        language: () => getAppLocale(),
         panel: trayPanel,
         motionAllowed: () =>
           motionAllowed(service.store.state.settings, () =>
@@ -1569,7 +1575,7 @@ else {
             show: (state) =>
               switchWindow?.show(
                 sceneView(state, {
-                  language: trayLanguage,
+                  language: getAppLocale(),
                   name: (id) =>
                     service.store.state.accounts.find((a) => a.id === id)?.name,
                   percent: (id) => usage.snapshot()[id]?.fiveHour?.usedPercent,
@@ -1654,7 +1660,7 @@ else {
         .catch(() => {});
     })
     .catch((error) => {
-      dialog.showErrorBox(say("Relay açılamadı", "Relay did not start"), String(error));
+      dialog.showErrorBox(say("electronMain.relayDidNotStart"), String(error));
       app.exit(1);
     });
 }
@@ -1676,34 +1682,25 @@ async function settleInstallLocation(): Promise<boolean> {
   }
   logDraftEvent("install-location", { place });
   // Settings are not read yet; the system language decides.
-  const t = pick(app.getLocale().toLowerCase().startsWith("tr") ? "tr" : "en");
+  const t = tFor(resolveLocale("system", app.getPreferredSystemLanguages()));
   const { response } = await dialog.showMessageBox({
     type: "warning",
-    buttons: [t("Uygulamalar klasörüne taşı", "Move to Applications"), t("Şimdi değil", "Not now")],
+    buttons: [t("electronMain.moveToApplications"), t("electronMain.notNow")],
     defaultId: 0,
     cancelId: 1,
-    message: t("Relay’i Uygulamalar klasörüne taşı", "Move Relay to Applications"),
+    message: t("electronMain.moveRelayToApplications"),
     detail:
       place === "disk-image"
-        ? t(
-            "Relay disk görüntüsünden çalıştığı sürece macOS her açılışta izin ister. Relay kendini Uygulamalar klasörüne taşır ve oradan açılır.",
-            "While Relay runs from the disk image, macOS asks for approval at every launch. Relay moves itself to Applications and opens from there.",
-          )
-        : t(
-            "Relay indirildiği yerden çalıştığı sürece macOS her açılışta izin ister. Relay kendini Uygulamalar klasörüne taşır ve oradan açılır.",
-            "While Relay runs from its download location, macOS asks for approval at every launch. Relay moves itself to Applications and opens from there.",
-          ),
+        ? t("electronMain.whileRelayRunsFromTheDisk")
+        : t("electronMain.whileRelayRunsFromItsDownload"),
   });
   if (response !== 0) return false;
   try {
     return app.moveToApplicationsFolder();
   } catch (error) {
     dialog.showErrorBox(
-      t("Relay taşınamadı", "Relay was not moved"),
-      t(
-        "Relay’i Finder’da Uygulamalar klasörüne sürükle, disk görüntüsünü çıkar ve Relay’i Uygulamalar’dan aç.",
-        "Drag Relay to Applications in Finder, eject the disk image and open Relay from Applications.",
-      ) + `\n\n${error instanceof Error ? error.message : String(error)}`,
+      t("electronMain.relayWasNotMoved"),
+      t("electronMain.dragRelayToApplicationsInFinder") + `\n\n${error instanceof Error ? error.message : String(error)}`,
     );
     return false;
   }
@@ -1798,22 +1795,13 @@ async function traySwitch(profileId: string) {
   const { response } = await dialog.showMessageBox({
     type: "question",
     buttons: [
-      say(
-        "Geç ve Claude uygulamasını yeniden başlat",
-        "Switch and restart the Claude app",
-      ),
-      say("Vazgeç", "Cancel"),
+      say("electronMain.switchAndRestartTheClaudeApp"),
+      say("common.cancel"),
     ],
     defaultId: 0,
     cancelId: 1,
-    message: say(
-      `Claude uygulaması ${account.name} hesabına geçsin mi?`,
-      `Switch the Claude app to ${account.name}?`,
-    ),
-    detail: say(
-      "Claude uygulaması kapanır ve bu hesapla yeniden açılır. Önce çalışan yanıtların bitmesini bekle.",
-      "The Claude app quits and reopens with this account. Wait for running replies to finish first.",
-    ),
+    message: say("electronMain.switchTheClaudeAppTo", { accountName: account.name }),
+    detail: say("electronMain.theClaudeAppQuitsAndReopens"),
   });
   if (response !== 0) return;
   try {
@@ -1822,10 +1810,10 @@ async function traySwitch(profileId: string) {
     notifyExtensionLeft(account);
   } catch (error) {
     dialog.showErrorBox(
-      say("Geçiş yapılamadı", "Switch failed"),
+      say("electronMain.switchFailed"),
       localizeError(
         error instanceof Error ? error.message : String(error),
-        trayLanguage,
+        getAppLocale(),
       ),
     );
   } finally {
@@ -1871,12 +1859,9 @@ function notifyExtensionLeft(target: Account) {
       : undefined;
   const notice = new Notification({
     title: on
-      ? say(`Eklenti ${on} hesabında kaldı`, `Extension still on ${on}`)
-      : say("Eklenti geçmedi", "Extension not switched"),
-    body: say(
-      `Claude’un tarayıcı araçları ${target.name} ile çalışmıyor; düzeltmek için tıkla.`,
-      `Claude’s browser tools do not work with ${target.name}; click to fix.`,
-    ),
+      ? say("electronMain.extensionStillOn", { on })
+      : say("electronMain.extensionNotSwitched"),
+    body: say("electronMain.claudeSBrowserToolsDoNot", { targetName: target.name }),
   });
   notice.on("click", () => openPage("gecis"));
   notice.show();
@@ -1891,11 +1876,8 @@ function notifyLoopAlarm(alarm: ProxyLoopAlarm) {
   if (!Notification.isSupported()) return;
   const account = service.store.state.accounts.find((a) => a.id === alarm.accountId)?.name;
   const notice = new Notification({
-    title: say("Bir istem durmadan istek gönderiyor", "A prompt keeps sending requests"),
-    body: say(
-      `${alarm.requests} istek, ${alarm.subagents} alt ajan${account ? ` · ${account}` : ""}. Döngüde olabilir; Claude Code'da Esc ile durdurabilirsin.`,
-      `${alarm.requests} requests, ${alarm.subagents} subagents${account ? ` · ${account}` : ""}. It may be in a loop; Esc in Claude Code stops it.`,
-    ),
+    title: say("electronMain.aPromptKeepsSendingRequests"),
+    body: say("electronMain.requestsSubagentsItMayBeIn", { alarmRequests: alarm.requests, alarmSubagents: alarm.subagents, p1: account ? ` · ${account}` : "" }),
   });
   notice.on("click", () => openPage("proxy"));
   notice.show();
@@ -1903,11 +1885,8 @@ function notifyLoopAlarm(alarm: ProxyLoopAlarm) {
 function notifyExtensionBroken(account: Account) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: say("Eklenti giriş yapamıyor", "Extension cannot sign in"),
-    body: say(
-      `Claude’un tarayıcı araçları ${account.name} ile çalışmıyor; yeniden bağlamak için tıkla.`,
-      `Claude’s browser tools do not work with ${account.name}; click to reconnect.`,
-    ),
+    title: say("electronMain.extensionCannotSignIn"),
+    body: say("electronMain.claudeSBrowserToolsDoNot2", { accountName: account.name }),
   });
   notice.on("click", () => openPage("gecis"));
   notice.show();
@@ -2002,12 +1981,9 @@ function notifySignInEnding(account: Account, endsAt?: string) {
   const days = Number.isFinite(end) && end > Date.now() ? Math.max(1, Math.ceil((end - Date.now()) / 86_400_000)) : 0;
   const notice = new Notification({
     title: days
-      ? say(`${account.name}: Claude Code girişi ${days} gün içinde bitiyor`, `${account.name}: Claude Code sign-in ends in ${days} ${days === 1 ? "day" : "days"}`)
-      : say(`${account.name}: Claude Code girişinin süresi doldu`, `${account.name}: Claude Code sign-in ended`),
-    body: say(
-      "Claude uygulamasında bu hesaba yeniden girersen Relay kendisi yeniler; ya da tıkla ve tarayıcıdan yenile.",
-      "Sign in to this account again in the Claude app and Relay renews it by itself, or click to renew it in the browser.",
-    ),
+      ? say("electronMain.claudeCodeSignInEndsIn", { accountName: account.name, days })
+      : say("electronMain.claudeCodeSignInEnded", { accountName: account.name }),
+    body: say("electronMain.signInToThisAccountAgain"),
   });
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
@@ -2017,11 +1993,8 @@ let signInRenewal: SignInRenewal | undefined;
 function notifySignInEnded(account: Account) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: say("Claude girişi sona ermiş", "Claude sign-in ended"),
-    body: say(
-      `${account.name} hesabının kayıtlı girişi artık geçerli değil; yeniden giriş yapmak için tıkla.`,
-      `The saved sign-in of ${account.name} no longer works; click to sign in again.`,
-    ),
+    title: say("electronMain.claudeSignInEnded"),
+    body: say("electronMain.theSavedSignInOfNo", { accountName: account.name }),
   });
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
@@ -2030,11 +2003,8 @@ function notifySignInEnded(account: Account) {
 function notifyUpdate(version: string) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: say("Güncelleme hazır", "Update ready"),
-    body: say(
-      `Relay ${version} sürümünü kurmak için tıkla.`,
-      `Click to install Relay ${version}.`,
-    ),
+    title: say("electronMain.updateReady"),
+    body: say("electronMain.clickToInstallRelay", { version }),
   });
   notice.on("click", () => openPage("genel"));
   notice.show();
@@ -2115,11 +2085,8 @@ function startAppUpdates() {
 function notifySwitched(name: string) {
   if (!Notification.isSupported()) return;
   new Notification({
-    title: say("Geçiş tamamlandı", "Switch complete"),
-    body: say(
-      `Claude uygulaması ${name} hesabına geçti.`,
-      `The Claude app switched to ${name}.`,
-    ),
+    title: say("electronMain.switchComplete"),
+    body: say("electronMain.theClaudeAppSwitchedTo", { name }),
   }).show();
 }
 /** After the fleet switched at the limit: where Claude went, and what became of the conversations. */
@@ -2130,17 +2097,17 @@ function notifyFleet(
   if (!Notification.isSupported()) return;
   const name =
     service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
-    say("diğer", "another");
+    say("electronMain.another");
   new Notification({
-    title: say("Otomatik geçiş", "Automatic switch"),
-    body: fleetNotice(last, name, trayLanguage, reason),
+    title: say("electronMain.automaticSwitch"),
+    body: fleetNotice(last, name, getAppLocale(), reason),
   }).show();
 }
 /** After a draft restore: how many drafts were typed back, and how many wait in the panel. */
 function notifyDrafts(summary: { restored: number; left: number }) {
-  const body = draftNotice(summary, trayLanguage);
+  const body = draftNotice(summary, getAppLocale());
   if (!body || !Notification.isSupported()) return;
-  new Notification({ title: say("Kurtarılan taslaklar", "Rescued drafts"), body }).show();
+  new Notification({ title: say("common.rescuedDrafts"), body }).show();
 }
 /** Today's plan was re-planned at today's pace, or is back to normal. */
 function notifyAdapted(
@@ -2163,17 +2130,12 @@ function notifyAdapted(
         : [];
     })
     .join(", ");
-  const en = trayLanguage === "en";
   new Notification({
-    title: en ? "Early start" : "Önceden başlatma",
+    title: say("electronMain.earlyStart"),
     body:
       notice.kind === "normal"
-        ? en
-          ? "The plan is back to normal."
-          : "Plan normale döndü."
-        : en
-          ? `Plan adapted to today’s pace: ${list}`
-          : `Plan bugünkü hıza uyarlandı: ${list}`,
+        ? say("electronMain.thePlanIsBackToNormal")
+        : say("electronMain.planAdaptedToTodaySPace", { list }),
   }).show();
 }
 /**
@@ -2270,7 +2232,7 @@ let antigravityStarting = false;
 
 function antigravityBridge(accountId: string): AntigravityBridge {
   const account = service.store.account(accountId);
-  if (account.provider !== "antigravity") throw new Error(say("Antigravity hesabı değil.", "Not an Antigravity account."));
+  if (account.provider !== "antigravity") throw new Error(say("electronMain.notAnAntigravityAccount"));
   let bridge = antigravityBridges.get(accountId);
   if (!bridge) {
     bridge = new AntigravityBridge(
@@ -2302,7 +2264,7 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
   const completed = antigravityOAuthOutcomes.get(accountId);
   if (completed) return completed;
   if (pendingAntigravityOAuth.get(accountId) !== state)
-    throw new Error(say("Antigravity girişi artık beklemede değil.", "Antigravity sign-in is no longer pending."));
+    throw new Error(say("electronMain.antigravitySignInIsNoLonger"));
   const inFlight = antigravityOAuthPolls.get(accountId);
   if (inFlight) return inFlight;
   const work = (async (): Promise<AntigravityOAuthPoll> => {
@@ -2319,13 +2281,13 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
       a.auth?.email?.toLowerCase() === status.email.toLowerCase());
     if (duplicate) {
       await discardPendingAntigravity(accountId);
-      const result: AntigravityOAuthPoll = { status: "error", error: say("Bu Antigravity hesabı zaten bağlı.", "This Antigravity account is already connected.") };
+      const result: AntigravityOAuthPoll = { status: "error", error: say("electronMain.thisAntigravityAccountIsAlreadyConnected") };
       antigravityOAuthOutcomes.set(accountId, result);
       return result;
     }
     service.store.update((savedState) => {
       const account = savedState.accounts.find((a) => a.id === accountId);
-      if (!account) throw new Error(say("OAuth girişi sırasında hesap kayboldu.", "Account disappeared during OAuth sign-in."));
+      if (!account) throw new Error(say("electronMain.accountDisappearedDuringOauthSignIn"));
       // The plan (Google AI Pro, Ultra, free) is read with the account's first limits.
       account.auth = { loggedIn: true, checkedAt: new Date().toISOString(), email: status.email };
     });
@@ -2605,10 +2567,7 @@ async function startProxy(): Promise<void> {
     const code = (error as NodeJS.ErrnoException).code;
     proxyError =
       code === "EADDRINUSE"
-        ? say(
-            `${config.host}:${config.port} kullanımda. Başka bir port seç.`,
-            `${config.host}:${config.port} is already in use. Choose another port.`,
-          )
+        ? say("electronMain.isAlreadyInUseChooseAnother", { configHost: config.host, configPort: config.port })
         : (error as Error).message;
     throw new Error(proxyError);
   }
@@ -2808,7 +2767,7 @@ function createWindow(hash?: string) {
 function applyAppMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
-      appMenuTemplate(trayLanguage, {
+      appMenuTemplate(getAppLocale(), {
         closeToTray: () => closeToTray(),
         quit: () => app.quit(),
         closeWindow: () => closeFocusedWindow(),
@@ -2846,7 +2805,7 @@ function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
     event.senderFrame !== event.sender.mainFrame ||
     !relayPage(event.senderFrame?.url)
   )
-    throw new Error("Geçersiz IPC kaynağı.");
+    throw new Error("Invalid IPC source.");
 }
 /** Panel-only one-way messages; anything else (including the main window) is ignored. */
 function fromPanel(event: Electron.IpcMainEvent) {
@@ -3014,13 +2973,13 @@ function bindIPC() {
     if (!snapshot) return undefined;
     const now = Date.now();
     const alone = (item: (typeof MENU_BAR_ITEMS)[number]) => {
-      const text = trayTitle({ ...snapshot, titleItems: [item] }, now, trayLanguage);
+      const text = trayTitle({ ...snapshot, titleItems: [item] }, now, getAppLocale());
       return text === "—" ? "" : text;
     };
     // The saved choice, which the snapshot may not hold yet right after a change.
     const titleItems = menuBarTitle?.current.items ?? snapshot.titleItems;
     return {
-      title: trayTitle({ ...snapshot, titleItems }, now, trayLanguage),
+      title: trayTitle({ ...snapshot, titleItems }, now, getAppLocale()),
       values: Object.fromEntries(MENU_BAR_ITEMS.map((item) => [item, alone(item)])),
     };
   });
@@ -3034,15 +2993,21 @@ function bindIPC() {
     void tray?.update();
     return kept;
   });
-  handle("tray-language", (value) => {
-    const language = z.enum(["tr", "en"]).parse(value);
-    const changed = language !== trayLanguage;
-    trayLanguage = language;
-    if (changed) applyAppMenu();
-    // The widget's strings are in the app's language too.
-    if (changed) writeWidget(true);
+  handle("set-language", (value) => {
+    const pref = z.union([z.literal("system"), z.enum(LOCALES)]).parse(value);
+    writeLanguagePref(service.store.root, pref);
+    languagePref = pref;
+    if (setAppLocale(resolveLocale(pref, app.getPreferredSystemLanguages()))) {
+      applyAppMenu();
+      // The widget's strings are in the app's language too.
+      writeWidget(true);
+    }
     tray?.update();
   });
+  handle("get-language", () => ({
+    pref: languagePref,
+    locale: getAppLocale(),
+  }));
   handle("account-planning", (accountId, input) => {
     if (desktop.isBusy || desktopLock.busy)
       throw new Error(
@@ -3172,7 +3137,7 @@ function bindIPC() {
     // Checked and claimed before any await: a double click must not start two sign-ins on the
     // helper's one callback port.
     if (pendingAntigravityOAuth.size || antigravityStarting)
-      throw new Error(say("Önce açık Antigravity girişini tamamla.", "Finish the pending Antigravity sign-in first."));
+      throw new Error(say("electronMain.finishThePendingAntigravitySignIn"));
     const input = createAccountSchema.parse({ ...raw, provider: "antigravity" });
     antigravityStarting = true;
     const account = (() => {
@@ -3196,16 +3161,16 @@ function bindIPC() {
         handle: async (address) => {
           const expected = pendingAntigravityOAuth.get(account.id);
           try {
-            if (!expected) throw new Error(say("Bekleyen giriş yok.", "No sign-in is pending."));
+            if (!expected) throw new Error(say("electronMain.noSignInIsPending"));
             await bridge.submitCallback(expected, address);
             return {
-              title: say("Giriş alındı", "Signed in"),
-              body: say("Relay’e dönebilirsin; bu sekme kapanabilir.", "You can go back to Relay; this tab can be closed."),
+              title: say("electronMain.signedIn"),
+              body: say("electronMain.youCanGoBackToRelay"),
             };
           } catch {
             return {
-              title: say("Giriş tamamlanamadı", "Sign-in not finished"),
-              body: say("Relay’e dönüp yeniden dene.", "Go back to Relay and try again."),
+              title: say("electronMain.signInNotFinished"),
+              body: say("electronMain.goBackToRelayAndTry"),
             };
           } finally {
             showWindow();
@@ -3221,7 +3186,7 @@ function bindIPC() {
       const timer = setInterval(() => {
         if (Date.now() - startedAt > 10 * 60_000) {
           void discardPendingAntigravity(account.id).then(() => {
-            antigravityOAuthOutcomes.set(account.id, { status: "error", error: say("Antigravity girişi zaman aşımına uğradı.", "Antigravity sign-in timed out.") });
+            antigravityOAuthOutcomes.set(account.id, { status: "error", error: say("electronMain.antigravitySignInTimedOut") });
           });
           return;
         }
@@ -3245,7 +3210,7 @@ function bindIPC() {
     await discardPendingAntigravity(input.accountId);
     antigravityOAuthOutcomes.set(input.accountId, {
       status: "error",
-      error: say("Antigravity girişi iptal edildi.", "Antigravity sign-in was cancelled."),
+      error: say("electronMain.antigravitySignInWasCancelled"),
     });
   });
   handle("antigravity-oauth-callback", async (raw) => {
@@ -3254,7 +3219,7 @@ function bindIPC() {
       .strict()
       .parse(raw);
     if (pendingAntigravityOAuth.get(input.accountId) !== input.state)
-      throw new Error(say("Antigravity girişi artık beklemede değil.", "Antigravity sign-in is no longer pending."));
+      throw new Error(say("electronMain.antigravitySignInIsNoLonger"));
     await antigravityBridge(input.accountId).submitCallback(input.state, input.url);
   });
   handle("antigravity-oauth-poll", async (raw) => {
@@ -3352,12 +3317,12 @@ function bindIPC() {
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
   handle("open-antigravity", () => openAntigravityApp());
   const antigravityOnly = () => {
-    if (!antigravitySwitcher) throw new Error(say("Antigravity hesap geçişi yalnızca macOS'ta çalışır.", "Antigravity account switching works on macOS only."));
+    if (!antigravitySwitcher) throw new Error(say("electronMain.antigravityAccountSwitchingWorksOnMacos"));
     return antigravitySwitcher;
   };
   const antigravityAccount = (accountId: unknown) => {
     const account = service.store.account(id.parse(accountId));
-    if (account.provider !== "antigravity") throw new Error(say("Antigravity hesabı değil.", "Not an Antigravity account."));
+    if (account.provider !== "antigravity") throw new Error(say("electronMain.notAnAntigravityAccount"));
     return account.id;
   };
   handle("switch-antigravity", (accountId) => antigravityOnly().switchTo(antigravityAccount(accountId)));
@@ -3514,7 +3479,7 @@ function bindIPC() {
     const { range, accountId } = usageStatisticsInput.parse(input);
     if (!tokenLedger)
       throw new Error(
-        say("Token kaydı açılamadı.", "Relay cannot read the token usage."),
+        say("electronMain.relayCannotReadTheTokenUsage"),
       );
     if (Date.now() - tokenTickedAt > TOKEN_FRESH_MS) {
       // Ticks until the pass is complete or about a second has passed.
@@ -3648,7 +3613,7 @@ function bindIPC() {
   handle("pick-folder", async () => {
     const result = await openDialog({
       properties: ["openDirectory"],
-      title: say("Proje klasörünü seç", "Select the project folder"),
+      title: say("electronMain.selectTheProjectFolder"),
     });
     return result.canceled ? null : result.filePaths[0];
   });
@@ -3662,19 +3627,13 @@ function bindIPC() {
     const result = await openDialog({
       properties: ["openFile", "showHiddenFiles"],
       ...(opensThere ? { defaultPath: installed } : {}),
-      title: say(
-        "Claude Code CLI dosyasını seç",
-        "Select the Claude Code CLI file",
-      ),
+      title: say("electronMain.selectTheClaudeCodeCliFile"),
     });
     if (!result.canceled) {
       // Claude Desktop is not the CLI: running it for `auth status` or `--version` only opens it.
       if (isClaudeDesktopExecutable(result.filePaths[0]))
         throw new Error(
-          say(
-            "Bu dosya Claude masaüstü uygulaması, Claude Code CLI değil. `claude` dosyasını seç (genellikle ~/.local/bin/claude).",
-            "This file is the Claude desktop app, not the Claude Code CLI. Select the `claude` file (usually ~/.local/bin/claude).",
-          ),
+          say("electronMain.thisFileIsTheClaudeDesktop"),
         );
       service.store.update((s) => {
         s.executable = result.filePaths[0];
@@ -3687,7 +3646,7 @@ function bindIPC() {
     const result = await openDialog({
       properties: ["openFile"],
       ...(mac ? { defaultPath: "/Applications" } : {}),
-      title: say("Claude uygulamasını seç", "Select the Claude app"),
+      title: say("electronMain.selectTheClaudeApp"),
     });
     if (result.canceled || !result.filePaths[0]) return;
     // The store's change reaches every window, which reads the Desktop state again.
@@ -3778,15 +3737,9 @@ app.on("before-quit", (event) => {
     showWindow();
     void dialog.showMessageBox({
       type: "info",
-      message: say(
-        "Limit okuma girişi yenileniyor.",
-        "A usage sign-in renewal is in progress.",
-      ),
-      detail: say(
-        "Relay, yenileme bitene kadar açık kalır. Sonra yeniden çık.",
-        "Relay stays open until the renewal ends. Then quit again.",
-      ),
-      buttons: [say("Tamam", "OK")],
+      message: say("electronMain.aUsageSignInRenewalIs"),
+      detail: say("electronMain.relayStaysOpenUntilTheRenewal"),
+      buttons: [say("electronMain.ok")],
     });
     return;
   }
@@ -3817,17 +3770,12 @@ app.on("before-quit", (event) => {
     .showMessageBox({
       type: "question",
       buttons: [
-        say("Relay’e dön", "Back to Relay"),
-        say("Durdur ve çık", "Stop and quit"),
+        say("electronMain.backToRelay"),
+        say("electronMain.stopAndQuit"),
       ],
       defaultId: 0,
       cancelId: 0,
-      message: say(
-        `${active.length} terminal çalışıyor.`,
-        active.length === 1
-          ? "1 terminal is running."
-          : `${active.length} terminals are running.`,
-      ),
+      message: say("electronMain.terminalsRunning", { count: active.length }),
     })
     .then(async (result) => {
       if (result.response !== 1) return;
@@ -3838,7 +3786,7 @@ app.on("before-quit", (event) => {
         app.quit();
       } catch (error) {
         dialog.showErrorBox(
-          say("Çıkış tamamlanmadı", "Quit did not finish"),
+          say("electronMain.quitDidNotFinish"),
           String(error),
         );
       }

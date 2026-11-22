@@ -17,6 +17,7 @@ import {
   type TokenToday,
   type TokenUsageView,
 } from "../../../shared/token-usage-view";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import type { StatisticsRange } from "../../../shared/usage-statistics-view";
 import { AccountDot, accountColor } from "@/components/AccountDot";
 import { Banner } from "@/components/Banner";
@@ -50,7 +51,6 @@ import {
   formatDayLong,
   formatNumber,
   formatTokens,
-  locale,
   toneIndex,
 } from "./format";
 import { useTokenUsage, type TokenUsageState } from "./useTokenUsage";
@@ -92,7 +92,7 @@ const isEstimated = (
 const rowLabel = (row: TokenRow, t: T) =>
   row.kind === "account"
     ? (row.name ?? "")
-    : t(TOKEN_ROW_LABELS[row.kind].tr, TOKEN_ROW_LABELS[row.kind].en);
+    : t(TOKEN_ROW_LABELS[row.kind]);
 
 /** Terminal and unknown tokens belong to no account: they take the muted tone, the unknown one fainter. */
 const MUTED_OPACITY: Partial<Record<TokenRow["kind"], string>> = {
@@ -194,9 +194,9 @@ function Tile({
 /** "Girdi 1,1 Mn · Çıktı 220 B · Önbellek 855 B": a count split by kind in one quiet line. */
 function kindsLine(c: TokenCounts, t: T, language: Language) {
   return [
-    `${t("Girdi", "Input")} ${formatTokens(c.input, language)}`,
-    `${t("Çıktı", "Output")} ${formatTokens(c.output, language)}`,
-    `${t("Önbellek", "Cache")} ${formatTokens(c.cacheWrite + c.cacheRead, language)}`,
+    `${t("tokenUsage.input")} ${formatTokens(c.input, language)}`,
+    `${t("tokenUsage.output")} ${formatTokens(c.output, language)}`,
+    `${t("common.cache")} ${formatTokens(c.cacheWrite + c.cacheRead, language)}`,
   ].join(" · ");
 }
 
@@ -223,18 +223,18 @@ function TodayTile({ today }: { today: TokenToday }) {
   const since =
     today.slotsSince === undefined
       ? undefined
-      : new Intl.DateTimeFormat(locale(language), { hour: "2-digit", minute: "2-digit" }).format(today.slotsSince);
-  const config: ChartConfig = { value: { label: t("API karşılığı", "API value"), color: "var(--meter)" } };
+      : new Intl.DateTimeFormat(FORMAT_LOCALE[language], { hour: "2-digit", minute: "2-digit" }).format(today.slotsSince);
+  const config: ChartConfig = { value: { label: t("common.apiValue"), color: "var(--meter)" } };
   return (
-    <section data-slot="token-today" aria-label={t("Bugün", "Today")} className="contents">
+    <section data-slot="token-today" aria-label={t("common.today")} className="contents">
       <Tile
-        label={t("Bugün", "Today")}
+        label={t("common.today")}
         value={formatTokens(total, language)}
         exact={formatNumber(total, language)}
         detail={kindsLine(totals, t, language)}
       >
         <div className="mt-1 flex items-baseline gap-2 text-xs">
-          <span className="text-muted-foreground">{t("API karşılığı", "API value")}</span>
+          <span className="text-muted-foreground">{t("common.apiValue")}</span>
           <span data-slot="token-today-cost" className="font-semibold tabular-nums">
             {totals.costEstimated ? "≈" : ""}
             {formatCost(cost, language)}
@@ -272,22 +272,16 @@ function TodayTile({ today }: { today: TokenToday }) {
         )}
         {/* What the area shows, in words: for screen readers and where the chart is not drawn. */}
         <p data-slot="token-today-line" className="sr-only">
-          {t(
-            `Bugün çeyrek saat başına API karşılığı, ${points.length} çeyrek; en yüksek ${formatCost(max, "tr")}`,
-            `API value per quarter hour today, ${points.length} quarters; highest ${formatCost(max, "en")}`,
-          )}
+          {t("tokenUsage.apiValuePerQuarterHourToday", { pointsLength: points.length, highest: formatCost(max, language) })}
           {today.yesterdayAverage !== null && (
             <span data-slot="token-today-yesterday">
-              {t(
-                `; dünkü ortalama ${formatCost(today.yesterdayAverage, "tr")}`,
-                `; yesterday's average ${formatCost(today.yesterdayAverage, "en")}`,
-              )}
+              {t("tokenUsage.yesterdaySAverage", { average: formatCost(today.yesterdayAverage, language) })}
             </span>
           )}
         </p>
         {since && (
           <p className="text-2xs text-muted-foreground">
-            {t(`Gün içi çizgi için ${since} öncesinde veri yok.`, `No line data before ${since}.`)}
+            {t("tokenUsage.noLineDataBefore", { since })}
           </p>
         )}
       </Tile>
@@ -306,28 +300,28 @@ function Tiles({ view }: { view: TokenUsageView }) {
     <Card data-slot="token-tiles" className="grid gap-0 divide-y p-0 @lg:grid-cols-3 @lg:divide-x @lg:divide-y-0">
       <TodayTile today={view.today} />
       <Tile
-        label={t(`Toplam · ${view.range} gün`, `Total · ${view.range} days`)}
+        label={t("tokenUsage.totalDays", { viewRange: view.range })}
         value={formatTokens(total, language)}
         exact={formatNumber(total, language)}
         detail={kindsLine(totals, t, language)}
       />
       <Tile
-        label={t("API karşılığı", "API value")}
+        label={t("common.apiValue")}
         value={`${totals.costEstimated ? "≈" : ""}${formatCost(cost, language)}`}
-        detail={t(`günde ${formatCost(cost / days, "tr")}`, `${formatCost(cost / days, "en")} per day`)}
+        detail={t("tokenUsage.perDay", { cost: formatCost(cost / days, language) })}
       />
     </Card>
   );
 }
 
 /** "tahmini" / "estimated": what screen readers hear in place of the ≈ mark. */
-const estimatedWord = (t: T) => t("tahmini", "estimated");
+const estimatedWord = (t: T) => t("tokenUsage.estimated");
 
 /** A row's share of a day: "%29", "<%1" for a sliver; undefined for an empty day. */
-function shareOf(value: number, total: number, language: Language) {
+function shareOf(value: number, total: number, t: T, language: Language) {
   if (total <= 0) return undefined;
   const percent = (value / total) * 100;
-  if (percent > 0 && percent < 1) return language === "tr" ? "<%1" : "<1%";
+  if (percent > 0 && percent < 1) return t("tokenUsage.under", { percent: formatPercent(1, language) });
   return formatPercent(percent, language);
 }
 
@@ -383,18 +377,18 @@ export function DayDetail({ day, metric, metricLabel }: { day: ChartDay; metric:
                 {part.estimated ? "≈" : ""}
                 {formatValue(part.value, metric, language)}
               </span>
-              <span className="w-9 text-right text-muted-foreground tabular-nums">{shareOf(part.value, day.total, language)}</span>
+              <span className="w-9 text-right text-muted-foreground tabular-nums">{shareOf(part.value, day.total, t, language)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-muted-foreground">{t("Bu gün token yok.", "No tokens on this day.")}</p>
+        <p className="text-muted-foreground">{t("tokenUsage.noTokensOnThisDay")}</p>
       )}
       {estimated && (
         <p className="text-muted-foreground">
           {metric === "cost"
-            ? t("≈ Hesap ya da tutar tahmin edildi", "≈ Account or amount estimated")
-            : t("≈ Limit ölçümlerinden tahmin edildi", "≈ Estimated from limit samples")}
+            ? t("tokenUsage.accountOrAmountEstimated")
+            : t("tokenUsage.estimatedFromLimitSamples")}
         </p>
       )}
     </div>
@@ -531,7 +525,7 @@ function TokenChart({
         />
       )}
       {/* The same days as a list, for screen readers and as the chart's text: each names its rows, the estimated ones as such. */}
-      <ul data-slot="token-days" className="sr-only" aria-label={t("Günlük token değerleri", "Daily token values")}>
+      <ul data-slot="token-days" className="sr-only" aria-label={t("tokenUsage.dailyTokenValues")}>
         {days.map((day) => (
           <li key={day.date}>
             {[
@@ -551,16 +545,10 @@ function TokenChart({
 export function tokenNotes(view: TokenUsageView, metric: Metric, t: T, language: Language): string[] {
   const mix = modelMix(view, metric, language);
   return [
-    mix ? `${t("Aralıktaki modeller: ", "Models in this range: ")}${mix}` : "",
-    t(
-      `Fiyatlar: Anthropic API liste fiyatları, ${formatDay(view.pricesChecked, "tr")} ${view.pricesChecked.slice(0, 4)}.`,
-      `Prices: Anthropic API list prices, ${formatDay(view.pricesChecked, "en")} ${view.pricesChecked.slice(0, 4)}.`,
-    ),
+    mix ? t("tokenUsage.modelsInThisRange", { mix }) : "",
+    t("tokenUsage.pricesAnthropicApiListPrices", { day: formatDay(view.pricesChecked, language), year: view.pricesChecked.slice(0, 4) }),
     view.exactSince
-      ? t(
-          `Hesap eşleşmesi ${formatDay(view.exactSince, "tr")} tarihinden beri kesin. Önceki günler limit ölçümlerinden tahmin edildi.`,
-          `Account matches are exact from ${formatDay(view.exactSince, "en")}. Earlier days are estimated from limit samples.`,
-        )
+      ? t("tokenUsage.accountMatchesAreExactFromEarlier", { day: formatDay(view.exactSince, language) })
       : "",
   ].filter(Boolean);
 }
@@ -578,8 +566,8 @@ export function DayTable({
   const { t, language } = useI18n();
   const estimatedTip =
     metric === "cost"
-      ? t("Hesap ya da tutar tahmin edildi", "Account or amount estimated")
-      : t("Limit ölçümlerinden tahmin edildi", "Estimated from limit samples");
+      ? t("tokenUsage.accountOrAmountEstimated2")
+      : t("tokenUsage.estimatedFromLimitSamples2");
   /**
    * A cell's text: "—" for none, "≈" before a value estimated from limit
    * samples, which screen readers hear as "tahmini".
@@ -602,19 +590,19 @@ export function DayTable({
     <div
       role="region"
       tabIndex={0}
-      aria-label={t("Günlük token tablosu", "Daily token table")}
+      aria-label={t("tokenUsage.dailyTokenTable")}
       className="max-h-96 overflow-y-auto"
     >
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t("Gün", "Date")}</TableHead>
+            <TableHead>{t("tokenUsage.date")}</TableHead>
             {columns.map((column) => (
               <TableHead key={column.key} className="text-right">
                 {column.name}
               </TableHead>
             ))}
-            <TableHead className="text-right">{t("Toplam", "Total")}</TableHead>
+            <TableHead className="text-right">{t("common.total")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -689,7 +677,7 @@ function Content({
   );
   const today = view.days[view.days.length - 1]?.date ?? "";
   const linesOf = (date: string) =>
-    pandaLines({ view, date, accountNames, today });
+    pandaLines({ view, date, accountNames, today }, t, language);
   const lines = explained ? linesOf(explained.date) : [];
   // The chosen line while it still applies; after a refresh dropped it, the day's first.
   const line = explained
@@ -697,7 +685,7 @@ function Content({
     : undefined;
   const say = (date: string, next: PandaLine) => {
     setExplained({ date, key: next.key });
-    setSaid(`${formatDayLong(date, language)}: ${t(next.tr, next.en)}`);
+    setSaid(`${formatDayLong(date, language)}: ${next.text}`);
   };
   const nextLine = () => {
     if (!explained || !line) return;
@@ -716,11 +704,11 @@ function Content({
   }, [explained]);
   const columns = tokenColumns(view, accounts, t);
   const labels: Record<Metric, string> = {
-    total: t("Toplam", "Total"),
-    input: t("Girdi", "Input"),
-    output: t("Çıktı", "Output"),
-    cache: t("Önbellek", "Cache"),
-    cost: t("API karşılığı", "API value"),
+    total: t("common.total"),
+    input: t("tokenUsage.input"),
+    output: t("tokenUsage.output"),
+    cache: t("common.cache"),
+    cost: t("common.apiValue"),
   };
   const empty = view.rows.length === 0;
   const scanning = !view.progress.complete;
@@ -733,10 +721,7 @@ function Content({
         // While the scan runs, an empty range may only not be read yet: the scanning note says so.
         !scanning && (
           <p className="text-sm text-muted-foreground">
-            {t(
-              "Bu aralıkta token kaydı yok.",
-              "No token records in this range.",
-            )}
+            {t("tokenUsage.noTokenRecordsInThisRange")}
           </p>
         )
       ) : (
@@ -745,7 +730,7 @@ function Content({
           <Tiles view={view} />
           <PageSection
             slot="token-chart"
-            title={t("Günlük", "Daily")}
+            title={t("tokenUsage.daily")}
             info={
               <span className="grid gap-1">
                 {tokenNotes(view, metric, t, language).map((note) => (
@@ -765,13 +750,13 @@ function Content({
                   }}
                 >
                   <PandaRig pose="head" expression="happy" size={16} />
-                  {t("Panda anlatsın", "Ask the panda")}
+                  {t("tokenUsage.askThePanda")}
                 </Button>
                 <ToggleGroup
                   type="single"
                   variant="outline"
                   size="sm"
-                  aria-label={t("Ölçü", "Measure")}
+                  aria-label={t("tokenUsage.measure")}
                   value={metric}
                   onValueChange={(v) => v && setMetric(v as Metric)}
                 >
@@ -800,7 +785,7 @@ function Content({
                   (opener.current as HTMLElement | null)?.focus?.()
                 }
               />
-              <Disclosure title={t("Gün gün tablo", "Day-by-day table")}>
+              <Disclosure title={t("tokenUsage.dayByDayTable")}>
                 <DayTable view={view} columns={columns} metric={metric} />
               </Disclosure>
             </Card>
@@ -809,26 +794,17 @@ function Content({
       )}
       {view.unpricedModels.length > 0 && !empty && (
         <Note className="text-xs">
-          {t(
-            `${formatTokens(view.totals.unpriced ?? 0, "tr")} token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı (${view.unpricedModels.join(", ")}).`,
-            `${formatTokens(view.totals.unpriced ?? 0, "en")} tokens are from models with no known price and are not in the amount (${view.unpricedModels.join(", ")}).`,
-          )}
+          {t("tokenUsage.tokensAreFromModelsWithNo", { tokens: formatTokens(view.totals.unpriced ?? 0, language), models: view.unpricedModels.join(", ") })}
         </Note>
       )}
       {scanning && (
         <Note className="text-xs">
-          {t(
-            `Konuşma kayıtları taranıyor… ${formatPercent(view.progress.percent, "tr")}`,
-            `Relay scans the conversation logs… ${formatPercent(view.progress.percent, "en")}`,
-          )}
+          {t("tokenUsage.relayScansTheConversationLogs", { percent: formatPercent(view.progress.percent, language) })}
         </Note>
       )}
       {view.progress.error && (
         <Note className="text-xs">
-          {t(
-            "Token kayıtları saklanamıyor.",
-            "Relay cannot save the token records.",
-          )}
+          {t("tokenUsage.relayCannotSaveTheTokenRecords")}
         </Note>
       )}
     </>
@@ -851,7 +827,7 @@ export function TokenUsageCard({
   return (
     <section
       data-slot="token-usage"
-      aria-label={t("Token kullanımı", "Token usage")}
+      aria-label={t("tokenUsage.tokenUsage")}
       className="grid min-w-0 gap-4"
       role={error && !view ? "alert" : undefined}
       aria-busy={(loading && view !== undefined) || undefined}
@@ -860,10 +836,7 @@ export function TokenUsageCard({
         <Banner tone="error" role="alert">
           <span>
             <b>
-              {t(
-                "Token kullanımı yenilenemedi.",
-                "Cannot refresh token usage.",
-              )}
+              {t("tokenUsage.cannotRefreshTokenUsage")}
             </b>{" "}
             {error}
           </span>
@@ -874,13 +847,13 @@ export function TokenUsageCard({
       ) : error ? (
         <p className="text-sm text-muted-foreground">
           <b>
-            {t("Token kullanımı alınamadı.", "Cannot load token usage.")}
+            {t("tokenUsage.cannotLoadTokenUsage")}
           </b>{" "}
           {error}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {t("Token kaydı yükleniyor", "Relay loads the token usage…")}
+          {t("tokenUsage.relayLoadsTheTokenUsage")}
         </p>
       )}
     </section>

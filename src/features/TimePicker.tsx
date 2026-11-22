@@ -22,8 +22,8 @@ import {
   wheelSteps,
   type WheelState,
 } from "../../shared/time-picker";
+import type { T } from "../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /** An inline hh:mm field: type a time, or step it with the arrows and wheel. */
 export function TimePicker({
@@ -223,10 +223,7 @@ export function TimePicker({
         onMouseUp={onMouseUp}
       />
       <small id={hintId} className="sr-only">
-        {t(
-          "↑↓ 15 dk, PageUp/PageDown 1 saat",
-          "↑↓ 15 min, PageUp/PageDown 1 hour",
-        )}
+        {t("timePicker.n15MinPageupPagedown1Hour")}
       </small>
       {showError && (
         <p
@@ -234,10 +231,7 @@ export function TimePicker({
           role="alert"
           className="absolute top-full left-0 z-10 mt-1 w-max max-w-64 rounded-md border border-destructive/40 bg-popover px-2 py-1 text-xs font-medium text-destructive shadow-md"
         >
-          {t(
-            "Geçerli bir saat gir. Örnek: 09:30.",
-            "Enter a valid time, such as 09:30.",
-          )}
+          {t("timePicker.enterAValidTimeSuchAs")}
         </p>
       )}
     </div>

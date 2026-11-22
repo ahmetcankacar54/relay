@@ -41,14 +41,14 @@ export function accountStatus(input: {
   const reason = health.label === health.short ? undefined : health.label;
   // A spent model's limit is told by the limits below, in their words; an old reading is quiet.
   if (health.tone !== "ok" && !health.limit) {
-    const old = !!usage && (usage.stale || usage.status === "error") && health.short === t("Eski okuma", "Old reading");
+    const old = !!usage && (usage.stale || usage.status === "error") && health.short === t("accountStatus.oldReading");
     return { tone: old ? "off" : health.tone, text: health.short, ...(reason ? { reason } : {}) };
   }
-  const lead = inUse ? t("Açık", "In use") : undefined;
+  const lead = inUse ? t("accountStatus.inUse") : undefined;
   // No limits to read (a Codex API key, a provider Relay cannot read): the sign-in decides, and it is fine.
   const readable = !!usage && usage.issue !== "unsupported" && (!!usage.fiveHour || !!usage.sevenDay || !!usage.modelWindows?.length);
-  if (!readable) return { tone: "ok", text: lead ?? t("Hazır", "Ready") };
-  if (!freshUsage(usage, now)) return { tone: "off", text: t("Eski okuma", "Old reading") };
+  if (!readable) return { tone: "ok", text: lead ?? t("common.ready") };
+  if (!freshUsage(usage, now)) return { tone: "off", text: t("accountStatus.oldReading") };
   const say = (tone: AccountStatus["tone"], words: string, resetsAt?: string): AccountStatus => ({
     tone,
     text: lead ? `${lead} · ${words}` : withLeft(words, resetsAt, now, t),
@@ -65,21 +65,21 @@ export function accountStatus(input: {
     const spent = [...pools].filter(([, p]) => p.used >= 100);
     if (spent.length && spent.length === pools.size) {
       const first = spent.map(([, p]) => p.resetsAt).sort()[0];
-      return say("crit", t("Dolu", "Full"), first);
+      return say("crit", t("common.full"), first);
     }
-    if (spent.length) return say("warn", t(`${spent[0][0]} dolu`, `${spent[0][0]} full`), spent[0][1].resetsAt);
+    if (spent.length) return say("warn", t("accountStatus.full2", { modelLabel: spent[0][0] }), spent[0][1].resetsAt);
     const cols = fullestByPeriod(usage, now);
     const fullest = Math.max(cols.five_hour?.usedPercent ?? 0, cols.seven_day?.usedPercent ?? 0, limitHeadline(usage, now)?.usedPercent ?? 0);
-    if (fullest >= 90) return say("warn", t("Dolmak üzere", "Nearly full"));
-    return { tone: "ok", text: lead ?? t("Hazır", "Ready") };
+    if (fullest >= 90) return say("warn", t("accountStatus.nearlyFull"));
+    return { tone: "ok", text: lead ?? t("common.ready") };
   }
 
   const five = usedNow(usage.fiveHour, now);
   const week = usedNow(usage.sevenDay, now);
-  if (week >= 100) return say("crit", t("Hafta dolu", "Week full"), usage.sevenDay?.resetsAt);
-  if (five >= 100) return say("crit", t("Dolu", "Full"), usage.fiveHour?.resetsAt);
+  if (week >= 100) return say("crit", t("accountStatus.weekFull"), usage.sevenDay?.resetsAt);
+  if (five >= 100) return say("crit", t("common.full"), usage.fiveHour?.resetsAt);
   const model = spentModelWindows(usage, now).sort((a, b) => (a.resetsAt ?? "").localeCompare(b.resetsAt ?? ""))[0];
-  if (model) return say("warn", t(`${model.label} dolu`, `${model.label} full`), model.resetsAt);
-  if (Math.max(five, week) >= 90) return say("warn", t("Dolmak üzere", "Nearly full"));
-  return { tone: "ok", text: lead ?? t("Hazır", "Ready") };
+  if (model) return say("warn", t("accountStatus.full2", { modelLabel: model.label }), model.resetsAt);
+  if (Math.max(five, week) >= 90) return say("warn", t("accountStatus.nearlyFull"));
+  return { tone: "ok", text: lead ?? t("common.ready") };
 }

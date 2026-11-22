@@ -6,6 +6,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
 import { hourLabel, hourRange, weekdayName } from "./format";
+import type { T } from "../../../shared/i18n/translate";
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 /** Opacity of the five steps; step 0 is an empty cell. */
@@ -25,10 +26,10 @@ export function heatStep(value: number, sorted: number[]): number {
 function hoursLine(
   weekday: PlanningHours,
   weekend: PlanningHours,
-  t: (tr: string, en: string) => string,
+  t: T,
 ) {
   const part = (days: string, h: PlanningHours) => (h.enabled ? `${days} ${h.start}–${h.end}` : "");
-  return [part(t("Pzt–Cum", "Mon–Fri"), weekday), part(t("Cmt–Paz", "Sat–Sun"), weekend)]
+  return [part(t("usageHeatmap.monFri"), weekday), part(t("usageHeatmap.satSun"), weekend)]
     .filter(Boolean)
     .join(", ");
 }
@@ -57,23 +58,20 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
     max > 0 ? formatPercent(Math.round((value / max) * 100), language) : formatPercent(0, language);
   return (
     <PageSection
-      title={t("Çalışma saatleri", "Working hours")}
+      title={t("usageHeatmap.workingHours")}
       slot="usage-heatmap"
       info={
         window && share !== undefined && hours
-          ? t(
-              `En yoğun saatler ${hourRange(window.start, window.end)}; kullanımın ${formatPercent(share, "tr")} kadarı çalışma saatlerinde (${hours}).`,
-              `Busiest hours ${hourRange(window.start, window.end)}; ${formatPercent(share, "en")} of use falls in work hours (${hours}).`,
-            )
+          ? t("usageHeatmap.busiestHoursOfUseFallsIn", { hourRange: hourRange(window.start, window.end), share: formatPercent(share, language), hours })
           : undefined
       }
       aside={
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-hidden="true">
-          {t("az", "less")}
+          {t("usageHeatmap.less")}
           {STEP_OPACITY.slice(1).map((opacity) => (
             <span key={opacity} className="size-3 rounded-[3px] bg-brand" style={{ opacity }} />
           ))}
-          {t("çok", "more")}
+          {t("usageHeatmap.more")}
         </span>
       }>
     <Card className="gap-3 px-4 py-3.5">
@@ -81,11 +79,8 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
         role="img"
         aria-label={
           window
-            ? t(
-                `Gün ve saate göre kullanım. En yoğun saatler ${hourRange(window.start, window.end)}.`,
-                `Usage by day and hour. Busiest hours ${hourRange(window.start, window.end)}.`,
-              )
-            : t("Gün ve saate göre kullanım. Bu aralıkta kullanım yok.", "Usage by day and hour. No usage in this range.")
+            ? t("usageHeatmap.usageByDayAndHourBusiest", { hourRange: hourRange(window.start, window.end) })
+            : t("usageHeatmap.usageByDayAndHourNo")
         }
         // Square cells: they take the width they get and as much height, up to a 768 px grid.
         className="grid max-w-3xl grid-cols-[2.5rem_repeat(24,minmax(0,1fr))_3rem] items-center gap-[3px] text-2xs leading-none text-muted-foreground"
@@ -96,7 +91,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
             {hour % 3 === 0 ? String(hour).padStart(2, "0") : ""}
           </span>
         ))}
-        <span className="text-2xs">{t("toplam", "total")}</span>
+        <span className="text-2xs">{t("usageHeatmap.total")}</span>
         {cells.map((row, weekday) => [
           <span key={`day-${weekday}`} className="self-center truncate">
             {weekdayName(weekday, language, "short")}
@@ -110,11 +105,8 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
                 data-step={step}
                 title={
                   value > 0
-                    ? t(
-                        `${cellName(weekday, hour)} · en yoğun saate göre ${relative(value)}`,
-                        `${cellName(weekday, hour)} · ${relative(value)} of the busiest hour`,
-                      )
-                    : t(`${cellName(weekday, hour)} · kullanım yok`, `${cellName(weekday, hour)} · no usage`)
+                    ? t("usageHeatmap.ofTheBusiestHour", { cellName: cellName(weekday, hour), relative: relative(value) })
+                    : t("usageHeatmap.noUsage", { cellName: cellName(weekday, hour) })
                 }
                 className={step ? "aspect-square rounded-[3px] bg-brand" : "aspect-square rounded-[3px] bg-track"}
                 style={step ? { opacity: STEP_OPACITY[step] } : undefined}
@@ -128,7 +120,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
             />
           </span>,
         ])}
-        <span className="self-end text-2xs">{t("toplam", "total")}</span>
+        <span className="self-end text-2xs">{t("usageHeatmap.total")}</span>
         {HOURS.map((hour) => (
           <span key={`hour-${hour}`} className="flex h-6 items-end" aria-hidden="true">
             <span
@@ -139,7 +131,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
         ))}
         <span />
       </div>
-      {!window && <p className="text-sm text-muted-foreground">{t("Bu aralıkta kullanım yok.", "No usage in this range.")}</p>}
+      {!window && <p className="text-sm text-muted-foreground">{t("usageHeatmap.noUsageInThisRange")}</p>}
     </Card>
     </PageSection>
   );

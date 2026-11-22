@@ -88,7 +88,7 @@ export function useCopy(): Copy {
     void api.copyText(text).then(
       () => setCopied(id),
       // Said, never swallowed: a Copy that does nothing looks like a broken button.
-      () => setNotice(t("Panoya kopyalanamadı.", "Could not copy to the clipboard.")),
+      () => setNotice(t("hooks.couldNotCopyToTheClipboard")),
     );
   return { copied, copy };
 }

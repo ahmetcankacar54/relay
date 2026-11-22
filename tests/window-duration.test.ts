@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatDuration, windowMinutes } from "../src/lib/window-duration";
+import { testT } from "./i18n";
 
-const tr = (text: string) => text;
-const en = (_: string, text: string) => text;
+const tr = testT("tr");
+const en = testT("en");
 
 test("a window lasts its capacity in Pro units at the tempo, to five minutes", () => {
   assert.equal(windowMinutes(1, 205), 30);

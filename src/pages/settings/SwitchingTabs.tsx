@@ -107,10 +107,7 @@ export function SwitchingTab() {
                 disabled={disabled}
                 onClick={requestAccessibility}
               >
-                {t(
-                  "macOS Erişilebilirlik iznini aç",
-                  "Open macOS Accessibility permission",
-                )}
+                {t("switchingTabs.openMacosAccessibilityPermission")}
               </Button>
             )}
             {continuation?.status === "reconciliation-required" && (
@@ -125,10 +122,7 @@ export function SwitchingTab() {
                       )
                     }
                   >
-                    {t(
-                      "Yarım kalan geçişi sürdür ve doğrula",
-                      "Continue and verify the interrupted switch",
-                    )}
+                    {t("switchingTabs.continueAndVerifyTheInterruptedSwitch")}
                   </Button>
                   <Button
                     variant="outline"
@@ -139,17 +133,11 @@ export function SwitchingTab() {
                       )
                     }
                   >
-                    {t(
-                      "Gönderilmemiş devam mesajını iptal et",
-                      "Cancel the unsent continuation",
-                    )}
+                    {t("switchingTabs.cancelTheUnsentContinuation")}
                   </Button>
                 </div>
                 <Note>
-                  {t(
-                    "İptal, Claude uygulamasındaki “Auto-continue when limits reset” seçeneğini yeniden açmaz. Bu seçeneği Claude uygulamasında kontrol et.",
-                    "Cancel does not turn “Auto-continue when limits reset” back on in the Claude app. Check this option in the Claude app.",
-                  )}
+                  {t("switchingTabs.cancelDoesNotTurnAutoContinue")}
                 </Note>
               </div>
             )}
@@ -157,17 +145,11 @@ export function SwitchingTab() {
         )}
         <PageSection
           slot="gecis-birlikte"
-          title={t("Geçişte birlikte değişenler", "What switches along")}
+          title={t("switchingTabs.whatSwitchesAlong")}
           info={
             browserSteps
-              ? t(
-                  "Claude uygulaması hesap değiştirince bunlar da değişebilir. Eklenti ve terminal isteğe bağlıdır.",
-                  "When the Claude app changes account, these can change too. The extension and the terminal are optional.",
-                )
-              : t(
-                  "Claude uygulaması hesap değiştirince Code geçmişin de gelebilir.",
-                  "When the Claude app changes account, your Code history can come along.",
-                )
+              ? t("switchingTabs.whenTheClaudeAppChangesAccount")
+              : t("switchingTabs.whenTheClaudeAppChangesAccount2")
           }
         >
           {/* One card, one row each: the name, where it stands now, its choice and its check. */}
@@ -200,15 +182,12 @@ export function SwitchingTab() {
           </Card>
         </PageSection>
         <PageSection
-          title={t("Limite yaklaşınca", "Near the limit")}
-          info={t(
-            "Relay limite yaklaşan hesabı işaretler ve istersen geçilecek hesabı önerir.",
-            "Relay marks accounts near their limit and, if you want, suggests one to switch to.",
-          )}
+          title={t("switchingTabs.nearTheLimit")}
+          info={t("switchingTabs.relayMarksAccountsNearTheirLimit")}
         >
         <Card id="gecis-oneri" padded>
           <SettingRow
-            label={t("Limite yaklaşan hesabı işaretle", "Mark accounts near their limit")}
+            label={t("switchingTabs.markAccountsNearTheirLimit")}
             htmlFor="usage-warnings"
           >
             <Switch
@@ -219,27 +198,18 @@ export function SwitchingTab() {
             />
           </SettingRow>
           <SettingRow
-            label={<span id="settings-threshold-label">{t("Uyarı eşiği", "Warning threshold")}</span>}
-            description={t(
-              "5 saatlik ve haftalık dönem için.",
-              "For the 5-hour and weekly periods.",
-            )}
+            label={<span id="settings-threshold-label">{t("switchingTabs.warningThreshold")}</span>}
+            description={t("switchingTabs.forThe5HourAndWeekly")}
           >
             <WarningThreshold labelledBy="settings-threshold-label" short />
           </SettingRow>
           <SettingRow
-            label={t("Geçilecek hesabı öner", "Suggest another account")}
+            label={t("switchingTabs.suggestAnotherAccount")}
             htmlFor="usage-suggestions"
             description={
               settings.usageWarnings
-                ? t(
-                    "Code geçmişini paylaşan ve iki limitinde de yer olan bir hesap önerir. Geçişi sen başlatırsın.",
-                    "Suggests an account with shared Code history and room in both limits. You start the switch.",
-                  )
-                : t(
-                    "Önce limite yaklaşan hesabı işaretlemeyi aç.",
-                    "First, turn on marking accounts near their limit.",
-                  )
+                ? t("switchingTabs.suggestsAnAccountWithSharedCode")
+                : t("switchingTabs.firstTurnOnMarkingAccountsNear")
             }
           >
             <Switch
@@ -265,13 +235,13 @@ function SidebarSections() {
     <div id="gecis-kenar" className={rowClass}>
       <SectionHeading
         icon={<ListTree />}
-        title={t("Kenar çubuğu bölümleri", "Sidebar sections")}
+        title={t("switchingTabs.sidebarSections")}
       />
       <SettingRow
         label={
           gap
             ? `${sidebarGapLine(gap, t)}. ${sidebarRecipeHint(gap, copiedId === gap.id, t)}`
-            : t("Açık hesapta eksik bölüm yok.", "The open account has all sections.")
+            : t("switchingTabs.theOpenAccountHasAllSections")
         }
       >
         {gap ? (
@@ -281,7 +251,7 @@ function SidebarSections() {
             disabled={sidebarActionKeys(gap.id).includes(relay.busy)}
             onClick={() => void copySidebarRecipeAction(relay, gap.id, () => setCopiedId(gap.id))}
           >
-            {t("Talimatı kopyala", "Copy recipe")}
+            {t("switchingTabs.copyRecipe")}
           </Button>
         ) : (
           <span />
@@ -304,11 +274,8 @@ function RescuedDrafts() {
   return (
     <div id="gecis-taslak" className={rowClass}>
       <SectionHeading
-        title={t("Kurtarılan taslaklar", "Rescued drafts")}
-        description={t(
-          "Geçişte, Claude uygulaması kapalıyken gönderilmemiş taslaklar kurtarılır. Buradan kopyalayıp yapıştır; Claude uygulamasına yeniden yazmak yalnızca macOS’ta.",
-          "At a switch, while the Claude app is closed, Relay rescues unsent drafts. Copy them here and paste; re-typing them into the Claude app is macOS only.",
-        )}
+        title={t("common.rescuedDrafts")}
+        description={t("switchingTabs.atASwitchWhileTheClaude")}
       />
       {drafts.map((draft) => {
         const running = [`draft-copy:${draft.id}`, `draft-dismiss:${draft.id}`].includes(
@@ -319,12 +286,12 @@ function RescuedDrafts() {
             key={draft.id}
             label={
               draft.newSession
-                ? t("Yeni oturum", "New session")
-                : draft.title.trim() || t("Adsız konuşma", "Untitled conversation")
+                ? t("switchingTabs.newSession")
+                : draft.title.trim() || t("switchingTabs.untitledConversation")
             }
             description={
               draft.state === "pending"
-                ? t("Bekliyor", "Waiting")
+                ? t("switchingTabs.waiting")
                 : draftReason(draft.reason, t, draft.newSession)
             }
           >
@@ -335,7 +302,7 @@ function RescuedDrafts() {
                 disabled={running}
                 onClick={() => void copyDraftAction(relay, draft.id)}
               >
-                {t("Kopyala", "Copy")}
+                {t("common.copy")}
               </Button>
               {draft.state === "needs-copy" && (
                 <Button
@@ -344,7 +311,7 @@ function RescuedDrafts() {
                   disabled={running}
                   onClick={() => void dismissDraftAction(relay, draft.id)}
                 >
-                  {t("Kapat", "Dismiss")}
+                  {t("common.dismiss")}
                 </Button>
               )}
             </span>
@@ -387,7 +354,7 @@ export function RefreshIntervalRow() {
   const { t } = useI18n();
   return (
     <SettingRow
-      label={t("Limitleri otomatik yenile", "Refresh limits automatically")}
+      label={t("switchingTabs.refreshLimitsAutomatically")}
       htmlFor="usage-interval"
     >
       <OptionSelect
@@ -395,10 +362,10 @@ export function RefreshIntervalRow() {
         value={String(relay.settings.usageRefreshMinutes)}
         disabled={disabled}
         options={[
-          { value: "0", label: t("Elle", "Manually") },
+          { value: "0", label: t("switchingTabs.manually") },
           ...[5, 15, 30].map((n) => ({
             value: String(n),
-            label: t(`${n} dakikada bir`, `Every ${n} min`),
+            label: t("switchingTabs.everyMin", { n }),
           })),
         ]}
         onChange={(v) =>

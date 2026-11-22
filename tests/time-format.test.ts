@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatReset, formatRelative } from "../src/lib/time";
+// Registers the real catalogs: the labels read in the language asked for.
+import "./i18n";
 const NOW = Date.parse("2026-10-14T09:10:00Z"); // 12:10 Istanbul
 const Z = "Europe/Istanbul";
 test("reset labels show clock and remaining time", () => {

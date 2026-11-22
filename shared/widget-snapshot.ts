@@ -1,9 +1,4 @@
-import {
-  formatChange,
-  formatCost,
-  formatTokens,
-  type NumberLanguage,
-} from "./number-format";
+import { formatChange, formatCost, formatTokens } from "./number-format";
 import { formatPercent, percentUsed } from "./percent";
 import type {
   TokenCounts,
@@ -17,6 +12,8 @@ import { desktopCliMismatch } from "./account-state";
 import { clockLocative, withDative } from "./tr-dative";
 import { relaySwitchLink } from "./relay-link";
 import { overviewAccounts } from "../src/data/selectors";
+import { FORMAT_LOCALE, type Locale } from "./i18n/locales";
+import { tFor, type T } from "./i18n/translate";
 
 /** The file's layout; the widget reads only this version. */
 export const WIDGET_SNAPSHOT_VERSION = 2;
@@ -165,6 +162,8 @@ export interface WidgetWeek {
 export interface WidgetSnapshot {
   version: 2;
   generatedAt: number;
+  /** The language every string below is in; the widget's own fallbacks follow it. */
+  locale: Locale;
   date: string;
   zone: string;
   /** "data", "empty" (no tokens today yet) or "scanning" (the first scan is running). */
@@ -232,7 +231,7 @@ export interface WidgetSnapshot {
 export interface WidgetSnapshotInput {
   today: TokenToday;
   progress: { complete: boolean; percent: number };
-  language: NumberLanguage;
+  language: Locale;
   zone: string;
   now: number;
   /** The token view's days (the last seven, ending today): per-account costs and the week. */
@@ -251,11 +250,10 @@ export interface WidgetSnapshotInput {
   hits?: number;
 }
 
-const locale = (language: NumberLanguage) =>
-  language === "tr" ? "tr-TR" : "en-GB";
+const locale = (language: Locale) => FORMAT_LOCALE[language];
 
 const clock = new Map<string, Intl.DateTimeFormat>();
-function timeOf(time: number, zone: string, language: NumberLanguage) {
+function timeOf(time: number, zone: string, language: Locale) {
   const key = `${language}:${zone}`;
   let f = clock.get(key);
   if (!f) {
@@ -271,7 +269,7 @@ function timeOf(time: number, zone: string, language: NumberLanguage) {
 }
 
 const weekdays = new Map<string, Intl.DateTimeFormat>();
-function weekdayOf(time: number, zone: string, language: NumberLanguage) {
+function weekdayOf(time: number, zone: string, language: Locale) {
   const key = `${language}:${zone}`;
   let f = weekdays.get(key);
   if (!f) {
@@ -284,7 +282,7 @@ function weekdayOf(time: number, zone: string, language: NumberLanguage) {
   return f.format(time).replace(/\.$/, "");
 }
 /** "Pzt" / "Mon" for a calendar date. */
-const dayLabel = (date: string, language: NumberLanguage) =>
+const dayLabel = (date: string, language: Locale) =>
   weekdayOf(Date.parse(`${date}T12:00:00Z`), "UTC", language);
 
 /** Time left until `at` as "h:mm" ("1:50", "0:07"); "" when past or unknown. */
@@ -338,7 +336,7 @@ export function buildWidgetSnapshot(
   input: WidgetSnapshotInput,
 ): WidgetSnapshot {
   const { today, progress, language, zone, now } = input;
-  const t = (tr: string, en: string) => (language === "tr" ? tr : en);
+  const t = tFor(language);
   const { totals } = today;
   const cache = totals.cacheWrite + totals.cacheRead;
   const total = totals.input + totals.output + cache;
@@ -353,7 +351,7 @@ export function buildWidgetSnapshot(
   }).format(progress.percent / 100);
   const money = (value: number, estimated?: boolean) =>
     `${estimated ? "≈" : ""}${formatCost(value, language)}`;
-  const tokenWord = t("token", "tokens");
+  const tokenWord = t("widgetSnapshot.tokens");
   const costText = money(cost, totals.costEstimated);
   const costTokens = `${costText} · ${formatTokens(total, language)} ${tokenWord}`;
 
@@ -365,6 +363,7 @@ export function buildWidgetSnapshot(
     zone,
     state,
     mood: widgetMood(state, accountsPart.active),
+    locale: language,
     totals: { input: totals.input, output: totals.output, cache, total },
     cost,
     change: today.change,
@@ -372,9 +371,9 @@ export function buildWidgetSnapshot(
     yesterdayAverage: today.yesterdayAverage,
     ...accountsPart,
     text: {
-      title: t("Bugün", "Today"),
-      subtitle: t("CLAUDE CODE · TOKEN", "CLAUDE CODE · TOKENS"),
-      rows: [t("Girdi", "Input"), t("Çıktı", "Output"), t("Önbellek", "Cache")],
+      title: t("common.today"),
+      subtitle: t("widgetSnapshot.claudeCodeTokens"),
+      rows: [t("widgetSnapshot.input"), t("widgetSnapshot.output"), t("common.cache")],
       input: formatTokens(totals.input, language),
       output: formatTokens(totals.output, language),
       cache: formatTokens(cache, language),
@@ -383,42 +382,35 @@ export function buildWidgetSnapshot(
       change: today.change === null ? "" : formatChange(today.change, language),
       status:
         state === "scanning"
-          ? t(`Relay tarıyor… ${percent}`, `Scan: ${percent}`)
+          ? t("widgetSnapshot.scan", { percent })
           : state === "empty"
-            ? t("Bugün henüz token yok", "No tokens yet today")
+            ? t("widgetSnapshot.noTokensYetToday")
             : "",
-      empty: t("Bugün henüz token yok", "No tokens yet today"),
-      stale: t(
-        `Son güncelleme ${timeOf(now, zone, language)}`,
-        `Last updated ${timeOf(now, zone, language)}`,
-      ),
+      empty: t("widgetSnapshot.noTokensYetToday"),
+      stale: t("widgetSnapshot.lastUpdated", { timeOf: timeOf(now, zone, language) }),
       costTokens,
       tokens: `${formatTokens(total, language)} ${tokenWord}`,
-      apiTitle: t("Bugün · API karşılığı", "Today · API value"),
-      others: t("Diğer hesaplar", "Other accounts"),
-      todayWord: t("bugün", "today"),
-      inClaude: t("Claude’da açık", "Open in Claude"),
-      suggested: t("önerilen", "suggested"),
-      todayLine: t(`Bugün toplam ${costTokens}`, `Total today ${costTokens}`),
-      allToday: t("Bugün · tüm hesaplar", "Today · all accounts"),
-      switch: t("Geç", "Switch"),
-      left: t("kaldı", "left"),
-      noActive: t(
-        "Kayıtlı hesap açık değil",
-        "No saved account is open",
-      ),
+      apiTitle: t("widgetSnapshot.todayApiValue"),
+      others: t("widgetSnapshot.otherAccounts"),
+      todayWord: t("widgetSnapshot.today"),
+      inClaude: t("widgetSnapshot.openInClaude"),
+      suggested: t("widgetSnapshot.suggested"),
+      todayLine: t("widgetSnapshot.totalToday", { costTokens }),
+      allToday: t("widgetSnapshot.todayAllAccounts"),
+      switch: t("common.switch"),
+      left: t("widgetSnapshot.left"),
+      noActive: t("widgetSnapshot.noSavedAccountIsOpen"),
     },
   };
 }
 
 type Money = (value: number, estimated?: boolean) => string;
-type Say = (tr: string, en: string) => string;
 
 /** The accounts, the stacked bars' series, today's split and the week. */
 function buildAccounts(
   input: WidgetSnapshotInput,
   money: Money,
-  t: Say,
+  t: T,
 ): Pick<WidgetSnapshot, "active" | "accounts" | "series" | "split" | "week"> {
   const { limits, language, zone, now, today } = input;
   const days = input.days?.filter((d) => d.date <= today.date) ?? [];
@@ -450,7 +442,7 @@ function buildAccounts(
   if (restSpent)
     series.push({
       key: WIDGET_REST_KEY,
-      name: t("Diğer", "Other"),
+      name: t("widgetSnapshot.other"),
       color: WIDGET_SERIES,
     });
   const seriesOf = (key: string) =>
@@ -500,7 +492,7 @@ function buildAccounts(
         weekShort:
           known.week === undefined
             ? ""
-            : t(`hafta ${pct(known.week)}`, `week ${pct(known.week)}`),
+            : t("widgetSnapshot.week", { pct: pct(known.week) }),
       },
     };
   };
@@ -517,14 +509,14 @@ function buildAccounts(
           week === undefined
             ? ""
             : text.weekReset
-              ? t(
-                  // The clock takes the locative: "Cmt 21:30’da yenilenir".
-                  `Hafta ${pct(week)} · ${text.weekReset.replace(/\d{1,2}:\d{2}$/, (c) => clockLocative(c))} yenilenir`,
-                  `Week ${pct(week)} · renews ${text.weekReset}`,
-                )
-              : t(`Hafta ${pct(week)}`, `Week ${pct(week)}`),
-        costChip: t(`${text.cost} bugün`, `${text.cost} today`),
-        tokensChip: `${text.tokens} ${t("token", "tokens")}`,
+              ? t("widgetSnapshot.weekRenews", {
+                  pct: pct(week),
+                  weekReset: text.weekReset,
+                  weekResetLocative: text.weekReset.replace(/\d{1,2}:\d{2}$/, (c) => clockLocative(c)),
+                })
+              : t("widgetSnapshot.week2", { pct: pct(week) }),
+        costChip: t("widgetSnapshot.today2", { textCost: text.cost }),
+        tokensChip: `${text.tokens} ${t("widgetSnapshot.tokens")}`,
       },
     };
   }
@@ -572,10 +564,7 @@ function buildAccounts(
         ...(switchable ? { link: relaySwitchLink(row.account.id) } : {}),
         text: {
           ...base.text,
-          switchTo: t(
-            `${withDative(row.account.name)} geç${figure}`,
-            `Switch to ${row.account.name}${figure}`,
-          ),
+          switchTo: t("widgetSnapshot.switchTo", { accountName: row.account.name, figure, accountNameDative: withDative(row.account.name) }),
         },
       });
     }
@@ -636,25 +625,19 @@ function buildAccounts(
       average,
       ...(input.hits !== undefined ? { hits: input.hits } : {}),
       text: {
-        title: t("Son 7 gün", "Last 7 days"),
+        title: t("widgetSnapshot.last7Days"),
         cost: money(cost),
-        tokens: `${formatTokens(tokens, language)} ${t("token", "tokens")}`,
-        average: t(`Günde ${money(average)}`, `${money(average)} a day`),
+        tokens: `${formatTokens(tokens, language)} ${t("widgetSnapshot.tokens")}`,
+        average: t("widgetSnapshot.aDay", { money: money(average) }),
         busiest: busiest
-          ? t(
-              `En yoğun ${busiest.label} · ${money(busiest.cost)}`,
-              `Busiest ${busiest.label} · ${money(busiest.cost)}`,
-            )
+          ? t("widgetSnapshot.busiest", { busiestLabel: busiest.label, money: money(busiest.cost) })
           : "",
         hits:
           input.hits === undefined
             ? ""
             : input.hits === 0
-              ? t("Limit hiç dolmadı", "No limit reached")
-              : t(
-                  `Limit ${input.hits} kez doldu`,
-                  `Limit reached ${input.hits}×`,
-                ),
+              ? t("widgetSnapshot.noLimitReached")
+              : t("widgetSnapshot.limitReached", { inputHits: input.hits }),
         activeWeek,
       },
     };

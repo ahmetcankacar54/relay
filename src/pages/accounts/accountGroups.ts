@@ -2,8 +2,8 @@ import type { Account, AccountProvider, AccountUsage } from "../../../shared/typ
 import { limitColumns } from "../../../shared/quota-windows";
 import { boardOrder } from "@/lib/limit-standing";
 import { accountProvider, groupName, providerShortLabel } from "./accountLabels";
+import type { T } from "../../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /*
  * The Accounts list's sections: by provider (with work groups below a provider whose accounts span
@@ -49,9 +49,9 @@ function workGroups(accounts: Account[], language: string, t: T): { key: WorkGro
       accounts: own,
       label:
         key === "personal"
-          ? t("Kişisel", "Personal")
+          ? t("common.personal")
           : key === "separate"
-            ? t("Ayrı çalışma alanları", "Separate workspaces")
+            ? t("accountGroups.separateWorkspaces")
             : groupName(own[0], t),
     }))
     .sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) === 1 ? a.label.localeCompare(b.label, language) : 0));

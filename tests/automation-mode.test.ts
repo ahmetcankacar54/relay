@@ -6,6 +6,7 @@ import {
   automationModeWrites,
 } from "../shared/automation-mode";
 import { withDative } from "../shared/tr-dative";
+import { testT } from "./i18n";
 
 test("the mode comes from the fleet first, then prepare-on-quit", () => {
   assert.equal(
@@ -44,8 +45,11 @@ test("every mode has a Turkish and English label and description", () => {
     AUTOMATION_MODES.map((mode) => mode.value),
     ["off", "after-exit", "quota"],
   );
+  const tr = testT("tr");
+  const en = testT("en");
+  const both = (id: (typeof AUTOMATION_MODES)[number]["label"]) => [tr(id), en(id)];
   assert.deepEqual(
-    AUTOMATION_MODES.map((mode) => mode.label),
+    AUTOMATION_MODES.map((mode) => both(mode.label)),
     [
       ["Kapalı", "Off"],
       ["Claude uygulaması kapanınca", "When the Claude app quits"],
@@ -53,15 +57,15 @@ test("every mode has a Turkish and English label and description", () => {
     ],
   );
   const [off, afterExit, quota] = AUTOMATION_MODES;
-  assert.deepEqual(off.description, [
+  assert.deepEqual(both(off.description), [
     "Relay hesabı kendiliğinden değiştirmez.",
     "Relay does not switch accounts automatically.",
   ]);
-  assert.deepEqual(afterExit.description, [
+  assert.deepEqual(both(afterExit.description), [
     "Limit dolunca, kapattığında sıradaki hesabı hazırlar.",
     "At the limit, prepares the next account when you quit.",
   ]);
-  assert.deepEqual(quota.description, [
+  assert.deepEqual(both(quota.description), [
     "Sıradaki hesapla açar, duran konuşmaları sürdürür.",
     "Opens the next account and continues stopped conversations.",
   ]);

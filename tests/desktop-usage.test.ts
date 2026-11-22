@@ -21,6 +21,7 @@ import { readsThroughApp, cliNeedsReconnect } from "../shared/account-state";
 import { usageIdentity, historyIdentity } from "../shared/usage-statistics";
 import { usageSignInStatus } from "../src/lib/account-health";
 import type { Account } from "../shared/types";
+import { testT } from "./i18n";
 
 const PASSWORD = "fixture-safe-storage-password";
 const KEY = cookieKey(PASSWORD);
@@ -278,7 +279,7 @@ test("a failed read through the Claude app keeps its source, so the app knows wh
 });
 
 test("the account's status names the Claude app as its usage source", () => {
-  const t = (_tr: string, en: string) => en;
+  const t = testT("en");
   const ready = { accountId: "a", status: "ready" as const, stale: false, source: "desktop" as const, checkedAt: "2026-11-07T12:00:00Z" };
   assert.equal(readsThroughApp(account(), ready), true);
   assert.equal(cliNeedsReconnect(account(), ready), false);

@@ -146,11 +146,6 @@ export const BROWSERS: Record<
 export function browserApps(platform?: string): readonly BrowserApp[] {
   return platform === "linux" ? BROWSER_APPS.filter((app) => !!BROWSERS[app].linux) : BROWSER_APPS;
 }
-/** The browsers Relay looks in, by name: "Chrome, Brave, … and Comet". */
-export function browserNames(and: string, apps: readonly BrowserApp[] = BROWSER_APPS): string {
-  const names = apps.map((app) => BROWSERS[app].name);
-  return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
-}
 /** A profile folder: "Default", "Profile 1" and the like. */
 export const PROFILE_FOLDER = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
 /** Profiles the browser keeps for itself; never a user's. */

@@ -8,9 +8,13 @@ import {
   modelName,
   pandaLines,
   pickBook,
-  readingTime,
+  readingTime as readingTimeIn,
 } from "../src/pages/usage/panda-facts";
 import type { TokenCounts, TokenRow, TokenUsageView } from "../shared/token-usage-view";
+import { testT } from "./i18n";
+
+const tr = testT("tr");
+const en = testT("en");
 
 const counts = (input: number, output = 0, cacheWrite = 0, cacheRead = 0): TokenCounts => ({
   input, output, cacheWrite, cacheRead, responses: 1,
@@ -42,7 +46,12 @@ function viewOf(byDate: Record<string, ByRow>, extra: Partial<TokenUsageView> = 
 }
 const names = { a: "Kişisel", b: "Vertex" };
 const TODAY = "2026-10-14";
-const lines = (view: TokenUsageView, date: string) => pandaLines({ view, date, accountNames: names, today: TODAY });
+/** The day's lines in Turkish and English side by side. */
+const lines = (view: TokenUsageView, date: string) => {
+  const input = { view, date, accountNames: names, today: TODAY };
+  const english = pandaLines(input, en, "en");
+  return pandaLines(input, tr, "tr").map((l, i) => ({ key: l.key, tr: l.text, en: english[i].text }));
+};
 const keys = (view: TokenUsageView, date: string) => lines(view, date).map((l) => l.key);
 
 test("shares under 10% keep one decimal, larger ones are whole, in each language's form", () => {
@@ -59,22 +68,23 @@ test("shares under 10% keep one decimal, larger ones are whole, in each language
 
 test("a book is one the value is 1 to 1,000 times, varied by the seed, else the largest under it", () => {
   // 1.3 million tokens is at least once every book up to Shakespeare and at most 1,000 times the Little Prince.
-  const picks = new Set(Array.from({ length: 40 }, (_, i) => pickBook(1_300_000, `seed ${i}`)?.en));
+  const picks = new Set(Array.from({ length: 40 }, (_, i) => pickBook(1_300_000, `seed ${i}`)?.name));
   assert.ok(picks.size > 3);
   for (const pick of picks) {
-    const book = BOOKS.find((b) => b.en === pick)!;
+    const book = BOOKS.find((b) => b.name === pick)!;
     assert.ok(1_300_000 >= book.tokens && 1_300_000 / book.tokens <= 1_000, pick);
   }
-  assert.equal(pickBook(1_300_000, "same")?.en, pickBook(1_300_000, "same")?.en);
+  assert.equal(pickBook(1_300_000, "same")?.name, pickBook(1_300_000, "same")?.name);
   // 100 billion is over 1,000 times every book: the largest under it, Wikipedia.
-  assert.equal(pickBook(100_000_000_000, "x")?.en, "English Wikipedia");
+  assert.equal(en(pickBook(100_000_000_000, "x")!.name), "English Wikipedia");
   assert.equal(pickBook(21_999, "x"), undefined);
-  assert.equal(pickBook(22_000, "x")?.tr, "Küçük Prens");
+  assert.equal(tr(pickBook(22_000, "x")!.name), "Küçük Prens");
 });
 
 test("reading time grows from hours to days, months and years", () => {
   // 1.3 tokens a word, 238 words a minute.
   const tokensFor = (minutes: number) => minutes * 238 * 1.3;
+  const readingTime = (tokens: number) => ({ tr: readingTimeIn(tokens, tr), en: readingTimeIn(tokens, en) });
   assert.deepEqual(readingTime(tokensFor(0.2)), { tr: "1 dakika", en: "1 minute" });
   assert.deepEqual(readingTime(tokensFor(10)), { tr: "10 dakika", en: "10 minutes" });
   assert.deepEqual(readingTime(tokensFor(70)), { tr: "1 saat", en: "1 hour" });
@@ -130,13 +140,13 @@ test("a day says what Claude wrote, in pages and a book, and what it read, in re
 });
 
 test("between once and twice a book the panda says about one; above it, how many times", () => {
-  const lotr = BOOKS.find((b) => b.en === "The Lord of the Rings")!;
+  const lotr = BOOKS.find((b) => en(b.name) === "The Lord of the Rings")!;
   const wrote = lines(viewOf({ [TODAY]: { a: cell(counts(0, lotr.tokens * 1.5)) } }), TODAY)
     .find((l) => l.key === "wrote")!;
-  const named = [...BOOKS].reverse().find((b) => wrote.tr.includes(b.tr))!;
+  const named = [...BOOKS].reverse().find((b) => wrote.tr.includes(tr(b.name)))!;
   const times = (lotr.tokens * 1.5) / named.tokens;
-  if (times < 2) assert.match(wrote.tr, new RegExp(`; aşağı yukarı bir ${named.tr} kadar\\.$`));
-  else assert.match(wrote.tr, new RegExp(`; ≈ [\\d,]+ ${named.tr} kadar\\.$`));
+  if (times < 2) assert.match(wrote.tr, new RegExp(`; aşağı yukarı bir ${tr(named.name)} kadar\\.$`));
+  else assert.match(wrote.tr, new RegExp(`; ≈ [\\d,]+ ${tr(named.name)} kadar\\.$`));
 });
 
 test("a day is placed among the range's active days: top three, busy, ordinary or quiet", () => {

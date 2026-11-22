@@ -22,6 +22,7 @@ import {
   startupLine,
   accountUuids,
 } from "@/lib/extension-ui";
+import type { T } from "../../shared/i18n/translate";
 
 /** While the extension waits to be reconnected, Relay looks this often whether it signed in. */
 const RECONNECT_CHECK_MS = 5_000;
@@ -30,22 +31,16 @@ const RECONNECT_CHECK_MS = 5_000;
 function pairLine(
   status: ExtensionStatus,
   accounts: Parameters<typeof pairedAccounts>[1],
-  t: (tr: string, en: string) => string,
+  t: T,
 ): string {
   const { paired, half } = pairedAccounts(status, accounts);
   const list = (names: string[]) => names.join(", ");
   const parts = [
     paired.length
-      ? t(
-          `Eklenti girişi ve claude.ai oturumu kayıtlı hesaplar: ${list(paired)}.`,
-          `Extension sign-in and claude.ai login saved: ${list(paired)}.`,
-        )
-      : t("İkisi de kayıtlı olan bir hesap henüz yok.", "No account has both saved yet."),
+      ? t("extensionPreference.extensionSignInAndClaudeAi", { list: list(paired) })
+      : t("extensionPreference.noAccountHasBothSavedYet"),
     half.length
-      ? t(
-          `Kaydı eksik olanlar: ${list(half)}. Her biri için o hesapla claude.ai’ye gir, eklentiyi aç, sonra “Kontrol et”e bas.`,
-          `One of the two is missing: ${list(half)}. For each one, sign in to claude.ai with that account and open the extension. Then select “Check”.`,
-        )
+      ? t("extensionPreference.oneOfTheTwoIsMissing", { list: list(half) })
       : "",
   ];
   return parts.filter(Boolean).join(" ");
@@ -98,15 +93,12 @@ export function ExtensionPreference({
     : current.state === "signed-in"
       ? on
         ? current.expired
-          ? t(
-              `Eklenti ${on.name} hesabında ama girişi düşmüş; Claude’un tarayıcı araçları çalışmaz.`,
-              `The extension is on ${on.name}, but its sign-in expired. Claude’s browser tools do not work.`,
-            )
-          : t(`Eklenti şu an ${on.name} hesabında.`, `The extension is on ${on.name} now.`)
-        : t("Eklenti Relay’de olmayan bir hesapta.", "The extension is on an account Relay does not have.")
+          ? t("extensionPreference.theExtensionIsOnButIts", { onName: on.name })
+          : t("extensionPreference.theExtensionIsOnNow", { onName: on.name })
+        : t("extensionPreference.theExtensionIsOnAnAccount")
       : current.state === "signed-out"
-        ? t("Eklentide giriş yok.", "The extension is signed out.")
-        : t("Eklentinin girişi okunamadı.", "Relay cannot read the extension sign-in.");
+        ? t("extensionPreference.theExtensionIsSignedOut")
+        : t("extensionPreference.relayCannotReadTheExtensionSign");
   const setting = settings.claudeExtension ?? DEFAULT_EXTENSION;
   const disabled = !!busy || !!desktop?.busy;
   const update = (next: typeof setting) =>
@@ -128,18 +120,18 @@ export function ExtensionPreference({
       ? modeSentence("off", t)
       : !status.target
         ? instanceLine(status, t, platform)
-        : (currentLine ?? t("Eklenti kontrol ediliyor…", "Extension check in progress…"));
+        : (currentLine ?? t("extensionPreference.extensionCheckInProgress"));
   return (
     <div className="grid gap-1">
       <SettingRow
-        label={<span className="font-medium">{t("Claude tarayıcı eklentisi", "Claude browser extension")}</span>}
+        label={<span className="font-medium">{t("extensionPreference.claudeBrowserExtension")}</span>}
         htmlFor="extension-mode"
         description={
           !status.instances.length && status.denied?.length ? (
             <>
               {statusLine}{" "}
               <ExternalLink href={EXTERNAL_LINKS.fullDiskAccess}>
-                {t("Tam Disk Erişimi’ni aç", "Open Full Disk Access")}
+                {t("extensionPreference.openFullDiskAccess")}
               </ExternalLink>
             </>
           ) : (
@@ -158,7 +150,7 @@ export function ExtensionPreference({
           />
           {follows && (
             <Button variant="outline" disabled={checking} onClick={() => void check()}>
-              {t("Kontrol et", "Check")}
+              {t("common.check")}
             </Button>
           )}
         </span>
@@ -171,10 +163,7 @@ export function ExtensionPreference({
               <span>{reconnect.why}</span>
               {reconnect.canSync && (
                 <span>
-                  {t(
-                    "Önce Ayrıntılar’daki “Şimdi eşitle”yi dene. Olmazsa:",
-                    "First, try “Sync now” under Details. If that does not help:",
-                  )}
+                  {t("extensionPreference.firstTrySyncNowUnderDetails")}
                 </span>
               )}
               <ol className="list-decimal pl-4">
@@ -190,32 +179,26 @@ export function ExtensionPreference({
             disabled={disabled}
             onClick={() => void action("extension-web", () => api.openClaudeWeb())}
           >
-            {t("claude.ai’yi aç", "Open claude.ai")}
+            {t("extensionPreference.openClaudeAi")}
           </Button>
         </SettingRow>
       )}
       {leftBehind && (
         <SettingRow
-          label={t(
-            `Claude’un tarayıcı araçları ${active!.name} ile çalışmaz`,
-            `Claude’s browser tools do not work with ${active!.name}`,
-          )}
-          description={t(
-            "Eklenti Claude uygulamasıyla aynı hesapta olmalı. Relay her geçişte onu da taşıyabilir.",
-            "The extension must be on the same account as the Claude app. Relay can move it at each switch.",
-          )}
+          label={t("extensionPreference.claudeSBrowserToolsDoNot", { name: active!.name })}
+          description={t("extensionPreference.theExtensionMustBeOnThe")}
         >
           <Button
             variant="outline"
             disabled={disabled}
             onClick={() => update({ ...setting, mode: "restart" })}
           >
-            {t("Her geçişte taşı", "Move it at each switch")}
+            {t("extensionPreference.moveItAtEachSwitch")}
           </Button>
         </SettingRow>
       )}
       <Disclosure
-        title={t("Ayrıntılar", "Details")}
+        title={t("extensionPreference.details")}
         // A profile has to be chosen before anything else works, so the section opens for it; a
         // reconnect that Sync now may do opens it for that button.
         defaultOpen={openDetails || choose || !!reconnect?.canSync}
@@ -224,18 +207,12 @@ export function ExtensionPreference({
         {setting.mode !== "off" && <Note>{modeSentence(setting.mode, t, platform)}</Note>}
         {status.instances.length > 1 && (
           <SettingRow
-            label={t("Eklentinin tarayıcı profili", "Extension browser profile")}
+            label={t("extensionPreference.extensionBrowserProfile")}
             htmlFor="extension-instance"
             description={
               status.picked === "recent"
-                ? t(
-                    "Profil seçilmedi; en son kullanılan profil izleniyor. Relay yalnızca bu profildeki girişi yönetir.",
-                    "No profile selected, so Relay uses the last used one. Relay manages only the sign-in in this profile.",
-                  )
-                : t(
-                    "Relay yalnızca bu profildeki girişi yönetir.",
-                    "Relay manages only the sign-in in this profile.",
-                  )
+                ? t("extensionPreference.noProfileSelectedSoRelayUses")
+                : t("extensionPreference.relayManagesOnlyTheSignIn")
             }
           >
             <OptionSelect
@@ -243,7 +220,7 @@ export function ExtensionPreference({
               // A select item's value is never "": "none" stands for nothing chosen yet.
               value={status.target ? instanceValue(status.target) : "none"}
               options={[
-                ...(status.target ? [] : [{ value: "none", label: t("Profil seç", "Select a profile") }]),
+                ...(status.target ? [] : [{ value: "none", label: t("extensionPreference.selectAProfile") }]),
                 ...status.instances.map((i) => ({
                   value: instanceValue(i),
                   label: instanceLabel(i),
@@ -262,10 +239,7 @@ export function ExtensionPreference({
           label={instanceLine(status, t, platform)}
           description={
             confirming && status.target
-              ? t(
-                  `${BROWSERS[status.target.app].name} açıksa kapanıp sekmeleriyle yeniden açılır. Eklenti ve claude.ai oturumu Claude uygulamasının hesabına geçer.${platform === "linux" ? " Linux’ta “sayfadan ayrıl” ya da indirme uyarısı gösterilmeyebilir." : ""}`,
-                  `If ${BROWSERS[status.target.app].name} is open, it closes and opens again with its tabs. The extension and the claude.ai login move to the account of the Claude app.${platform === "linux" ? " On Linux a “leave this page” or downloads prompt may not be shown." : ""}`,
-                )
+              ? t("extensionPreference.ifIsOpenItClosesAnd", { name: BROWSERS[status.target.app].name, platform: platform ?? "" })
               : startup
           }
         >
@@ -280,16 +254,16 @@ export function ExtensionPreference({
                     const outcome = await api.syncExtension();
                     setResult(
                       extensionLine(outcome, t) ??
-                        t("Eklentide değiştirilecek bir şey yok.", "Nothing to change in the extension."),
+                        t("extensionPreference.nothingToChangeInTheExtension"),
                     );
                     void reload();
                   })
                 }
               >
-                {t("Evet, eşitle", "Yes, sync")}
+                {t("extensionPreference.yesSync")}
               </Button>
               <Button variant="ghost" onClick={() => setConfirming(false)}>
-                {t("Vazgeç", "Cancel")}
+                {t("common.cancel")}
               </Button>
             </span>
           ) : (
@@ -298,13 +272,13 @@ export function ExtensionPreference({
               disabled={disabled || setting.mode === "off" || !status.target}
               onClick={() => setConfirming(true)}
             >
-              {t("Şimdi eşitle", "Sync now")}
+              {t("extensionPreference.syncNow")}
             </Button>
           )}
         </SettingRow>
         {follows && (
           <SettingRow
-            label={t("Kayıtlı hesaplar", "Saved accounts")}
+            label={t("extensionPreference.savedAccounts")}
             description={pairLine(status, accounts, t)}
           >
             <span />
@@ -312,10 +286,7 @@ export function ExtensionPreference({
         )}
         {follows && (
           <Note>
-            {t(
-              "Eklentiye bir hesapla giriş yaptıktan sonra “Kontrol et”e bas; o hesap bağlanır. Tarayıcı kapanmaz.",
-              "After you sign in to the extension, select “Check” to link that account. The browser stays open.",
-            )}
+            {t("extensionPreference.afterYouSignInToThe")}
           </Note>
         )}
         {status.last && <Note>{extensionLine(status.last, t) ?? ""}</Note>}

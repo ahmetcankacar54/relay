@@ -27,6 +27,7 @@ import {
 import { ElectronUpdateDriver, type ElectronUpdater } from "../electron/core/win-linux-update";
 import type { UpdateState } from "../shared/types";
 import { localizeError } from "../shared/error-text";
+import "./i18n";
 
 const temp = (t: any) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-update-"));

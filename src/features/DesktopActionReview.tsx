@@ -5,6 +5,7 @@ import { ArrowLeftRight, LoaderCircle, X } from "lucide-react";
 import { RefreshIcon } from "@/components/icons";
 import type { Account } from "../../shared/types";
 import { macWording, usePlatform } from "@/data/platform";
+import type { MessageId, T } from "../../shared/i18n/translate";
 
 export type DesktopActionKind =
   | "switch"
@@ -24,16 +25,10 @@ export interface DesktopActionRequest {
  * asks again: said wherever a sign-in is saved, and on a switch, which unseals the saved one
  * (most likely the first use after an update). On Linux the desktop's keyring asks instead.
  */
-export const keychainHint = (platform?: string): readonly [string, string] =>
+export const keychainHint = (platform?: string): MessageId =>
   macWording(platform)
-    ? [
-        "macOS Mac parolanı isterse (Relay Safe Storage) “Her Zaman İzin Ver”i seç.",
-        "If macOS asks for your Mac password (Relay Safe Storage), select “Always Allow”.",
-      ]
-    : [
-        "Anahtar deposu (KWallet ya da Secret Service) Relay için izin ya da parola isterse izin ver.",
-        "If your keyring (KWallet or Secret Service) asks to let Relay in or for its password, allow it.",
-      ];
+    ? "desktopActionReview.ifMacosAsksForYourMac"
+    : "desktopActionReview.ifYourKeyringKwalletOrSecret";
 
 export function DesktopActionReview({
   account,
@@ -51,7 +46,7 @@ export function DesktopActionReview({
   active?: Account;
   kind: DesktopActionKind;
   busy: boolean;
-  t: (tr: string, en: string) => string;
+  t: T;
   confirm: () => void;
   cancel: () => void;
   historyAccounts?: Account[];
@@ -64,38 +59,26 @@ export function DesktopActionReview({
   const hint = keychainHint(usePlatform());
   const title =
     kind === "history"
-      ? t("Ortak Code geçmişini birleştir", "Merge shared Code history")
+      ? t("desktopActionReview.mergeSharedCodeHistory")
       : kind === "recover"
-        ? t("Yedeği geri yükle", "Restore backup")
+        ? t("desktopActionReview.restoreBackup")
         : kind === "cancel"
-          ? t(
-              "Girişi iptal et ve önceki hesaba dön",
-              "Cancel sign-in and return to the previous account",
-            )
+          ? t("desktopActionReview.cancelSignInAndReturnTo")
           : kind === "switch"
-            ? t("Claude uygulamasında başka hesaba geç", "Switch the Claude app to another account")
+            ? t("desktopActionReview.switchTheClaudeAppToAnother")
             : kind === "capture"
-              ? t(
-                  "Claude uygulamasında açık hesabı kaydet",
-                  "Save the account open in the Claude app",
-                )
-              : t(
-                  "Claude uygulamasına giriş yap",
-                  "Sign in to the Claude app",
-                );
+              ? t("desktopActionReview.saveTheAccountOpenInThe")
+              : t("common.signInToTheClaudeApp");
   const progress =
     kind === "switch"
-      ? t(`${account?.name} hesabına geçiliyor`, `Relay switches to ${account?.name}`)
+      ? t("desktopActionReview.relaySwitchesTo", { accountName: account?.name })
       : kind === "history"
-        ? t("Ortak geçmiş birleştiriliyor", "Relay merges the shared history")
+        ? t("desktopActionReview.relayMergesTheSharedHistory")
         : kind === "cancel" || kind === "recover"
-          ? t("Yedek geri yükleniyor", "Relay restores the backup")
+          ? t("desktopActionReview.relayRestoresTheBackup")
           : kind === "capture"
-            ? t("Açık hesap kaydediliyor", "Relay saves the open account")
-            : t(
-                "Claude uygulamasında giriş ekranı açılıyor",
-                "The Claude app opens its sign-in screen",
-              );
+            ? t("desktopActionReview.relaySavesTheOpenAccount")
+            : t("desktopActionReview.theClaudeAppOpensItsSign");
   return (
     <section
       className="grid gap-3"
@@ -109,7 +92,7 @@ export function DesktopActionReview({
           variant="ghost"
           size="icon"
           disabled={busy}
-          aria-label={t("İşlemi iptal et", "Cancel action")}
+          aria-label={t("desktopActionReview.cancelAction")}
           onClick={cancel}
         >
           <X />
@@ -117,15 +100,12 @@ export function DesktopActionReview({
       </div>
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
         <span className="text-muted-foreground">
-          {active?.name ?? t("Açık hesap", "Current account")}
+          {active?.name ?? t("desktopActionReview.currentAccount")}
         </span>
         <ArrowLeftRight size={15} className="shrink-0 text-muted-foreground" />
         <strong className="font-semibold">
           {kind === "cancel" || kind === "recover"
-            ? t(
-                "Önceki Claude uygulaması girişi",
-                "Previous Claude app sign-in",
-              )
+            ? t("desktopActionReview.previousClaudeAppSignIn")
             : account?.name}
         </strong>
       </div>
@@ -134,36 +114,21 @@ export function DesktopActionReview({
           <Panda scene="travel" size={110} />
           <p className="text-sm font-semibold">{progress}</p>
           <p className="text-xs text-muted-foreground">
-            {t("Claude uygulaması kapanıp yeniden açılıyor…", "The Claude app restarts…")}
+            {t("desktopActionReview.theClaudeAppRestarts")}
           </p>
         </div>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
             {kind === "history"
-              ? t(
-                  "Seçilen hesapların yerel Code oturumları ve projeleri açık hesapla birleştirilir. Claude uygulaması yeniden başlar; hesap değişmez.",
-                  "Relay merges the local Code sessions and projects of the selected accounts into the current account. The Claude app restarts. The account does not change.",
-                )
+              ? t("desktopActionReview.relayMergesTheLocalCodeSessions")
               : kind === "cancel" || kind === "recover"
-                ? t(
-                    "Önceki Claude uygulaması girişi yedekten geri yüklenir. Claude uygulaması yeniden başlar; açık işler durabilir.",
-                    "Relay restores your previous Claude app sign-in from the backup. The Claude app restarts, and active work can stop.",
-                  )
+                ? t("desktopActionReview.relayRestoresYourPreviousClaudeApp")
                 : kind === "switch"
-                  ? t(
-                      "Claude uygulaması bu hesapla yeniden başlar. Açık yanıtlar ve arka plan görevleri durabilir.",
-                      "The Claude app restarts with this account. Active responses and background tasks can stop.",
-                    )
+                  ? t("desktopActionReview.theClaudeAppRestartsWithThis")
                   : kind === "capture"
-                    ? t(
-                        "Claude uygulamasında açık hesap bu profile kaydedilir. Claude uygulaması yeniden başlar.",
-                        "Relay saves the account open in the Claude app to this profile. The Claude app restarts.",
-                      )
-                    : t(
-                        "Claude uygulaması giriş ekranıyla yeniden başlar. Bu profilin hesabıyla giriş yap, sonra Code’u aç. Relay girişi kaydeder ve Claude uygulamasını bir kez daha yeniden başlatır.",
-                        "The Claude app restarts on its sign-in screen. Sign in with this profile’s account. Then open Code. Relay saves the sign-in and restarts the Claude app again.",
-                      )}
+                    ? t("desktopActionReview.relaySavesTheAccountOpenIn")
+                    : t("desktopActionReview.theClaudeAppRestartsOnIts")}
           </p>
           {kind === "switch" && fullLimit && (
             <p
@@ -178,14 +143,14 @@ export function DesktopActionReview({
             kind === "reconnect" ||
             kind === "switch") && (
             <p className="text-xs text-muted-foreground">
-              {t(...hint)}
+              {t(hint)}
             </p>
           )}
           {(kind === "history" || kind === "switch") &&
             historyAccounts.length > 0 && (
               <p className="text-sm">
                 <strong>
-                  {t("Geçmiş alınacak hesaplar", "History sources")}:{" "}
+                  {t("desktopActionReview.historySources")}:{" "}
                 </strong>
                 {historyAccounts.map((a) => a.name).join(", ")}
               </p>
@@ -198,10 +163,7 @@ export function DesktopActionReview({
               disabled={busy}
               onChange={(e) => setReady(e.target.checked)}
             />
-            {t(
-              "İşlerimi bitirdim; Claude uygulaması yeniden başlayabilir.",
-              "My work is finished. The Claude app can restart.",
-            )}
+            {t("desktopActionReview.myWorkIsFinishedTheClaude")}
           </label>
         </>
       )}
@@ -213,14 +175,14 @@ export function DesktopActionReview({
             <RefreshIcon />
           )}
           {kind === "history"
-            ? t("Birleştir ve yeniden başlat", "Merge and restart")
+            ? t("desktopActionReview.mergeAndRestart")
             : kind === "cancel" || kind === "recover"
-              ? t("Geri yükle ve yeniden başlat", "Restore and restart")
+              ? t("desktopActionReview.restoreAndRestart")
               : kind === "switch"
-                ? t("Yeniden başlat ve geç", "Restart and switch")
+                ? t("desktopActionReview.restartAndSwitch")
                 : kind === "capture"
-                  ? t("Kaydet ve yeniden başlat", "Save and restart")
-                  : t("Yeniden başlat ve giriş ekranını aç", "Restart and open sign-in")}
+                  ? t("desktopActionReview.saveAndRestart")
+                  : t("desktopActionReview.restartAndOpenSignIn")}
         </Button>
         <Button
           type="button"
@@ -228,7 +190,7 @@ export function DesktopActionReview({
           disabled={busy}
           onClick={cancel}
         >
-          {t("Vazgeç", "Cancel")}
+          {t("common.cancel")}
         </Button>
       </div>
     </section>

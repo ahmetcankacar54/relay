@@ -11,6 +11,7 @@ import { DesktopActionReview, type DesktopActionKind } from "../src/features/Des
 import { routeQuery } from "../src/app/routes";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AuthFlow, type DesktopState, type Diagnostics, type RelaySettings, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -38,7 +39,7 @@ const wrap = (relay: Relay, child: ReturnType<typeof createElement>) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );
@@ -183,7 +184,7 @@ test("saving a Claude app sign-in warns that macOS may ask for the Mac password 
       createElement(DesktopActionReview, {
         kind,
         busy: false,
-        t: (tr: string, en: string) => (language === "tr" ? tr : en),
+        t: testT(language),
         confirm() {},
         cancel() {},
       }),

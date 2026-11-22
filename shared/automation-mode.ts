@@ -1,3 +1,4 @@
+import type { MessageId } from "./i18n/translate";
 import type { FleetContinuationState, RelaySettings } from "./types";
 
 /**
@@ -32,31 +33,22 @@ export function automationModeWrites(mode: AutomationMode): {
 
 export const AUTOMATION_MODES: {
   value: AutomationMode;
-  label: [tr: string, en: string];
-  description: [tr: string, en: string];
+  label: MessageId;
+  description: MessageId;
 }[] = [
   {
     value: "off",
-    label: ["Kapalı", "Off"],
-    description: [
-      "Relay hesabı kendiliğinden değiştirmez.",
-      "Relay does not switch accounts automatically.",
-    ],
+    label: "common.off",
+    description: "automationMode.relayDoesNotSwitchAccounts",
   },
   {
     value: "after-exit",
-    label: ["Claude uygulaması kapanınca", "When the Claude app quits"],
-    description: [
-      "Limit dolunca, kapattığında sıradaki hesabı hazırlar.",
-      "At the limit, prepares the next account when you quit.",
-    ],
+    label: "automationMode.whenTheClaudeAppQuits",
+    description: "automationMode.atTheLimitPreparesThe",
   },
   {
     value: "quota",
-    label: ["Limit dolunca", "When the limit is reached"],
-    description: [
-      "Sıradaki hesapla açar, duran konuşmaları sürdürür.",
-      "Opens the next account and continues stopped conversations.",
-    ],
+    label: "automationMode.whenTheLimitIsReached",
+    description: "automationMode.opensTheNextAccountAnd",
   },
 ];

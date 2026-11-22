@@ -15,6 +15,7 @@ import { generateProxyKey } from "../../../electron/core/proxy/proxy-status";
 import { readCodexCredential } from "../../../electron/core/provider-credentials";
 import { readsUsage } from "../../../shared/cli-version";
 import type { AccountUsage } from "../../../shared/types";
+import type { T } from "../../../shared/i18n/translate";
 
 /** How often limits are re-read, so routing follows the real 5-hour and weekly windows. */
 const USAGE_REFRESH_MS = 2 * 60_000;
@@ -22,24 +23,24 @@ const USAGE_REFRESH_MS = 2 * 60_000;
 const CREDENTIAL_TTL_MS = 20_000;
 const STATUS_TIMEOUT_MS = 3_000;
 
-function parsePort(raw: string | boolean | undefined, t: (tr: string, en: string) => string): number {
+function parsePort(raw: string | boolean | undefined, t: T): number {
   if (raw === undefined) return DEFAULT_PROXY_CONFIG.port;
   const port = typeof raw === "string" && /^\d{1,5}$/.test(raw) ? Number(raw) : NaN;
   if (!Number.isInteger(port) || port < 1 || port > 65_535)
     throw new CliError(
-      t("--port 1 ile 65535 arasında bir sayı olmalı.", "--port must be a number from 1 to 65535."),
+      t("proxy.portMustBeANumberFrom"),
       EXIT.usage,
     );
   return port;
 }
 
 /** `--host`: this computer only, or its Tailscale address, as in Relay's Proxy page. */
-function parseHost(raw: string | boolean | undefined, t: (tr: string, en: string) => string): string {
+function parseHost(raw: string | boolean | undefined, t: T): string {
   if (raw === undefined) return DEFAULT_PROXY_CONFIG.host;
   const host = typeof raw === "string" ? raw.trim() : "";
   if (!gatewayHostAllowed(host))
     throw new CliError(
-      t("127.0.0.1, localhost ya da bir Tailscale adresi kullan.", "Use 127.0.0.1, localhost or a Tailscale address."),
+      t("proxy.use127001Localhost"),
       EXIT.usage,
     );
   return host;
@@ -126,15 +127,12 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
   const subcommand = parsed.positionals[0] ?? "status";
   if (parsed.positionals.length > 1)
     throw new CliError(
-      t("relay proxy tek bir alt komut alır: start, status, env.", "relay proxy takes one subcommand: start, status, env."),
+      t("proxy.relayProxyTakesOneSubcommandStart"),
       EXIT.usage,
     );
   if (!["start", "status", "env"].includes(subcommand))
     throw new CliError(
-      t(
-        `Bilinmeyen proxy alt komutu: ${subcommand}. Beklenen: start, status, env.`,
-        `Unknown proxy subcommand: ${subcommand}. Expected: start, status, env.`,
-      ),
+      t("proxy.unknownProxySubcommandExpectedStart", { subcommand }),
       EXIT.usage,
     );
 
@@ -152,10 +150,7 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
     for (const line of envLines(url, savedKey)) io.stdout(line);
     if (!savedKey)
       io.stderr(
-        t(
-          "İstemci anahtarı yok: Relay uygulamasında Proxy sayfasını bir kez aç ya da relay proxy start'ın yazdığı anahtarı kullan.",
-          "No client key yet: open the Proxy page in Relay.app once, or use the key relay proxy start prints.",
-        ),
+        t("proxy.noClientKeyYetOpenThe"),
       );
     return EXIT.ok;
   }
@@ -227,8 +222,8 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
     const code = (error as NodeJS.ErrnoException).code;
     throw new CliError(
       code === "EADDRINUSE"
-        ? t(`${host}:${port} kullanımda. Başka bir --port dene.`, `${host}:${port} is already in use. Try another --port.`)
-        : t(`Ağ geçidi başlatılamadı: ${(error as Error).message}`, `The gateway could not start: ${(error as Error).message}`),
+        ? t("proxy.isAlreadyInUseTryAnother", { host, port })
+        : t("proxy.theGatewayCouldNotStart", { message: (error as Error).message }),
       code === "EADDRINUSE" ? EXIT.busy : EXIT.failed,
     );
   }
@@ -238,20 +233,14 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
       paint(
         color,
         "yellow",
-        t(
-          `Uyarı: ${host} yerel olmayan bir adres; anahtarı bilen herkes hesaplarını kullanabilir. Tailscale gibi kapalı bir ağda tut.`,
-          `Warning: ${host} is not a loopback address; anyone with the key can spend your accounts. Keep it on a private network such as Tailscale.`,
-        ),
+        t("proxy.warningIsNotALoopbackAddress", { host }),
       ),
     );
   if (!savedKey)
     io.stdout(
-      t(
-        "Bu çalıştırma için yeni bir istemci anahtarı üretildi; kalıcı anahtar için Relay uygulamasında Proxy sayfasını aç.",
-        "A client key was made for this run; open the Proxy page in Relay.app for a lasting one.",
-      ),
+      t("proxy.aClientKeyWasMadeFor"),
     );
-  io.stdout(paint(color, "yellow", t("İstemcide ayarla:", "Set in your client:")));
+  io.stdout(paint(color, "yellow", t("proxy.setInYourClient")));
   for (const line of envLines(url, key)) io.stdout(`  ${line}`);
 
   // Keep the limits (and the account list) current in the background.

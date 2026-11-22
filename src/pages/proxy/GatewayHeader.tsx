@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { useI18n, type T } from "@/data/i18n";
 import { agoLabel, gatewayUrl, maskKey } from "@/lib/proxy-ui";
 import type { ProxyAccountStatus, ProxyStatus } from "../../../shared/types";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import { CopyChip } from "../Proxy";
 import type { Copy } from "./hooks";
 import { CLIENT_NAMES } from "./shared";
@@ -17,10 +18,8 @@ function lastRequestLine(status: ProxyStatus, now: number, t: T): string | undef
   const last = status.recent?.find((r) => r.accountId);
   if (!last) return undefined;
   const name = status.accounts.find((a) => a.id === last.accountId)?.name;
-  return t(
-    `son istek ${agoLabel(last.at, now, t)}${name ? ` · ${name}` : ""}`,
-    `last request ${agoLabel(last.at, now, t)}${name ? ` · ${name}` : ""}`,
-  );
+  const ago = agoLabel(last.at, now, t);
+  return name ? t("gatewayHeader.lastRequestBy", { ago, account: name }) : t("gatewayHeader.lastRequest", { ago });
 }
 
 /** Accounts the gateway can send a request to now: in the pool, signed in, not full. */
@@ -47,7 +46,7 @@ export function GatewayHeader({
   /** Reads keep failing: say so rather than "Loading…". */
   unreadable: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [reveal, setReveal] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const running = status?.running === true;
@@ -61,7 +60,7 @@ export function GatewayHeader({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <Switch
           id="proxy-enabled"
-          aria-label={t("Ağ geçidini aç veya kapat", "Turn the gateway on or off")}
+          aria-label={t("gatewayHeader.turnTheGatewayOnOrOff")}
           checked={running}
           disabled={disabled || !status}
           onCheckedChange={onToggle}
@@ -74,29 +73,29 @@ export function GatewayHeader({
           >
             <StatusDot tone={unreadable ? "crit" : running ? "ok" : "off"} hollow={!running && !unreadable} />
             {unreadable
-              ? t("Ağ geçidi durumu okunamıyor", "Can't read the gateway state")
+              ? t("gatewayHeader.canTReadTheGatewayState")
               : !status
-                ? t("Okunuyor…", "Loading…")
+                ? t("gatewayHeader.loading")
                 : running
-                  ? t("Ağ geçidi çalışıyor", "Gateway running")
-                  : t("Ağ geçidi kapalı", "Gateway off")}
+                  ? t("gatewayHeader.gatewayRunning")
+                  : t("gatewayHeader.gatewayOff")}
           </span>
           <span className="text-xs text-muted-foreground">
             {[
-              t(`${ready} hesap hazır`, `${ready} accounts ready`),
+              t("gatewayHeader.accountsReady", { ready }),
               last,
-              bound.length ? t(`${bound.join(", ")} bağlı`, `${bound.join(", ")} connected`) : undefined,
+              bound.length ? t("gatewayHeader.connected", { join: bound.join(", ") }) : undefined,
             ]
               .filter(Boolean)
               .join(" · ")}
           </span>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <CopyChip id="endpoint" label={t("Adres", "Address")} shown={endpoint} value={endpoint} copy={copy} />
+          <CopyChip id="endpoint" label={t("gatewayHeader.address")} shown={endpoint} value={endpoint} copy={copy} />
           <CopyChip
             id="key"
-            label={t("Anahtar", "Key")}
-            shown={key ? (reveal ? key : maskKey(key)) : t("açılınca oluşur", "made on first start")}
+            label={t("gatewayHeader.key")}
+            shown={key ? (reveal ? key : maskKey(key)) : t("gatewayHeader.madeOnFirstStart")}
             value={key}
             copy={copy}
           >
@@ -104,7 +103,7 @@ export function GatewayHeader({
               variant="ghost"
               size="icon-sm"
               disabled={!key}
-              aria-label={reveal ? t("Anahtarı gizle", "Hide key") : t("Anahtarı göster", "Show key")}
+              aria-label={reveal ? t("gatewayHeader.hideKey") : t("gatewayHeader.showKey")}
               aria-pressed={reveal}
               onClick={() => setReveal((r) => !r)}
             >
@@ -115,7 +114,7 @@ export function GatewayHeader({
             variant="ghost"
             size="icon-sm"
             disabled={disabled || !key}
-            aria-label={t("Anahtarı yenile", "Regenerate key")}
+            aria-label={t("gatewayHeader.regenerateKey")}
             onClick={() => setConfirming(true)}
           >
             <RefreshCw />
@@ -131,14 +130,8 @@ export function GatewayHeader({
         <div className="flex flex-wrap items-center gap-2 border-t pt-2.5">
           <Note className="text-foreground">
             {bound.length
-              ? t(
-                  `Eski anahtar hemen çalışmaz olur. ${bound.join(" ve ")} yeni anahtarı kendiliğinden alır; diğer araçlara elle girmen gerekir.`,
-                  `The old key stops working at once. ${bound.join(" and ")} get the new one by themselves; other tools need it entered by hand.`,
-                )
-              : t(
-                  "Eski anahtar hemen çalışmaz olur. Araçlara yenisini girmen gerekir.",
-                  "The old key stops working at once. You will need to enter the new one in your tools.",
-                )}
+              ? t("gatewayHeader.theOldKeyStopsWorkingAt", { clients: new Intl.ListFormat(FORMAT_LOCALE[language]).format(bound) })
+              : t("gatewayHeader.theOldKeyStopsWorkingAt2")}
           </Note>
           <Button
             size="sm"
@@ -148,10 +141,10 @@ export function GatewayHeader({
               onRegenerate();
             }}
           >
-            {t("Yeni anahtar üret", "Generate new key")}
+            {t("gatewayHeader.generateNewKey")}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-            {t("Vazgeç", "Cancel")}
+            {t("common.cancel")}
           </Button>
         </div>
       )}

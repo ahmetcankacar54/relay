@@ -17,6 +17,7 @@ import {
   draftSummaries,
   tallyStalls,
 } from "../electron/core/draft-main";
+import { testT } from "./i18n";
 
 const ACCOUNT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const OTHER = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
@@ -1387,8 +1388,8 @@ test("the accessibility request asks only while a feature that needs it is on", 
 
 test("the quit notice addresses the user as sen", () => {
   const main = source("../electron/main.ts");
-  assert.doesNotMatch(main, /çıkabilirsiniz/);
-  assert.match(main, /Relay, yenileme bitene kadar açık kalır\. Sonra yeniden çık\./);
+  assert.match(main, /say\("electronMain\.relayStaysOpenUntilTheRenewal"\)/);
+  assert.equal(testT("tr")("electronMain.relayStaysOpenUntilTheRenewal"), "Relay, yenileme bitene kadar açık kalır. Sonra yeniden çık.");
 });
 
 test("setting a draft back to pending removes its reason in the vault", async (t) => {
@@ -1439,7 +1440,7 @@ test("the restore notification counts drafts and never names them", () => {
   const notify = main.slice(main.indexOf("function notifyDrafts"));
   assert.match(
     notify.slice(0, notify.indexOf("\n}")),
-    /const body = draftNotice\(summary, trayLanguage\);[\s\S]*new Notification\(\{ title: say\("Kurtarılan taslaklar", "Rescued drafts"\), body \}\)\.show\(\);/,
+    /const body = draftNotice\(summary, getAppLocale\(\)\);[\s\S]*new Notification\(\{ title: say\("common\.rescuedDrafts"\), body \}\)\.show\(\);/,
   );
 });
 

@@ -1,18 +1,23 @@
 import type { Account, CreateAccount } from "../../shared/types";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import type { T } from "../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /** The name a new profile gets before Relay knows whose it is: "Hesap 3". */
 export function provisionalName(accounts: readonly Account[], t: T): string {
   const taken = new Set(accounts.map((a) => fold(a.name)));
   for (let n = accounts.length + 1; ; n++) {
-    const name = t(`Hesap ${n}`, `Account ${n}`);
+    const name = t("profileSuggestion.account", { n });
     if (!taken.has(fold(name))) return name;
   }
 }
 
-/** Whether a name is still the provisional one, in either language. */
-export const isProvisionalName = (name: string) => /^(?:Hesap|Account) \d+$/.test(name.trim());
+/** Whether a name is still the provisional one (`provisionalName`, in the language `t` speaks). */
+export function isProvisionalName(name: string, t: T): boolean {
+  const [before, after = ""] = t("profileSuggestion.account", { n: "\u0000" }).split("\u0000");
+  const text = name.trim();
+  return text.startsWith(before) && text.endsWith(after) && /^\d+$/.test(text.slice(before.length, text.length - after.length));
+}
 
 const fold = (name: string) => name.normalize("NFC").trim().replace(/[İIı]/g, "i").toLowerCase();
 
@@ -29,14 +34,14 @@ export function groupName(account: Pick<Account, "id" | "kind" | "group">): stri
  * the email's local part. A name another profile has gets " 2", " 3"… Undefined until the
  * sign-in has an email.
  */
-export function suggestProfile(account: Account, accounts: readonly Account[]): CreateAccount | undefined {
+export function suggestProfile(account: Account, accounts: readonly Account[], language: Locale): CreateAccount | undefined {
   const email = account.auth?.email ?? account.desktop?.email;
   if (!email) return undefined;
   const org = account.auth?.orgName?.trim().slice(0, 64);
   const seat = account.auth?.subscription?.toLowerCase() ?? "";
   const work = /team|enterprise/.test(seat);
   const local = email.split("@")[0].replace(/[._-]+/g, " ").trim();
-  const personalName = local ? local.replace(/^\p{Ll}/u, (c) => c.toLocaleUpperCase("tr")) : email;
+  const personalName = local ? local.replace(/^\p{Ll}/u, (c) => c.toLocaleUpperCase(FORMAT_LOCALE[language])) : email;
   const base = (work && org ? org : personalName).slice(0, 60);
   const taken = new Set(accounts.filter((a) => a.id !== account.id).map((a) => fold(a.name)));
   let name = base;

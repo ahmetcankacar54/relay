@@ -204,7 +204,7 @@ test("a schema 5 registry keeps the modes that write to a browser, and accepts g
   }
 });
 
-test("a 0.18 registry written under schema 6 opens, drops the removed live-switch setting and is written as 7", (t) => {
+test("a 0.18 registry written under schema 6 opens, drops the removed live-switch setting and is written as the current schema", (t) => {
   const dir = folder(t);
   new Store(dir).create({ name: "A", kind: "personal" });
   const old = raw(dir);
@@ -213,7 +213,7 @@ test("a 0.18 registry written under schema 6 opens, drops the removed live-switc
   old.accounts[0].provider = "claude";
   writeRaw(dir, old);
   const store = new Store(dir);
-  assert.equal(raw(dir).schema, 7);
+  assert.equal(raw(dir).schema, STATE_SCHEMA);
   assert.equal("cdpHotSwitch" in raw(dir).settings, false);
   assert.equal(store.state.accounts[0].name, "A");
 });

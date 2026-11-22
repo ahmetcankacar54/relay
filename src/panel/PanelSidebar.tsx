@@ -26,7 +26,7 @@ export function PanelSidebar() {
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
-        {t("Kenar çubuğu düzeni", "Sidebar layout")}
+        {t("panelSidebar.sidebarLayout")}
       </div>
       <div
         className={`${panelCard} grid grid-cols-[1fr_auto] items-center gap-2 px-2 py-1.5`}
@@ -48,7 +48,7 @@ export function PanelSidebar() {
               )
             }
           >
-            {t("Talimatı kopyala", "Copy recipe")}
+            {t("panelSidebar.copyRecipe")}
           </Button>
           <Button
             size="xs"
@@ -56,7 +56,7 @@ export function PanelSidebar() {
             disabled={running}
             onClick={() => void dismissSidebarGapAction(relay, gap.id)}
           >
-            {t("Kapat", "Dismiss")}
+            {t("common.dismiss")}
           </Button>
         </span>
       </div>

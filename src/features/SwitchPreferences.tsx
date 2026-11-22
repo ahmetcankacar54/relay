@@ -13,8 +13,8 @@ import {
 } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
 import { InfoTip } from "@/components/PageSection";
+import type { T } from "../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /** A switch per account, with select-all and clear. */
 export function AccountSelection({
@@ -51,7 +51,7 @@ export function AccountSelection({
           size="sm"
           onClick={() => update(accounts.map((a) => a.id))}
         >
-          {t("Tümünü seç", "Select all")}
+          {t("switchPreferences.selectAll")}
         </Button>
         <Button
           type="button"
@@ -59,7 +59,7 @@ export function AccountSelection({
           size="sm"
           onClick={() => update([])}
         >
-          {t("Seçimi temizle", "Clear selection")}
+          {t("switchPreferences.clearSelection")}
         </Button>
       </div>
       <div className="grid gap-1">
@@ -90,29 +90,23 @@ export function AccountSelection({
                   {(a.desktop?.email ?? (!desktopCliMismatch(a) ? a.auth?.email : undefined)) ? (
                     <Private>{a.desktop?.email ?? a.auth?.email}</Private>
                   ) : (
-                    t("E-posta henüz bağlanmadı", "Email not connected yet")
+                    t("switchPreferences.emailNotConnectedYet")
                   )}
                 </small>
               </span>
               <Badge variant="outline" className="text-muted-foreground">
                 <StatusDot tone={ready ? "ok" : "warn"} />
                 {desktopCliMismatch(a)
-                  ? t(
-                      "Girişler farklı hesaplara ait",
-                      "Sign-ins belong to different accounts",
-                    )
+                  ? t("switchPreferences.signInsBelongToDifferentAccounts")
                   : a.desktop
-                    ? t("Claude uygulaması girişi kayıtlı", "Claude app sign-in saved")
-                    : t(
-                        "Claude uygulaması girişi gerekli",
-                        "Claude app sign-in needed",
-                      )}
+                    ? t("switchPreferences.claudeAppSignInSaved")
+                    : t("switchPreferences.claudeAppSignInNeeded")}
               </Badge>
             </label>
           );
         })}
         {!accounts.length && (
-          <Note>{t("Önce hesap ekle.", "Add an account first.")}</Note>
+          <Note>{t("switchPreferences.addAnAccountFirst")}</Note>
         )}
       </div>
     </fieldset>
@@ -124,10 +118,10 @@ export function historyTransferOptions(
   t: T,
 ): { value: RelaySettings["desktopHistoryTransfer"]; label: string }[] {
   return [
-    { value: "all", label: t("Tüm hesaplar arasında", "Between all accounts") },
-    { value: "same-group", label: t("Aynı paylaşım grubunda", "In the same sharing group") },
-    { value: "selected", label: t("Seçtiğim hesaplar arasında", "Between selected accounts") },
-    { value: "off", label: t("Paylaşma", "Do not share") },
+    { value: "all", label: t("switchPreferences.betweenAllAccounts") },
+    { value: "same-group", label: t("switchPreferences.inTheSameSharingGroup") },
+    { value: "selected", label: t("switchPreferences.betweenSelectedAccounts") },
+    { value: "off", label: t("switchPreferences.doNotShare") },
   ];
 }
 
@@ -151,21 +145,18 @@ export function DraftRetypePreference({
 }: Pick<Props, "value" | "update" | "disabled" | "t">) {
   return (
     <div className="grid gap-1">
-      <SectionHeading title={t("Kurtarılan taslaklar", "Rescued drafts")} />
+      <SectionHeading title={t("common.rescuedDrafts")} />
       <SettingRow
         label={
           <span className="inline-flex items-center gap-2">
-            {t("Taslakları Claude uygulamasına yeniden yaz", "Re-type drafts into the Claude app")}
+            {t("switchPreferences.reTypeDraftsIntoTheClaude")}
             <Badge variant="outline" className="text-muted-foreground">
-              {t("Deneysel", "Experimental")}
+              {t("switchPreferences.experimental")}
             </Badge>
           </span>
         }
         htmlFor="draft-retype"
-        description={t(
-          "Geçişten sonra taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
-          "After a switch, types the draft into the message box but does not send it. Needs Accessibility permission.",
-        )}
+        description={t("switchPreferences.afterASwitchTypesTheDraft")}
       >
         <Switch
           id="draft-retype"
@@ -187,22 +178,13 @@ export function historyScopeNote(
   // "same-group" is explained by its label.
   const scope =
     transfer === "all"
-      ? t(
-          "Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
-          "All accounts with a saved Claude app sign-in, personal or work, share Code history.",
-        )
+      ? t("switchPreferences.allAccountsWithASavedClaude")
       : transfer === "selected"
-        ? t(
-            "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
-            "Selected accounts share Code history, even across companies.",
-          )
+        ? t("switchPreferences.selectedAccountsShareCodeHistoryEven")
         : "";
   return [
     scope,
-    t(
-      "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
-      "Relay shares only local Code history. Chat and cloud sessions do not sync.",
-    ),
+    t("switchPreferences.relaySharesOnlyLocalCodeHistory"),
   ]
     .filter(Boolean)
     .join(" ");
@@ -233,34 +215,22 @@ export function SharedHistoryPreferences({
   // "Paylaşma": nothing is shared, so nothing may say it is.
   const off = value.desktopHistoryTransfer === "off";
   const where = off
-    ? t("Code konuşmaların her hesapta ayrı kalır.", "Your Code conversations stay separate in each account.")
+    ? t("switchPreferences.yourCodeConversationsStaySeparateIn")
     : value.desktopHistoryTransfer === "all"
-      ? t(
-          "Geçişten sonra Code konuşmaların bağlı her hesapta görünür.",
-          "After a switch, your Code conversations appear in every connected account.",
-        )
+      ? t("switchPreferences.afterASwitchYourCodeConversations")
       : value.desktopHistoryTransfer === "selected"
-        ? t(
-            "Geçişten sonra Code konuşmaların seçtiğin hesaplarda görünür.",
-            "After a switch, your Code conversations appear in the accounts you selected.",
-          )
-        : t(
-            "Geçişten sonra Code konuşmaların aynı gruptaki hesaplarda görünür.",
-            "After a switch, your Code conversations appear in the accounts of the same group.",
-          );
+        ? t("switchPreferences.afterASwitchYourCodeConversations2")
+        : t("switchPreferences.afterASwitchYourCodeConversations3");
   // What the merge would do, on the button's title: the row keeps one line.
   const merge = active
     ? sources.length
-      ? t(
-          `${sources.length} hesabın geçmişi ${active.name} hesabında birleştirilir.`,
-          `Relay merges the history of ${sources.length} ${sources.length === 1 ? "account" : "accounts"} into ${active.name}.`,
-        )
-      : t(`${active.name} için paylaşılacak hesap seçili değil.`, `No accounts are selected to share with ${active.name}.`)
-    : t("Önce Claude uygulamasında açık hesabın girişini kaydet.", "First, save the Claude app sign-in of the open account.");
+      ? t("switchPreferences.relayMergesTheHistoryOfAccounts", { sourcesLength: sources.length, activeName: active.name })
+      : t("switchPreferences.noAccountsAreSelectedToShare", { activeName: active.name })
+    : t("switchPreferences.firstSaveTheClaudeAppSign");
   return (
     <div className="grid gap-1">
       <SettingRow
-        label={<span className="font-medium">{t("Ortak Code geçmişi", "Shared Code history")}</span>}
+        label={<span className="font-medium">{t("switchPreferences.sharedCodeHistory")}</span>}
         htmlFor="history-transfer"
         description={
           <span className="inline-flex items-center gap-1">
@@ -285,7 +255,7 @@ export function SharedHistoryPreferences({
             disabled={syncDisabled || disabled || !active || !sources.length}
             onClick={sync}
           >
-            {t("Açık hesapla birleştir…", "Merge into the open account…")}
+            {t("switchPreferences.mergeIntoTheOpenAccount")}
           </Button>
         </span>
       </SettingRow>
@@ -301,7 +271,7 @@ export function SharedHistoryPreferences({
           selected={value.desktopHistoryAccounts}
           update={(ids) => update({ desktopHistoryAccounts: ids })}
           disabled={disabled}
-          label={t("Geçmişi paylaşan hesaplar", "Accounts that share history")}
+          label={t("switchPreferences.accountsThatShareHistory")}
           t={t}
         />
       )}

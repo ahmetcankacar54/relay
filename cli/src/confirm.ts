@@ -1,5 +1,5 @@
 import { CliError, EXIT, type CliIO } from "./io";
-import type { Translate } from "./i18n";
+import type { T } from "../../shared/i18n/translate";
 
 /**
  * Asks before something that cannot be taken back. With --yes it goes ahead. Without a
@@ -8,27 +8,24 @@ import type { Translate } from "./i18n";
  */
 export async function confirm(
   io: CliIO,
-  t: Translate,
+  t: T,
   lines: string[],
   yes: boolean,
 ): Promise<void> {
   if (yes) return;
   if (!io.isTTY)
     throw new CliError(
-      t(
-        "Bu işlem onay ister. Bir terminalde çalıştır ya da --yes ekle.",
-        "This needs confirmation. Run it in a terminal, or add --yes.",
-      ),
+      t("confirm.thisNeedsConfirmationRunItIn"),
       EXIT.confirm,
     );
   for (const line of lines) io.stdout(line);
-  const answer = (await io.prompt(t("Devam edilsin mi? [e/H] ", "Continue? [y/N] ")))
+  const answer = (await io.prompt(t("confirm.continueYN")))
     ?.trim()
     .toLowerCase();
-  const accepted = t("e evet y yes", "y yes").split(" ");
+  const accepted = t("confirm.yYes").split(" ");
   if (!answer || !accepted.includes(answer))
     throw new CliError(
-      t("Vazgeçildi; hiçbir şey değişmedi.", "Cancelled; nothing changed."),
+      t("confirm.cancelledNothingChanged"),
       EXIT.failed,
     );
 }

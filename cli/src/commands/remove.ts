@@ -15,17 +15,14 @@ import { CliError, EXIT } from "../io";
 export const remove: Command = async ({ io, deps, parsed, t }) => {
   const query = parsed.positionals[0];
   if (!query || parsed.positionals.length > 1)
-    throw new CliError(t("Kullanım: relay remove <ad>", "Usage: relay remove <name>"), EXIT.usage);
+    throw new CliError(t("remove.usageRelayRemoveName"), EXIT.usage);
   const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: false });
   const account = resolveAccount(ctx.store.state.accounts, query, t);
   const refuse = (reason: RemovalBlock): never => {
     throw new CliError(
       reason === "active"
-        ? t(
-            `${account.name} şu an Claude uygulamasında açık. Önce başka bir hesaba geç: relay switch <ad>`,
-            `${account.name} is signed in to the Claude app now. Switch to another account first: relay switch <name>`,
-          )
-        : t("Bu hesabın girişi yarım kaldı; önce relay add --cancel çalıştır.", "This account’s sign-in is pending; run relay add --cancel first."),
+        ? t("remove.isSignedInToTheClaude", { accountName: account.name })
+        : t("remove.thisAccountSSignInIs"),
       EXIT.busy,
     );
   };
@@ -35,10 +32,7 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
     io,
     t,
     [
-      t(
-        `${account.name} unutulacak: kayıtlı Claude uygulaması girişi ve Claude Code profili (limit okuma girişi) silinir. Claude uygulamasının kendi verisine dokunulmaz.`,
-        `${account.name} will be forgotten: its saved Claude app sign-in and its Claude Code profile (usage sign-in) are deleted. The Claude app’s own data is not touched.`,
-      ),
+      t("remove.willBeForgottenItsSavedClaude", { accountName: account.name }),
     ],
     ctx.yes,
   );
@@ -68,11 +62,8 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
   }
   if (removed.signedOut === false)
     io.stderr(
-      t(
-        "Uyarı: Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.",
-        "Warning: could not sign out of the usage sign-in; its Keychain item may remain.",
-      ),
+      t("remove.warningCouldNotSignOutOf"),
     );
-  io.stdout(t(`${account.name} unutuldu.`, `Forgot ${account.name}.`));
+  io.stdout(t("remove.forgot", { accountName: account.name }));
   return EXIT.ok;
 };

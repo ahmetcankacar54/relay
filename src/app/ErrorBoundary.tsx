@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { bootLocale } from "@/data/i18n";
+import { tFor } from "../../shared/i18n/translate";
 
 /**
  * A window's last resort. Without it one render error unmounts the whole tree: the window stays
@@ -21,10 +23,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
 
   render() {
     if (!this.state.failed) return this.props.children;
-    const turkish = navigator.language.toLowerCase().startsWith("tr");
+    const t = tFor(bootLocale());
     return (
       <div role="alert" className="grid gap-3 p-6 text-sm text-foreground">
-        <p className="font-semibold">{turkish ? "Beklenmedik bir hata oluştu." : "An unexpected error occurred."}</p>
+        <p className="font-semibold">{t("errorBoundary.anUnexpectedErrorOccurred")}</p>
         <div>
           <Button
             size="sm"
@@ -35,7 +37,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
               window.location.reload();
             }}
           >
-            {turkish ? "Yeniden yükle" : "Reload"}
+            {t("errorBoundary.reload")}
           </Button>
         </div>
       </div>

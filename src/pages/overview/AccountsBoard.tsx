@@ -24,13 +24,13 @@ type Window = ColumnWindow;
  */
 function otherLimit(usage: AccountUsage | undefined, shown: Window[], now: number, t: T): { text: string; full: boolean } | undefined {
   const spent = spentModelWindows(usage, now)[0];
-  if (spent && !shown.some((w) => w.label === spent.label)) return { text: t(`${spent.label} dolu`, `${spent.label} full`), full: true };
+  if (spent && !shown.some((w) => w.label === spent.label)) return { text: t("accountsBoard.full", { spentLabel: spent.label }), full: true };
   const used = (w: { usedPercent: number; resetsAt?: string }) => usedAt(w, now);
   const rest = (usage?.modelWindows ?? []).filter((w) => !shown.some((s) => s.label === w.label));
   const top = rest.sort((a, b) => used(b) - used(a))[0];
   if (!top) return undefined;
   const n = Math.round(used(top));
-  return { text: `${top.label} ${t(`%${n}`, `${n}%`)}`, full: n >= 100 };
+  return { text: `${top.label} ${t("accountsBoard.msg", { n })}`, full: n >= 100 };
 }
 
 /**
@@ -49,8 +49,8 @@ export function AccountsBoard({ now }: { now: number }) {
   // Until the first snapshot the board holds placeholders, not the empty Overview.
   if (relay.data === undefined)
     return (
-      <PageSection title={t("Tüm hesaplar", "All accounts")} slot="accounts-board">
-        <ListCard label={t("Tüm hesaplar", "All accounts")}>
+      <PageSection title={t("accountsBoard.allAccounts")} slot="accounts-board">
+        <ListCard label={t("accountsBoard.allAccounts")}>
           <ListSkeleton />
         </ListCard>
       </PageSection>
@@ -89,7 +89,7 @@ export function AccountsBoard({ now }: { now: number }) {
         ariaLabel={name}
         usedPercent={window.usedPercent}
         resetsAt={window.resetsAt}
-        period={name === t("Hafta", "Week") ? "seven_day" : "five_hour"}
+        period={name === t("common.week") ? "seven_day" : "five_hour"}
         now={now}
         t={t}
         faded={faded}
@@ -110,10 +110,10 @@ export function AccountsBoard({ now }: { now: number }) {
             <ListOpen onOpen={() => (window.location.hash = accountHash(a.id))} title={a.name}>
               {a.name}
             </ListOpen>
-            {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("açık", "in use")}</span>}
+            {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("accountsBoard.inUse")}</span>}
           </div>
-          {line(five, t("5 saat", "5 hours"), pooled, faded)}
-          {line(week, t("Hafta", "Week"), pooled, faded)}
+          {line(five, t("common.n5Hours"), pooled, faded)}
+          {line(week, t("common.week"), pooled, faded)}
           <span className={narrowHidden}>
             {other && (
               <span data-slot="other-limit" className="inline-flex max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
@@ -135,21 +135,21 @@ export function AccountsBoard({ now }: { now: number }) {
   };
   return (
     <PageSection
-      title={t("Tüm hesaplar", "All accounts")}
+      title={t("accountsBoard.allAccounts")}
       slot="accounts-board"
       aside={
         <span className="text-xs text-muted-foreground">
-          {t(`${usable}/${relay.accounts.length} kullanılabilir`, `${usable}/${relay.accounts.length} usable`)}
+          {t("accountsBoard.usable", { usable, accountsLength: relay.accounts.length })}
         </span>
       }
     >
-      <ListCard label={t("Tüm hesaplar", "All accounts")}>
+      <ListCard label={t("accountsBoard.allAccounts")}>
         <ListHead columns="board">
           <span />
-          <span>{t("Hesap", "Account")}</span>
-          <span>{t("5 saat", "5 hours")}</span>
-          <span>{t("Hafta", "Week")}</span>
-          <span className={narrowHidden}>{t("Model limiti", "Model limit")}</span>
+          <span>{t("common.account")}</span>
+          <span>{t("common.n5Hours")}</span>
+          <span>{t("common.week")}</span>
+          <span className={narrowHidden}>{t("accountsBoard.modelLimit")}</span>
           <span />
         </ListHead>
         {groups.map(({ provider, own }) => (

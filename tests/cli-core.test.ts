@@ -46,6 +46,12 @@ test("help follows the language", async (t) => {
   assert.match(f.out(), /Kullanım/);
 });
 
+test("--lang takes every locale and help lists them", async (t) => {
+  const f = await cliFixture(t);
+  assert.equal(await f.run("--lang", "ja", "help"), 0);
+  assert.match(f.out(), /--lang <code> .*en, tr, de, fr, es, pt-BR, it, ja, ko, zh-Hans, zh-Hant, ru, uk, pl, nl/);
+});
+
 test("language: --lang, then RELAY_LANG, then LC_ALL/LC_MESSAGES/LANG, else English", () => {
   assert.equal(pickLang(undefined, { LANG: "tr_TR.UTF-8" }), "tr");
   assert.equal(pickLang(undefined, { LC_ALL: "en_US.UTF-8", LANG: "tr_TR.UTF-8" }), "en");
@@ -53,7 +59,13 @@ test("language: --lang, then RELAY_LANG, then LC_ALL/LC_MESSAGES/LANG, else Engl
   assert.equal(pickLang(undefined, { RELAY_LANG: "tr", LANG: "en_US.UTF-8" }), "tr");
   assert.equal(pickLang("en", { RELAY_LANG: "tr" }), "en");
   assert.equal(pickLang(undefined, {}), "en");
-  assert.equal(translator("tr")("evet", "yes"), "evet");
+  // Every locale, by code or by POSIX locale; C/POSIX and unknown ones fall through.
+  assert.equal(pickLang("zh-Hant", { LANG: "tr_TR.UTF-8" }), "zh-Hant");
+  assert.equal(pickLang("xx", { LANG: "de_DE.UTF-8" }), "de");
+  assert.equal(pickLang(undefined, { RELAY_LANG: "system", LANG: "ja_JP.UTF-8" }), "ja");
+  assert.equal(pickLang(undefined, { LC_ALL: "C", LANG: "pt_PT.UTF-8" }), "pt-BR");
+  assert.equal(pickLang(undefined, { LANG: "zh_TW.UTF-8" }), "zh-Hant");
+  assert.equal(translator("tr")("confirm.yYes"), "e evet y yes");
 });
 
 test("arguments: global flags, command flags, positionals and -- passthrough", () => {
@@ -190,11 +202,11 @@ test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt,
 
 test("a core error the app knows in both languages is shown in the CLI's language", () => {
   const core = new Error("Connect this account in Claude Desktop first.");
-  assert.equal(describeError(core, translator("tr")).message, "Önce bu hesabı Claude uygulamasında bağla.");
-  assert.equal(describeError(core, translator("en")).message, "Connect this account in the Claude app first.");
+  assert.equal(describeError(core, "tr").message, "Önce bu hesabı Claude uygulamasında bağla.");
+  assert.equal(describeError(core, "en").message, "Connect this account in the Claude app first.");
   // The blocked ones keep their own words, with the relay command that clears them.
   assert.match(
-    describeError(new Error("Finish or cancel the current Desktop sign-in first."), translator("tr")).message,
+    describeError(new Error("Finish or cancel the current Desktop sign-in first."), "tr").message,
     /relay add --resume ile bitir/,
   );
 });

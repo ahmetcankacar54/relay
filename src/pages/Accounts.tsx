@@ -270,8 +270,8 @@ export function Accounts() {
     );
   return (
     <PageFrame
-      title={t("Hesaplar", "Accounts")}
-      description={t(`${accounts.length} hesap`, `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`)}
+      title={t("common.accounts")}
+      description={t("accounts.accounts", { accountsLength: accounts.length })}
       actions={
         <>
           {/* Linking needs a profile; with none, adding one links it in the dialog. */}
@@ -283,7 +283,7 @@ export function Accounts() {
                 onClick={() => setLinking(true)}
               >
                 <Link2 />
-                {t("Claude uygulaması hesabını eşleştir", "Link Claude app account")}
+                {t("accounts.linkClaudeAppAccount")}
               </Button>
               {/* A lock both buttons share is said once, after the second. */}
               {linkBlock && linkBlock !== addBlock && (
@@ -299,7 +299,7 @@ export function Accounts() {
             }}
           >
             <PlusIcon />
-            {t("Hesap ekle", "Add account")}
+            {t("common.addAccount")}
           </Button>
           {addBlock && <Reason>{blockReason(addBlock, t)}</Reason>}
         </>
@@ -314,7 +314,7 @@ export function Accounts() {
               type="single"
               variant="outline"
               size="sm"
-              aria-label={t("Sağlayıcıya göre filtrele", "Filter by provider")}
+              aria-label={t("accounts.filterByProvider")}
               data-slot="provider-filter"
               className="flex-wrap"
               value={provider}
@@ -322,7 +322,7 @@ export function Accounts() {
             >
               {(
                 [
-                  ["all", t("Tümü", "All"), accounts.length],
+                  ["all", t("accounts.all"), accounts.length],
                   ["claude", providerShortLabel("claude"), counts.claude],
                   ["codex", providerShortLabel("codex"), counts.codex],
                   ["antigravity", providerShortLabel("antigravity"), counts.antigravity],
@@ -343,11 +343,8 @@ export function Accounts() {
               <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={search}
-                aria-label={t("Hesap ara", "Search accounts")}
-                placeholder={t(
-                  "Ara…",
-                  "Search…",
-                )}
+                aria-label={t("accounts.searchAccounts")}
+                placeholder={t("accounts.search")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className={mac ? "pr-12 pl-8" : "pr-16 pl-8"}
@@ -361,41 +358,41 @@ export function Accounts() {
               onValueChange={(v) => setFilter(v as AccountFilter)}
             >
               <SelectTrigger
-                aria-label={t("Hesap filtresi", "Filter accounts")}
+                aria-label={t("accounts.filterAccounts")}
                 className="w-28"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t("Tümü", "All accounts")}</SelectItem>
+                <SelectItem value="all">{t("accounts.allAccounts")}</SelectItem>
                 <SelectItem value="connected">
-                  {t("Claude uygulaması girişi kayıtlı", "Claude app sign-in saved")}
+                  {t("accounts.claudeAppSignInSaved")}
                 </SelectItem>
                 <SelectItem value="personal">
-                  {t("Kişisel", "Personal")}
+                  {t("common.personal")}
                 </SelectItem>
-                <SelectItem value="work">{t("Şirket", "Work")}</SelectItem>
+                <SelectItem value="work">{t("common.work")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={view.groupBy} onValueChange={(v) => setView("groupBy", v as AccountGroupBy)}>
-              <SelectTrigger aria-label={t("Grupla", "Group by")} className="w-36">
+              <SelectTrigger aria-label={t("accounts.groupBy")} className="w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="provider">{t("Sağlayıcı", "Provider")}</SelectItem>
-                <SelectItem value="workGroup">{t("Çalışma grubu", "Work group")}</SelectItem>
-                <SelectItem value="none">{t("Yok", "None")}</SelectItem>
+                <SelectItem value="provider">{t("common.provider")}</SelectItem>
+                <SelectItem value="workGroup">{t("accounts.workGroup")}</SelectItem>
+                <SelectItem value="none">{t("accounts.none")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={view.sort} onValueChange={(v) => setView("sort", v as AccountSort)}>
-              <SelectTrigger aria-label={t("Sırala", "Sort")} className="w-36">
+              <SelectTrigger aria-label={t("accounts.sort")} className="w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">{t("Varsayılan", "Default")}</SelectItem>
-                <SelectItem value="name">{t("Ad", "Name")}</SelectItem>
-                <SelectItem value="usage">{t("5 saat kullanımı", "5-hour use")}</SelectItem>
-                <SelectItem value="reset">{t("Sonraki yenileme", "Next reset")}</SelectItem>
+                <SelectItem value="default">{t("accounts.default")}</SelectItem>
+                <SelectItem value="name">{t("accounts.name")}</SelectItem>
+                <SelectItem value="usage">{t("accounts.n5HourUse")}</SelectItem>
+                <SelectItem value="reset">{t("accounts.nextReset")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -464,23 +461,20 @@ export function AccountsEmpty({
       <Panda scene={hasAccounts ? "lookout" : "welcome"} size={72} playful />
       <h3 className="font-semibold break-words">
         {searched
-          ? t(`“${searched}” ile eşleşen hesap yok`, `No accounts match “${searched}”`)
+          ? t("accounts.noAccountsMatch", { searched })
           : hasAccounts
-            ? t("Eşleşen hesap yok", "No accounts match the filter")
-            : t("Henüz hesap yok", "No accounts yet")}
+            ? t("accounts.noAccountsMatchTheFilter")
+            : t("accounts.noAccountsYet")}
       </h3>
       {searched && clearQuery ? (
         <Button variant="link" size="sm" className="h-auto px-0" onClick={clearQuery}>
-          {t("Aramayı temizle", "Clear search")}
+          {t("accounts.clearSearch")}
         </Button>
       ) : (
         <p className="text-sm text-muted-foreground">
           {hasAccounts
-            ? t("Aramayı veya filtreyi değiştir.", "Change the search or the filter.")
-            : t(
-                "Önce Claude uygulamasında açık hesabı ekle.",
-                "Add the account open in the Claude app first.",
-              )}
+            ? t("accounts.changeTheSearchOrTheFilter")
+            : t("accounts.addTheAccountOpenInThe")}
         </p>
       )}
     </div>

@@ -45,8 +45,8 @@ const api: RelayAPI = {
   menuBarTitle: () => ipcRenderer.invoke("relay:menu-bar-title"),
   setMenuBarTitle: (choice) => ipcRenderer.invoke("relay:set-menu-bar-title", choice),
   menuBarNow: () => ipcRenderer.invoke("relay:menu-bar-now"),
-  setTrayLanguage: (language) =>
-    ipcRenderer.invoke("relay:tray-language", language),
+  setLanguage: (pref) => ipcRenderer.invoke("relay:set-language", pref),
+  getLanguage: () => ipcRenderer.invoke("relay:get-language"),
   openPage: (page, intent) =>
     ipcRenderer.invoke("relay:open-page", page, intent),
   onNavigate: (callback) => {

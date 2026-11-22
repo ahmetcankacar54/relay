@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { MenuItemConstructorOptions } from "electron";
 import { appMenuTemplate } from "../electron/app-menu";
-import { pick } from "../electron/language";
+import "./i18n";
 
 const calls: string[] = [];
 const actions = {
@@ -21,11 +21,6 @@ const labels = (menu: MenuItemConstructorOptions[]) =>
   ]);
 const click = (item: MenuItemConstructorOptions | undefined) =>
   (item?.click as unknown as () => void)();
-
-test("pick returns the copy for the app's language", () => {
-  assert.equal(pick("tr")("Aç", "Open"), "Aç");
-  assert.equal(pick("en")("Aç", "Open"), "Open");
-});
 
 test("the app menu speaks Turkish", () => {
   assert.deepEqual(labels(appMenuTemplate("tr", actions, "darwin")), [

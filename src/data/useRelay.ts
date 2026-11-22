@@ -263,7 +263,7 @@ function useRelayState(
       else if (request.kind === "cancel") await api.cancelDesktopLogin();
       else {
         if (!account)
-          throw new Error(t("Hesap bulunamadı.", "Account not found."));
+          throw new Error(t("useRelay.accountNotFound"));
         if (request.kind === "switch") {
           // Automation may have switched while the review was open.
           const [status, snapshot] = await Promise.all([
@@ -275,14 +275,8 @@ function useRelayState(
             setDesktopRequest(undefined);
             setNotice(
               stale === "already-active"
-                ? t(
-                    `${account.name} zaten Claude uygulamasında açık.`,
-                    `${account.name} is already open in the Claude app.`,
-                  )
-                : t(
-                    "Otomatik bir geçiş sürüyor; elle geçiş başlamadı.",
-                    "An automatic switch is in progress; your switch did not start.",
-                  ),
+                ? t("useRelay.isAlreadyOpenInTheClaude", { accountName: account.name })
+                : t("useRelay.anAutomaticSwitchIsInProgress"),
             );
             return;
           }
@@ -305,34 +299,16 @@ function useRelayState(
       setHistoryRevision((value) => value + 1);
       setNotice(
         request.kind === "history"
-          ? t(
-              "Ortak Code geçmişi açık hesapla birleştirildi.",
-              "Relay merged the shared Code history into the open account.",
-            )
+          ? t("useRelay.relayMergedTheSharedCodeHistory")
           : request.kind === "switch"
-            ? t(
-                `Claude uygulaması ${account?.name} hesabına geçti.`,
-                `The Claude app switched to ${account?.name}.`,
-              )
+            ? t("useRelay.theClaudeAppSwitchedTo", { accountName: account?.name })
             : later
-              ? t(
-                  "Girişi kaydetmek için Claude uygulamasında Code’u bir kez aç.",
-                  "Open Code once in the Claude app to save the sign-in.",
-                )
+              ? t("useRelay.openCodeOnceInTheClaude")
               : request.kind === "capture"
-              ? t(
-                  `${account?.name} · Claude uygulaması girişi kaydedildi.`,
-                  `${account?.name} · Claude app sign-in saved.`,
-                )
+              ? t("useRelay.claudeAppSignInSaved", { accountName: account?.name })
               : request.kind === "cancel" || request.kind === "recover"
-                ? t(
-                    "Önceki Claude uygulaması girişi geri yüklendi.",
-                    "Relay restored the previous Claude app sign-in.",
-                  )
-                : t(
-                    "Claude uygulamasında bu hesapla giriş yap, sonra Code’u aç.",
-                    "Sign in with this account in the Claude app, then open Code.",
-                  ),
+                ? t("useRelay.relayRestoredThePreviousClaudeApp")
+                : t("useRelay.signInWithThisAccountIn"),
       );
     });
   };

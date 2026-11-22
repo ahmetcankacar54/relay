@@ -10,6 +10,7 @@ import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
 import type { TerminalStatus } from "../shared/terminal-identity";
 import { localDate, localSlot } from "../shared/planning";
 import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
+import { resolveLocale } from "../shared/i18n/locales";
 import type {
   Account,
   AuthFlow,
@@ -1048,7 +1049,8 @@ export const previewApi: RelayAPI = {
     saved: true,
     at: new Date().toISOString(),
   }),
-  setTrayLanguage: async () => {},
+  setLanguage: async () => {},
+  getLanguage: async () => ({ pref: "system" as const, locale: resolveLocale("system", navigator.languages) }),
   showDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,

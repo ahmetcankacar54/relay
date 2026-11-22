@@ -19,7 +19,7 @@ export function ClaudeAppActions({ download = true }: { download?: boolean }) {
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {download && (
         <ExternalLink href={EXTERNAL_LINKS.claudeDownload}>
-          {t("İndir", "Download")}
+          {t("claudeAppSetup.download")}
         </ExternalLink>
       )}
       <Button
@@ -28,7 +28,7 @@ export function ClaudeAppActions({ download = true }: { download?: boolean }) {
         disabled={!!relay.busy}
         onClick={() => chooseClaudeApp(relay)}
       >
-        {t("Konumu seç", "Choose location")}
+        {t("claudeAppSetup.chooseLocation")}
       </Button>
     </span>
   );

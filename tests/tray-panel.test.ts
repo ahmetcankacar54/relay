@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { trayTitle, trayTooltip, type TraySnapshot } from "../shared/tray";
 import { PANEL_WIDTH, clampPanelHeight, panelPosition } from "../shared/tray-panel";
 import type { Account, AccountUsage } from "../shared/types";
+import "./i18n";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const account = { id: "a", name: "A", kind: "personal", group: "personal", color: "olive", createdAt: "2026-10-01T00:00:00Z",

@@ -3,26 +3,24 @@ import { PageSection } from "@/components/PageSection";
 import { StatusDot } from "@/components/StatusDot";
 import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import { sessionCacheLine } from "@/lib/proxy-ui";
 import type { ProxyStatus } from "../../../shared/types";
 
 /** The sessions heard from lately: whose account holds their cache, and whether it is still warm. */
 export function SessionsCard({ status }: { status: ProxyStatus }) {
   const { t, language } = useI18n();
-  const locale = language === "tr" ? "tr-TR" : "en-US";
+  const locale = FORMAT_LOCALE[language];
   const now = Date.now();
   const name = (id: string) => status.accounts.find((a) => a.id === id)?.name ?? "—";
   return (
     <PageSection
       slot="sessions"
-      title={t("Oturumlar", "Sessions")}
-      info={t(
-        "Oturumun önbelleği hesabındadır. Sıcakken dönmek ucuzdur; soğuyunca ya da hesap değişince bütün istem yeniden yazılır.",
-        "A session's cache lives on its account. Coming back while it is warm is cheap; once cold, or on another account, the whole prompt is written again.",
-      )}
+      title={t("sessionsCard.sessions")}
+      info={t("sessionsCard.aSessionSCacheLivesOn")}
     >
       <Card padded>
-        <ol aria-label={t("Oturumlar", "Sessions")} className="grid">
+        <ol aria-label={t("sessionsCard.sessions")} className="grid">
           {(status.sessions ?? []).map((session) => {
             const line = sessionCacheLine(session, now, t, locale);
             return (
