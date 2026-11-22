@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { app, BrowserWindow, screen } from "electron";
 import {
   INITIAL_PANEL_LOAD,
   panelLoadState,
@@ -58,6 +58,7 @@ export class SwitchWindow {
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
+        devTools: !app.isPackaged,
       },
     });
     this.win = win;

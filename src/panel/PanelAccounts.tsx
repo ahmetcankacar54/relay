@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import { staleManualSwitch } from "../../shared/automation-status";
 import { Button } from "@/components/ui/button";
 import { useI18n, type T } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
@@ -63,13 +64,35 @@ export const switchingId = (busy: string) =>
   busy.startsWith("switch:") ? busy.slice("switch:".length) : undefined;
 
 /** The first account is added in the main window: Accounts, with the add dialog open. */
-export const openAddAccount = (relay: Pick<Relay, "api">) =>
-  void relay.api.openPage("hesaplar", "ekle");
+export const openAddAccount = (relay: Pick<Relay, "api" | "report">) =>
+  void relay.report(() => relay.api.openPage("hesaplar", "ekle"));
 
-/** Starts the Desktop switch after the inline confirmation. */
-export function confirmSwitch(relay: Relay, id: string, done: () => void) {
+/**
+ * Starts the Desktop switch after the inline confirmation. Automation may have switched while
+ * the confirmation was open, so it checks again first, as the main window's review does.
+ */
+export function confirmSwitch(relay: Relay, id: string, t: T, done: () => void) {
   void relay
-    .action(`switch:${id}`, () => relay.api.switchDesktop(id))
+    .action(`switch:${id}`, async () => {
+      const [status, snapshot] = await Promise.all([
+        relay.api.desktopSnapshot(),
+        relay.api.panelSnapshot(),
+      ]);
+      const stale = staleManualSwitch(id, status, snapshot.fleet);
+      if (!stale) return relay.api.switchDesktop(id);
+      const name = relay.accounts.find((a) => a.id === id)?.name ?? "";
+      relay.setNotice(
+        stale === "already-active"
+          ? t(
+              `${name} zaten Claude uygulamasında açık.`,
+              `${name} is already open in the Claude app.`,
+            )
+          : t(
+              "Otomatik bir geçiş sürüyor; elle geçiş başlamadı.",
+              "An automatic switch is in progress; your switch did not start.",
+            ),
+      );
+    })
     .finally(done);
 }
 
@@ -117,7 +140,11 @@ export function PanelAccounts({
           <span>{t("Diğer hesaplar", "Other accounts")}</span>
         )}
       </div>
-      {rows.length === 0 ? (
+      {relay.data === undefined ? (
+        <p aria-busy="true" className="px-3 py-2 text-xs text-muted-foreground">
+          {t("Yükleniyor…", "Loading…")}
+        </p>
+      ) : rows.length === 0 ? (
         <div className={`${panelCard} text-muted-foreground`}>
           {relay.accounts.length ? (
             t("Başka hesap yok", "No other accounts")
@@ -156,7 +183,8 @@ export function PanelAccounts({
           }
           pick={(row, e) => {
             const { canSwitch, reason } = panelRowState(row, relay);
-            if (reason === "not-linked") return void relay.api.openPage("hesaplar");
+            if (reason === "not-linked")
+              return void relay.report(() => relay.api.openPage("hesaplar"));
             if (reason === "window")
               return void relay.action(`window:${row.account.id}`, () =>
                 relay.api.openWindow(row.account.id),
@@ -212,7 +240,7 @@ export function PanelAccounts({
                 size="xs"
                 disabled={!panelRowState(confirming, relay).canSwitch}
                 onClick={() =>
-                  confirmSwitch(relay, confirming.account.id, () => setConfirmId(undefined))
+                  confirmSwitch(relay, confirming.account.id, t, () => setConfirmId(undefined))
                 }
               >
                 {t("Geç", "Switch")}
@@ -226,7 +254,7 @@ export function PanelAccounts({
           variant="link"
           size="sm"
           className="mt-1 h-auto px-1 text-xs text-muted-foreground"
-          onClick={() => void relay.api.openPage("hesaplar")}
+          onClick={() => void relay.report(() => relay.api.openPage("hesaplar"))}
         >
           {t(
             `+${hidden} hesap · Relay’de gör`,

@@ -401,11 +401,14 @@ test("TokenUsage loads on mount, on a new range or account, and follows its Rela
     assert.match(textOf(dom.container), /Toplam · \d+ gün3,2 Mn/);
     await mount(7, "b");
     assert.deepEqual(stub.calls.map((c) => c.input), [{ range: 30 }, { range: 7, accountId: "b" }]);
-    // The stale answer of the earlier request is dropped; the view stays.
+    // The view of the earlier range and account is not shown as this one's.
+    assert.doesNotMatch(textOf(dom.container), /3,2 Mn/);
+    assert.match(textOf(dom.container), /Token kaydı yükleniyor/);
+    // The stale answer of the earlier request is dropped.
     await act(async () => stub.calls[0].reject(new Error("late")));
     assert.doesNotMatch(textOf(dom.container), /late/);
     await act(async () => stub.calls[1].reject(new Error("Error invoking remote method 'relay:token-usage': Error: boom")));
-    assert.match(textOf(dom.container), /Token kullanımı yenilenemedi\.\s*boom/);
+    assert.match(textOf(dom.container), /Token kullanımı alınamadı\.\s*boom/);
     await act(async () => root.unmount());
     assert.equal(stub.listening(), false);
   } finally {

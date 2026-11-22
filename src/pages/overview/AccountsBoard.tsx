@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { AccountDot } from "@/components/AccountDot";
 import { LimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListRow, narrowHidden } from "@/components/ListCard";
+import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, ListSkeleton, narrowHidden } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -10,12 +10,11 @@ import { AntigravityAction, AntigravityPrompt, AntigravitySteps, antigravityAcco
 import { inUseIds } from "@/lib/provider-view";
 import { boardOrder, limitStanding } from "@/lib/limit-standing";
 import { accountHash } from "../accounts/AccountDetail";
+import { PROVIDER_ORDER } from "../accounts/accountGroups";
 import { providerShortLabel } from "../accounts/accountLabels";
 import { limitColumns, spentModelWindows, usedAt, limitHeadline, type ColumnWindow } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
-import type { Account, AccountProvider, AccountUsage } from "../../../shared/types";
-
-const ORDER: AccountProvider[] = ["claude", "codex", "antigravity", "gemini"];
+import type { Account, AccountUsage } from "../../../shared/types";
 
 type Window = ColumnWindow;
 
@@ -47,6 +46,15 @@ export function AccountsBoard({ now }: { now: number }) {
   const views = relayProviders(relay, now);
   const inUse = inUseIds(views);
   const listed = relay.accounts.filter((a) => a.id !== relay.active?.id);
+  // Until the first snapshot the board holds placeholders, not the empty Overview.
+  if (relay.data === undefined)
+    return (
+      <PageSection title={t("Tüm hesaplar", "All accounts")} slot="accounts-board">
+        <ListCard label={t("Tüm hesaplar", "All accounts")}>
+          <ListSkeleton />
+        </ListCard>
+      </PageSection>
+    );
   if (!listed.length) return null;
   // The same count the Limits board used: a read account with room in its five hours and week.
   const usable = relay.accounts.filter((a) => {
@@ -69,7 +77,7 @@ export function AccountsBoard({ now }: { now: number }) {
       : undefined;
   const promptOn = (id: string) =>
     ask ? ask.accountId === id : app?.busy ? app.signInFor === id : app?.result?.accountId === id;
-  const groups = ORDER.flatMap((provider) => {
+  const groups = PROVIDER_ORDER.flatMap((provider) => {
     // Within a provider: a week ending soon with room first, full ones after, unread last.
     const own = boardOrder(listed.filter((a) => (a.provider ?? "claude") === provider), usage, now);
     return own.length ? [{ provider, own }] : [];
@@ -96,17 +104,12 @@ export function AccountsBoard({ now }: { now: number }) {
     const other = otherLimit(u, [five, week].filter((w): w is Window => !!w), now, t);
     return (
       <Fragment key={a.id}>
-        <ListRow
-          columns="board"
-          onOpen={() => (window.location.hash = accountHash(a.id))}
-          label={a.name}
-          data={{ "data-account": a.id }}
-        >
+        <ListRow columns="board" onOpen={() => (window.location.hash = accountHash(a.id))} data={{ "data-account": a.id }}>
           <AccountDot color={a.color} />
           <div className="flex min-w-0 items-baseline gap-1.5">
-            <span className="truncate text-sm font-semibold" title={a.name}>
+            <ListOpen onOpen={() => (window.location.hash = accountHash(a.id))} title={a.name}>
               {a.name}
-            </span>
+            </ListOpen>
             {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("açık", "in use")}</span>}
           </div>
           {line(five, t("5 saat", "5 hours"), pooled, faded)}
@@ -123,9 +126,9 @@ export function AccountsBoard({ now }: { now: number }) {
           </div>
         </ListRow>
         {a.provider === "antigravity" && promptOn(a.id) && (
-          <div className="border-b px-4 py-2 last:border-b-0">
+          <ListNote>
             <AntigravityPrompt ask={ask} onClose={() => setAsk(undefined)} now={now} size="sm" />
-          </div>
+          </ListNote>
         )}
       </Fragment>
     );
@@ -152,12 +155,14 @@ export function AccountsBoard({ now }: { now: number }) {
         {groups.map(({ provider, own }) => (
           <Fragment key={provider}>
             <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />
-            {own.map(row)}
-            {provider === "antigravity" && handSteps && (
-              <div className="border-b px-4 py-2.5 last:border-b-0">
-                <AntigravitySteps target={handSteps} size="sm" />
-              </div>
-            )}
+            <ListSection id={`board-${provider}`} label={providerShortLabel(provider)}>
+              {own.map(row)}
+              {provider === "antigravity" && handSteps && (
+                <ListNote className="py-2.5">
+                  <AntigravitySteps target={handSteps} size="sm" />
+                </ListNote>
+              )}
+            </ListSection>
           </Fragment>
         ))}
       </ListCard>

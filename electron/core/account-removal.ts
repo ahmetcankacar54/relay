@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AccountRemoved, DesktopState } from "../../shared/types";
 import { writeBytes } from "./desktop-files";
 import { acquireProfileLock } from "./profile-lock";
+import { proxyExtrasSchema, type ProxyExtras } from "./proxy/proxy-status";
 import type { Store } from "./store";
 
 /** Why an account cannot be removed now: it is open in the Claude app, or its sign-in there is pending. */
@@ -45,13 +46,38 @@ export interface AccountRemoval {
 }
 
 /**
+ * Takes an account out of the gateway's pool order and its left-out list in `proxy-pool.json`,
+ * beside the registry. A missing or unreadable file has nothing to take out. The client bindings
+ * there hold the clients' own settings, never an account.
+ */
+function forgetInPool(root: string, accountId: string) {
+  const file = path.join(root, "proxy-pool.json");
+  let extras: ProxyExtras;
+  try {
+    extras = proxyExtrasSchema.parse(JSON.parse(fs.readFileSync(file, "utf8")));
+  } catch {
+    return;
+  }
+  const { accountOrder, excludedAccountIds } = extras;
+  if (!accountOrder?.includes(accountId) && !excludedAccountIds?.includes(accountId)) return;
+  const next: ProxyExtras = {
+    ...extras,
+    ...(accountOrder ? { accountOrder: accountOrder.filter((id) => id !== accountId) } : {}),
+    ...(excludedAccountIds ? { excludedAccountIds: excludedAccountIds.filter((id) => id !== accountId) } : {}),
+  };
+  const temp = `${file}.tmp`;
+  fs.writeFileSync(temp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(temp, file);
+}
+
+/**
  * Forgets an account, for `relay remove` and the app alike. Refused (AccountRemovalRefused) for
  * the account open in the Claude app and one whose Claude app sign-in is pending, and while
  * anything holds its profile lock (ProfileLockBusyError). Under that lock it signs the usage
  * sign-in out, deletes the profile folder, the sealed Claude app sign-in, the Claude extension's
  * sign-in, the plain terminal's saved sign-ins and the browser's claude.ai login kept for it (under either uuid the account has), and
- * drops it from the registry and the lists that name it. The Claude app's own data, the usage
- * history and the token ledger are left alone.
+ * drops it from the registry, the lists that name it and the gateway's pool. The Claude app's own
+ * data, the usage history and the token ledger are left alone.
  */
 export async function removeAccount(accountId: string, options: AccountRemoval): Promise<AccountRemoved> {
   const { store } = options;
@@ -95,6 +121,7 @@ export async function removeAccount(accountId: string, options: AccountRemoval):
       s.settings.autoSwitchAccounts = s.settings.autoSwitchAccounts.filter((id) => id !== account.id);
       s.settings.planning.accounts = s.settings.planning.accounts.filter((a) => a.id !== account.id);
     });
+    forgetInPool(store.root, account.id);
   } finally {
     release();
     fs.rmSync(path.join(options.locks, account.id), { recursive: true, force: true });

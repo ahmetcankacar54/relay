@@ -17,6 +17,7 @@ import {
   EXTENSION_MODES,
   PROFILE_FOLDER,
 } from "../../shared/browser-extension";
+import { defaultPlanning } from "../../shared/planning";
 
 export const accountPlanningSchema = z
   .object({
@@ -215,8 +216,9 @@ export const settingsPatchSchema = settingsSchema
     autoSwitchMode: settingsSchema.shape.autoSwitchMode.removeDefault(),
     autoSwitchAccounts: settingsSchema.shape.autoSwitchAccounts.removeDefault(),
   })
-  // The gateway's settings change through its own calls, which restart it when needed.
-  .omit({ proxy: true })
+  // The gateway's settings change through its own calls, which restart it when needed;
+  // planning changes only through `update-planning`, which validates and re-plans.
+  .omit({ proxy: true, planning: true })
   .partial();
 // A new install starts with DEFAULT_SETTINGS' "same-group". A saved registry that never
 // wrote the mode shared across all accounts, and keeps doing so.
@@ -377,7 +379,7 @@ export class Store {
     } else {
       this.state = {
         version: 1,
-        settings: { ...DEFAULT_SETTINGS },
+        settings: { ...DEFAULT_SETTINGS, planning: defaultPlanning() },
         accounts: [],
         pinned: [],
         importEnabled: false,

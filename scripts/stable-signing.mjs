@@ -20,6 +20,10 @@ export const WIDGET_RELATIVE = "Contents/PlugIns/RelayWidget.appex";
 export const WIDGET_ENTITLEMENTS = fileURLToPath(
   new URL("../electron/native/widget/widget.entitlements", import.meta.url),
 );
+/** The app's hardened-runtime exceptions; the widget keeps its own. */
+export const APP_ENTITLEMENTS = fileURLToPath(
+  new URL("../build/entitlements.mac.plist", import.meta.url),
+);
 const permissionTargets = [
   { relative: "", identifier: appIdentifier },
   ...["desktop-automation"].map((name) => ({
@@ -543,9 +547,13 @@ async function main() {
           mac: {
             identity: identity.fingerprint,
             sign: pinnedSigner(identity.fingerprint, signAsync),
-            // A local, non-notarized build: the hardened runtime adds library
-            // validation rules that a self-signed certificate cannot satisfy.
-            hardenedRuntime: false,
+            // The hardened runtime with the exceptions a self-signed Electron
+            // app needs: V8's JIT, loading its own native modules (node-pty,
+            // classic-level) without a Team ID for library validation to
+            // match, and the Apple events that quit Claude Desktop and browsers.
+            hardenedRuntime: true,
+            entitlements: APP_ENTITLEMENTS,
+            entitlementsInherit: APP_ENTITLEMENTS,
             strictVerify: true,
             ...(timestampPolicy.timestamp
               ? { timestamp: timestampPolicy.timestamp }

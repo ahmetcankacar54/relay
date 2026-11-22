@@ -120,7 +120,7 @@ export function CostBreakdown({
             "The cost of these tokens at API list prices. It is not your subscription price.",
           )}
         </p>
-        <div className={cn("grid gap-4", byAccount.length > 0 && byModel.length > 0 && "lg:grid-cols-2")}>
+        <div className={cn("grid gap-4", byAccount.length > 0 && byModel.length > 0 && "@4xl:grid-cols-2")}>
           {byAccount.length > 0 && (
             <section className="grid content-start gap-2">
               <h4 className="text-xs font-semibold text-muted-foreground">{t("Hesaba göre", "By account")}</h4>

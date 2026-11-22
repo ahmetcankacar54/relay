@@ -26,8 +26,11 @@ export function useExtensionStatus({
   const { api, settings } = useRelay();
   const [status, setStatus] = useState<ExtensionStatus | null | undefined>(initial);
   const [checking, setChecking] = useState(false);
+  // Only the latest request may set the status: an older one can answer after it.
+  const latest = useRef(0);
   const run = useCallback(
     (look: boolean, claimFor?: string) => {
+      const request = ++latest.current;
       if (look) setChecking(true);
       return (
         claimFor
@@ -37,10 +40,14 @@ export function useExtensionStatus({
             : api.extensionStatus()
       )
         .then(
-          (s) => setStatus(s ?? null),
+          (s) => {
+            if (request === latest.current) setStatus(s ?? null);
+          },
           () => {},
         )
-        .finally(() => look && setChecking(false));
+        .finally(() => {
+          if (request === latest.current) setChecking(false);
+        });
     },
     [api],
   );

@@ -572,14 +572,16 @@ test("when every start is manual the even spread is returned as is", () => {
   assert.deepEqual(plan.forecast, plan.evenForecast);
 });
 
-test("without demand every free start is the latest candidate", () => {
+test("without demand the resets spread widest: the even spread", () => {
   const plan = optimizeStarts({
     interval: { start: S, end: E },
     accounts,
     rate: () => 0,
     even,
   });
-  assert.deepEqual(plan.starts.map(hhmm), ["08:45", "08:45", "08:45"]);
+  // Every plan ties on unmet demand and switches; no 15-minute combination
+  // spreads three resets as wide as the even 100 minutes apart.
+  assert.deepEqual(plan.starts.map(hhmm), ["04:50", "06:30", "08:10"]);
   assert.equal(plan.forecast.switches, 0);
   assert.equal(plan.forecast.unmet, 0);
 });
@@ -887,4 +889,71 @@ test("without auto start the account that starts when demand resumes is the larg
     "max",
   );
   assert.equal(forecast.switches, 0);
+});
+
+test("five Pro accounts on a flat day leave no gap and spread their resets", () => {
+  const pros = Array.from({ length: 5 }, (_, i) => ({
+    id: `pro${i}`,
+    capacity: 1,
+  }));
+  const plan = optimizeStarts({
+    interval: { start: S, end: E },
+    accounts: pros,
+    rate: flat(20),
+    even: evenFor(5),
+  });
+  assert.equal(plan.forecast.unmet, 0);
+  const phases = plan.starts
+    .map((s) => (((s - S) % WINDOW_MS) + WINDOW_MS) % WINDOW_MS)
+    .sort((a, b) => a - b);
+  const gaps = phases.map((phase, i) =>
+    i ? phase - phases[i - 1] : phase + WINDOW_MS - phases.at(-1)!,
+  );
+  assert.ok(Math.min(...gaps) >= 45 * MIN, `${gaps.map((g) => g / MIN)}`);
+});
+
+test("an account out for its week serves once the week resets", () => {
+  const forecast = sim(
+    [
+      {
+        id: "weekly",
+        capacity: 5,
+        keepAlive: true,
+        remaining: 500,
+        blocked: true,
+        blockedUntil: S + 2 * H,
+      },
+    ],
+    flat(50),
+  );
+  assert.deepEqual(view(forecast), ["outage 09:00-11:00", "weekly 11:00-18:00"]);
+  assert.equal(forecast.unmet, 100);
+});
+
+test("the account whose week ends first takes over, before a sooner 5-hour reset", () => {
+  const list = (late: number): SimAccount[] => [
+    {
+      id: "soon-reset",
+      capacity: 1,
+      keepAlive: true,
+      remaining: 100,
+      firstReset: S + H,
+      weekEnds: S + 5 * 24 * H,
+    },
+    {
+      id: "week-ends",
+      capacity: 1,
+      keepAlive: true,
+      remaining: 100,
+      firstReset: S + 4 * H,
+      weekEnds: S + late,
+    },
+  ];
+  // A week ending a day sooner goes first; weeks within six hours tie and
+  // the 5-hour reset decides.
+  assert.equal(sim(list(24 * H), flat(10)).segments[0].accountId, "week-ends");
+  assert.equal(
+    sim(list(5 * 24 * H - 2 * H), flat(10)).segments[0].accountId,
+    "soon-reset",
+  );
 });

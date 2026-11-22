@@ -1,6 +1,6 @@
 import type { PrankLevel } from "../../shared/types";
 
-export type PrankKind = "nibble-cursor" | "wheel" | "nibble-bar" | "doze" | "confetti";
+export type PrankKind = "nibble-cursor" | "wheel" | "doze" | "confetti";
 
 /** How often a level may prank: the draw, the gap since the last prank, and the pranks per local day. */
 export const PRANK_BUDGET: Record<PrankLevel, { chance: number; gapMs: number; perDay: number }> = {

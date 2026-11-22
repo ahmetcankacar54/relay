@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import type net from "node:net";
+import net from "node:net";
 import { ProxyServer, aliasCodexPath } from "../electron/core/proxy/proxy-server";
 import type { Account, AccountUsage } from "../shared/types";
 
@@ -657,6 +657,68 @@ test("a loopback gateway refuses a foreign Host name (DNS rebinding)", async () 
     const local = await request(port, { path: "/status", headers: { host: `localhost:${port}` } });
     assert.equal(local.status, 200);
   } finally {
+    await server.stop();
+  }
+});
+
+test("the Host check never stands aside: no Host is refused, a tailnet bind answers only its own address", async () => {
+  const { server, port } = await startPool({ anthropicUrl: "http://127.0.0.1:9" }, [makeAccount("a", "A")]);
+  try {
+    // HTTP/1.0 may leave Host out; the gateway does not answer such a request.
+    const bare = await new Promise<string>((resolve, reject) => {
+      const socket = net.connect(port, "127.0.0.1", () => socket.end("GET /api/hello HTTP/1.0\r\n\r\n"));
+      let text = "";
+      socket.on("data", (c) => (text += c));
+      socket.on("end", () => resolve(text));
+      socket.on("error", reject);
+    });
+    assert.match(bare, /^HTTP\/1\.[01] 403/);
+    server.updateConfig({ host: "100.64.0.1" });
+    assert.equal((await request(port, { path: "/api/hello", headers: { host: `100.64.0.1:${port}` } })).status, 200);
+    assert.equal((await request(port, { path: "/api/hello", headers: { host: `localhost:${port}` } })).status, 200);
+    assert.equal((await request(port, { path: "/api/hello", headers: { host: "evil.example" } })).status, 403);
+    assert.equal((await request(port, { path: "/api/hello", headers: { host: `192.168.1.5:${port}` } })).status, 403);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("request bodies held at once are capped across requests: past the cap the gateway answers 503", async () => {
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true },
+    credentialResolver: async () => "tok",
+    usageProvider: () => ({ accounts: [makeAccount("a", "A")], usageMap: {} }),
+    upstreams: { anthropicUrl: "http://127.0.0.1:9" },
+    maxBufferedBytes: 1_000,
+  });
+  const { port } = await server.start();
+  // A body still arriving holds its bytes.
+  const slow = http.request({
+    host: "127.0.0.1",
+    port,
+    method: "POST",
+    path: "/v1/messages",
+    headers: { "content-type": "application/json", "content-length": 2_000 },
+  });
+  slow.on("error", () => {});
+  try {
+    slow.write("x".repeat(600));
+    // Real sockets: nothing tells the client when the gateway has read the bytes, so it waits.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const refused = await request(port, { method: "POST", path: "/v1/messages" }, JSON.stringify({ pad: "y".repeat(600) }));
+    assert.equal(refused.status, 503);
+    assert.deepEqual(JSON.parse(refused.body), {
+      type: "error",
+      error: { type: "overloaded_error", message: "Relay is holding too many request bodies at once" },
+    });
+    assert.equal(refused.headers["retry-after"], "1");
+    // Once the slow client leaves, its bytes are let go and the next body is taken.
+    slow.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const taken = await request(port, { method: "POST", path: "/v1/messages" }, JSON.stringify({ pad: "y".repeat(600) }));
+    assert.doesNotMatch(taken.body, /too many request bodies/);
+  } finally {
+    slow.destroy();
     await server.stop();
   }
 });

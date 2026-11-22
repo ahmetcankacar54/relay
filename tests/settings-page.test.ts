@@ -55,6 +55,7 @@ test("the system group offers the diagnostics files, and say which ones to send"
   relay.action = (async (name: string, fn: () => Promise<unknown>) => {
     calls.push(name);
     await fn();
+    return true;
   }) as Relay["action"];
   const html = (language: "tr" | "en") =>
     renderToStaticMarkup(
@@ -195,8 +196,10 @@ test("Settings offers the panda pranks setting on every platform", () => {
     for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /İmleci kısa süre saklayabilir\./])
       assert.match(html, re, platform);
     assert.match(html, /id="panda-pranks-label"/, platform);
-    assert.deepEqual(selected(html), ["Ara sıra"], platform);
-    assert.deepEqual(selected(render({ platform, pranks: "off" })), ["Kapalı"], platform);
+    // The pranks live under "Eğlence" and stay off until the user picks a level.
+    assert.match(html, /id="settings-panda"[\s\S]*?Eğlence/, platform);
+    assert.deepEqual(selected(html), ["Kapalı"], platform);
+    assert.deepEqual(selected(render({ platform, pranks: "sometimes" })), ["Ara sıra"], platform);
     assert.deepEqual(selected(render({ platform, pranks: "rarely" })), ["Nadiren"], platform);
   }
 });
@@ -282,7 +285,7 @@ test("Settings → Switching holds the warnings and their threshold; General the
     const updates: Partial<RelaySettings>[] = [];
     const relay = relayFor();
     relay.api = { ...relay.api, updateSettings: async (patch: Partial<RelaySettings>) => void updates.push(patch) } as unknown as Relay["api"];
-    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => (await fn(), true)) as Relay["action"];
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () =>
@@ -325,7 +328,7 @@ test("the system group shows how Relay starts Claude, and changes it through mai
         return choice;
       },
     } as unknown as Relay["api"];
-    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => (await fn(), true)) as Relay["action"];
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () =>
@@ -402,7 +405,7 @@ async function menuBarSettings(state: { items: string[]; now?: () => unknown }) 
     },
     ...(state.now ? { menuBarNow: async () => state.now!() } : {}),
   } as unknown as Relay["api"];
-  relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+  relay.action = (async (_name: string, fn: () => Promise<unknown>) => (await fn(), true)) as Relay["action"];
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(dom.container as unknown as Element);
   await act(async () =>

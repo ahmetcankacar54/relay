@@ -11,6 +11,7 @@ import type {
 } from "../../../shared/proxy-types";
 import type { LimitCalibration } from "../../../shared/limit-calibration";
 import { responseCost } from "../../../shared/model-prices";
+import { GATEWAY_HOST_ERROR, gatewayHostAllowed } from "../../../shared/proxy-url";
 
 /** The prefix every client key starts with, so a key pasted somewhere is recognised as Relay's. */
 export const PROXY_KEY_PREFIX = "relay-sec-";
@@ -19,16 +20,14 @@ export const PROXY_KEY_PREFIX = "relay-sec-";
 export const generateProxyKey = (): string =>
   `${PROXY_KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
 
-/** What the Proxy Gateway page may change: where the gateway listens, its routing strategy and session time. */
+/**
+ * What the Proxy Gateway page may change: where the gateway listens (this computer, or its
+ * Tailscale address), its routing strategy and session time.
+ */
 export const proxyConfigurePatch = z
   .object({
     port: z.number().int().min(1).max(65_535),
-    host: z
-      .string()
-      .trim()
-      .min(1)
-      .max(255)
-      .refine((host) => !/[\s/@?#]/.test(host), "Not a host address"),
+    host: z.string().trim().refine(gatewayHostAllowed, GATEWAY_HOST_ERROR),
     routingStrategy: z.enum(["soonest-reset", "balanced", "strict-priority"]),
     affinityTtlSeconds: z.number().int().min(10).max(3_600),
     accountOrder: z.array(z.string().min(1).max(128)).max(200),

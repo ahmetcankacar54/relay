@@ -91,10 +91,10 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.doesNotMatch(html, /Önerilen üstte|en uygunu üstte|Geçişi incele/);
   // Every other account is a row of the board that opens the account's page: its 5 hours and its week.
   const row = rowFor(html, "Vertex");
-  assert.match(row, /^ data-account="vertex" role="button" tabindex="0" aria-label="Vertex"/);
+  assert.match(row, /^ data-account="vertex" class="[^"]*"><[\s\S]*?<button type="button" data-list-nav=""[^>]*title="Vertex">Vertex<\/button>/);
   assert.match(row, /role="meter" aria-label="5 saat %12"/);
   assert.match(row, /role="meter" aria-label="Hafta %31"/);
-  assert.doesNotMatch(row, /<button/);
+  assert.doesNotMatch(row, /<button(?! type="button" data-list-nav)/);
   // The account in the Claude app is the card above, not a row again; the aside counts the usable ones.
   assert.equal(rowsOf(html).length, 1);
   assert.match(listOf(html), /<h2[^>]*>Tüm hesaplar<\/h2>[\s\S]*?>2\/2 kullanılabilir</);
@@ -125,8 +125,8 @@ test("unlinked accounts lead to their page instead of offering a switch", async 
   const html = render(relay);
   const row = rowFor(html, "Studio");
   // The row opens like a link and offers no switch; nothing is suggested.
-  assert.match(row, /^ data-account="other" role="button" tabindex="0" aria-label="Studio"/);
-  assert.doesNotMatch(row, /<button/);
+  assert.match(row, /<button type="button" data-list-nav=""[^>]*title="Studio">Studio<\/button>/);
+  assert.doesNotMatch(row, /<button(?! type="button" data-list-nav)/);
   assert.equal(switchButtons(html).length, 0);
   assert.equal(suggestionBlock(html), "");
   // Choosing it opens the account's page, where its sign-in is saved.
@@ -314,7 +314,7 @@ test("the hero shows the account's status where something is wrong, in a few wor
   // Another account's problem is on its own page: its board row has no figure to show and opens it.
   const other = acct("other", "Vertex", "pro");
   const row = rowFor(render(relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...failed("expired"), accountId: "other" } })), "Vertex");
-  assert.match(row, /^ data-account="other" role="button"/);
+  assert.match(row, /^ data-account="other"[\s\S]*?data-list-nav=""[^>]*title="Vertex"/);
   assert.equal(row.match(/>—<\/span>/g)?.length, 2);
 });
 
@@ -578,6 +578,7 @@ test("the CLI's Choose file reuses the Settings picker", async () => {
   relay.action = (async (name: string, fn: () => Promise<unknown>) => {
     calls.push(name);
     await fn();
+    return true;
   }) as Relay["action"];
   relay.api = { pickExecutable: async () => void calls.push("pick") } as unknown as Relay["api"];
   const { chooseCliFile } = await import("../src/features/CliSetup");
@@ -682,8 +683,8 @@ test("the Overview's one Geç is the suggestion's, filled, and every other accou
   assert.match(buttons[0], /data-variant="default"[^>]*class="[^"]*bg-primary[^"]*"[^>]*aria-label="Vertex hesabına geç"/);
   // The rows, linked or not, open the account; none of them switches.
   for (const [name, id] of [["Vertex", "vertex"], ["Alto", "alto"], ["Studio", "studio"]]) {
-    assert.match(rowFor(html, name), new RegExp(`^ data-account="${id}" role="button"`), name);
-    assert.doesNotMatch(rowFor(html, name), /<button/, name);
+    assert.match(rowFor(html, name), new RegExp(`^ data-account="${id}"[\\s\\S]*?data-list-nav=""[^>]*title="${name}"`), name);
+    assert.doesNotMatch(rowFor(html, name), /<button(?! type="button" data-list-nav)/, name);
   }
   // The hero's Geç asks for the switch, as every switch does.
   const dom = fakeDom();
@@ -848,13 +849,13 @@ test("the Overview lists Antigravity's accounts on the board: the account the ap
   const plainRelay = withApp({ installed: true, canOpen: false, accountId: "g1" });
   const plain = group(render(plainRelay));
   // The account the app uses is marked; its spent pool leads, red, with when it opens; the other pool beside it.
-  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/span><span[^>]*>açık<\/span>/);
+  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/button><span[^>]*>açık<\/span>/);
   assert.match(plain, /data-account="g1"[\s\S]*?Gemini 4 Carbon \(High\)[\s\S]*?text-crit">Dolu · 25 dk</);
   assert.match(plain, /data-account="g1"[\s\S]*?data-slot="other-limit"[^>]*><span[^>]*>Gemini 4 Argon %0</);
   // Never the roomiest pool as "%0" for the other account: its own figure.
   assert.match(plain, /data-account="g2"[\s\S]*?>%6</);
   // Not on macOS Relay cannot move the app: no button on the board. The tray's pane walks through it by hand.
-  assert.doesNotMatch(plain, /<button/);
+  assert.doesNotMatch(plain, /<button(?! type="button" data-list-nav)/);
   const pane = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,

@@ -1,6 +1,5 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "../styles/fonts.css";
 import { ErrorBoundary } from "../app/ErrorBoundary";
 import { I18nProvider } from "../data/i18n";
 import { api, RelayProvider } from "../data/useRelay";

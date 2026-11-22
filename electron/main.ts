@@ -7,6 +7,7 @@ import {
   Menu,
   nativeTheme,
   Notification,
+  powerMonitor,
   shell,
   systemPreferences,
 } from "electron";
@@ -38,6 +39,7 @@ import { SignInBusyError } from "./core/auth";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
 import os from "node:os";
 import { z } from "zod";
@@ -180,7 +182,8 @@ import {
   unbindClient,
   type ClientTarget,
 } from "./core/proxy/proxy-clients";
-import { gatewayUrl } from "../shared/proxy-url";
+import { gatewayHostAllowed, gatewayUrl } from "../shared/proxy-url";
+import { redact } from "./core/redact";
 import { listenOAuthCallback, type CallbackServer } from "./core/oauth-callback-server";
 import { proxyExtrasSchema, type ProxyExtras } from "./core/proxy/proxy-status";
 import {
@@ -738,6 +741,35 @@ function startTokenScan() {
 }
 const keeperAbort = new AbortController();
 let quitting = false;
+/** The system is shutting down or restarting: quitting is not vetoed then. */
+let systemShutdown = false;
+/** The error log is started over once it passes this size. */
+const MAIN_ERROR_LOG_BYTES = 1024 * 1024;
+/**
+ * An error no code in the main process caught, appended to `<logs>/main-errors.log` with the
+ * time, each line redacted, for a bug report. Relay keeps running.
+ */
+function recordMainError(kind: string, error: unknown) {
+  try {
+    const file = path.join(app.getPath("logs"), "main-errors.log");
+    const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    const lines = text.split(/\r?\n/).map((line) => redact(line, 500));
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) > MAIN_ERROR_LOG_BYTES)
+      fs.truncateSync(file, 0);
+    fs.appendFileSync(file, `${new Date().toISOString()} ${kind} ${lines.join("\n  ")}\n`, {
+      mode: 0o600,
+    });
+  } catch {
+    // Nowhere to write it: the error is dropped, never thrown again.
+  }
+}
+process.on("unhandledRejection", (reason) => recordMainError("unhandledRejection", reason));
+process.on("uncaughtException", (error) => recordMainError("uncaughtException", error));
+// No Relay page embeds another one.
+app.on("web-contents-created", (_event, contents) =>
+  contents.on("will-attach-webview", (event) => event.preventDefault()),
+);
 app.setName("Relay");
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -813,6 +845,10 @@ else {
           path.join(__dirname, "icon.png"),
         );
       watchRegistry();
+      // A shutdown or restart quits Relay without asking: a veto there would stall the system.
+      powerMonitor.on("shutdown", () => {
+        systemShutdown = true;
+      });
       nativeTheme.themeSource = themeSource(service.store.state.settings);
       const vaultDir = path.join(app.getPath("userData"), "desktop-vault");
       operationLock = new ProcessLock(path.join(vaultDir, "operation.lock"), "app");
@@ -1044,7 +1080,8 @@ else {
       // While separate windows run, the helper looks only at the main Claude.
       const automationTarget = async () => host.automationTarget?.();
       automation = nativeDesktopAutomation(automationHelper, undefined, automationTarget);
-      if (process.platform === "darwin" && process.env.RELAY_UI_OUTLINE === "1")
+      // A diagnosis aid for development; a packaged Relay never reads it.
+      if (process.platform === "darwin" && !app.isPackaged && process.env.RELAY_UI_OUTLINE === "1")
         void writeUiOutline(
           automationHelper,
           path.join(app.getPath("userData"), "diagnostics", "ui-outline.json"),
@@ -2005,10 +2042,10 @@ function notifyUpdate(version: string) {
 /**
  * Starts Relay's own updates: on macOS Relay downloads, verifies and swaps its app itself; on
  * Windows and Linux electron-updater does. A development run never updates unless
- * RELAY_UPDATE_FEED points it at a test feed.
+ * RELAY_UPDATE_FEED points it at a test feed; a packaged Relay never reads that variable.
  */
 function startAppUpdates() {
-  const testFeed = process.env.RELAY_UPDATE_FEED;
+  const testFeed = app.isPackaged ? undefined : process.env.RELAY_UPDATE_FEED;
   if (!app.isPackaged && !testFeed) return;
   const folder = path.join(app.getPath("userData"), "updates");
   const current = app.getVersion();
@@ -2030,7 +2067,8 @@ function startAppUpdates() {
               ),
             ),
           spawnDetached: (file, args) => {
-            // Nothing of Relay's environment reaches the app the script opens (it uses env -i).
+            // Only PATH: the script's RELAY_UPDATE_* tool overrides (tests set them) never come from
+            // Relay's environment, and nothing of it reaches the app the script opens (env -i).
             spawn(file, args, { detached: true, stdio: "ignore", env: { PATH: "/usr/bin:/bin" } }).unref();
           },
           writable: (dir) => {
@@ -2140,12 +2178,13 @@ function notifyAdapted(
 }
 /**
  * Reloads the account list when another process (the relay CLI) writes it, and tells the
- * windows and the menu bar. Relay's own writes are noticed and skipped by `reload`.
+ * windows and the menu bar. Relay's own writes are noticed and skipped by `reload`. A watch that
+ * fails (the folder replaced, the system out of watches) is started again 5 s later.
  */
 function watchRegistry() {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    fs.watch(service.store.root, (_event, name) => {
+    const watcher = fs.watch(service.store.root, (_event, name) => {
       if (name !== "state.json") return;
       clearTimeout(timer);
       timer = setTimeout(() => {
@@ -2158,6 +2197,11 @@ function watchRegistry() {
         broadcastChanged();
         void tray?.update();
       }, 250);
+    });
+    watcher.on("error", () => {
+      clearTimeout(timer);
+      watcher.close();
+      setTimeout(watchRegistry, 5_000).unref();
     });
   } catch {
     // Without a watch, another process's changes show after Relay restarts.
@@ -2385,11 +2429,15 @@ function proxyExtras(): ProxyExtras {
   }
   return proxyExtrasCache;
 }
-const proxySettings = (): ProxyConfig => ({
-  ...DEFAULT_PROXY_CONFIG,
-  ...service.store.state.settings.proxy,
-  ...proxyExtras(),
-});
+const proxySettings = (): ProxyConfig => {
+  const config: ProxyConfig = {
+    ...DEFAULT_PROXY_CONFIG,
+    ...service.store.state.settings.proxy,
+    ...proxyExtras(),
+  };
+  // A host older Relays accepted (the whole local network) falls back to this computer only.
+  return gatewayHostAllowed(config.host) ? config : { ...config, host: DEFAULT_PROXY_CONFIG.host };
+};
 const saveProxySettings = (config: ProxyConfig) => {
   const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, ...base } = config;
   const extras: ProxyExtras = {
@@ -2646,6 +2694,13 @@ function broadcastChanged() {
   if (window && !window.isDestroyed()) window.webContents.send("relay:changed");
   trayPanel?.webContents()?.send("relay:changed");
 }
+/** The Vite dev server the pages come from in development; undefined when they load from dist. */
+function devServer(): string | undefined {
+  const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
+  return devURL === "http://127.0.0.1:5173" ? devURL : undefined;
+}
+/** The built pages: index.html, panel.html, switch.html. */
+const PAGES_DIR = path.join(__dirname, "../dist");
 /** Loads a Vite entry from the dev server in development, else from dist. */
 function loadPage(
   win: BrowserWindow,
@@ -2653,17 +2708,31 @@ function loadPage(
   /** `#/planlama`: the page the main window opens on. */
   hash?: string,
 ) {
-  const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
-  if (devURL === "http://127.0.0.1:5173")
+  const devURL = devServer();
+  if (devURL)
     void win.loadURL(
       page === "index.html" ? `${devURL}/${hash ?? ""}` : `${devURL}/${page}`,
     );
   else
     void win.loadFile(
-      path.join(__dirname, "../dist", page),
+      path.join(PAGES_DIR, page),
       hash ? { hash: hash.replace(/^#/, "") } : undefined,
     );
 }
+/** Whether a frame shows one of Relay's own pages, from where `loadPage` loads them. */
+function relayPage(url: string | undefined): boolean {
+  if (!url) return false;
+  const devURL = devServer();
+  if (devURL) return url.startsWith(`${devURL}/`);
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "file:" && fileURLToPath(parsed).startsWith(PAGES_DIR + path.sep);
+  } catch {
+    return false;
+  }
+}
+/** How long the main window's page may stay unresponsive before it is restarted. */
+const UNRESPONSIVE_RESTART_MS = 10_000;
 function createWindow(hash?: string) {
   window = new BrowserWindow({
     width: 960,
@@ -2676,7 +2745,7 @@ function createWindow(hash?: string) {
     // elsewhere the window takes the page colour, so nothing flashes before the page draws.
     ...(process.platform === "darwin"
       ? { vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
-      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f11" : "#f4f4f5" }),
+      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#100f0e" : "#f5f4f2" }),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     // 16 px from the left: the three buttons end at 68 px, inside the 84 px collapsed rail.
     trafficLightPosition: { x: 16, y: 19 },
@@ -2686,6 +2755,7 @@ function createWindow(hash?: string) {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      devTools: !app.isPackaged,
     },
   });
   // A link opens in the browser only when it is one of the allow-listed pages; no window opens.
@@ -2701,6 +2771,20 @@ function createWindow(hash?: string) {
   applyAppMenu();
   loadPage(window, "index.html", hash);
   const own = window;
+  // A crashed or killed page loads again; a page that stays hung is ended, and then loads again.
+  own.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason !== "clean-exit" && !own.isDestroyed()) own.webContents.reload();
+  });
+  let hung: ReturnType<typeof setTimeout> | undefined;
+  own.on("unresponsive", () => {
+    clearTimeout(hung);
+    hung = setTimeout(() => {
+      if (!own.isDestroyed()) own.webContents.forcefullyCrashRenderer();
+    }, UNRESPONSIVE_RESTART_MS);
+    hung.unref();
+  });
+  own.on("responsive", () => clearTimeout(hung));
+  own.on("closed", () => clearTimeout(hung));
   own.on("closed", () => {
     if (window !== own) return;
     windowRelease.cancel();
@@ -2713,7 +2797,9 @@ function createWindow(hash?: string) {
   own.on("close", (event) => {
     if (!quitting && tray) {
       event.preventDefault();
-      own.hide();
+      // Linux desktops without a tray area would leave a hidden window unreachable.
+      if (process.platform === "linux") own.minimize();
+      else own.hide();
       closeWindowToTray();
     }
   });
@@ -2730,6 +2816,12 @@ function applyAppMenu() {
     ),
   );
 }
+/** An open-file dialog over the main window while it is there, else on its own. */
+function openDialog(options: Electron.OpenDialogOptions) {
+  return window && !window.isDestroyed()
+    ? dialog.showOpenDialog(window, options)
+    : dialog.showOpenDialog(options);
+}
 /**
  * Cmd+W. The main window closes as its close button does: it hides and Relay stays in the menu
  * bar. The menu bar panel hides; other windows are left alone.
@@ -2740,7 +2832,10 @@ function closeFocusedWindow() {
   if (focused === window) focused.close();
   else if (focused.webContents === trayPanel?.webContents()) trayPanel?.hide();
 }
-/** Only the main frames of the main window and the menu bar panel may call Relay. */
+/**
+ * Only the main frames of the main window and the menu bar panel may call Relay, and only while
+ * they show Relay's own pages.
+ */
 function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
   const allowed = [
     window && !window.isDestroyed() ? window.webContents : undefined,
@@ -2748,7 +2843,8 @@ function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
   ];
   if (
     !allowed.includes(event.sender) ||
-    event.senderFrame !== event.sender.mainFrame
+    event.senderFrame !== event.sender.mainFrame ||
+    !relayPage(event.senderFrame?.url)
   )
     throw new Error("Geçersiz IPC kaynağı.");
 }
@@ -3095,6 +3191,8 @@ function bindIPC() {
         port: ANTIGRAVITY_CALLBACK_PORT,
         path: "/oauth-callback",
         timeoutMs: 10 * 60_000,
+        // Set below, once the helper has named the sign-in; a redirect for another one waits.
+        state: () => pendingAntigravityOAuth.get(account.id),
         handle: async (address) => {
           const expected = pendingAntigravityOAuth.get(account.id);
           try {
@@ -3486,6 +3584,9 @@ function bindIPC() {
           desktop: () => desktop.snapshot(),
         });
         usage.forget(account);
+        // removeAccount took it out of proxy-pool.json; the gateway forgets its sessions.
+        proxyExtrasCache = undefined;
+        proxyServer?.sessionCache.evictAccount(account);
         // Its Antigravity app sign-in kept in the vault goes with it, like every other sign-in Relay keeps.
         await antigravitySwitcher?.forget(account).catch(() => {});
         void forgetSignInSession(account).catch(() => {});
@@ -3545,7 +3646,7 @@ function bindIPC() {
     ),
   );
   handle("pick-folder", async () => {
-    const result = await dialog.showOpenDialog(window!, {
+    const result = await openDialog({
       properties: ["openDirectory"],
       title: say("Proje klasörünü seç", "Select the project folder"),
     });
@@ -3558,7 +3659,7 @@ function bindIPC() {
       .stat(installed)
       .then((s) => s.isDirectory())
       .catch(() => false);
-    const result = await dialog.showOpenDialog(window!, {
+    const result = await openDialog({
       properties: ["openFile", "showHiddenFiles"],
       ...(opensThere ? { defaultPath: installed } : {}),
       title: say(
@@ -3583,7 +3684,7 @@ function bindIPC() {
   });
   handle("pick-claude-app", async () => {
     const mac = process.platform === "darwin";
-    const result = await dialog.showOpenDialog(window!, {
+    const result = await openDialog({
       properties: ["openFile"],
       ...(mac ? { defaultPath: "/Applications" } : {}),
       title: say("Claude uygulamasını seç", "Select the Claude app"),
@@ -3667,6 +3768,11 @@ app.on("window-all-closed", () => {
 });
 app.on("before-quit", (event) => {
   if (!service) return;
+  // The system is going down: nothing may hold it up; running work ends with Relay.
+  if (systemShutdown) {
+    quitting = true;
+    return;
+  }
   if (usageCredentialRefresher?.anyActive) {
     event.preventDefault();
     showWindow();

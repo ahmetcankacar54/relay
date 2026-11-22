@@ -5,7 +5,7 @@ import type net from "node:net";
 import { cliFixture } from "./cli-fixture";
 import { parseCommand } from "../cli/src/args";
 
-test("relay proxy takes --port and --host, and rejects bad values", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("relay proxy takes --port and --host, and rejects bad values", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   assert.equal(
     parseCommand(["proxy", "env", "--port", "9000", "--host", "::1"]).flags
       .port,
@@ -30,11 +30,17 @@ test("relay proxy takes --port and --host, and rejects bad values", { skip: proc
     ].join("\n"),
   );
   f.clear();
-  assert.equal(await f.run("proxy", "env", "--host", "0.0.0.0"), 0);
-  assert.match(f.out(), /http:\/\/127\.0\.0\.1:8317/);
-  f.clear();
   assert.equal(await f.run("proxy", "env", "--host", "::1"), 0);
   assert.match(f.out(), /http:\/\/\[::1\]:8317/);
+  f.clear();
+  assert.equal(await f.run("proxy", "env", "--host", "100.101.12.34"), 0);
+  assert.match(f.out(), /http:\/\/100\.101\.12\.34:8317/);
+  // Only this computer or its tailnet: a whole-network or foreign address is refused.
+  for (const host of ["0.0.0.0", "::", "192.168.1.5", "example.com", "x/y", ""]) {
+    f.clear();
+    assert.equal(await f.run("proxy", "env", "--host", host), 2, host);
+    assert.match(f.err(), /Use 127\.0\.0\.1, localhost or a Tailscale address\./, host);
+  }
 
   for (const port of ["0", "70000", "abc", "-1"]) {
     assert.equal(await f.run("proxy", "env", "--port", port), 2, port);
@@ -42,7 +48,7 @@ test("relay proxy takes --port and --host, and rejects bad values", { skip: proc
   assert.equal(await f.run("proxy", "frobnicate"), 2);
 });
 
-test("relay proxy status reports a running and a stopped gateway", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("relay proxy status reports a running and a stopped gateway", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
@@ -83,7 +89,7 @@ test("relay proxy status reports a running and a stopped gateway", { skip: proce
   assert.equal(JSON.parse(f.out()).running, false);
 });
 
-test("relay proxy env and status use the client key Relay.app saved", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("relay proxy env and status use the client key Relay.app saved", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const key = "relay-sec-cli-test-key";
   let seenKey: string | undefined;
   const server = http.createServer((req, res) => {

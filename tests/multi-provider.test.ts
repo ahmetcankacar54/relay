@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts } from "../src/pages/Accounts";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
-import { AccountDetailBody } from "../src/pages/accounts/AccountDetail";
+import { AccountDetailBody } from "../src/pages/accounts/account-detail/Body";
 import { AddAccountFlow } from "../src/pages/accounts/AddAccountDialog";
 import { suggestAccountName } from "../src/pages/accounts/AddAccountProviders";
 import {

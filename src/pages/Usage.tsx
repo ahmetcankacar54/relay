@@ -4,7 +4,7 @@ import type { StatisticsRange } from "../../shared/usage-statistics-view";
 import type { TokenUsageView } from "../../shared/token-usage-view";
 import { historyIdentity } from "../../shared/usage-statistics";
 import { Banner } from "@/components/Banner";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Panda } from "@/components/Panda";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -28,8 +28,6 @@ import {
   type UsageStatisticsState,
 } from "./usage/useUsageStatistics";
 
-const cardClass = "gap-0 px-4 py-3.5";
-
 /** A card with one message instead of the statistics; the panda reflects the state. */
 function StatisticsMessage({
   title,
@@ -43,7 +41,7 @@ function StatisticsMessage({
   scene?: PandaScene;
 }) {
   return (
-    <Card className={cardClass} role={alert ? "alert" : undefined}>
+    <Card padded role={alert ? "alert" : undefined}>
       <div className="flex items-center gap-4">
         {scene && <Panda scene={scene} size={72} playful />}
         <div className="min-w-0 flex-1">
@@ -160,7 +158,7 @@ function StatisticsContent({
     <div className="grid gap-5" aria-busy={loading || undefined}>
       <SummaryTiles view={view} />
       <DailyChart view={view} accounts={accounts} zone={zone} />
-      <div className="grid items-start gap-5 lg:grid-cols-2">
+      <div className="grid items-start gap-5 @4xl:grid-cols-2">
         <AccountBalance view={view} accounts={accounts} />
         <LimitHits view={view} zone={zone} />
       </div>
@@ -283,7 +281,7 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
         ) : undefined
       }
     >
-      <div className="grid gap-4 px-5 pb-5">
+      <PageBody className="pb-5">
         {/* History only: today's limits of every account are on the Overview. */}
         {section === "limits" && (
           <LimitsPage
@@ -295,7 +293,7 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
         )}
         {section === "tokens" && <TokenUsage range={range} accountId={accountId} />}
         {section === "lost" && <LostFound />}
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }

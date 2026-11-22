@@ -26,6 +26,7 @@ import { ProxySessionCache } from "./proxy-session-cache";
 import { ProxyStats, type RequestLogSink } from "./proxy-stats";
 import { GatewayInsights } from "./proxy-insights";
 import { responseCost } from "../../../shared/model-prices";
+import { LOOPBACK_HOSTS } from "../../../shared/proxy-url";
 import { AnthropicUpstream } from "./anthropic-upstream";
 import { CodexUpstream } from "./codex-upstream";
 import { WebSocketBridge, rejectUpgrade } from "./websocket-bridge";
@@ -68,6 +69,8 @@ function requestClassOf(headers: http.IncomingHttpHeaders): string | undefined {
 
 /** The largest request body the gateway buffers: Anthropic itself caps requests at 32 MB. */
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
+/** The most request body bytes held at once across all requests, in Relay's main process. */
+const MAX_BUFFERED_BYTES = 256 * 1024 * 1024;
 /** A body is only parsed (session key, model) up to this size. */
 const MAX_PARSE_BYTES = 16 * 1024 * 1024;
 /** Requests answered at once; the gateway runs in Relay's main process and buffers each body. */
@@ -85,7 +88,6 @@ const OVERLOADED_COOLDOWN_S = 10;
 const EXTRA_USAGE_COOLDOWN_S = 30 * 60;
 /** Answers another account may succeed at: a limit, a refused sign-in, an overloaded upstream. */
 const RETRYABLE = new Set([401, 403, 429, 503, 529]);
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const CODEX_WS_URL = "wss://chatgpt.com/backend-api/codex/responses";
 
 /**
@@ -140,6 +142,9 @@ export class ProxyServer {
   private readonly now: () => number;
   private requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
   private hubFetch?: typeof fetch;
+  /** Request body bytes held now, across requests; capped at `maxBufferedBytes`. */
+  private bufferedBytes = 0;
+  private readonly maxBufferedBytes: number;
 
   constructor(options: {
     config?: Partial<ProxyConfig>;
@@ -159,6 +164,8 @@ export class ProxyServer {
     now?: () => number;
     /** Sends the usage dashboards' provider requests (tests replace it). */
     hubFetch?: typeof fetch;
+    /** The cap on request body bytes held at once (tests pass a small one). */
+    maxBufferedBytes?: number;
     /** Where requests go instead of the real services (tests, regional endpoints). */
     upstreams?: {
       anthropicUrl?: string;
@@ -178,6 +185,7 @@ export class ProxyServer {
     this.onLoopAlarm = options.onLoopAlarm;
     this.requestLog = options.requestLog;
     this.hubFetch = options.hubFetch;
+    this.maxBufferedBytes = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
 
     this.sessionCache = new ProxySessionCache({
       ttlSeconds: this.config.affinityTtlSeconds,
@@ -349,7 +357,11 @@ export class ProxyServer {
     sendJsonError(res, 500, "api_error", message);
   }
 
-  /** Buffers the request body; undefined when the client left, timed out, or the body was too large. */
+  /**
+   * Buffers the request body; undefined when the client left, timed out, or the body was too large
+   * (413) or would take the gateway past its cap on bodies held at once (503). A body stays counted
+   * until its answer is done, since a request may be sent to several accounts.
+   */
   private readBody(
     req: http.IncomingMessage,
     res: http.ServerResponse,
@@ -357,12 +369,20 @@ export class ProxyServer {
     return new Promise((resolve) => {
       const chunks: Buffer[] = [];
       let size = 0;
+      let held = 0;
       let done = false;
+
+      const release = () => {
+        this.bufferedBytes -= held;
+        held = 0;
+      };
+      res.once("close", release);
 
       const finish = (body: Buffer | undefined) => {
         if (done) return;
         done = true;
         clearTimeout(timer);
+        if (!body) release();
         resolve(body);
       };
 
@@ -393,6 +413,18 @@ export class ProxyServer {
           finish(undefined);
           return;
         }
+        if (this.bufferedBytes + chunk.length > this.maxBufferedBytes) {
+          chunks.length = 0;
+          sendJsonError(res, 503, "overloaded_error", "Relay is holding too many request bodies at once", {
+            "retry-after": "1",
+            connection: "close",
+          });
+          res.once("finish", () => req.destroy());
+          finish(undefined);
+          return;
+        }
+        held += chunk.length;
+        this.bufferedBytes += chunk.length;
         chunks.push(chunk);
       });
       req.on("end", () => finish(Buffer.concat(chunks)));
@@ -545,19 +577,19 @@ export class ProxyServer {
   private readonly lastMainPrompt = new Map<string, string>();
 
   /**
-   * On a loopback bind, only loopback Host names are answered: a web page that rebinds its own
-   * domain to 127.0.0.1 then cannot reach the gateway. A wider bind needs the client key anyway.
+   * Only Host names the gateway is reached by are answered: loopback names, and the address it
+   * listens on (a Tailscale one). A web page that rebinds its own domain to the gateway's address
+   * then cannot reach it. A request without a Host header is refused.
    */
   private hostAllowed(hostHeader: string | undefined): boolean {
-    if (!LOOPBACK_HOSTS.has(this.config.host)) return true;
-    if (!hostHeader) return true;
+    if (!hostHeader) return false;
     let name: string;
     try {
       name = new URL(`http://${hostHeader}`).hostname.replace(/^\[|\]$/g, "");
     } catch {
       return false;
     }
-    return LOOPBACK_HOSTS.has(name) || /^127\./.test(name);
+    return LOOPBACK_HOSTS.has(name) || /^127\./.test(name) || name === this.config.host.replace(/^\[|\]$/g, "");
   }
 
   /**

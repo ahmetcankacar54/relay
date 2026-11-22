@@ -803,7 +803,7 @@ export interface RelaySettings {
   menuBarAnimation?: boolean;
   /** Show the switch window under the menu bar while Claude restarts; missing means on. */
   switchWindow?: boolean;
-  /** How often the panda pranks; missing means "sometimes". */
+  /** How often the panda pranks; missing means "off". */
   pranks?: PrankLevel;
   /**
    * Experimental: re-type the drafts rescued at a switch into Claude. Missing means off: the

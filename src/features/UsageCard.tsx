@@ -217,7 +217,7 @@ export function UsageCard({
                 ? "bg-muted-foreground/40"
                 : meterFill(window?.usedPercent),
             )}
-            style={{ width: `${used ?? 0}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, used ?? 0))}%` }}
           />
         </div>
         <div className="mt-1 text-xs text-muted-foreground">

@@ -439,10 +439,12 @@ test("the default tempo plans a lone Pro and two Pro accounts at fixed times", (
     settings({ weekday: hours, accounts: [{ id: A }, { id: B }] }),
     context(),
   );
-  // 450 Pro units of demand, 100 per window: no gap with two switches.
+  // 450 Pro units of demand, 100 per window: no gap with two switches. Of
+  // those plans, 04:00 and 06:00 put the resets furthest apart (09:00/14:00
+  // and 11:00/16:00: two and three hours).
   assert.deepEqual(clocks(two.accounts.map((a) => a.firstStart)), [
-    "07:00",
-    "08:00",
+    "04:00",
+    "06:00",
   ]);
   assert.equal(two.forecast?.unmet, 0);
   assert.equal(two.forecast?.switches, 2);
@@ -540,4 +542,15 @@ test("a week of plans optimizes each distinct day shape once", () => {
   assert.equal(planCacheStats().optimizations, 2);
   clearPlanCache();
   assert.equal(planCacheStats().optimizations, 0);
+});
+
+test("work hours that end in a skipped DST hour end at the first time after it", () => {
+  const night = settings({
+    timeZone: "Europe/Berlin",
+    weekend: { enabled: true, start: "22:00", end: "02:30" },
+  });
+  // 2026-03-29 02:00 CET jumps to 03:00 CEST: 02:30 never happens.
+  const interval = workInterval("2026-03-28", night)!;
+  assert.equal(interval.start, Date.parse("2026-03-28T21:00:00Z"));
+  assert.equal(interval.end, Date.parse("2026-03-29T01:00:00Z"));
 });

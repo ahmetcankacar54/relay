@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AccountDetailBody, ExtensionRow } from "../src/pages/accounts/AccountDetail";
+import { AccountDetailBody } from "../src/pages/accounts/account-detail/Body";
+import { ExtensionRow } from "../src/pages/accounts/account-detail/ExtensionConnection";
 import { ExtensionPreference } from "../src/features/ExtensionPreference";
 import {
   instanceLine,

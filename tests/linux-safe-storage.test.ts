@@ -106,6 +106,9 @@ test("Chromium's keyring choice follows the desktop", () => {
   assert.deepEqual(linuxKeyring({}), { kind: "secret-service" });
   assert.equal(linuxKeyringReachable(KDE6, (f) => f === "/usr/bin/busctl"), true);
   assert.equal(linuxKeyringReachable({ XDG_CURRENT_DESKTOP: "GNOME" }, (f) => f === "/usr/bin/busctl"), false);
+  // secret-tool counts only at its two fixed places, never wherever PATH points.
+  assert.equal(linuxKeyringReachable({ XDG_CURRENT_DESKTOP: "GNOME" }, (f) => f === "/usr/local/bin/secret-tool"), true);
+  assert.equal(linuxKeyringReachable({ XDG_CURRENT_DESKTOP: "GNOME", PATH: "/tmp" }, (f) => f === "/tmp/secret-tool"), false);
 });
 
 /** A busctl stand-in answering KWallet's D-Bus methods as `busctl --json=short` does. */
@@ -175,6 +178,7 @@ test("KWallet: Claude's own folder and key, never opened in the background while
 
 test("Secret Service: the item Chromium's schema files under Claude's name", async () => {
   const calls: string[][] = [];
+  const files: string[] = [];
   let answer: RunResult = { stdout: `${SECRET}\n`, stderr: "" };
   const read = () =>
     linuxSafeStoragePassword({
@@ -182,19 +186,40 @@ test("Secret Service: the item Chromium's schema files under Claude's name", asy
       remember: async () => {},
       env: { XDG_CURRENT_DESKTOP: "GNOME" },
       run: async (file, args) => {
-        assert.equal(file, "secret-tool");
+        files.push(file);
         calls.push(args);
         return answer;
       },
     })(false);
   assert.equal(await read(), SECRET);
+  assert.deepEqual(files, ["/usr/bin/secret-tool"]);
   assert.deepEqual(calls[0], ["lookup", "xdg:schema", "chrome_libsecret_os_crypt_password_v2", "application", "Claude"]);
   answer = { code: 1, stdout: "", stderr: "" };
   assert.equal(await issueOf(read()), "credentials-missing");
   answer = { code: 1, stdout: "", stderr: "secret-tool: Cannot create an item in a locked collection" };
   assert.equal(await issueOf(read()), "keychain-locked");
+  // Installed at neither place: the keyring cannot be read.
+  files.length = 0;
   answer = { code: "ENOENT", stdout: "", stderr: "" };
   assert.equal(await issueOf(read()), "keychain-locked");
+  assert.deepEqual(files, ["/usr/bin/secret-tool", "/usr/local/bin/secret-tool"]);
+});
+
+test("Secret Service: secret-tool under /usr/local/bin is used when /usr/bin has none", async () => {
+  const files: string[] = [];
+  const secret = await linuxSafeStoragePassword({
+    allowed: async () => true,
+    remember: async () => {},
+    env: { XDG_CURRENT_DESKTOP: "GNOME" },
+    run: async (file) => {
+      files.push(file);
+      return file === "/usr/bin/secret-tool"
+        ? { code: "ENOENT", stdout: "", stderr: "" }
+        : { stdout: SECRET, stderr: "" };
+    },
+  })(false);
+  assert.equal(secret, SECRET);
+  assert.deepEqual(files, ["/usr/bin/secret-tool", "/usr/local/bin/secret-tool"]);
 });
 
 test("the Claude app reads limits on macOS always, on Linux only after a keyring read succeeded", async (t) => {

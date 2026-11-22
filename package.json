@@ -33,11 +33,9 @@
   },
   "dependencies": {
     "classic-level": "3.0.0",
-    "node-pty": "^1.1.0"
+    "node-pty": "1.1.0"
   },
   "devDependencies": {
-    "@fontsource/dm-sans": "^5.2.8",
-    "@fontsource/manrope": "^5.2.8",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
@@ -46,10 +44,11 @@
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "electron": "^44.7.0",
+    "electron": "44.7.0",
     "electron-builder": "^26.0.12",
     "electron-updater": "6.8.11",
     "esbuild": "^0.25.0",
+    "intl-messageformat": "^12.2.0",
     "lucide-react": "^0.468.0",
     "prettier": "^3.9.10",
     "radix-ui": "1.6.7",

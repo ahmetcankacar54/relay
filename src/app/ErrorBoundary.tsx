@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 /**
  * A window's last resort. Without it one render error unmounts the whole tree: the window stays
  * blank (the menu bar panel is transparent, so it shows nothing) and its polling stops. It uses
- * no provider, since the provider may be what failed.
+ * no provider, since the provider may be what failed. The main window also wraps each page in
+ * one, keyed by the page, so a failing page leaves the sidebar working and going elsewhere
+ * clears it.
  */
 export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -24,7 +26,15 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
       <div role="alert" className="grid gap-3 p-6 text-sm text-foreground">
         <p className="font-semibold">{turkish ? "Beklenmedik bir hata oluştu." : "An unexpected error occurred."}</p>
         <div>
-          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              // Reloading the page that failed would only fail again: start from the first page.
+              window.location.hash = "#/";
+              window.location.reload();
+            }}
+          >
             {turkish ? "Yeniden yükle" : "Reload"}
           </Button>
         </div>

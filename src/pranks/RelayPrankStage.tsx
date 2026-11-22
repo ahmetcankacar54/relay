@@ -3,10 +3,10 @@ import { useRelay, type Relay } from "@/data/relay-context";
 import { PrankStage, windowStorage, type PrankStageProps } from "./PrankStage";
 import { markFirstSwitch, quietOnDayOne } from "./budget";
 
-/** What the app tells the stage: the pranks setting (missing means "sometimes"), and what keeps a prank from playing. */
+/** What the app tells the stage: the pranks setting (missing means "off"), and what keeps a prank from playing. */
 export function stagePropsFrom(relay: Relay): Omit<PrankStageProps, "children"> {
   return {
-    level: relay.settings.pranks ?? "sometimes",
+    level: relay.settings.pranks ?? "off",
     desktopBusy: relay.desktopBusy,
     errorShown: !!relay.error || !!relay.desktop?.error,
     dialogOpen: !!relay.desktopRequest,

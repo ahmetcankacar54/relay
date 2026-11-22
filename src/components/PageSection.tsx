@@ -39,13 +39,13 @@ export function PageSection({
 
 /** An ⓘ that explains on hover or focus: the place for "how it works" text. */
 export function InfoTip({ children }: { children: ReactNode }) {
-  const tr = (useContext(I18nContext)?.language ?? "tr") === "tr";
+  const label = useContext(I18nContext)?.t("Nasıl çalışır", "How it works") ?? "How it works";
   // Its own provider, so a section explains itself wherever it is drawn (the tray, a test, a page).
   return (
     <TooltipProvider>
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" aria-label={tr ? "Nasıl çalışır" : "How it works"} className="grid size-5 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
+        <button type="button" aria-label={label} className="grid size-5 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
           <InfoIcon className="size-3.5" />
         </button>
       </TooltipTrigger>

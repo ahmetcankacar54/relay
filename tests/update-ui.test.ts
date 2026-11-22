@@ -88,7 +88,7 @@ test("Settings shows the version, the last check and the automatic switch; only 
       relayFor(update),
       createElement(UpdatesGroup, {
         api: {} as Relay["api"],
-        action: async () => {},
+        action: async () => true,
         data: { update } as unknown as Snapshot,
         busy: "",
         t,

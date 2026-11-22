@@ -595,3 +595,22 @@ test("a closed window scheduled before now starts now, not at the past time", ()
   assert.equal(liveSetup(past)!.accounts[1].warmUp, now);
   assert.deepEqual(liveForecast(past), liveForecast(input));
 });
+
+test("an account whose used-up week resets during work serves from then", () => {
+  const now = at("09:00");
+  const vertex: AccountUsage = {
+    ...fresh("vertex", now, 0, "12:00"),
+    sevenDay: { usedPercent: 100, resetsAt: new Date(at("11:00")).toISOString() },
+  };
+  const forecast = liveForecast({
+    plan,
+    settings: settings(),
+    context: context(flatTempo(300)),
+    usage: { max: fresh("max", now, 80, "11:15"), vertex },
+    activeId: "max",
+    now,
+  })!;
+  const served = forecast.segments.filter((s) => s.accountId === "vertex");
+  assert.ok(served.length > 0);
+  assert.ok(served.every((s) => s.from >= at("11:00")));
+});

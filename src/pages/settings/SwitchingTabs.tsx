@@ -25,8 +25,6 @@ import { AutomationSettings } from "../../features/AutomationControl";
 import { WarningThreshold } from "../Usage";
 import type { RelaySettings } from "../../../shared/types";
 
-
-const cardClass = "gap-0 px-4 py-3.5";
 /** A row of the "what switches along" card: the card draws the line between rows. */
 const partClass = "border-t py-2 first:border-t-0 first:pt-0 last:pb-0";
 /** A part inside Advanced → Experimental's group, divided from the one above it. */
@@ -69,7 +67,7 @@ export function SwitchingTab() {
         {/* A single-conversation watch from earlier versions stays visible until it is off. */}
         {(continuation?.enabled ||
           continuation?.status === "reconciliation-required") && (
-          <Card className={cardClass}>
+          <Card padded>
             <ContinuationSettings
               accounts={accounts}
               active={active}
@@ -173,7 +171,7 @@ export function SwitchingTab() {
           }
         >
           {/* One card, one row each: the name, where it stands now, its choice and its check. */}
-          <Card className={cardClass} data-slot="switch-along">
+          <Card padded data-slot="switch-along">
             <div id="gecis-gecmis" className={partClass}>
               <SharedHistoryPreferences
                 value={settings}
@@ -208,7 +206,7 @@ export function SwitchingTab() {
             "Relay marks accounts near their limit and, if you want, suggests one to switch to.",
           )}
         >
-        <Card id="gecis-oneri" className={cardClass}>
+        <Card id="gecis-oneri" padded>
           <SettingRow
             label={t("Limite yaklaşan hesabı işaretle", "Mark accounts near their limit")}
             htmlFor="usage-warnings"

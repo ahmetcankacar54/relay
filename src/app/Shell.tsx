@@ -13,6 +13,7 @@ import { Overview } from "@/pages/Overview";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { cardState, cardYields, desktopWorking } from "@/mascot/card-panda";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Sidebar } from "./Sidebar";
 import { CardPanda, useCardPanda } from "./CardPanda";
 import { DesktopActionDialog } from "./DesktopActionDialog";
@@ -147,15 +148,18 @@ export function Shell() {
               key={page}
               className="flex flex-1 flex-col animate-in fade-in-0 duration-150 motion-reduce:animate-none"
             >
-              {page === "genel" && <Overview go={go} />}
-              {page === "hesaplar" && <Accounts />}
-              {page === "proxy" && <ProxyPage />}
-              {page === "gecis" && <SwitchingPage />}
-              {page === "planlama" && <PlanningPage />}
-              {page === "kullanim" && <Usage section="limits" />}
-              {page === "tokenlar" && <Usage section="tokens" />}
-              {page === "rozetler" && <Usage section="lost" />}
-              {page === "ayarlar" && <Settings />}
+              {/* Keyed by the page: a page that fails to render clears when another opens. */}
+              <ErrorBoundary key={page}>
+                {page === "genel" && <Overview go={go} />}
+                {page === "hesaplar" && <Accounts />}
+                {page === "proxy" && <ProxyPage />}
+                {page === "gecis" && <SwitchingPage />}
+                {page === "planlama" && <PlanningPage />}
+                {page === "kullanim" && <Usage section="limits" />}
+                {page === "tokenlar" && <Usage section="tokens" />}
+                {page === "rozetler" && <Usage section="lost" />}
+                {page === "ayarlar" && <Settings />}
+              </ErrorBoundary>
             </div>
           </main>
         </div>

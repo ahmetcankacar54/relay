@@ -18,8 +18,9 @@ export const TOKEN_SCAN_POLL_MS = 5_000;
  * Fetches the token view on mount and whenever the range or account changes,
  * and again on `relay:changed`, at most once per statistics throttle interval.
  * While the scan is incomplete it also asks every few seconds, so the progress
- * moves; a failed fetch stops that until the next change. The last view stays
- * shown while reloading and after a failed reload.
+ * moves; a failed fetch stops that until the next change. A new range or
+ * account starts from an empty view; the same one keeps its view while
+ * reloading. A failure shows the error in place of the view.
  */
 export function useTokenUsage(
   range: StatisticsRange,
@@ -30,25 +31,29 @@ export function useTokenUsage(
   const [requests] = useState(() => new StatisticsRequests());
   const pending = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const load = useCallback(() => {
-    clearTimeout(pending.current);
-    pending.current = undefined;
-    const id = requests.start(Date.now());
-    setState(statisticsLoading);
-    api.tokenUsage({ range, ...(accountId ? { accountId } : {}) }).then(
-      (view) => {
-        if (requests.current(id)) setState({ view, loading: false });
-      },
-      (error: unknown) => {
-        if (requests.current(id)) setState((s) => statisticsFailed(s, error));
-      },
-    );
-  }, [api, range, accountId, requests]);
+  const load = useCallback(
+    (fresh = false) => {
+      clearTimeout(pending.current);
+      pending.current = undefined;
+      const id = requests.start(Date.now());
+      setState(fresh ? { loading: true } : statisticsLoading);
+      api.tokenUsage({ range, ...(accountId ? { accountId } : {}) }).then(
+        (view) => {
+          if (requests.current(id)) setState({ view, loading: false });
+        },
+        (error: unknown) => {
+          if (requests.current(id)) setState(statisticsFailed(error));
+        },
+      );
+    },
+    [api, range, accountId, requests],
+  );
   // A trailing timer must load the current range, not the one it was set for.
   const latestLoad = useRef(load);
   useEffect(() => {
     latestLoad.current = load;
-    load();
+    // Another range or account: the last view belongs to the previous one.
+    load(true);
   }, [load]);
 
   const changed = useCallback(() => {

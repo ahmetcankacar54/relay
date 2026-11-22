@@ -10,11 +10,10 @@ import type { DesktopActionKind } from "../src/features/DesktopActionReview";
 import { Banners, reconnectIssues } from "../src/app/Banners";
 import { shortcutPage } from "../src/app/routes";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
-import { AccountDetailBody } from "../src/pages/accounts/AccountDetail";
+import { AccountDetailBody } from "../src/pages/accounts/account-detail/Body";
 import { AccountsTable } from "../src/pages/accounts/AccountsTable";
 import { AccountsBoard } from "../src/pages/overview/AccountsBoard";
 import { forgetSetupOnLeave } from "../src/pages/Accounts";
-import { LimitMeter } from "../src/components/LimitMeter";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { clockLocative } from "../shared/tr-dative";
 import { I18nContext, type Language } from "../src/data/i18n";
@@ -202,8 +201,9 @@ test("the overview never starts a Desktop setup itself: an unlinked account's ro
   ] as Partial<Relay>[]) {
     const label = JSON.stringify(extra);
     const studio = row(extra);
-    assert.match(studio, /role="button"[^>]*aria-label="Studio"|aria-label="Studio"[^>]*role="button"/, label);
-    assert.doesNotMatch(studio, /<button/, label);
+    // The row opens through its name; that name is the row's only control.
+    assert.match(studio, /<button type="button" data-list-nav=""[^>]*title="Studio">Studio<\/button>/, label);
+    assert.equal(studio.match(/<button/g)?.length, 1, label);
     assert.doesNotMatch(studio, /Girişi kaydet|Geç</, label);
   }
 });
@@ -254,20 +254,7 @@ test("only the shell provides tooltips", () => {
 });
 
 // 11. Percent formatting follows the language, and every limit percentage is what is used, as on Claude's usage page.
-test("limit percentages read %45 kullanıldı in Turkish and 45% used in English", () => {
-  const meter = (language: Language, size?: "sm" | "md") =>
-    renderToStaticMarkup(
-      createElement(I18nContext.Provider, { value: i18n(language) }, createElement(LimitMeter, { label: "x", percent: 45, size })),
-    );
-  const tr = meter("tr");
-  const en = meter("en");
-  assert.match(tr, />%45<\/span> <small[^>]*>kullanıldı<\/small>/);
-  assert.match(en, />45%<\/span> <small[^>]*>used<\/small>/);
-  // The number and the bar say the same thing: the fill and the meter's value are the percent used.
-  assert.match(tr, /aria-valuenow="45"/);
-  assert.match(tr, /aria-valuetext="%45 kullanıldı"/);
-  assert.match(en, /aria-valuetext="45% used"/);
-  assert.match(tr, /style="width:45%"/);
+test("limit percentages read %38 in Turkish and 38% in English", () => {
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 38 }, sevenDay: { usedPercent: 78 } } };
   const table = (language: Language) =>
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
@@ -276,30 +263,6 @@ test("limit percentages read %45 kullanıldı in Turkish and 45% used in English
   // The list's header names the two columns.
   assert.match(table("tr"), /data-slot="list-head"[^>]*>.*<span>5 saat<\/span><span[^>]*>Hafta<\/span>/);
   assert.match(table("en"), /data-slot="list-head"[^>]*>.*<span>5 hours<\/span><span[^>]*>Week<\/span>/);
-});
-
-test("the medium meter names its number with a word, the small one shows the number alone", () => {
-  const meter = (language: Language, size: "sm" | "md") =>
-    renderToStaticMarkup(
-      createElement(I18nContext.Provider, { value: i18n(language) }, createElement(LimitMeter, { label: "x", percent: 94, size })),
-    );
-  for (const [language, word, figure] of [["tr", "kullanıldı", "%94"], ["en", "used", "94%"]] as const) {
-    const md = meter(language, "md");
-    assert.match(md, new RegExp(`>${figure}</span> <small[^>]*>${word}</small>`), language);
-    const sm = meter(language, "sm");
-    assert.match(sm, new RegExp(`<b [^>]*><span class="whitespace-nowrap">${figure}</span></b>`), language);
-    assert.doesNotMatch(sm, /<small/, language);
-    // The word stays in the small meter's value text, for screen readers.
-    assert.match(sm, new RegExp(`aria-valuetext="[^"]*${word}"`), language);
-  }
-});
-
-test("a meter without a value shows a dash and no word", () => {
-  const html = renderToStaticMarkup(
-    createElement(I18nContext.Provider, { value: i18n("tr") }, createElement(LimitMeter, { label: "x" })),
-  );
-  assert.match(html, />—<\/b>/);
-  assert.doesNotMatch(html, /kullanıldı|aria-valuetext/);
 });
 
 test("a confirmed Desktop action shows the travelling panda until it finishes", () => {

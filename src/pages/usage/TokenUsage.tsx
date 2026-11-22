@@ -303,7 +303,7 @@ function Tiles({ view }: { view: TokenUsageView }) {
   const total = totalOf(totals);
   const days = view.days.length || view.range;
   return (
-    <Card data-slot="token-tiles" className="grid gap-0 divide-y p-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+    <Card data-slot="token-tiles" className="grid gap-0 divide-y p-0 @lg:grid-cols-3 @lg:divide-x @lg:divide-y-0">
       <TodayTile today={view.today} />
       <Tile
         label={t(`Toplam · ${view.range} gün`, `Total · ${view.range} days`)}

@@ -31,8 +31,9 @@ npm run install:mac
 ```
 
 This builds, signs the app and its `desktop-automation` helper with the pinned
-certificate (no timestamp server, no hardened runtime for this local build),
-verifies both designated requirements are certificate based, and replaces
+certificate (no timestamp server; hardened runtime with the exceptions in
+`build/entitlements.mac.plist`), verifies both designated requirements are
+certificate based, and replaces
 `/Applications/Relay.app`. Without `--install` (`npm run dist`) the signed bundle
 stays in `release/stable/mac-arm64/Relay.app`.
 

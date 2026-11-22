@@ -284,6 +284,7 @@ test("with no account yet, the panel offers adding one in the main window", asyn
   const opened: unknown[][] = [];
   const relay = relayFor(undefined, [], {}, {
     api: { openPage: async (...args: unknown[]) => void opened.push(args) } as unknown as Relay["api"],
+    report: async (fn: () => Promise<unknown>) => void (await fn()),
   });
   const { openAddAccount } = await import("../src/panel/PanelAccounts");
   openAddAccount(relay);
@@ -418,6 +419,7 @@ test("a pending Desktop connection explains itself and links to accounts", () =>
   const relay = relayFor(active, [active, vertex], baseUsage, {
     pendingDesktop: vertex,
     api: { openPage: async (page: string) => void opened.push(page) } as unknown as Relay["api"],
+    report: async (fn: () => Promise<unknown>) => void (await fn()),
   });
   // The link target is checked through the exported handler.
   return import("../src/panel/PanelActiveCard").then(({ openPendingDesktop }) => {
@@ -440,16 +442,59 @@ test("a rejected switch clears the confirmation and shows the error", async () =
   });
   const relay = relayFor(active, [active, vertex], baseUsage, {
     action,
-    api: { switchDesktop: async () => { throw new Error("Claude did not quit."); } } as unknown as Relay["api"],
+    api: {
+      desktopSnapshot: async () => desktopState("active"),
+      panelSnapshot: async () => ({}),
+      switchDesktop: async () => { throw new Error("Claude did not quit."); },
+    } as unknown as Relay["api"],
   });
   let cleared = false;
-  await new Promise<void>((resolve) => confirmSwitch(relay, "vertex", () => { cleared = true; resolve(); }));
+  await new Promise<void>((resolve) => confirmSwitch(relay, "vertex", (tr) => tr, () => { cleared = true; resolve(); }));
   assert.equal(cleared, true);
   assert.equal(errors.length, 1);
   assert.match(String(errors[0]), /Claude did not quit/);
   assert.equal(refreshed, false);
   assert.equal(busy, "");
   assert.equal(lock.current, false);
+});
+
+test("a panel switch that automation made stale does not start and says why", async () => {
+  const notices: string[] = [];
+  const switched: string[] = [];
+  const action = relayAction({ current: false }, {
+    setBusy() {},
+    setError() {},
+    setNotice() {},
+    refresh: async () => {},
+    showError: (e) => assert.fail(String(e)),
+  });
+  const run = (desktop: DesktopState, fleet?: { status: string }) => {
+    const relay = relayFor(active, [active, vertex], baseUsage, {
+      action,
+      setNotice: (text: string) => void notices.push(text),
+      api: {
+        desktopSnapshot: async () => desktop,
+        panelSnapshot: async () => ({ fleet }),
+        switchDesktop: async (id: string) => void switched.push(id),
+      } as unknown as Relay["api"],
+    });
+    return new Promise<void>((resolve) => confirmSwitch(relay, "vertex", (_tr, en) => en, resolve));
+  };
+  await run(desktopState("vertex"));
+  await run(desktopState("active"), { status: "switching" });
+  assert.deepEqual(notices, [
+    "Vertex is already open in the Claude app.",
+    "An automatic switch is in progress; your switch did not start.",
+  ]);
+  assert.deepEqual(switched, []);
+  await run(desktopState("active"));
+  assert.deepEqual(switched, ["vertex"]);
+});
+
+test("the panel says it is loading before the first snapshot, not that there are no accounts", () => {
+  const html = render({ ...relayFor(undefined, [], {}), data: undefined });
+  assert.match(html, /<p aria-busy="true"[^>]*>Yükleniyor…<\/p>/);
+  assert.doesNotMatch(html, /Henüz hesap yok/);
 });
 
 test("the early start row names the adopted start while the plan is adapted", () => {
@@ -810,7 +855,7 @@ test("copy, dismiss and permission go through relay.action by record id", async 
   const calls: string[] = [];
   const keys: string[] = [];
   const relay = relayFor(active, [active, vertex], baseUsage, {
-    action: async (key: string, fn: () => Promise<unknown>) => { keys.push(key); await fn(); },
+    action: async (key: string, fn: () => Promise<unknown>) => { keys.push(key); await fn(); return true; },
     api: {
       copyDraft: async (id: string) => void calls.push(`copy:${id}`),
       dismissDraft: async (id: string) => void calls.push(`dismiss:${id}`),
@@ -889,6 +934,7 @@ test("Copy recipe and Dismiss go through relay.action by offer id, and only a co
     action: async (key: string, fn: () => Promise<unknown>) => {
       keys.push(key);
       await fn().catch(() => {});
+      return true;
     },
     api: {
       copySidebarRecipe: async (id: string) => {
@@ -969,6 +1015,7 @@ test("Switch runs the extension sync through relay.action and says nothing more 
       action: async (key: string, fn: () => Promise<unknown>) => {
         keys.push(key);
         await fn();
+        return true;
       },
     });
   await syncExtensionAction(relay("switched"), tr, (line) => said.push(line));

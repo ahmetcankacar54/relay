@@ -143,7 +143,7 @@ export function AccountLimits({
       className={cn(
         "grid",
         layout === "grid"
-          ? cn("gap-x-6 gap-y-3 sm:grid-cols-2", rows.length % 2 === 1 && "md:grid-cols-3")
+          ? cn("gap-x-6 gap-y-3 @lg:grid-cols-2", rows.length % 2 === 1 && "@2xl:grid-cols-3")
           : size === "sm"
             ? "gap-2"
             : "gap-3",

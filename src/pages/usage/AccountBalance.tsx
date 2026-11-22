@@ -34,12 +34,12 @@ export function AccountBalance({
   const head = "text-xs font-normal text-muted-foreground";
   return (
     <PageSection title={t("Hesap dengesi", "Account balance")} slot="account-balance">
-    <Card className="gap-0 px-4 py-3.5">
+    <Card padded>
       {/* Rows share these columns (subgrid), so every share bar ends at the same x. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-4 sm:grid-cols-[minmax(0,12rem)_1fr_auto_auto_auto]">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-4 @lg:grid-cols-[minmax(0,12rem)_1fr_auto_auto_auto]">
         <div className="col-span-full grid grid-cols-subgrid pb-1.5">
           <span className={head}>{t("Hesap", "Account")}</span>
-          <span className="hidden sm:block" />
+          <span className="hidden @lg:block" />
           <span className={cn(head, "text-right")}>{t("Pay", "Share")}</span>
           <span className={cn(head, "text-right")}>{t("Ort. doluluk", "Avg. fill")}</span>
           <span className={cn(head, "text-right")}>{t("Boşta", "Idle")}</span>
@@ -58,7 +58,7 @@ export function AccountBalance({
                 </span>
                 {badge && <Badge variant="secondary">{badge}</Badge>}
               </div>
-              <div aria-hidden className="hidden h-2.5 overflow-hidden rounded-full bg-track sm:block">
+              <div aria-hidden className="hidden h-2.5 overflow-hidden rounded-full bg-track @lg:block">
                 <div
                   className={cn("h-full rounded-full", accountTone(accounts.find((a) => a.id === row.accountId)))}
                   style={{ width: `${share}%` }}

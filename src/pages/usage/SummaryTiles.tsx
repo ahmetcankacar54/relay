@@ -77,7 +77,7 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
       }
     >
     <Card className="gap-3 px-4 py-3.5">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-4">
         <Tile
           label={t("Kullanılan", "Used")}
           value={

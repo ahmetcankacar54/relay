@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "./PageHeader";
 import { Banners } from "./Banners";
 import { ConnectionPanels } from "./ConnectionPanels";
@@ -45,4 +46,9 @@ export function PageFrame({
       {children}
     </>
   );
+}
+
+/** A page's content under its frame: one column with the app's gutter, a container for its breakpoints. */
+export function PageBody({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cn("@container grid gap-4 px-5 pb-6", className)}>{children}</div>;
 }

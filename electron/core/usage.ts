@@ -136,17 +136,18 @@ function scopedLimits(root: Json): ModelWindow[] {
     ];
   });
 }
+/** The longest a server's Retry-After holds limit reads back: a larger one is a bad header. */
+const MAX_RETRY_MS = 3_600_000;
+/** When to read again after a refusal: the server's Retry-After, between one minute and one hour. */
 export function retryTime(header: string | null, now: number) {
   const seconds = header && /^\d+(\.\d+)?$/.test(header) ? Number(header) : NaN;
   const date = header ? Date.parse(header) : NaN;
-  return Math.max(
-    now + 60_000,
-    Number.isFinite(seconds)
-      ? now + seconds * 1000
-      : Number.isFinite(date)
-        ? date
-        : now + 300_000,
-  );
+  const wanted = Number.isFinite(seconds)
+    ? now + seconds * 1000
+    : Number.isFinite(date)
+      ? date
+      : now + 300_000;
+  return Math.min(now + MAX_RETRY_MS, Math.max(now + 60_000, wanted));
 }
 /** The error type and message of a refused response, from at most 4 KiB of its body. */
 async function errorBody(response: Response): Promise<{ type?: string; message?: string }> {

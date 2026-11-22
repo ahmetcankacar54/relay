@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { app, BrowserWindow, screen } from "electron";
 import {
   clampPanelHeight,
   INITIAL_PANEL_LOAD,
@@ -77,6 +77,7 @@ export class TrayPanel {
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
+        devTools: !app.isPackaged,
       },
     });
     this.win = win;

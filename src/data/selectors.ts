@@ -33,7 +33,12 @@ export function limitFull(
   if (!freshUsage(u, now)) return undefined;
   const full = (quotaWindows(u) ?? []).filter((w) => w.usedPercent >= 100);
   if (!full.length) return undefined;
-  const availableAt = full.map((w) => w.resetsAt).filter((r): r is string => !!r).sort().at(-1);
+  // By time: the same instant can be written with different offsets or precision.
+  const availableAt = full
+    .map((w) => w.resetsAt)
+    .filter((r): r is string => !!r && Number.isFinite(Date.parse(r)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b))
+    .at(-1);
   return availableAt ? { availableAt } : {};
 }
 

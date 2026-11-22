@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/select";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { PageFrame } from "@/app/PageFrame";
+import { macWording, usePlatform } from "@/data/platform";
+import { ListSkeleton } from "@/components/ListCard";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { parseIntent, routeHash, routeQuery, type AddProvider } from "@/app/routes";
 import { AccountsTable } from "./accounts/AccountsTable";
 import {
@@ -33,6 +35,13 @@ import {
   type AccountFilter,
   type ProviderFilter,
 } from "./accounts/accountLabels";
+import {
+  ACCOUNTS_VIEW_KEYS,
+  readAccountsView,
+  type AccountGroupBy,
+  type AccountsView,
+  type AccountSort,
+} from "./accounts/accountGroups";
 import { blockReason, type Block } from "@/lib/onboarding";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -111,6 +120,18 @@ export function Accounts() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountFilter>("all");
   const [provider, setProvider] = useState<ProviderFilter>("all");
+  const [view, setViewState] = useState<AccountsView>(() => readAccountsView((key) => window.localStorage.getItem(key)));
+  const setView = <K extends keyof AccountsView>(key: K, value: AccountsView[K]) => {
+    setViewState((current) => ({ ...current, [key]: value }));
+    try {
+      window.localStorage.setItem(ACCOUNTS_VIEW_KEYS[key], typeof value === "string" ? value : JSON.stringify(value));
+    } catch {
+      // Without storage the choice lasts until the window closes.
+    }
+  };
+  const toggleSection = (key: string) =>
+    setView("collapsed", view.collapsed.includes(key) ? view.collapsed.filter((k) => k !== key) : [...view.collapsed, key]);
+  const mac = macWording(usePlatform());
   const [adding, setAdding] = useState(false);
   const [addProvider, setAddProvider] = useState<AddProvider>();
   const [linking, setLinking] = useState(false);
@@ -130,6 +151,11 @@ export function Accounts() {
     if (window.location.hash !== hash) window.location.hash = hash;
     setSelectedState(id);
   };
+  // An account removed elsewhere (the CLI, the panel) takes its open page with it.
+  const known = relay.data?.accounts;
+  useEffect(() => {
+    if (selected && known && !known.some((a) => a.id === selected)) setSelected(undefined);
+  }, [selected, known]);
   // A new page opens at its top; <main> is the scroller and outlives this one.
   useEffect(() => {
     document.querySelector("main")?.scrollTo?.(0, 0);
@@ -183,6 +209,11 @@ export function Accounts() {
   };
   const visible = filterAccounts(accounts, query, filter, language, provider);
   const counts = providerCounts(accounts);
+  // A provider filter whose last account went away would leave an empty list with no way back.
+  const providerGone = provider !== "all" && counts[provider] === 0;
+  useEffect(() => {
+    if (providerGone) setProvider("all");
+  }, [providerGone]);
   const account = accounts.find((a) => a.id === selected);
   const dialogs = (
     <>
@@ -274,7 +305,7 @@ export function Accounts() {
         </>
       }
     >
-      <div className="grid gap-4 px-5 pb-5">
+      <PageBody>
         {/* One toolbar: the provider filter on the left, search and the group filter on the right. */}
         <div className="flex flex-wrap items-center gap-2">
         {/* Only once accounts of more than one provider exist: a Claude-only list needs no filter. */}
@@ -319,10 +350,10 @@ export function Accounts() {
                 )}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pr-12 pl-8"
+                className={mac ? "pr-12 pl-8" : "pr-16 pl-8"}
               />
               <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted-foreground">
-                ⌘K
+                {mac ? "⌘K" : "Ctrl+K"}
               </kbd>
             </div>
           <Select
@@ -346,20 +377,48 @@ export function Accounts() {
                 <SelectItem value="work">{t("Şirket", "Work")}</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={view.groupBy} onValueChange={(v) => setView("groupBy", v as AccountGroupBy)}>
+              <SelectTrigger aria-label={t("Grupla", "Group by")} className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="provider">{t("Sağlayıcı", "Provider")}</SelectItem>
+                <SelectItem value="workGroup">{t("Çalışma grubu", "Work group")}</SelectItem>
+                <SelectItem value="none">{t("Yok", "None")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={view.sort} onValueChange={(v) => setView("sort", v as AccountSort)}>
+              <SelectTrigger aria-label={t("Sırala", "Sort")} className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">{t("Varsayılan", "Default")}</SelectItem>
+                <SelectItem value="name">{t("Ad", "Name")}</SelectItem>
+                <SelectItem value="usage">{t("5 saat kullanımı", "5-hour use")}</SelectItem>
+                <SelectItem value="reset">{t("Sonraki yenileme", "Next reset")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         {visible.length ? (
           <AccountsTable
             accounts={visible}
+            groupBy={view.groupBy}
+            sort={view.sort}
+            // A search shows every match, closed sections included, without forgetting which were closed.
+            collapsed={query.trim() ? [] : view.collapsed}
+            toggle={toggleSection}
             open={setSelected}
             remove={setRemoving}
-          edit={setEditing}
+            edit={setEditing}
             link={(id) => {
               setSetupId(id);
               relay.cancelDesktopRequest();
               setSelected(id);
             }}
           />
+        ) : relay.data === undefined ? (
+          <ListSkeleton />
         ) : (
           <AccountsEmpty
             hasAccounts={accounts.length > 0}
@@ -370,7 +429,7 @@ export function Accounts() {
             }}
           />
         )}
-      </div>
+      </PageBody>
       {dialogs}
     </PageFrame>
   );

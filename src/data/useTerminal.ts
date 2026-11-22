@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_TERMINAL_MODE, type TerminalStatus } from "../../shared/terminal-identity";
 import { useRelay } from "./relay-context";
 
@@ -14,15 +14,22 @@ export function useTerminalStatus({
   const { api, settings } = useRelay();
   const [status, setStatus] = useState<TerminalStatus | null | undefined>(initial);
   const [checking, setChecking] = useState(false);
+  // Only the latest request may set the status: an older one can answer after it.
+  const latest = useRef(0);
   const run = useCallback(
     (look: boolean) => {
+      const request = ++latest.current;
       if (look) setChecking(true);
       return (look ? api.checkTerminal() : api.terminalStatus())
         .then(
-          (s) => setStatus(s ?? null),
+          (s) => {
+            if (request === latest.current) setStatus(s ?? null);
+          },
           () => {},
         )
-        .finally(() => look && setChecking(false));
+        .finally(() => {
+          if (request === latest.current) setChecking(false);
+        });
     },
     [api],
   );

@@ -19,6 +19,7 @@ test("Relay answers the redirect itself: hands the address on, shows its own pag
     port,
     path: "/oauth-callback",
     timeoutMs: 60_000,
+    state: () => "abc12345",
     handle: async (address) => {
       seen.push(address);
       return { title: "Giriş alındı", body: "Relay’e dönebilirsin <script>" };
@@ -47,7 +48,7 @@ test("a taken port is left alone so the helper's own forwarder can take the redi
   const blocker = net.createServer();
   await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
   const port = (blocker.address() as net.AddressInfo).port;
-  const server = await listenOAuthCallback({ port, path: "/oauth-callback", timeoutMs: 1_000, handle: async () => ({ title: "", body: "" }) });
+  const server = await listenOAuthCallback({ port, path: "/oauth-callback", timeoutMs: 1_000, state: () => "s", handle: async () => ({ title: "", body: "" }) });
   assert.equal(server, undefined);
   await new Promise<void>((resolve) => blocker.close(() => resolve()));
 });
@@ -58,6 +59,7 @@ test("a failed hand-off still answers the browser with Relay's page", async () =
     port,
     path: "/oauth-callback",
     timeoutMs: 60_000,
+    state: () => "x",
     handle: async () => {
       throw new Error("boom");
     },
@@ -66,6 +68,34 @@ test("a failed hand-off still answers the browser with Relay's page", async () =
   assert.equal(response.status, 200);
   assert.doesNotMatch(await response.text(), /boom/);
   server?.close();
+});
+
+test("a redirect with another sign-in's state, or none pending, gets 400 and the real one is still taken", async () => {
+  const port = await freePort();
+  let pending: string | undefined;
+  const seen: string[] = [];
+  const server = await listenOAuthCallback({
+    port,
+    path: "/oauth-callback",
+    timeoutMs: 60_000,
+    state: () => pending,
+    handle: async (address) => {
+      seen.push(address);
+      return { title: "Signed in", body: "" };
+    },
+  });
+  assert.ok(server);
+  // Before the helper named the sign-in, nothing is taken.
+  assert.equal((await fetch(`http://127.0.0.1:${port}/oauth-callback?state=good1234&code=c`)).status, 400);
+  pending = "good1234";
+  assert.equal((await fetch(`http://127.0.0.1:${port}/oauth-callback?state=evil1234&code=c`)).status, 400);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/oauth-callback?code=c`)).status, 400);
+  assert.deepEqual(seen, []);
+  const response = await fetch(`http://127.0.0.1:${port}/oauth-callback?state=good1234&code=c`);
+  assert.equal(response.status, 200);
+  await response.text();
+  assert.deepEqual(seen, [`http://localhost:${port}/oauth-callback?state=good1234&code=c`]);
+  server.close();
 });
 
 test("the page follows the system appearance and closes itself", () => {

@@ -32,7 +32,7 @@ function Row({
       type="button"
       title={title}
       className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      onClick={() => void relay.api.openPage(page)}
+      onClick={() => void relay.report(() => relay.api.openPage(page))}
     >
       <StatusDot tone={tone} className="size-[7px]" />
       <span className="shrink-0">{name}</span>

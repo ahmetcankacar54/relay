@@ -5,15 +5,12 @@ import { act, createElement, type ReactElement } from "react";
 import type { Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DEFAULT_SETTINGS } from "../shared/types";
-import { LimitMeter, NIBBLE_BAR_HOVER_MS, NIBBLE_BAR_PERCENT, nibbleBarRest } from "../src/components/LimitMeter";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { PRANK_HISTORY_KEY, PRANK_SWITCHED_KEY } from "../src/pranks/budget";
 import {
   ConfettiLayer,
   DOZE_ACTIVITY_EVENTS,
   DozeLayer,
-  NIBBLE_BAR_MS,
-  NibbleBarLayer,
   WHEEL_MS,
   WheelLayer,
   besideRect,
@@ -37,9 +34,8 @@ const play = (kind: PrankPlay["kind"], extra: Partial<PrankPlay> = {}): PrankPla
 /** The opening <svg> tag of the first rig in some markup. */
 const rigTag = (html: string) => html.match(/<svg [^>]*>/)?.[0] ?? "";
 
-test("the registry draws the wheel, the bar nibble, the doze and the confetti", () => {
+test("the registry draws the wheel, the doze and the confetti", () => {
   assert.equal(PRANK_LAYERS.wheel, WheelLayer);
-  assert.equal(PRANK_LAYERS["nibble-bar"], NibbleBarLayer);
   assert.equal(PRANK_LAYERS.doze, DozeLayer);
   assert.equal(PRANK_LAYERS.confetti, ConfettiLayer);
   assert.equal(Object.getPrototypeOf(PRANK_LAYERS), Object.prototype);
@@ -63,16 +59,6 @@ test("the wheel is a 28 px walking panda in its wheel, right of the button and c
   for (const attribute of ['width="28"', 'height="28"', 'data-pose="walk"', 'data-props="wheel"', 'data-motion="walk"'])
     assert.ok(tag.includes(attribute), attribute);
   assert.equal(html.match(/<svg /g)?.length, 1);
-});
-
-test("the bar nibble is a 28 px chewing panda with crumbs, at the filled end and above the bar", () => {
-  const fill = { left: 50, top: 200, width: 120, height: 6 };
-  const html = renderToStaticMarkup(createElement(NibbleBarLayer, { play: play("nibble-bar", { rect: fill }), done: noop }));
-  // Centred on the fill's right end (170 - 14), 26 px above its top.
-  assert.match(html, /^<div class="absolute" style="left:156px;top:174px"><svg /);
-  const tag = rigTag(html);
-  for (const attribute of ['width="28"', 'height="28"', 'data-pose="chew"', 'data-props="crumbs"', 'data-motion="chew"'])
-    assert.ok(tag.includes(attribute), attribute);
 });
 
 test("the doze is a 48 px curled panda with z that breathes, in the bottom left", () => {
@@ -110,7 +96,6 @@ test("the confetti is 14 leaves at fixed places with fixed delays", () => {
 test("no layer takes a click: none draws pointer-events-auto", () => {
   const markup = [
     createElement(WheelLayer, { play: play("wheel", { rect }), done: noop }),
-    createElement(NibbleBarLayer, { play: play("nibble-bar", { rect }), done: noop }),
     createElement(DozeLayer, { play: play("doze"), done: noop }),
     createElement(DozeLayer, { play: play("doze"), done: noop, startled: true }),
     createElement(ConfettiLayer, { play: play("confetti"), done: noop }),
@@ -118,9 +103,8 @@ test("no layer takes a click: none draws pointer-events-auto", () => {
   for (const html of markup) assert.ok(html.length > 0 && !html.includes("pointer-events-auto"));
 });
 
-test("the layer durations are the catalog's: 2.4 s wheel, 1 s nibble, 2 s confetti", () => {
+test("the layer durations are the catalog's: 2.4 s wheel, 2 s confetti", () => {
   assert.equal(WHEEL_MS, 2_400);
-  assert.equal(NIBBLE_BAR_MS, 1_000);
   assert.equal(CONFETTI_MS, 2_000);
   assert.deepEqual([...DOZE_ACTIVITY_EVENTS], ["pointermove", "pointerdown", "keydown", "wheel"]);
 });
@@ -172,10 +156,9 @@ async function inFakeBrowser(
 }
 const tick = (ms: number) => act(async () => mock.timers.tick(ms));
 
-test("the wheel, the bar nibble and the confetti call done at their durations, and not after an unmount", async () => {
+test("the wheel and the confetti call done at their durations, and not after an unmount", async () => {
   const layers = [
     ["wheel", WheelLayer, play("wheel", { rect }), WHEEL_MS],
-    ["bar nibble", NibbleBarLayer, play("nibble-bar", { rect }), NIBBLE_BAR_MS],
     ["confetti", ConfettiLayer, play("confetti"), CONFETTI_MS],
   ] as const;
   for (const [name, Layer, current, ms] of layers) {
@@ -199,14 +182,12 @@ test("the wheel, the bar nibble and the confetti call done at their durations, a
   }
 });
 
-test("a wheel or a nibble with no anchor has nothing to draw and ends at once", async () => {
-  for (const [Layer, kind] of [[WheelLayer, "wheel"], [NibbleBarLayer, "nibble-bar"]] as const) {
-    assert.equal(renderToStaticMarkup(createElement(Layer, { play: play(kind), done: noop })), "");
-    let done = 0;
-    await inFakeBrowser(createElement(Layer, { play: play(kind), done: () => done++ }), async () => {
-      assert.equal(done, 1, kind);
-    });
-  }
+test("a wheel with no anchor has nothing to draw and ends at once", async () => {
+  assert.equal(renderToStaticMarkup(createElement(WheelLayer, { play: play("wheel"), done: noop })), "");
+  let done = 0;
+  await inFakeBrowser(createElement(WheelLayer, { play: play("wheel"), done: () => done++ }), async () => {
+    assert.equal(done, 1);
+  });
 });
 
 test("the doze waits for the first activity, then startles for 0.6 s and leaves", async () => {
@@ -277,10 +258,10 @@ test("an unmounted doze lets go of every listener and timer", async () => {
   });
 });
 
-/** The relay the main window's hooks read, with `count` accounts and its data loaded or not. */
+/** The relay the main window's hooks read, with `count` accounts, its data loaded or not, and pranks turned on. */
 function relayWith(count: number, loaded: boolean): Relay {
   return {
-    settings: DEFAULT_SETTINGS,
+    settings: { ...DEFAULT_SETTINGS, pranks: "sometimes" },
     error: "",
     desktopBusy: false,
     desktop: undefined,
@@ -511,161 +492,6 @@ test("confetti obeys Reduce motion and Off: the stage refuses, the layer never d
       );
     });
   }
-});
-
-test("a meter rests on its bar for 0.6 s only above 90%, and leaving cancels the wait", () => {
-  assert.equal(NIBBLE_BAR_PERCENT, 90);
-  assert.equal(NIBBLE_BAR_HOVER_MS, 600);
-  const calls: { ms: number; cancelled: boolean }[] = [];
-  const schedule = (_run: () => void, ms: number) => {
-    const call = { ms, cancelled: false };
-    calls.push(call);
-    return () => {
-      call.cancelled = true;
-    };
-  };
-  for (const below of [undefined, 0, 50, 89.9, 90]) assert.equal(nibbleBarRest(below, noop, schedule), undefined, String(below));
-  assert.deepEqual(calls, []);
-  let fired = 0;
-  const cancel = nibbleBarRest(90.1, () => fired++, schedule);
-  assert.deepEqual(calls, [{ ms: 600, cancelled: false }]);
-  cancel?.();
-  assert.deepEqual(calls, [{ ms: 600, cancelled: true }]);
-  assert.equal(fired, 0);
-  // With the default timer, the wait runs the callback once the time is up.
-  mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    nibbleBarRest(100, () => fired++);
-    mock.timers.tick(599);
-    assert.equal(fired, 0);
-    mock.timers.tick(1);
-    assert.equal(fired, 1);
-    nibbleBarRest(100, () => fired++)?.();
-    mock.timers.tick(600);
-    assert.equal(fired, 1);
-  } finally {
-    mock.timers.reset();
-  }
-});
-
-/** What a hover test drives: a LimitMeter in a stage with the real gates and a budget it can read, and the plays it drew. */
-interface MeterRig {
-  /** The coloured fill: the element the nibble must anchor on. */
-  fill: FakeNode;
-  plays: PrankPlay[];
-  /** How many offers the stage accepted, counted in its budget history, so a meter that is gone is still seen offering. */
-  offers(): number;
-  enter(): Promise<void>;
-  leave(): Promise<void>;
-  /** The pointer moves from the bar onto the label, still inside the meter. */
-  moveWithin(): Promise<void>;
-  unmount(): Promise<void>;
-}
-const FILL_BOX = { left: 40, top: 100, width: 190, height: 6 };
-
-/** Mounts a meter, sets a recognisable box on its fill, and lets the test hover it through React's own pointer events. */
-async function withMeter(percent: number | undefined, run: (meter: MeterRig) => Promise<void>) {
-  const storage = memoryStorage();
-  const stage = { level: "sometimes", desktopBusy: false, errorShown: false, dialogOpen: false, storage, random: () => 0 } as const;
-  const tree = createElement(PrankStage, { ...stage, children: createElement(LimitMeter, { label: "5 saat", percent }) });
-  await withSpyLayers(["nibble-bar"], async (_drawn, _finish, plays) => {
-    await inFakeBrowser(tree, async (dom, root) => {
-      const top = dom.container as unknown as FakeNode;
-      const track = findNode(top, (n) => n.attributes.get("role") === "meter");
-      const fill = findNode(top, (n) => (n.attributes.get("class") ?? "").includes("h-full"));
-      const label = findNode(top, (n) => n.tagName === "span");
-      assert.ok(track && fill && label, "the meter's bar, fill and label are drawn");
-      fill.box = FILL_BOX;
-      await run({
-        fill,
-        plays,
-        offers: () => (JSON.parse(storage.map.get(PRANK_HISTORY_KEY) ?? "[]") as number[]).length,
-        enter: () => act(async () => dom.dispatch(track, "pointerover")),
-        leave: () => act(async () => dom.dispatch(track, "pointerout")),
-        moveWithin: async () => {
-          await act(async () => dom.dispatch(track, "pointerout", { relatedTarget: label }));
-          await act(async () => dom.dispatch(label, "pointerover", { relatedTarget: track }));
-        },
-        unmount: () => act(async () => root.unmount()),
-      });
-    });
-  });
-}
-
-test("a mouse that rests 0.6 s on a meter above 90% offers the nibble, anchored on the coloured fill", async () => {
-  await withMeter(95, async (meter) => {
-    await meter.enter();
-    await tick(NIBBLE_BAR_HOVER_MS - 1);
-    assert.equal(meter.offers(), 0);
-    await tick(1);
-    assert.equal(meter.offers(), 1);
-    assert.equal(meter.plays[0].kind, "nibble-bar");
-    // The rect is the fill's, not the meter's or the bar's (those answer all zeros here).
-    assert.deepEqual(meter.plays[0].rect, FILL_BOX);
-    assert.equal(meter.plays[0].point, undefined);
-  });
-});
-
-test("a pointer that leaves before 0.6 s cancels the nibble, and coming back starts the wait again", async () => {
-  await withMeter(100, async (meter) => {
-    await meter.enter();
-    await tick(300);
-    await meter.leave();
-    await tick(2_000);
-    assert.equal(meter.offers(), 0);
-    await meter.enter();
-    await tick(NIBBLE_BAR_HOVER_MS - 1);
-    assert.equal(meter.offers(), 0);
-    await tick(1);
-    assert.equal(meter.offers(), 1);
-  });
-});
-
-test("entering a meter again while a wait is running restarts it instead of stacking a second", async () => {
-  await withMeter(95, async (meter) => {
-    await meter.enter();
-    await tick(300);
-    await meter.enter();
-    await tick(NIBBLE_BAR_HOVER_MS - 1);
-    assert.equal(meter.offers(), 0);
-    await tick(1);
-    assert.equal(meter.offers(), 1);
-  });
-});
-
-test("a pointer moving between a meter's own parts keeps resting, so the wait is not restarted or cancelled", async () => {
-  await withMeter(95, async (meter) => {
-    await meter.enter();
-    await tick(300);
-    await meter.moveWithin();
-    await tick(300);
-    assert.equal(meter.offers(), 1);
-  });
-});
-
-test("a meter that goes away while the mouse rests on it offers nothing", async () => {
-  await withMeter(95, async (meter) => {
-    await meter.enter();
-    await tick(300);
-    await meter.unmount();
-    await tick(2_000);
-    assert.equal(meter.offers(), 0);
-  });
-});
-
-test("a meter at 90% or below, or without a value, never offers", async () => {
-  for (const percent of [90, 89.9, 50, 0, undefined]) {
-    await withMeter(percent, async (meter) => {
-      await meter.enter();
-      await tick(5_000);
-      assert.equal(meter.offers(), 0, String(percent));
-    });
-  }
-  await withMeter(90.1, async (meter) => {
-    await meter.enter();
-    await tick(NIBBLE_BAR_HOVER_MS);
-    assert.equal(meter.offers(), 1);
-  });
 });
 
 test("the stylesheet drops leaves with motion on, draws them still and unseen without, and lands every leaf in time", () => {

@@ -69,11 +69,14 @@ function Stat({
       <strong className={cn("text-sm font-semibold", crit && "text-crit")} title={valueTitle}>
         {value}
       </strong>
+      {/* Who warms up when: visible, and still the title for a pointer resting on the value. */}
+      {valueTitle && <small className="text-2xs text-muted-foreground">{valueTitle}</small>}
       {note && (
         <span className={noteClass} title={noteTitle}>
           {note}
         </span>
       )}
+      {noteTitle && <small className="text-2xs text-muted-foreground">{noteTitle}</small>}
       {chips}
     </div>
   );
@@ -194,7 +197,7 @@ export function PlanTimeline({
   };
   const nextStat = offset === 0 ? next : undefined;
   return (
-    <Card className="@container gap-0 px-4 py-3.5">
+    <Card padded className="@container">
       <div className="mb-3 flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-baseline gap-2">
           <strong className="font-display text-sm font-semibold">

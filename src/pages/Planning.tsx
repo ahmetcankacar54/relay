@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -68,9 +68,9 @@ export function PlanningScreen() {
         </Button>
       }
     >
-      <div className="grid gap-4 px-5 pb-6">
+      <PageBody>
         <PlanningTab settingsOpen={open} onSettingsOpenChange={setOpen} />
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }

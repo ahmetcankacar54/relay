@@ -25,6 +25,7 @@ import {
   errorAfterRefresh,
   hiddenRefresh,
   relayAction,
+  relayReport,
   reportedVisibility,
   shouldPoll,
 } from "./relay-action";
@@ -81,6 +82,9 @@ export const api: RelayAPI =
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
+/** What one refresh read. */
+type Fresh = { snapshot: Snapshot; status: DesktopState };
+
 function useRelayState(
   options: { pollWhenHidden?: boolean; reportsVisibility?: boolean } = {},
 ): Relay {
@@ -100,7 +104,11 @@ function useRelayState(
   const [historyRevision, setHistoryRevision] = useState(0);
   const [dismissed, setDismissed] = useState<string>();
   const lock = useRef(false);
-  const sequence = useRef(0);
+  // One snapshot request at a time; calls while one runs share exactly one follow-up.
+  const inFlight = useRef<Promise<Fresh> | undefined>(undefined);
+  const followUp = useRef<Promise<Fresh> | undefined>(undefined);
+  // Bumped to drop the result of a request that started before a local change.
+  const epoch = useRef(0);
   const showError = useCallback((e: unknown) => setError(errorMessage(e)), []);
   // A background refresh that failed once (a busy moment) must not leave its error behind
   // after refreshes work again.
@@ -110,22 +118,43 @@ function useRelayState(
     refreshError.current = message;
     setError(message);
   }, []);
-  const refresh = useCallback(async () => {
-    const request = ++sequence.current;
-    const [snapshot, status] = await Promise.all([
-      api.panelSnapshot(),
-      api.desktopSnapshot(),
-    ]);
-    if (request === sequence.current) {
-      setData(snapshot);
-      setDesktop(status);
-      const stale = refreshError.current;
-      if (stale !== undefined) {
-        refreshError.current = undefined;
-        setError((current) => errorAfterRefresh(current, stale));
-      }
-    }
-    return { snapshot, status };
+  const refresh = useCallback((): Promise<Fresh> => {
+    const run = () => {
+      const started = epoch.current;
+      const request = Promise.all([
+        api.panelSnapshot(),
+        api.desktopSnapshot(),
+      ]).then(([snapshot, status]) => {
+        if (started === epoch.current) {
+          setData(snapshot);
+          setDesktop(status);
+          const stale = refreshError.current;
+          if (stale !== undefined) {
+            refreshError.current = undefined;
+            setError((current) => errorAfterRefresh(current, stale));
+          }
+        }
+        return { snapshot, status };
+      });
+      inFlight.current = request;
+      const settle = () => {
+        if (inFlight.current === request) inFlight.current = undefined;
+      };
+      request.then(settle, settle);
+      return request;
+    };
+    if (followUp.current) return followUp.current;
+    const running = inFlight.current;
+    if (!running) return run();
+    // A change seen while a request runs may be newer than what that request reads.
+    const next = running
+      .catch(() => undefined)
+      .then(() => {
+        followUp.current = undefined;
+        return run();
+      });
+    followUp.current = next;
+    return next;
   }, []);
   useEffect(() => {
     void refresh().catch(showRefreshError);
@@ -174,6 +203,7 @@ function useRelayState(
     refresh,
     showError,
   });
+  const report = relayReport(showError);
   const accounts = data?.accounts ?? [];
   const active = accounts.find((a) => a.id === desktop?.activeProfileId);
   const settings = data?.settings ?? DEFAULT_SETTINGS;
@@ -204,7 +234,7 @@ function useRelayState(
     setError("");
     if (desktop?.error) {
       const revision = desktop.errorRevision;
-      ++sequence.current;
+      ++epoch.current;
       setDesktop((previous) =>
         previous ? { ...previous, error: undefined } : previous,
       );
@@ -360,6 +390,7 @@ function useRelayState(
     setOrg,
     refresh,
     action,
+    report,
     setNotice,
     dismissError,
     refreshUsage,

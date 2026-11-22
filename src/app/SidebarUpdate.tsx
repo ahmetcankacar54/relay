@@ -64,7 +64,7 @@ export function SidebarUpdate({ compact = false, t: given }: { compact?: boolean
   if (later === version && status !== "installing") return null;
   const busy = !!relay.busy || !!relay.desktop?.busy;
   const install = () => void relay.action(UPDATE_INSTALL_KEY, () => relay.api.installUpdate());
-  const notes = () => void relay.api.openUpdateNotes();
+  const notes = () => void relay.report(() => relay.api.openUpdateNotes());
   const hint = updateHint(update, t);
   const full = hint ? `${updateTitle(update, t)} ${hint}` : updateTitle(update, t);
   const percent = Math.round((update.progress ?? 0) * 100);

@@ -363,16 +363,27 @@ test("today's pace scales the forecast: 1.6 times the plan adopts a hold", () =>
 });
 
 test("a gain that rests on two resets at the plan's same instant is not adopted", () => {
-  // Planned at 50 an hour, both accounts warmed up at 08:45. At 09:56 a has
+  // Planned at 50 an hour, both accounts warmed up at 08:45 (set by hand: the
+  // plan alone spreads the two resets apart). At 09:56 a has
   // been used at 93 an hour (1.9 times the plan) and runs out at 12:07; b
   // runs out at 13:10, and both windows reset at about 13:45 (a at 13:45:08,
   // b at 13:46:20), both within the plan's own 13:45.
   const now = at("09:56") + 5_000;
   const aReset = at("13:45") + 8_000;
-  const value = input([A, B], 50, now, {
+  const read = input([A, B], 50, now, {
     a: fresh("a", now, 31, aReset),
     b: fresh("b", now, 0, at("13:46") + 20_000),
   });
+  const value = {
+    ...read,
+    settings: {
+      ...read.settings,
+      accounts: [
+        { id: "a", firstStart: "08:45" },
+        { id: "b", firstStart: "08:45" },
+      ],
+    },
+  };
   const samples: UsageSample[] = [];
   for (let time = now - HOUR; time <= now; time += 5 * MINUTE)
     samples.push({

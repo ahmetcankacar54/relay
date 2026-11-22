@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import "../styles/fonts.css";
 import type { SwitchSceneView } from "../../shared/switch-scene";
+import { ErrorBoundary } from "../app/ErrorBoundary";
 import { SwitchStage } from "./SwitchStage";
 import "../styles/theme.css";
 
@@ -24,6 +24,8 @@ function SwitchWindow() {
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <SwitchWindow />
+    <ErrorBoundary>
+      <SwitchWindow />
+    </ErrorBoundary>
   </React.StrictMode>,
 );

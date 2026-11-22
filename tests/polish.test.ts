@@ -15,7 +15,7 @@ test("body text is 16 px; the compact panel ramp keeps every text at 11 px or mo
   assert.match(main, /--text-sm: 1rem;/);
   assert.match(main, /--text-xs: 0\.875rem;/);
   assert.match(compact, /--text-sm: 0\.8125rem;/);
-  assert.match(compact, /--text-2xs: 0\.6875rem;/);
+  assert.match(compact, /--text-2xs: 0\.75rem;/);
   assert.match(read("../src/panel/main.tsx"), /dataset\.density = "compact"/);
   for (const file of [
     "../src/panel/Panel.tsx",
@@ -23,7 +23,6 @@ test("body text is 16 px; the compact panel ramp keeps every text at 11 px or mo
     "../src/panel/PanelActiveCard.tsx",
     "../src/panel/PanelDrafts.tsx",
     "../src/panel/PanelAutomation.tsx",
-    "../src/components/LimitMeter.tsx",
     "../src/components/Disclosure.tsx",
     "../src/app/Sidebar.tsx",
   ])

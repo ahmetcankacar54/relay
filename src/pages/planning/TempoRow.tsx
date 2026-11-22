@@ -53,26 +53,43 @@ export function TempoRow({
     maximumFractionDigits: 0,
   }).format(rate);
   const days = tempo.days.weekday + tempo.days.weekend;
-  const summary =
+  const weekendRate = weekend && tempo.rate.weekend !== tempo.rate.weekday;
+  // The words show; the rate in Pro units, which means little at a glance, is in the title.
+  const [summary, detail] =
     tempo.source === "learned"
-      ? weekend && tempo.rate.weekend !== tempo.rate.weekday
-        ? t(
-            `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
-            `Busy weekend day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
-          )
-        : t(
-            `Yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
-            `Busy day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
-          )
+      ? weekendRate
+        ? [
+            t(
+              `Hafta sonu yoğun gün, son 4 haftanın ${days} iş gününden`,
+              `Busy weekend day, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
+            ),
+            t(
+              `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
+              `Busy weekend day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
+            ),
+          ]
+        : [
+            t(
+              `Yoğun gün, son 4 haftanın ${days} iş gününden`,
+              `Busy day, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
+            ),
+            t(
+              `Yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
+              `Busy day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
+            ),
+          ]
       : tempo.source === "preset"
-        ? t(
-            `Sabit tempo ≈ ${n} Pro birimi/sa`,
-            `Fixed tempo ≈ ${n} Pro units/h`,
-          )
-        : t(
-            "Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa",
-            "Medium tempo ≈ 50 Pro units/h until there is enough data",
-          );
+        ? [
+            t("Sabit tempo", "Fixed tempo"),
+            t(`Sabit tempo ≈ ${n} Pro birimi/sa`, `Fixed tempo ≈ ${n} Pro units/h`),
+          ]
+        : [
+            t("Veri birikene kadar orta tempo", "Medium tempo until there is enough data"),
+            t(
+              "Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa",
+              "Medium tempo ≈ 50 Pro units/h until there is enough data",
+            ),
+          ];
   // Each kind of plan once, largest first.
   const kinds = new Map<string, number>();
   for (const account of accounts) {
@@ -113,7 +130,9 @@ export function TempoRow({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <p className="text-sm">{summary}</p>
+        <p className="text-sm" title={detail}>
+          {summary}
+        </p>
         {parts.length > 0 && (
           <p className={noteClass}>
             {t("Bu tempoyla bir dönem: ", "At this tempo one period lasts: ") +

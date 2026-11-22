@@ -30,7 +30,7 @@ export function LimitHits({
   });
   return (
     <PageSection title={t("Limite takılmalar", "Limit hits")} slot="limit-hits">
-    <Card className="gap-0 px-4 py-3.5">
+    <Card padded>
       {hits.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {t("Bu aralıkta limite takılma yok.", "No limit hits in this range.")}

@@ -181,16 +181,39 @@ const previewProviderUsage: Record<string, Snapshot["usage"][string]> = {
     ["3p_weekly", "Claude & GPT", "seven_day", 0, 7 * 24 * 60],
   ]),
 };
+// `?demo=50`: 46 more accounts across the providers (60 % Claude, 25 % Codex, 15 % Antigravity), in
+// ten work groups with a few personal and own-workspace ones, each with a reading, so the Accounts
+// list's hierarchy, sort orders and limits all have something to show.
 if (new URLSearchParams(location.search).get("demo") === "50") {
-  for (let i = 4; i < 50; i++)
+  const ownWorkspace = new Set([9, 22, 37]);
+  for (let i = 4; i < 50; i++) {
+    const id = `preview-account-${i}`;
+    const slot = (i - 4) % 20;
+    const provider = slot < 12 ? "claude" : slot < 17 ? "codex" : "antigravity";
+    const personal = i % 7 === 0;
     accounts.push({
-      id: `preview-account-${i}`,
+      id,
       name: `Workspace ${String(i + 1).padStart(2, "0")} · ${i % 2 ? "Consulting" : "Product"}`,
-      kind: "work",
-      group: `work:team-${i % 5}`,
+      kind: personal ? "personal" : "work",
+      group: personal ? "personal" : ownWorkspace.has(i) ? `work:${id}` : `work:team-${i % 10}`,
       color: ["terra", "olive", "blue", "plum"][i % 4],
+      provider,
       createdAt: new Date().toISOString(),
+      auth: {
+        loggedIn: true,
+        checkedAt: new Date().toISOString(),
+        email: `workspace${i + 1}@example.test`,
+        orgName: personal ? "Personal workspace" : `Team ${i % 10}`,
+      },
     });
+    previewProviderUsage[id] = {
+      accountId: id,
+      status: "ready",
+      stale: false,
+      checkedAt: minutes(-1),
+      fiveHour: { usedPercent: (i * 37) % 100, resetsAt: minutes(((i % 5) + 1) * 60) },
+    };
+  }
 }
 const sessions: Session[] = [
   ["Ödeme akışını sadeleştir", "storefront", 0, 32, true],

@@ -1,4 +1,9 @@
-import type { Account } from "./types";
+import {
+  DEFAULT_PLANNING,
+  type Account,
+  type PlanningSettings,
+} from "./types";
+import { validTimeZone } from "./time-zones";
 
 const HOUR = 3_600_000;
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
@@ -71,6 +76,32 @@ export function wallTime(date: string, clock: string, timeZone: string) {
       );
     });
   return matches.length ? Math.min(...matches) : undefined;
+}
+/**
+ * `wallTime`, or for a clock a DST change skips, the first existing quarter
+ * hour after it within two hours on the same date (02:30 on a spring-forward
+ * night is 03:00); undefined when none exists.
+ */
+export function wallTimeOrNext(date: string, clock: string, timeZone: string) {
+  const exact = wallTime(date, clock, timeZone);
+  if (exact !== undefined || !/^([01]\d|2[0-3]):[0-5]\d$/.test(clock))
+    return exact;
+  const minutes = Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+  for (let later = minutes + 15; later <= minutes + 120; later += 15) {
+    if (later >= 24 * 60) return;
+    const next = `${String(Math.floor(later / 60)).padStart(2, "0")}:${String(later % 60).padStart(2, "0")}`;
+    const time = wallTime(date, next, timeZone);
+    if (time !== undefined) return time;
+  }
+}
+/** The system's time zone when it is one Relay can plan in, else UTC. */
+export function systemTimeZone() {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return zone && validTimeZone(zone) ? zone : "UTC";
+}
+/** Planning settings for a new registry: the defaults in the system's time zone. */
+export function defaultPlanning(): PlanningSettings {
+  return { ...structuredClone(DEFAULT_PLANNING), timeZone: systemTimeZone() };
 }
 export function planningIdentity(a: Account) {
   if (!a.auth?.loggedIn || !a.auth.accountUuid || !a.auth.orgId) return;

@@ -10,6 +10,7 @@ import { UsageManager } from "../../../electron/core/usage";
 import { UsageError, readCredential } from "../../../electron/core/usage-credentials";
 import { UsageCredentialRefresher, anthropicUnreachable } from "../../../electron/core/usage-refresh";
 import { DEFAULT_PROXY_CONFIG } from "../../../shared/proxy-types";
+import { clientHost, gatewayHostAllowed, LOOPBACK_HOSTS } from "../../../shared/proxy-url";
 import { generateProxyKey } from "../../../electron/core/proxy/proxy-status";
 import { readCodexCredential } from "../../../electron/core/provider-credentials";
 import { readsUsage } from "../../../shared/cli-version";
@@ -20,15 +21,6 @@ const USAGE_REFRESH_MS = 2 * 60_000;
 /** How long a read credential is reused before the Keychain is asked again. */
 const CREDENTIAL_TTL_MS = 20_000;
 const STATUS_TIMEOUT_MS = 3_000;
-
-const bracketed = (host: string) => (host.includes(":") && !host.startsWith("[") ? `[${host}]` : host);
-
-/** The host a client should dial: a wildcard bind address is reached through loopback. */
-const clientHost = (host: string) =>
-  host === "0.0.0.0" ? "127.0.0.1" : host === "::" || host === "[::]" ? "[::1]" : bracketed(host);
-
-const isLoopback = (host: string) =>
-  host === "localhost" || host === "::1" || host === "[::1]" || /^127\./.test(host);
 
 function parsePort(raw: string | boolean | undefined, t: (tr: string, en: string) => string): number {
   if (raw === undefined) return DEFAULT_PROXY_CONFIG.port;
@@ -41,11 +33,16 @@ function parsePort(raw: string | boolean | undefined, t: (tr: string, en: string
   return port;
 }
 
+/** `--host`: this computer only, or its Tailscale address, as in Relay's Proxy page. */
 function parseHost(raw: string | boolean | undefined, t: (tr: string, en: string) => string): string {
   if (raw === undefined) return DEFAULT_PROXY_CONFIG.host;
-  if (typeof raw !== "string" || !raw.trim() || /[\s/@?#]/.test(raw))
-    throw new CliError(t("--host geçerli bir adres olmalı.", "--host must be a valid address."), EXIT.usage);
-  return raw.trim();
+  const host = typeof raw === "string" ? raw.trim() : "";
+  if (!gatewayHostAllowed(host))
+    throw new CliError(
+      t("127.0.0.1, localhost ya da bir Tailscale adresi kullan.", "Use 127.0.0.1, localhost or a Tailscale address."),
+      EXIT.usage,
+    );
+  return host;
 }
 
 /** The lines that point Claude Code and OpenAI-style clients at the gateway. */
@@ -236,7 +233,7 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
     );
   }
   io.stdout(paint(color, "green", `✓ Gateway listening on ${state.endpointUrl}`));
-  if (!isLoopback(host))
+  if (!LOOPBACK_HOSTS.has(host))
     io.stderr(
       paint(
         color,

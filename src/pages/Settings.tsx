@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, CircleAlert } from "lucide-react";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { usePrivacyBlur } from "@/components/Private";
@@ -242,9 +242,9 @@ export function SwitchingPage() {
   const { t } = useI18n();
   return (
     <PageFrame automationInline title={t("Geçiş", "Switching")}>
-      <div className="grid gap-4 px-5 pb-6">
+      <PageBody>
         <SwitchingTab />
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }
@@ -267,12 +267,14 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
   const disabled = !!busy || !!desktop?.busy;
   const update = (patch: Partial<RelaySettings>) =>
     void action("settings", () => api.updateSettings(patch));
+  const mac = macWording(data?.diagnostics.platform);
   return (
     <PageFrame
       automationInline
       title={t("Ayarlar", "Settings")}
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-4 px-5 pb-6">
+      <PageBody>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-4">
         <TabsList aria-label={t("Ayar bölümleri", "Settings sections")} className="h-auto w-fit flex-wrap justify-start">
           {SETTINGS_TABS.map((id) => (
             <TabsTrigger key={id} value={id}>
@@ -352,7 +354,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                 />
               </SettingGroup>
             )}
-            <SettingGroup id="settings-panda" title="Panda">
+            <SettingGroup id="settings-panda" title={t("Eğlence", "Fun")}>
               <SettingRow
                 label={
                   <span id="panda-pranks-label">
@@ -369,7 +371,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   variant="outline"
                   size="sm"
                   aria-labelledby="panda-pranks-label"
-                  value={settings.pranks ?? "sometimes"}
+                  value={settings.pranks ?? "off"}
                   disabled={disabled}
                   onValueChange={(v) => v && update({ pranks: v as PrankLevel })}
                 >
@@ -487,7 +489,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   size="sm"
                   onClick={() => void showDiagnostics({ api, action })}
                 >
-                  {t("Finder’da göster", "Show in Finder")}
+                  {mac ? t("Finder’da göster", "Show in Finder") : t("Klasörde göster", "Show in folder")}
                 </Button>
               </SettingRow>
             </SettingGroup>
@@ -517,6 +519,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           </div>
         </TabsContent>
       </Tabs>
+      </PageBody>
     </PageFrame>
   );
 }

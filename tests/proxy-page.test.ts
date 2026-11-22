@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -229,6 +229,7 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
     let current = status({
       running: false,
       accounts: pooled,
+      tailscaleAddress: "100.101.12.34",
       clients: [{ id: "claude-code", installed: true, bound: false, stale: false, file: "~/.claude/settings.json" }],
     });
     const api = {
@@ -297,11 +298,47 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
     await act(async () => dom.dispatch(radio("Sıralı")!, "click", { detail: 1 }));
     assert.deepEqual(calls.at(-1), ["configure", { routingStrategy: "strict-priority" }]);
     // A host preset fills the address; Uygula saves it with the port.
-    await act(async () => dom.dispatch(radio("Tüm yerel ağ")!, "click", { detail: 1 }));
+    await act(async () => dom.dispatch(radio("Tailscale ağım")!, "click", { detail: 1 }));
     await act(async () => dom.dispatch(button("Uygula")!, "click", { detail: 1 }));
-    assert.deepEqual(calls.at(-1), ["configure", { port: 8317, host: "0.0.0.0" }]);
+    assert.deepEqual(calls.at(-1), ["configure", { port: 8317, host: "100.101.12.34" }]);
     await act(async () => next.unmount());
   } finally {
+    dom.uninstall();
+  }
+});
+
+test("after three failed reads in a row the page says it cannot read the gateway, and a good read brings it back", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  mock.timers.enable({ apis: ["setInterval"] });
+  try {
+    let fail = true;
+    const api = {
+      proxyStatus: async () => {
+        if (fail) throw new Error("down");
+        return status();
+      },
+    };
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const container = dom.container as unknown as Fake;
+    const tick = () => act(async () => mock.timers.tick(3_000));
+    await act(async () => root.render(provide(relayFor(status(), api), () => createElement(ProxyPage, { initialTab: "canli" }))));
+    // One or two misses keep the last state on screen.
+    await tick();
+    assert.match(textOf(container), /Ağ geçidi çalışıyor/);
+    assert.match(textOf(container), /Claude Max/);
+    await tick();
+    assert.match(textOf(container), /Ağ geçidi durumu okunamıyor/);
+    assert.doesNotMatch(textOf(container), /Ağ geçidi çalışıyor|Claude Max/);
+    fail = false;
+    await tick();
+    assert.match(textOf(container), /Ağ geçidi çalışıyor/);
+    assert.doesNotMatch(textOf(container), /okunamıyor/);
+    await act(async () => root.unmount());
+  } finally {
+    mock.timers.reset();
     dom.uninstall();
   }
 });

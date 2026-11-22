@@ -32,6 +32,7 @@ import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import { timeLeft } from "@/lib/account-row";
 import type { T } from "@/data/i18n";
 import { RelayContext } from "@/data/relay-context";
+import { macWording } from "@/data/platform";
 import { type sidebarStatus } from "@/data/selectors";
 import type { PageId } from "./routes";
 import { SidebarUpdate } from "./SidebarUpdate";
@@ -278,7 +279,8 @@ export function Sidebar({
       variant="ghost"
       size="icon-sm"
       aria-label={toggleLabel}
-      title={`${toggleLabel} (⌃⌘S)`}
+      // ⌃⌘S is the macOS menu's shortcut; elsewhere the button has none.
+      title={macWording(relay?.data?.diagnostics?.platform) ? `${toggleLabel} (⌃⌘S)` : toggleLabel}
       aria-expanded={!collapsed}
       onClick={onToggle}
       className="text-sidebar-muted [-webkit-app-region:no-drag] hover:text-sidebar-foreground"

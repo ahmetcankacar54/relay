@@ -196,7 +196,7 @@ const blockers: Record<string, PrankGate> = {
   dialogOpen: { ...clear, dialogOpen: true },
   "day one": { ...clear, dayOne: true },
 };
-const KINDS: (PrankKind | "trick")[] = ["nibble-cursor", "wheel", "nibble-bar", "doze", "confetti", "trick"];
+const KINDS: (PrankKind | "trick")[] = ["nibble-cursor", "wheel", "doze", "confetti", "trick"];
 
 test("pranks stay quiet for the first 24 hours after Relay first runs", () => {
   assert.equal(PRANK_QUIET_MS, 24 * HOUR);

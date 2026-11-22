@@ -17,17 +17,16 @@ export interface UsageStatisticsState<V = UsageStatisticsView> {
   error?: string;
 }
 
-/** A request started: the last view and error stay until it settles. */
+/** A reload of the same range and account started: the last view and error stay until it settles. */
 export const statisticsLoading = <V>(
   state: UsageStatisticsState<V>,
 ): UsageStatisticsState<V> => ({ ...state, loading: true });
 
-/** A request failed: the last view stays shown beside the error. */
-export const statisticsFailed = <V>(
-  state: UsageStatisticsState<V>,
-  error: unknown,
-): UsageStatisticsState<V> => ({
-  ...(state.view ? { view: state.view } : {}),
+/**
+ * A request failed: the error replaces the view, so data that may be out of date is not shown
+ * as current.
+ */
+export const statisticsFailed = <V>(error: unknown): UsageStatisticsState<V> => ({
   loading: false,
   error: errorMessage(error),
 });
@@ -59,8 +58,9 @@ export class StatisticsRequests {
  * Fetches the statistics view on mount and whenever the range or account
  * changes. Relay changes refetch it, throttled: `relay:changed`, and new
  * usage checks or plan edits seen in the snapshot (recording a sample does
- * not broadcast `relay:changed`). The last view stays shown while reloading
- * and after a failed reload.
+ * not broadcast `relay:changed`). A new range or account starts from an empty
+ * view; the same one keeps its view while reloading. A failure shows the error
+ * in place of the view.
  */
 export function useUsageStatistics(
   range: StatisticsRange,
@@ -71,25 +71,29 @@ export function useUsageStatistics(
   const [requests] = useState(() => new StatisticsRequests());
   const pending = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const load = useCallback(() => {
-    clearTimeout(pending.current);
-    pending.current = undefined;
-    const id = requests.start(Date.now());
-    setState(statisticsLoading);
-    api.usageStatistics({ range, ...(accountId ? { accountId } : {}) }).then(
-      (view) => {
-        if (requests.current(id)) setState({ view, loading: false });
-      },
-      (error: unknown) => {
-        if (requests.current(id)) setState((s) => statisticsFailed(s, error));
-      },
-    );
-  }, [api, range, accountId, requests]);
+  const load = useCallback(
+    (fresh = false) => {
+      clearTimeout(pending.current);
+      pending.current = undefined;
+      const id = requests.start(Date.now());
+      setState(fresh ? { loading: true } : statisticsLoading);
+      api.usageStatistics({ range, ...(accountId ? { accountId } : {}) }).then(
+        (view) => {
+          if (requests.current(id)) setState({ view, loading: false });
+        },
+        (error: unknown) => {
+          if (requests.current(id)) setState(statisticsFailed(error));
+        },
+      );
+    },
+    [api, range, accountId, requests],
+  );
   // A trailing timer must load the current range, not the one it was set for.
   const latestLoad = useRef(load);
   useEffect(() => {
     latestLoad.current = load;
-    load();
+    // Another range or account: the last view belongs to the previous one.
+    load(true);
   }, [load]);
 
   const changed = useCallback(() => {

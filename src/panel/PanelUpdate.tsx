@@ -25,7 +25,11 @@ export function PanelUpdate() {
           </Button>
         )}
         {update.status === "manual" && (
-          <Button size="xs" variant="outline" onClick={() => void relay.api.openUpdateNotes()}>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => void relay.report(() => relay.api.openUpdateNotes())}
+          >
             {t("İndir", "Download")}
           </Button>
         )}

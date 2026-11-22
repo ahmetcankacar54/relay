@@ -96,6 +96,27 @@ test("removing an account deletes its profile and its sealed sign-ins, and drops
   assert.equal(fs.existsSync(path.join(f.locks, f.b.id)), false);
 });
 
+test("a removed account leaves the gateway's pool order and left-out list; the client bindings stay", async (t) => {
+  const f = fixture(t);
+  const pool = path.join(f.root, "proxy-pool.json");
+  const bindings = { "claude-code": { ANTHROPIC_BASE_URL: null } };
+  fs.writeFileSync(
+    pool,
+    JSON.stringify({ accountOrder: [f.b.id, f.a.id], excludedAccountIds: [f.b.id], clientBindings: bindings }),
+  );
+  await removeAccount(f.b.id, f.options());
+  assert.deepEqual(JSON.parse(fs.readFileSync(pool, "utf8")), {
+    accountOrder: [f.a.id],
+    excludedAccountIds: [],
+    clientBindings: bindings,
+  });
+  if (process.platform !== "win32") assert.equal(fs.statSync(pool).mode & 0o777, 0o600);
+  // Without the file there is nothing to change, and none is made.
+  const g = fixture(t);
+  await removeAccount(g.b.id, g.options());
+  assert.equal(fs.existsSync(path.join(g.root, "proxy-pool.json")), false);
+});
+
 test("the account open in the Claude app, and one whose sign-in is pending, are refused and kept", async (t) => {
   const f = fixture(t);
   assert.equal(removalBlock(f.a.id, f.state), "active");

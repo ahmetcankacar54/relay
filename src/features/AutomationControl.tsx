@@ -218,7 +218,7 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
               <span
                 className={cn(
                   "text-2xs font-normal",
-                  state === "next" ? "text-primary" : state === "open" ? "text-muted-foreground" : "text-warn",
+                  state === "next" ? "text-primary" : state === "open" ? "text-muted-foreground" : "text-warn-foreground",
                 )}
               >
                 · {t(...CHIP_STATE[state])}
@@ -256,7 +256,7 @@ export function AutomationSettings() {
       <div
         role="radiogroup"
         aria-labelledby="automation-title"
-        className="grid gap-3 sm:grid-cols-3"
+        className="grid gap-3 @lg:grid-cols-3"
       >
         {AUTOMATION_MODES.map((m) => {
           const Icon = MODE_ICON[m.value];

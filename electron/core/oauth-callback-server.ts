@@ -28,11 +28,14 @@ export function callbackHtml(page: CallbackPage): string {
 /**
  * Listens on 127.0.0.1:<port> for <path>. Undefined when the port is taken, so the caller can
  * fall back to another way back. `handle` gets the full address; its page answers the browser.
- * The server closes itself after a handled callback and after `timeoutMs`.
+ * Only a callback whose `state` is the pending sign-in's is handled; any other gets 400 and the
+ * server keeps waiting. It closes itself after a handled callback and after `timeoutMs`.
  */
 export async function listenOAuthCallback(options: {
   port: number;
   path: string;
+  /** The pending sign-in's state; undefined while none is pending. */
+  state: () => string | undefined;
   handle: (address: string) => Promise<CallbackPage>;
   timeoutMs: number;
 }): Promise<CallbackServer | undefined> {
@@ -41,6 +44,11 @@ export async function listenOAuthCallback(options: {
     const url = new URL(req.url ?? "/", `http://localhost:${options.port}`);
     if (req.method !== "GET" || url.pathname !== options.path || handled) {
       res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
+      return;
+    }
+    const expected = options.state();
+    if (!expected || url.searchParams.get("state") !== expected) {
+      res.writeHead(400, { "content-type": "text/plain" }).end("Not this sign-in");
       return;
     }
     handled = true;

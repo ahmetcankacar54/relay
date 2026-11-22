@@ -413,34 +413,53 @@ export function AddAccountSteps({
     if (connected) setStep((s) => (s === 2 ? 3 : s));
   }, [connected]);
 
-  // The usage sign-in starts on its own, once per profile.
+  // The usage sign-in starts on its own, once per profile. A call the action lock refused, or
+  // one that failed, leaves it unstarted, so the next render tries again.
   const startedFor = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (step !== 2 || !account || connected || flow || cliBlocked(cli)) return;
     if (startedFor.current === account.id) return;
-    startedFor.current = account.id;
-    void relay.startCli(account);
+    const id = account.id;
+    void relay.startCli(account).then((started) => {
+      if (started) startedFor.current = id;
+    });
   }, [step, account, connected, flow, cli, relay]);
 
-  // Closing before the Claude app sign-in was saved takes the provisional profile away again.
+  // Closing before the Claude app sign-in was saved takes the provisional profile away again,
+  // also one whose creation was still running then.
   const latest = useRef({ account, pending: false });
   latest.current = { account, pending: pendingDesktop?.id === account?.id };
-  useEffect(
-    () => () => {
+  const creating = useRef<Promise<Account> | undefined>(undefined);
+  const closed = useRef(false);
+  useEffect(() => {
+    closed.current = false;
+    return () => {
+      closed.current = true;
       const { account: left, pending } = latest.current;
-      if (!left || left.desktop || left.auth?.loggedIn || initial) return;
+      if (initial) return;
+      if (!left) {
+        void creating.current?.then((made) => api.removeAccount(made.id)).catch(() => {});
+        return;
+      }
+      if (left.desktop || left.auth?.loggedIn) return;
       void api.disarmAutoCapture(left.id).catch(() => {});
       if (!pending) void api.removeAccount(left.id).catch(() => {});
-    },
-    [],
-  );
+    };
+  }, []);
 
   const begin = () =>
     void action("create", async () => {
-      const next =
-        account ??
-        (await api.createAccount({ name: provisionalName(accounts, t), kind: "personal" }));
-      if (!account) {
+      let next = account;
+      if (!next) {
+        const made = api.createAccount({ name: provisionalName(accounts, t), kind: "personal" });
+        creating.current = made;
+        try {
+          next = await made;
+        } finally {
+          creating.current = undefined;
+        }
+        // Closed meanwhile: the cleanup above removes it, so no sign-in starts for it.
+        if (closed.current) return;
         setCreated(next);
         setCreatedId(next.id);
       }

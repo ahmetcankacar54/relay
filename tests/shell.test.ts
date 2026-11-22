@@ -5,7 +5,6 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Sidebar } from "../src/app/Sidebar";
-import { LimitMeter } from "../src/components/LimitMeter";
 import { Banners } from "../src/app/Banners";
 import { TooltipProvider } from "../src/components/ui/tooltip";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -56,20 +55,6 @@ test("compact sidebar keeps accessible names", () => {
     })),
   );
   assert.match(html, /aria-label="Ayarlar"/);
-});
-
-test("limit meter shows what is used, amber from 75 % and red from 90 %", () => {
-  const html = renderToStaticMarkup(
-    createElement(LimitMeter, {
-      label: "Haftalık",
-      percent: 78,
-      detail: "4 gün",
-    }),
-  );
-  assert.match(html, /%78/);
-  assert.match(html, /kullanıldı/);
-  assert.match(html, /bg-warn/);
-  assert.match(html, /role="meter"/);
 });
 
 test("banners read an injected relay and offer reconnect for expired usage sign-ins", () => {

@@ -365,6 +365,8 @@ test("the renewal window gets every live claude.ai cookie of the account with it
       return PASSWORD;
     },
     request: async () => json(200, {}),
+    // The fixture is sealed with the macOS scheme (the Keychain password's key).
+    platform: "darwin",
   });
   const cookies = await reader.cookies(account());
   assert.deepEqual(

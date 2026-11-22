@@ -117,7 +117,7 @@ export function PanelExtension() {
             <Button
               size="xs"
               disabled={disabled}
-              onClick={() => void relay.api.openExtensionSettings()}
+              onClick={() => void relay.report(() => relay.api.openExtensionSettings())}
             >
               {t("Yeniden bağla", "Reconnect")}
             </Button>

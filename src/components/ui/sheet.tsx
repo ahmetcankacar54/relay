@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { I18nContext } from "@/data/i18n"
 import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
@@ -51,6 +52,8 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  // Outside an I18nProvider (a test, a stray portal) the label stays English instead of throwing.
+  const close = React.useContext(I18nContext)?.t("Kapat", "Close") ?? "Close"
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -74,7 +77,7 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close className="absolute top-3.5 right-3.5 rounded-sm p-0.5 opacity-60 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-secondary">
             <XIcon className="size-3.5" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{close}</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Content>

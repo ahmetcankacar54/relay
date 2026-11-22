@@ -36,10 +36,11 @@ test("Cmd+W hides the main window as its close button does, and hides the panel"
   const body = topLevel("closeFocusedWindow");
   assert.match(body, /if \(focused === window\) focused\.close\(\);/);
   assert.match(body, /trayPanel\?\.hide\(\)/);
-  // The main window's close is what hides it while the menu bar keeps Relay running.
+  // The main window's close is what hides it while the menu bar keeps Relay running; on Linux,
+  // where a desktop may have no tray area, it is minimized instead.
   assert.match(
     main,
-    /own\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*own\.hide\(\);\s*closeWindowToTray\(\);/,
+    /own\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*(?:\/\/[^\n]*\s*)*if \(process\.platform === "linux"\) own\.minimize\(\);\s*else own\.hide\(\);\s*closeWindowToTray\(\);/,
   );
 });
 

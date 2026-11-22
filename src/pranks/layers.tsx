@@ -9,14 +9,10 @@ export interface LayerProps {
   done(): void;
 }
 
-/** How long the panda runs in the wheel, and how long it nibbles at the bar. */
+/** How long the panda runs in the wheel. */
 export const WHEEL_MS = 2_400;
-export const NIBBLE_BAR_MS = 1_000;
 
 const WHEEL_SIZE = 28;
-const NIBBLE_BAR_SIZE = 28;
-/** The nibbling panda's box rises this far above the bar's top edge. */
-const NIBBLE_BAR_RISE = 26;
 const DOZE_SIZE = 48;
 const DOZE_MARGIN = 12;
 /** The gap between a button and the wheel beside it. */
@@ -66,21 +62,6 @@ export function WheelLayer({ play, done }: LayerProps) {
   return (
     <div className="absolute prank-wheel" style={{ left: at.left, top: at.top }}>
       <PandaRig pose="walk" size={WHEEL_SIZE} props={["wheel"]} motion={["walk"]} />
-    </div>
-  );
-}
-
-/** A panda nibbles at the filled end of a bar, above it. `rect` is the bar's fill. */
-export function NibbleBarLayer({ play, done }: LayerProps) {
-  const { rect } = play;
-  useEndAfter(done, rect ? NIBBLE_BAR_MS : undefined);
-  if (!rect) return null;
-  return (
-    <div
-      className="absolute"
-      style={{ left: rect.left + rect.width - NIBBLE_BAR_SIZE / 2, top: rect.top - NIBBLE_BAR_RISE }}
-    >
-      <PandaRig pose="chew" size={NIBBLE_BAR_SIZE} props={["crumbs"]} motion={["chew"]} />
     </div>
   );
 }

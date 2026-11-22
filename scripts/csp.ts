@@ -20,6 +20,7 @@ export function contentSecurityPolicy(mode: CspMode): string {
     "object-src 'none'",
     "base-uri 'none'",
     "frame-src 'none'",
+    "form-action 'none'",
   ].join("; ");
 }
 

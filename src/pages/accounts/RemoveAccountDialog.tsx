@@ -75,16 +75,13 @@ export function RemoveAccountBody({
   const relay = useRelay();
   const { t } = useI18n();
   const running = relay.busy === `remove:${account.id}`;
-  const confirm = () => {
-    let done = false;
+  const confirm = () =>
     void relay
       .action(`remove:${account.id}`, async () => {
         const result = await relay.api.removeAccount(account.id);
-        done = true;
         relay.setNotice(removedNotice(account.name, result, t, relay.data?.diagnostics?.platform));
       })
-      .then(() => done && removed(account.id));
-  };
+      .then((done) => done && removed(account.id));
   const goes = [
     t("Kayıtlı Claude uygulaması girişi", "Its saved Claude app sign-in"),
     t(
@@ -131,7 +128,8 @@ export function RemoveAccountBody({
         <Button type="button" variant="ghost" disabled={running} onClick={close}>
           {t("Vazgeç", "Cancel")}
         </Button>
-        <Button type="button" variant="destructive" disabled={running} onClick={confirm}>
+        {/* Another action holds the lock, so a click now would do nothing. */}
+        <Button type="button" variant="destructive" disabled={!!relay.busy} onClick={confirm}>
           {running ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
           {t("Hesabı kaldır", "Remove account")}
         </Button>

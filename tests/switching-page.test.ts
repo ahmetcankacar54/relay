@@ -303,7 +303,7 @@ test("the sidebar card offers Copy recipe for the open account's missing section
   assert.doesNotMatch(none, /Talimatı kopyala/);
 });
 
-test("the main window and the menu bar panel sit inside an error boundary", () => {
-  for (const entry of ["../src/main.tsx", "../src/panel/main.tsx"])
+test("the main window, the menu bar panel and the switch window sit inside an error boundary", () => {
+  for (const entry of ["../src/main.tsx", "../src/panel/main.tsx", "../src/switch/main.tsx"])
     assert.match(readFileSync(new URL(entry, import.meta.url), "utf8"), /<ErrorBoundary>/, entry);
 });

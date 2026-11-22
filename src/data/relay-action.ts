@@ -1,4 +1,9 @@
 // Kept free of browser-only imports so it can be unit tested under Node.
+/**
+ * Runs one action at a time. Resolves true once `fn` resolved (a failed refresh after it is
+ * shown but does not undo that), false when another action held the lock and nothing ran, or
+ * when `fn` failed and its error is shown.
+ */
 export function relayAction(
   lock: { current: boolean },
   deps: {
@@ -9,20 +14,38 @@ export function relayAction(
     showError(e: unknown): void;
   },
 ) {
-  return async (key: string, fn: () => Promise<unknown>) => {
-    if (lock.current) return;
+  return async (key: string, fn: () => Promise<unknown>): Promise<boolean> => {
+    if (lock.current) return false;
     lock.current = true;
     deps.setBusy(key);
     deps.setError("");
     deps.setNotice("");
+    let done = false;
     try {
       await fn();
+      done = true;
       await deps.refresh();
     } catch (e) {
       deps.showError(e);
     } finally {
       lock.current = false;
       deps.setBusy("");
+    }
+    return done;
+  };
+}
+
+/**
+ * Runs a call that changes no Relay state (opening a page or a link, quitting) outside the
+ * action lock, so a running action never swallows it: no busy key, no refresh. A failure is
+ * shown like an action's.
+ */
+export function relayReport(showError: (e: unknown) => void) {
+  return async (fn: () => Promise<unknown>): Promise<void> => {
+    try {
+      await fn();
+    } catch (e) {
+      showError(e);
     }
   };
 }

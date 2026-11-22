@@ -499,7 +499,7 @@ export function ContinuationSettings({
         }
       />
 
-      <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr]">
+      <div className="grid items-stretch gap-2 @lg:grid-cols-[1fr_auto_1fr]">
         <div className={panel}>
           <span className={caption}>{t("Kaynak hesap", "Source account")}</span>
           <strong className="block text-sm font-semibold">
@@ -515,7 +515,7 @@ export function ContinuationSettings({
         <ArrowRight
           size={18}
           aria-hidden="true"
-          className="hidden self-center text-muted-foreground sm:block"
+          className="hidden self-center text-muted-foreground @lg:block"
         />
         <div className={panel}>
           <span className={caption}>
@@ -602,7 +602,7 @@ export function ContinuationSettings({
         </div>
       )}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 @lg:grid-cols-2">
         <div className={panel}>
           <span className={caption}>{t("Konuşma", "Conversation")}</span>
           <strong className="block break-all text-sm font-semibold">

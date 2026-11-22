@@ -19,8 +19,8 @@ export const panelEyebrow =
 export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
 
 /** The pending-Desktop hint links to the accounts page, where it is completed. */
-export const openPendingDesktop = (relay: Pick<Relay, "api">) =>
-  void relay.api.openPage("hesaplar");
+export const openPendingDesktop = (relay: Pick<Relay, "api" | "report">) =>
+  void relay.report(() => relay.api.openPage("hesaplar"));
 
 /** A reading the card keeps, faded: last known, with neither window reset since. */
 function keepsLastKnown(usage: AccountUsage | undefined, now: number): boolean {
@@ -58,7 +58,7 @@ export function PanelActiveCard({ now }: { now: number }) {
   // A reading old only because the service could not be reached (or that has just grown old) keeps
   // its rings, faded on a dashed track, until a window resets; a problem the user must fix does not.
   const lastKnown = !fresh && !health?.fix && keepsLastKnown(usage, now);
-  const openRelay = () => void relay.api.openPage("genel");
+  const openRelay = () => void relay.report(() => relay.api.openPage("genel"));
   const usageButton =
     active &&
     (renew ? (

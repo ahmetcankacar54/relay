@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
-import { AccountDetail, AccountDetailBody, accountFromHash, accountHash, historyLine } from "../src/pages/accounts/AccountDetail";
+import { AccountDetail, accountFromHash, accountHash } from "../src/pages/accounts/AccountDetail";
+import { AccountDetailBody, historyLine } from "../src/pages/accounts/account-detail/Body";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
 import { RemoveAccountBody, removedNotice } from "../src/pages/accounts/RemoveAccountDialog";
@@ -260,7 +261,7 @@ test("the inline fix button runs its action and does not also open the sheet", a
   const opened: string[] = [];
   const relay = relayWithUsage("k", usageOf("k", "expired"), {
     accounts: [critical],
-    startCli: async (account: Account) => void started.push(account.id),
+    startCli: async (account: Account) => (started.push(account.id), true),
   } as Partial<Relay>);
   const dom = fakeDom();
   dom.install();
@@ -341,9 +342,10 @@ test("an account without a plan shows its subscription beside its name, saying s
   const tr = html("tr");
   assert.doesNotMatch(tr, /Plan yok|No plan/);
   // The short plan sits beside the name, its source in the title; an account with neither shows none.
-  const [none, team, chosen] = listRows(tr);
-  assert.match(none, /title="Studio">Studio<\/span><\/div>/);
-  assert.match(team, /title="Şirket">Şirket<\/span><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
+  // Claude's accounts span two work groups, so the personal ones come first, then the team's.
+  const [none, chosen, team] = listRows(tr);
+  assert.match(none, /title="Studio">Studio<\/button><\/div>/);
+  assert.match(team, /title="Şirket">Şirket<\/button><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
   assert.doesNotMatch(tr, /Plan seç/);
   assert.match(html("en"), /title="Subscription · no plan selected for planning">Team<\/span>/);
   // A chosen plan says so.
@@ -363,6 +365,9 @@ test("an account page lives at #/hesaplar/<id>", () => {
   assert.equal(accountFromHash("#/hesaplar"), undefined);
   assert.equal(accountFromHash("#/hesaplar?ekle"), undefined);
   assert.equal(accountFromHash("#/genel"), undefined);
+  // A malformed escape is no account, not a thrown URIError.
+  assert.equal(accountFromHash("#/hesaplar/%E0%A4%A"), undefined);
+  assert.equal(accountFromHash("#/hesaplar/%"), undefined);
 });
 
 test("each connection keeps its refresh button left of its action, in shared columns, with a plain check", () => {
@@ -967,7 +972,7 @@ test("the remove dialog says what goes and what stays, and removes only on confi
   const calls: string[] = [];
   const relay = relayOf({
     api: { removeAccount: async (id: string) => (calls.push(id), { signedOut: true }) } as unknown as Relay["api"],
-    action: async (_key: string, fn: () => Promise<unknown>) => void (await fn()),
+    action: async (_key: string, fn: () => Promise<unknown>) => (await fn(), true),
     setNotice: (text: string) => void notices.push(text),
   });
   const body = () => createElement(RemoveAccountBody, { account: c, close() {}, removed: (id: string) => void removed.push(id) });

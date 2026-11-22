@@ -468,14 +468,14 @@ test("statistics requests: only the latest response applies and changes refetch 
   assert.equal(requests.wait(60_000), 0);
 });
 
-test("statistics state keeps the last view while loading and after a failure", () => {
+test("statistics state keeps the last view while reloading and drops it after a failure", () => {
   const loaded = { view, loading: false };
   assert.deepEqual(statisticsLoading(loaded), { view, loading: true });
-  const failed = statisticsFailed(statisticsLoading(loaded), new Error("Error invoking remote method 'relay:usage-statistics': Error: boom"));
-  assert.deepEqual(failed, { view, loading: false, error: "boom" });
+  const failed = statisticsFailed(new Error("Error invoking remote method 'relay:usage-statistics': Error: boom"));
+  assert.deepEqual(failed, { loading: false, error: "boom" });
   // The error stays until the next response settles.
-  assert.deepEqual(statisticsLoading(failed), { view, loading: true, error: "boom" });
-  assert.deepEqual(statisticsFailed({ loading: true }, "down"), { loading: false, error: "down" });
+  assert.deepEqual(statisticsLoading(failed), { loading: true, error: "boom" });
+  assert.deepEqual(statisticsFailed("down"), { loading: false, error: "down" });
 });
 
 const ninetyDays = Array.from({ length: 90 }, (_, i) =>

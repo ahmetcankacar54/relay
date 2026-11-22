@@ -73,9 +73,9 @@ test("the places that show an account's e-mail blur it", () => {
   const read = (path: string) => fs.readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8");
   // The accounts list and the Overview's card show no e-mail any more; the account page does.
   for (const [path, pattern] of [
-    ["pages/accounts/AccountDetail.tsx", /<Private>\{a\.desktop\?\.email \?\? a\.auth\?\.email\}<\/Private>/],
-    ["pages/accounts/AccountDetail.tsx", /<Private>\{a\.auth\.orgName\}<\/Private>/],
-    ["pages/Proxy.tsx", /<Private>\{account\.email\}<\/Private>/],
+    ["pages/accounts/account-detail/Body.tsx", /<Private>\{a\.desktop\?\.email \?\? a\.auth\?\.email\}<\/Private>/],
+    ["pages/accounts/account-detail/Body.tsx", /<Private>\{a\.auth\.orgName\}<\/Private>/],
+    ["pages/proxy/PoolCard.tsx", /<Private>\{account\.email\}<\/Private>/],
     ["app/ConnectionPanels.tsx", /<Private>\{flowAccount\.auth\.email\}<\/Private>/],
   ] as const)
     assert.match(read(path), pattern, path);
@@ -87,7 +87,7 @@ test("Copy goes through main: the window's clipboard API is refused in Relay's w
   assert.match(main, /handle\("copy-text", \(text\) => \{\s*clipboard\.writeText\(z\.string\(\)\.max\(16_384\)\.parse\(text\)\);/);
   const preload = fs.readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
   assert.match(preload, /copyText: \(text\) => ipcRenderer\.invoke\("relay:copy-text", text\)/);
-  const proxy = fs.readFileSync(new URL("../src/pages/Proxy.tsx", import.meta.url), "utf8");
+  const proxy = fs.readFileSync(new URL("../src/pages/proxy/hooks.ts", import.meta.url), "utf8");
   assert.match(proxy, /api\.copyText\(text\)/);
   assert.doesNotMatch(proxy, /navigator\.clipboard/);
 });

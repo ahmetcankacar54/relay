@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import { execFile } from "node:child_process";
 import { UsageError } from "./usage-credentials";
 import type { SafeStoragePassword } from "./desktop-usage";
@@ -51,27 +50,24 @@ export function linuxKeyring(env: NodeJS.ProcessEnv = process.env): LinuxKeyring
 }
 
 const BUSCTL = "/usr/bin/busctl";
-const SECRET_TOOL = "secret-tool";
+/** Where distributions and source installs put secret-tool, tried in this order; never PATH. */
+const SECRET_TOOLS = ["/usr/bin/secret-tool", "/usr/local/bin/secret-tool"];
 
-/** An executable on PATH (or an absolute path), as `execFile` would find it. */
-function onPath(file: string, env: NodeJS.ProcessEnv): boolean {
-  const dirs = path.isAbsolute(file) ? [""] : (env.PATH ?? "").split(path.delimiter).filter(Boolean);
-  return dirs.some((dir) => {
-    try {
-      fs.accessSync(path.join(dir, file), fs.constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+function executable(file: string): boolean {
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Whether the tool that reads this desktop's keyring is installed. */
 export function linuxKeyringReachable(
   env: NodeJS.ProcessEnv = process.env,
-  exists: (file: string) => boolean = (file) => onPath(file, env),
+  exists: (file: string) => boolean = executable,
 ): boolean {
-  return exists(linuxKeyring(env).kind === "kwallet" ? BUSCTL : SECRET_TOOL);
+  return linuxKeyring(env).kind === "kwallet" ? exists(BUSCTL) : SECRET_TOOLS.some(exists);
 }
 
 export interface RunResult {
@@ -206,15 +202,20 @@ async function kwalletSecret(
 }
 
 async function secretServiceSecret(exec: Run, timeout: number): Promise<string> {
-  const result = await exec(
-    SECRET_TOOL,
-    ["lookup", "xdg:schema", SECRET_SCHEMA, "application", LINUX_APP_NAME],
-    timeout,
-  );
-  // No match: exit 1 and nothing said. Anything else is a locked or unreachable keyring.
-  if (result.code === 1 && !result.stdout && !result.stderr.trim()) throw missing();
-  // secret-tool ends the secret with a newline only on a terminal; Chromium's never holds one.
-  const secret = result.stdout.replace(/\n$/, "");
-  if (result.code !== undefined || !secret) throw locked(`secret-tool exit ${result.code}`);
-  return secret;
+  for (const tool of SECRET_TOOLS) {
+    const result = await exec(
+      tool,
+      ["lookup", "xdg:schema", SECRET_SCHEMA, "application", LINUX_APP_NAME],
+      timeout,
+    );
+    // Not installed there: the next place.
+    if (result.code === "ENOENT") continue;
+    // No match: exit 1 and nothing said. Anything else is a locked or unreachable keyring.
+    if (result.code === 1 && !result.stdout && !result.stderr.trim()) throw missing();
+    // secret-tool ends the secret with a newline only on a terminal; Chromium's never holds one.
+    const secret = result.stdout.replace(/\n$/, "");
+    if (result.code !== undefined || !secret) throw locked(`secret-tool exit ${result.code}`);
+    return secret;
+  }
+  throw locked("secret-tool not installed");
 }

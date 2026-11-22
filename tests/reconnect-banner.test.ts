@@ -440,7 +440,7 @@ test("the group opens and closes, and its dismiss buttons clear one row or all",
     const started: string[] = [];
     const relay = {
       ...relayFor(all3, [max, team, pro]),
-      startCli: async (a: Account) => void started.push(a.id),
+      startCli: async (a: Account) => (started.push(a.id), true),
     } as Relay;
     const c = dom.container;
     let root = createRoot(c as unknown as Element);

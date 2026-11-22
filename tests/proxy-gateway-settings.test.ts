@@ -86,13 +86,20 @@ test("a client key is relay-sec- and 256 random bits, never repeated", () => {
 });
 
 test("configuring takes a valid port, a host and the routing choice, and nothing else", () => {
-  assert.deepEqual(proxyConfigurePatch.parse({ port: 9000, host: " 0.0.0.0 ", routingStrategy: "balanced" }), {
+  assert.deepEqual(proxyConfigurePatch.parse({ port: 9000, host: " 100.64.0.1 ", routingStrategy: "balanced" }), {
     port: 9000,
-    host: "0.0.0.0",
+    host: "100.64.0.1",
     routingStrategy: "balanced",
   });
+  for (const host of ["127.0.0.1", "localhost", "::1", "100.101.12.34", "100.127.255.255"])
+    assert.equal(proxyConfigurePatch.parse({ host }).host, host);
   for (const bad of [{ allowCrossProviderFallback: true }, { port: 0 }, { port: 1.5 }, { port: "80" }, { host: "" }, { host: "x/y" }, { apiKey: "mine" }, { enabled: true }])
     assert.throws(() => proxyConfigurePatch.parse(bad), JSON.stringify(bad));
+});
+
+test("the gateway listens only on this computer or its Tailscale address", () => {
+  for (const host of ["0.0.0.0", "::", "192.168.1.5", "100.128.0.1", "100.63.255.255", "example.com", "127.0.0.2"])
+    assert.throws(() => proxyConfigurePatch.parse({ host }), /Use 127\.0\.0\.1, localhost or a Tailscale address\./, host);
 });
 
 test("quota is the fuller window, and the reset is the soonest one that is still ahead", () => {
