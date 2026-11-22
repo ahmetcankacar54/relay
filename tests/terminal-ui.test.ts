@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import type { Account } from "../shared/types";
 import type { TerminalStatus } from "../shared/terminal-identity";
 import { terminalGuide } from "../src/lib/terminal-ui";
+import { testT } from "./i18n";
 
-const tr = (a: string) => a;
+const tr = testT("tr");
 const U = "00000000-0000-4000-8000-000000000001";
 const O = "00000000-0000-4000-8000-000000000002";
 const account = (desktop = true) =>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -16,7 +16,7 @@ export function PlanningTab({
 } = {}) {
   const { api, data, accounts, active, settings, busy, desktop, action } =
     useRelay();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   return (
         <PlanningPanel
           settings={settings.planning}
@@ -26,6 +26,7 @@ export function PlanningTab({
           activeId={active?.id}
           disabled={!!busy || !!desktop?.busy}
           t={t}
+          language={language}
           platform={data?.diagnostics?.platform}
           settingsOpen={settingsOpen}
           onSettingsOpenChange={onSettingsOpenChange}
@@ -47,7 +48,7 @@ export function PlanningTab({
  */
 export function PlanningScreen() {
   const { data, accounts, active, settings } = useRelay();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [open, setOpen] = useState(false);
   const model = planningModel({
     settings: settings.planning,
@@ -56,21 +57,22 @@ export function PlanningScreen() {
     usage: data?.usage ?? {},
     activeId: active?.id,
     t,
+    language,
   });
   return (
     <PageFrame
-      title={t("Planlama", "Planning")}
+      title={t("planning.planning")}
       description={planningHeadline(model, t)}
       actions={
         <Button variant="outline" onClick={() => setOpen(true)}>
           <SlidersHorizontal />
-          {t("Plan ayarları", "Plan settings")}
+          {t("planning.planSettings")}
         </Button>
       }
     >
-      <div className="grid gap-4 px-5 pb-6">
+      <PageBody>
         <PlanningTab settingsOpen={open} onSettingsOpenChange={setOpen} />
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }

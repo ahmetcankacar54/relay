@@ -11,6 +11,7 @@ const Switching = () => createElement(Fragment, null, createElement(SwitchingTab
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { historyScopeNote } from "../src/features/SwitchPreferences";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type ExtensionStatus, type Snapshot } from "../shared/types";
 
 /** Static markup inside the app's tooltip provider: the pages' ⓘ tips need one, as in the shell. */
@@ -94,7 +95,7 @@ const render = (relay: Relay) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(
         RelayContext.Provider,
         { value: relay },
@@ -129,7 +130,7 @@ test("Switching is when to switch, what switches along and near the limit; prefe
 });
 
 test("the history scope and its local-only limit are one note, behind the row's ⓘ", () => {
-  const tr = (text: string) => text;
+  const tr = testT("tr");
   const local =
     "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.";
   assert.equal(
@@ -170,13 +171,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      {
-        value: {
-          language: "en",
-          setLanguage() {},
-          t: (_: string, en: string) => en,
-        },
-      },
+      { value: i18nValue("en") },
       createElement(
         RelayContext.Provider,
         { value: relayFor({}, { desktopHistoryTransfer: "off" }) },
@@ -203,7 +198,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
+        { value: i18nValue("en") },
         createElement(
           RelayContext.Provider,
           { value: relayFor({}, { desktopHistoryTransfer: mode }) },
@@ -231,13 +226,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      {
-        value: {
-          language: "en",
-          setLanguage() {},
-          t: (_: string, en: string) => en,
-        },
-      },
+      { value: i18nValue("en") },
       createElement(
         RelayContext.Provider,
         { value: relayFor() },
@@ -303,7 +292,7 @@ test("the sidebar card offers Copy recipe for the open account's missing section
   assert.doesNotMatch(none, /Talimatı kopyala/);
 });
 
-test("the main window and the menu bar panel sit inside an error boundary", () => {
-  for (const entry of ["../src/main.tsx", "../src/panel/main.tsx"])
+test("the main window, the menu bar panel and the switch window sit inside an error boundary", () => {
+  for (const entry of ["../src/main.tsx", "../src/panel/main.tsx", "../src/switch/main.tsx"])
     assert.match(readFileSync(new URL(entry, import.meta.url), "utf8"), /<ErrorBoundary>/, entry);
 });

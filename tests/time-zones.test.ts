@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TimeZonePicker } from "../src/features/TimeZonePicker";
+import { testT } from "./i18n";
 import {
   COMMON_TIME_ZONES,
   buildTimeZoneCatalog,
@@ -102,7 +103,7 @@ test("closed picker exposes labelled current identity and dated offset without b
       value: "Europe/London",
       disabled: true,
       onChange: () => updates++,
-      t: (_tr, en) => en,
+      t: testT("en"),
       now: SUMMER,
     }),
   );

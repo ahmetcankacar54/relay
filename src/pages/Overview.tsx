@@ -2,10 +2,11 @@ import { LoaderCircle } from "lucide-react";
 import { RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
+import { FORMAT_LOCALE } from "../../shared/i18n/locales";
 import { useRelay } from "@/data/relay-context";
 import { formatRelative } from "@/lib/time";
 import { overviewCards } from "@/lib/onboarding";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import type { Destination } from "@/app/routes";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
@@ -26,7 +27,7 @@ export function Overview({
   const { t, language } = useI18n();
   const { accounts, usageBusy } = relay;
   const usage = relay.data?.usage ?? {};
-  const date = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
+  const date = new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
     timeZone: relay.settings.planning.timeZone,
     weekday: "long",
     day: "numeric",
@@ -38,25 +39,22 @@ export function Overview({
     .sort()
     .at(-1);
   const description = latest
-    ? t(
-        `${date} · ${formatRelative(latest, now, language)} güncellendi`,
-        `${date} · updated ${formatRelative(latest, now, language)}`,
-      )
+    ? t("overview.updated", { date, formatRelative: formatRelative(latest, now, language) })
     : date;
   const refreshing = usageBusy.size > 0;
   // Today plans a connected account; automatic switching needs two.
   const cards = overviewCards(accounts);
   return (
     <PageFrame
-      title={t("Genel bakış", "Overview")}
+      title={t("overview.overview")}
       description={description}
       actions={
         <>
           <Button
             variant="ghost"
             size="icon"
-            aria-label={t("Limitleri yenile", "Refresh limits")}
-            title={t("Limitleri yenile", "Refresh limits")}
+            aria-label={t("common.refreshLimits")}
+            title={t("common.refreshLimits")}
             disabled={refreshing || !accounts.length}
             onClick={(e) =>
               offerAfter(prank, "wheel", e, () => {
@@ -72,21 +70,22 @@ export function Overview({
               disabled={relay.desktopBusy}
               onClick={() => void relay.action("open", () => relay.api.openDesktop())}
             >
-              {t("Claude uygulamasını aç", "Open the Claude app")}
+              {t("overview.openTheClaudeApp")}
             </Button>
           )}
         </>
       }
     >
-      <div className="grid gap-5 px-5 pb-5">
+      <PageBody className="gap-5 pb-5">
         {/* Now: the account in the Claude app, then every other account in one board, then today. */}
         <ActiveAccountCard go={go} now={now} />
-        {/* Before the first account the checklist is the next step; after, the accounts come first. */}
-        {accounts.length === 0 && <SetupChecklist go={go} />}
+        {/* Before the first account the checklist is the next step; after, the accounts come first.
+            Until the first snapshot the board's placeholders stand in for both. */}
+        {accounts.length === 0 && relay.data !== undefined && <SetupChecklist go={go} />}
         <AccountsBoard now={now} />
         {cards.today && <TodayCard go={go} now={now} />}
         {accounts.length > 0 && <SetupChecklist go={go} />}
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }

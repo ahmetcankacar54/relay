@@ -22,13 +22,13 @@ test("Cmd+Q closes the window to the menu bar and Alt+Cmd+Q quits Relay", () => 
   // The template itself is tested in tests/app-menu.test.ts; main hands it these actions.
   assert.match(
     main,
-    /appMenuTemplate\(trayLanguage, \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
+    /appMenuTemplate\(getAppLocale\(\), \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
   );
 });
 
 test("the menu is rebuilt when the language changes", () => {
-  const handler = main.slice(main.indexOf('handle("tray-language"'));
-  assert.match(handler, /if \(changed\) applyAppMenu\(\);/);
+  const handler = main.slice(main.indexOf('handle("set-language"'));
+  assert.match(handler, /if \(setAppLocale\([^\n]*\)\) \{\s*applyAppMenu\(\);/);
   assert.ok(handler.indexOf("applyAppMenu()") < handler.indexOf("\n  });"));
 });
 
@@ -36,10 +36,11 @@ test("Cmd+W hides the main window as its close button does, and hides the panel"
   const body = topLevel("closeFocusedWindow");
   assert.match(body, /if \(focused === window\) focused\.close\(\);/);
   assert.match(body, /trayPanel\?\.hide\(\)/);
-  // The main window's close is what hides it while the menu bar keeps Relay running.
+  // The main window's close is what hides it while the menu bar keeps Relay running; on Linux,
+  // where a desktop may have no tray area, it is minimized instead.
   assert.match(
     main,
-    /own\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*own\.hide\(\);\s*closeWindowToTray\(\);/,
+    /own\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*(?:\/\/[^\n]*\s*)*if \(process\.platform === "linux"\) own\.minimize\(\);\s*else own\.hide\(\);\s*closeWindowToTray\(\);/,
   );
 });
 

@@ -18,6 +18,7 @@ import {
 } from "../shared/widget-snapshot";
 import { WIDGET_RELOAD_MS, WidgetFile } from "../electron/core/widget-file";
 import { loadWidgetCenter } from "../electron/core/widget-center";
+import "./i18n";
 
 const ZONE = "Europe/Istanbul";
 // 20:24 in Istanbul.
@@ -420,6 +421,11 @@ test("today's split and the week's bars share one set of colours: the active acc
     busiest: "En yoğun Sal · $145,10",
     hits: "Limit 2 kez doldu",
     activeWeek: "Kişisel · hafta %68",
+    pairs: [
+      { label: "Günde", figure: "$39,51" },
+      { label: "En yoğun Sal", figure: "$145,10" },
+      { label: "Limit doldu", figure: "2 kez" },
+    ],
   });
 });
 
@@ -439,6 +445,16 @@ test("the accounts and the week read in English too, and parts without data are 
   assert.equal(snap.week.hits, undefined);
   assert.equal(snap.week.text.hits, "");
   assert.equal(snap.week.text.activeWeek, "Kişisel · week 68%");
+  assert.deepEqual(snap.week.text.pairs, [
+    { label: "Per day", figure: "$39.51" },
+    { label: "Busiest Tue", figure: "$145.10" },
+  ]);
+  // The widget sets the figure apart however the language writes money, and a zero count has none.
+  assert.deepEqual(plainDeep(withAccounts({ language: "fr", hits: 0 })).week?.text.pairs, [
+    { label: "Par jour", figure: "39,51 $" },
+    { label: "Plus chargé mar", figure: "145,10 $" },
+    { label: "Aucune limite atteinte" },
+  ]);
   // No account open in Claude: no active part, the others still listed.
   const none = withAccounts({
     limits: { accounts: ACCOUNTS, usage: USAGE, settings: DEFAULT_SETTINGS },

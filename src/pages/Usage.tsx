@@ -4,7 +4,7 @@ import type { StatisticsRange } from "../../shared/usage-statistics-view";
 import type { TokenUsageView } from "../../shared/token-usage-view";
 import { historyIdentity } from "../../shared/usage-statistics";
 import { Banner } from "@/components/Banner";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Panda } from "@/components/Panda";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -28,8 +28,6 @@ import {
   type UsageStatisticsState,
 } from "./usage/useUsageStatistics";
 
-const cardClass = "gap-0 px-4 py-3.5";
-
 /** A card with one message instead of the statistics; the panda reflects the state. */
 function StatisticsMessage({
   title,
@@ -43,7 +41,7 @@ function StatisticsMessage({
   scene?: PandaScene;
 }) {
   return (
-    <Card className={cardClass} role={alert ? "alert" : undefined}>
+    <Card padded role={alert ? "alert" : undefined}>
       <div className="flex items-center gap-4">
         {scene && <Panda scene={scene} size={72} playful />}
         <div className="min-w-0 flex-1">
@@ -77,7 +75,7 @@ export function UsageStatisticsSection(props: SectionProps) {
       <StatisticsMessage
         alert
         scene="trouble"
-        title={t("İstatistikler alınamadı", "Cannot load the statistics")}
+        title={t("usage.cannotLoadTheStatistics")}
         description={error}
       />
     );
@@ -87,7 +85,7 @@ export function UsageStatisticsSection(props: SectionProps) {
       <Banner tone="error" role="alert">
         <span>
           <b>
-            {t("İstatistikler yenilenemedi.", "Cannot refresh the statistics.")}
+            {t("usage.cannotRefreshTheStatistics")}
           </b>{" "}
           {error}
         </span>
@@ -112,25 +110,19 @@ function StatisticsContent({
     return (
       <StatisticsMessage
         scene="lookout"
-        title={t(
-          "Bu hesap için kullanım kaydı yok",
-          "No usage record for this account",
-        )}
-        description={t(
-          "Relay, bu hesabın limitlerini okuduktan sonra kullanımı kaydeder.",
-          "Relay records usage after it reads the limits of this account.",
-        )}
+        title={t("usage.noUsageRecordForThisAccount")}
+        description={t("usage.relayRecordsUsageAfterItReads")}
       />
     );
   if (!view)
     return (
       <StatisticsMessage
         scene={loading ? undefined : "lookout"}
-        title={t("İstatistikler", "Statistics")}
+        title={t("usage.statistics")}
         description={
           loading
-            ? t("İstatistikler yükleniyor", "Relay loads the statistics…")
-            : t("İstatistik yok", "No statistics")
+            ? t("usage.relayLoadsTheStatistics")
+            : t("usage.noStatistics")
         }
       />
     );
@@ -138,29 +130,23 @@ function StatisticsContent({
     return (
       <StatisticsMessage
         scene="trouble"
-        title={t("Kullanım geçmişi okunamadı", "Cannot read the usage history")}
-        description={t(
-          "Canlı limitler çalışmaya devam eder.",
-          "Live limits still work.",
-        )}
+        title={t("usage.cannotReadTheUsageHistory")}
+        description={t("usage.liveLimitsStillWork")}
       />
     );
   if (view.status === "empty")
     return (
       <StatisticsMessage
         scene="collecting"
-        title={t("Henüz veri yok", "No data yet")}
-        description={t(
-          "Relay açıkken istatistik toplar.",
-          "Relay collects statistics while it is open.",
-        )}
+        title={t("usage.noDataYet")}
+        description={t("usage.relayCollectsStatisticsWhileItIs")}
       />
     );
   return (
     <div className="grid gap-5" aria-busy={loading || undefined}>
       <SummaryTiles view={view} />
       <DailyChart view={view} accounts={accounts} zone={zone} />
-      <div className="grid items-start gap-5 lg:grid-cols-2">
+      <div className="grid items-start gap-5 @4xl:grid-cols-2">
         <AccountBalance view={view} accounts={accounts} />
         <LimitHits view={view} zone={zone} />
       </div>
@@ -232,10 +218,7 @@ export function WarningThreshold({
         <ToggleGroupItem key={n} value={String(n)}>
           {short
             ? formatPercent(n, language)
-            : t(
-                `${formatPercent(n, "tr")} kullanılınca`,
-                `At ${formatPercent(n, "en")} used`,
-              )}
+            : t("usage.atUsed", { percent: formatPercent(n, language) })}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>
@@ -264,10 +247,10 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
   const filtered = section === "limits" || section === "tokens";
   const title =
     section === "tokens"
-      ? t("Token ve ücret", "Tokens and cost")
+      ? t("usage.tokensAndCost")
       : section === "lost"
-        ? t("Rozetler", "Pins")
-        : t("Limit geçmişi", "Limit history");
+        ? t("usage.pins")
+        : t("usage.limitHistory");
   return (
     <PageFrame
       title={title}
@@ -283,7 +266,7 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
         ) : undefined
       }
     >
-      <div className="grid gap-4 px-5 pb-5">
+      <PageBody className="pb-5">
         {/* History only: today's limits of every account are on the Overview. */}
         {section === "limits" && (
           <LimitsPage
@@ -295,7 +278,7 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
         )}
         {section === "tokens" && <TokenUsage range={range} accountId={accountId} />}
         {section === "lost" && <LostFound />}
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }

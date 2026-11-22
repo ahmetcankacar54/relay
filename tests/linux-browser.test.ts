@@ -21,8 +21,9 @@ import {
   browserApps,
   type ExtensionStatus,
 } from "../shared/browser-extension";
+import { testT } from "./i18n";
 
-const t = (tr: string, en: string) => en;
+const t = testT("en");
 
 test("Linux looks in the browsers with a Linux build only, under XDG_CONFIG_HOME", { skip: process.platform === "win32" && "Linux and macOS paths: the code joins them with the host's path module" }, () => {
   const apps = browserApps("linux");

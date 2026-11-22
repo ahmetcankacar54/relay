@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildStatisticsView } from "../shared/usage-statistics-view";
+import { buildStatisticsView, type UsageStatisticsView } from "../shared/usage-statistics-view";
 import {
   emptyRollups,
   foldSamples,
@@ -10,6 +10,7 @@ import {
 import { usageIdentity, type UsageSample } from "../shared/usage-statistics";
 import type { Account } from "../shared/types";
 import { planningAccount } from "./planning-fixtures";
+import { testT } from "./i18n";
 
 const ZONE = "Europe/Istanbul";
 // Wednesday 2026-10-14 15:00 in Istanbul (UTC+3).
@@ -200,9 +201,13 @@ function insightRollups(maxFills: number[], proFills: number[]) {
   return r;
 }
 
+/** The insight as Turkish and English text. */
+const said = (insight: UsageStatisticsView["insight"]) =>
+  insight && { tr: testT("tr")(insight.id, insight.params), en: testT("en")(insight.id, insight.params) };
+
 test("insight rule 1: highest-capacity account barely fills five or more windows", () => {
   const view = build({ rollups: insightRollups([10, 10, 10, 10, 20], [90]) });
-  assert.deepEqual(view.insight, {
+  assert.deepEqual(said(view.insight), {
     tr: "Max (Max 5×) dönemlerinin ortalama yalnızca %12 kadarını dolduruyor.",
     en: "Max (Max 5×) fills only 12% of its periods on average.",
   });
@@ -211,7 +216,7 @@ test("insight rule 1: highest-capacity account barely fills five or more windows
 test("insight rule 2: lowest-capacity account is almost always full", () => {
   // Four windows are not enough for rule 1.
   const view = build({ rollups: insightRollups([10, 10, 10, 10], [90, 85]) });
-  assert.deepEqual(view.insight, {
+  assert.deepEqual(said(view.insight), {
     tr: "Pro (Pro) açıldığında neredeyse hep doluyor.",
     en: "Pro (Pro) is almost always full when it opens.",
   });
@@ -239,7 +244,7 @@ test("insight: an idle account beside a full one suggests shifting the order", (
     return r;
   };
   const both = [alto, kisisel];
-  assert.deepEqual(build({ accounts: both, rollups: idleRollups(9) }).insight, {
+  assert.deepEqual(said(build({ accounts: both, rollups: idleRollups(9) }).insight), {
     tr: "Alto 5 gündür boşta; Kişisel ise dönemi açıldığında neredeyse hep doluyor. 5 saatlik limite daha az takılmak için Alto hesabını sırada öne al.",
     en: "Alto was idle for the last 5 days; Kişisel is almost always full when it opens. Move Alto up the order to hit the 5-hour limit less often.",
   });
@@ -248,9 +253,9 @@ test("insight: an idle account beside a full one suggests shifting the order", (
     tr: "Kişisel (Pro) açıldığında neredeyse hep doluyor.",
     en: "Kişisel (Pro) is almost always full when it opens.",
   };
-  assert.deepEqual(build({ accounts: both, rollups: idleRollups(13) }).insight, plain);
+  assert.deepEqual(said(build({ accounts: both, rollups: idleRollups(13) }).insight), plain);
   assert.deepEqual(
-    build({ accounts: both, accountId: "kisisel", rollups: idleRollups(9) }).insight,
+    said(build({ accounts: both, accountId: "kisisel", rollups: idleRollups(9) }).insight),
     plain,
   );
 });

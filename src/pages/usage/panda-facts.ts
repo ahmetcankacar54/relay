@@ -1,46 +1,33 @@
 // What the panda says about a token day (docs/superpowers/specs/2026-10-19-panda-explains-design.md).
-// Every line is written in both languages; a Turkish line never puts a suffix on a number or a name.
+// A Turkish line never puts a suffix on a number or a name.
 import type {
   TokenCounts,
   TokenUsageView,
 } from "../../../shared/token-usage-view";
 import { formatPercent } from "@/lib/meter";
-import type { Language } from "@/data/i18n";
-import { locale } from "./format";
+import type { Language, MessageId, T } from "@/data/i18n";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 
 /** A book and roughly how many tokens it is: about 1.3 tokens per English word; the ≈ ones are estimated from page counts. */
 export interface Book {
-  tr: string;
-  en: string;
+  name: MessageId;
   tokens: number;
 }
 
 export const BOOKS: readonly Book[] = [
-  { tr: "Küçük Prens", en: "The Little Prince", tokens: 22_000 },
-  { tr: "Hayvan Çiftliği", en: "Animal Farm", tokens: 39_000 },
+  { name: "pandaFacts.theLittlePrince", tokens: 22_000 },
+  { name: "pandaFacts.animalFarm", tokens: 39_000 },
   // ≈ from its page count.
-  { tr: "Kürk Mantolu Madonna", en: "Madonna in a Fur Coat", tokens: 90_000 },
-  { tr: "Hobbit", en: "The Hobbit", tokens: 123_000 },
-  { tr: "Suç ve Ceza", en: "Crime and Punishment", tokens: 274_000 },
+  { name: "pandaFacts.madonnaInAFurCoat", tokens: 90_000 },
+  { name: "pandaFacts.theHobbit", tokens: 123_000 },
+  { name: "pandaFacts.crimeAndPunishment", tokens: 274_000 },
   // ≈ from its page count.
-  { tr: "Tutunamayanlar", en: "The Disconnected", tokens: 400_000 },
-  {
-    tr: "Yüzüklerin Efendisi",
-    en: "The Lord of the Rings",
-    tokens: 576_000,
-  },
-  { tr: "Savaş ve Barış", en: "War and Peace", tokens: 730_000 },
-  {
-    tr: "Shakespeare’in bütün eserleri",
-    en: "Shakespeare’s complete works",
-    tokens: 1_150_000,
-  },
-  {
-    tr: "Harry Potter serisi",
-    en: "the Harry Potter series",
-    tokens: 1_410_000,
-  },
-  { tr: "İngilizce Vikipedi", en: "English Wikipedia", tokens: 6_900_000_000 },
+  { name: "pandaFacts.theDisconnected", tokens: 400_000 },
+  { name: "pandaFacts.theLordOfTheRings", tokens: 576_000 },
+  { name: "pandaFacts.warAndPeace", tokens: 730_000 },
+  { name: "pandaFacts.shakespeareSCompleteWorks", tokens: 1_150_000 },
+  { name: "pandaFacts.theHarryPotterSeries", tokens: 1_410_000 },
+  { name: "pandaFacts.englishWikipedia", tokens: 6_900_000_000 },
 ];
 
 /** A comparison names a book the value is at least once and at most this many times. */
@@ -56,8 +43,7 @@ const MIN_ACTIVE_DAYS = 5;
 
 export interface PandaLine {
   key: string;
-  tr: string;
-  en: string;
+  text: string;
 }
 
 export type DayKinds = Pick<
@@ -72,16 +58,16 @@ export const kindsTotal = (c: DayKinds) =>
 export function formatShare(share: number, language: Language) {
   const percent = share * 100;
   if (percent >= 10 || percent === 0) return formatPercent(percent, language);
-  if (percent < 0.1) return language === "tr" ? "<%0,1" : "<0.1%";
-  const n = new Intl.NumberFormat(locale(language), {
+  const tenths = new Intl.NumberFormat(FORMAT_LOCALE[language], {
+    style: "percent",
     maximumFractionDigits: 1,
-  }).format(percent);
-  return language === "tr" ? `%${n}` : `${n}%`;
+  });
+  return percent < 0.1 ? `<${tenths.format(0.001)}` : tenths.format(share);
 }
 
 /** How many times: one decimal under 10 ("3,1"), whole above ("44"). */
 function formatTimes(times: number, language: Language) {
-  return new Intl.NumberFormat(locale(language), {
+  return new Intl.NumberFormat(FORMAT_LOCALE[language], {
     maximumFractionDigits: times < 10 ? 1 : 0,
   }).format(times);
 }
@@ -103,47 +89,39 @@ export function pickBook(tokens: number, seed: string): Book | undefined {
 }
 
 /** "≈ 12 Hobbit kadar" / "≈ 12× The Hobbit", or "about as much as …" between 1 and 2. */
-function bookAmount(tokens: number, book: Book) {
+function bookAmount(tokens: number, book: Book, t: T, language: Language) {
   const times = tokens / book.tokens;
   return times < 2
-    ? {
-        tr: `aşağı yukarı bir ${book.tr} kadar`,
-        en: `about as much as ${book.en}`,
-      }
-    : {
-        tr: `≈ ${formatTimes(times, "tr")} ${book.tr} kadar`,
-        en: `≈ ${formatTimes(times, "en")}× ${book.en}`,
-      };
+    ? t("pandaFacts.aboutAsMuchAs", { book: t(book.name) })
+    : t("pandaFacts.timesBook", {
+        times: formatTimes(times, language),
+        book: t(book.name),
+      });
 }
 
 /** "6.600" pages: two significant digits, at least one. */
 function formatPages(tokens: number, language: Language) {
-  return new Intl.NumberFormat(locale(language), {
+  return new Intl.NumberFormat(FORMAT_LOCALE[language], {
     maximumSignificantDigits: 2,
   }).format(Math.max(1, tokens / TOKENS_PER_PAGE));
 }
 
 /** "2,9 milyar" / "2.9 billion": a count spelled out for a sentence. */
 export function formatCount(value: number, language: Language) {
-  return new Intl.NumberFormat(locale(language), {
+  return new Intl.NumberFormat(FORMAT_LOCALE[language], {
     notation: "compact",
     compactDisplay: "long",
     maximumFractionDigits: 1,
   }).format(value);
 }
 
-/** How much less than an ordinary day a quiet one is, in words. */
+/** How much less than an ordinary day a quiet one is: the `fraction` of "pandaFacts.aQuietDay". */
 function quietFraction(ratio: number) {
-  if (ratio <= 0.1)
-    return { tr: "onda birinden az", en: "less than a tenth of" };
-  if (ratio <= 0.25)
-    return { tr: "dörtte birinden az", en: "less than a quarter of" };
-  if (ratio <= 1 / 3)
-    return { tr: "üçte birinden az", en: "less than a third of" };
-  return { tr: "yarısından az", en: "less than half of" };
+  if (ratio <= 0.1) return "tenth";
+  if (ratio <= 0.25) return "quarter";
+  if (ratio <= 1 / 3) return "third";
+  return "half";
 }
-
-const ORDINAL_EN = ["", "", "second ", "third "];
 
 /**
  * Where the day stands among the range's active days: its rank when it is one of the three busiest, else
@@ -153,6 +131,8 @@ function rankLine(
   view: TokenUsageView,
   date: string,
   total: number,
+  t: T,
+  language: Language,
 ): PandaLine | undefined {
   const totals = view.days
     .map((day) =>
@@ -164,58 +144,37 @@ function rankLine(
   const ordinary = totals[Math.floor(totals.length / 2)];
   const ratio = total / ordinary;
   const rank = totals.indexOf(total) + 1;
-  const times = { tr: formatTimes(ratio, "tr"), en: formatTimes(ratio, "en") };
+  const times = formatTimes(ratio, language);
   const range = view.range;
   // A top-three day is named only when it stands out, so days alike do not all claim to be the busiest.
-  if (rank >= 1 && rank <= 3 && ratio >= 1.2)
-    return {
-      key: "rank",
-      tr: `Bu ${range} günün en yoğun ${rank === 1 ? "" : `${rank}. `}günü: sıradan bir gününün ${times.tr} katı.`,
-      en: `The ${ORDINAL_EN[rank]}busiest of these ${range} days: ${times.en}× an ordinary day.`,
-    };
+  if (rank === 1 && ratio >= 1.2)
+    return { key: "rank", text: t("pandaFacts.theBusiestOfTheseDays", { range, times }) };
+  if (rank >= 2 && rank <= 3 && ratio >= 1.2)
+    return { key: "rank", text: t("pandaFacts.theNthBusiestOfTheseDays", { rank, range, times }) };
   if (ratio >= 1.5)
-    return {
-      key: "rank",
-      tr: `Yoğun bir gün: sıradan bir gününün ${times.tr} katı.`,
-      en: `A busy day: ${times.en}× an ordinary day.`,
-    };
-  if (ratio < 0.5) {
-    const fraction = quietFraction(ratio);
-    return {
-      key: "rank",
-      tr: `Sakin bir gün: sıradan bir gününün ${fraction.tr}.`,
-      en: `A quiet day: ${fraction.en} an ordinary day.`,
-    };
-  }
-  return {
-    key: "rank",
-    tr: "Sıradan bir gün; ne fazla ne az.",
-    en: "An ordinary day, no more and no less.",
-  };
+    return { key: "rank", text: t("pandaFacts.aBusyDay", { times }) };
+  if (ratio < 0.5)
+    return { key: "rank", text: t("pandaFacts.aQuietDay", { fraction: quietFraction(ratio) }) };
+  return { key: "rank", text: t("pandaFacts.anOrdinaryDay") };
 }
 
 /** How long a person would read `tokens` without stopping: minutes, hours, days, months or years. */
-export function readingTime(tokens: number) {
+export function readingTime(tokens: number, t: T) {
   const minutes = tokens / TOKENS_PER_WORD / WORDS_PER_MINUTE;
   const hours = minutes / 60;
   const days = hours / 24;
   const months = days / 30;
   const unit =
     hours < 1
-      ? { n: Math.max(1, Math.round(minutes)), tr: "dakika", en: "minute" }
+      ? { count: Math.max(1, Math.round(minutes)), unit: "minute" }
       : days < 2
-        ? { n: Math.round(hours), tr: "saat", en: "hour" }
+        ? { count: Math.round(hours), unit: "hour" }
         : days < 60
-          ? { n: Math.round(days), tr: "gün", en: "day" }
+          ? { count: Math.round(days), unit: "day" }
           : months < 24
-            ? { n: Math.round(months), tr: "ay", en: "month" }
-            : { n: Math.round(months / 12), tr: "yıl", en: "year" };
-  const n = (language: Language) =>
-    new Intl.NumberFormat(locale(language)).format(unit.n);
-  return {
-    tr: `${n("tr")} ${unit.tr}`,
-    en: `${n("en")} ${unit.en}${unit.n === 1 ? "" : "s"}`,
-  };
+            ? { count: Math.round(months), unit: "month" }
+            : { count: Math.round(months / 12), unit: "year" };
+  return t("pandaFacts.readingTime", unit);
 }
 
 /** "claude-opus-5-5" → "Opus 5.5", "claude-3-5-sonnet-20241022" → "Sonnet 3.5"; a date is dropped; anything else as it is. */
@@ -274,40 +233,33 @@ export function busiestDay(view: TokenUsageView) {
 }
 
 /** Everything the panda can say about a day, in the order it says it. */
-export function pandaLines(input: DayInput): PandaLine[] {
+export function pandaLines(input: DayInput, t: T, language: Language): PandaLine[] {
   const { view, date, accountNames, today } = input;
   const { kinds, rows, estimated, total } = dayParts(input);
   if (total === 0)
-    return [
-      {
-        key: "empty",
-        tr: "Bu gün boş. Ben de biraz kestirdim.",
-        en: "Nothing here. I had a little nap too.",
-      },
-    ];
+    return [{ key: "empty", text: t("pandaFacts.nothingHereIHadALittle") }];
   const lines: PandaLine[] = [];
   const share = (value: number, of = total) => value / of;
-  const isToday = date === today;
-  const rank = rankLine(view, date, total);
+  const when = date === today ? "today" : "past";
+  const rank = rankLine(view, date, total, t, language);
   if (rank) lines.push(rank);
   // What Claude wrote: its output, in pages and in a book.
   if (kinds.output >= TOKENS_PER_PAGE) {
     const book = pickBook(kinds.output, `${date}:wrote`);
-    const amount = book && bookAmount(kinds.output, book);
+    const pages = formatPages(kinds.output, language);
     lines.push({
       key: "wrote",
-      tr: `Claude ${isToday ? "bugün" : "bu gün"} ≈ ${formatPages(kinds.output, "tr")} sayfa yazdı${amount ? `; ${amount.tr}` : ""}.`,
-      en: `Claude wrote ≈ ${formatPages(kinds.output, "en")} pages ${isToday ? "today" : "this day"}${amount ? `, ${amount.en}` : ""}.`,
+      text: book
+        ? t("pandaFacts.claudeWrotePagesAmount", { when, pages, amount: bookAmount(kinds.output, book, t, language) })
+        : t("pandaFacts.claudeWrotePages", { when, pages }),
     });
   }
   // What it read to do so: everything it was given, cached or not.
   const read = kinds.input + kinds.cacheWrite + kinds.cacheRead;
   if (read > 0) {
-    const time = readingTime(read);
     lines.push({
       key: "read",
-      tr: `Claude ${isToday ? "bugün" : "bu gün"} ${formatCount(read, "tr")} token okudu; bir insan durmadan okusa ${time.tr} sürerdi.`,
-      en: `Claude read ${formatCount(read, "en")} tokens ${isToday ? "today" : "this day"}; a person who reads nonstop needs ${time.en} for that.`,
+      text: t("pandaFacts.claudeReadTokens", { when, count: formatCount(read, language), time: readingTime(read, t) }),
     });
   }
   // Only an account carries a day, and only when the range has more than one row to choose from.
@@ -315,31 +267,23 @@ export function pandaLines(input: DayInput): PandaLine[] {
   const carrier =
     top && view.rows.length > 1 ? accountNames[top.key] : undefined;
   if (carrier && rows.length === 1)
-    lines.push({
-      key: "carried",
-      tr: `Bu günü tek başına ${carrier} taşıdı.`,
-      en: `${carrier} carried this day alone.`,
-    });
+    lines.push({ key: "carried", text: t("pandaFacts.carriedThisDayAlone", { carrier }) });
   else if (carrier && share(top.total) >= CARRIED_SHARE)
     lines.push({
       key: "carried",
-      tr: `Bu günün yükünü büyük ölçüde ${carrier} çekti: ${formatShare(share(top.total), "tr")}.`,
-      en: `${carrier} pulled most of this day: ${formatShare(share(top.total), "en")}.`,
+      text: t("pandaFacts.pulledMostOfThisDay", { carrier, share: formatShare(share(top.total), language) }),
     });
   if (estimated)
-    lines.push({
-      key: "estimated",
-      tr: "Bu günü limit ölçümlerinden tahmin ettim; ≈ işaretleri ondan.",
-      en: "I estimated this day from limit samples; ≈ marks the estimates.",
-    });
+    lines.push({ key: "estimated", text: t("pandaFacts.iEstimatedThisDayFromLimit") });
   const rangeWrote = view.totals.output;
   if (rangeWrote >= TOKENS_PER_PAGE) {
     const book = pickBook(rangeWrote, `${date}:range`);
-    const amount = book && bookAmount(rangeWrote, book);
+    const pages = formatPages(rangeWrote, language);
     lines.push({
       key: "range-wrote",
-      tr: `Bu ${view.range} günde Claude ≈ ${formatPages(rangeWrote, "tr")} sayfa yazdı${amount ? `; ${amount.tr}` : ""}.`,
-      en: `Over these ${view.range} days Claude wrote ≈ ${formatPages(rangeWrote, "en")} pages${amount ? `, ${amount.en}` : ""}.`,
+      text: book
+        ? t("pandaFacts.overTheseDaysClaudeWroteAmount", { range: view.range, pages, amount: bookAmount(rangeWrote, book, t, language) })
+        : t("pandaFacts.overTheseDaysClaudeWrote", { range: view.range, pages }),
     });
   }
   const models = view.models
@@ -351,8 +295,7 @@ export function pandaLines(input: DayInput): PandaLine[] {
     const part = share(models[0].total, all);
     lines.push({
       key: "model",
-      tr: `Bu aralıkta en çok ${name} çalıştı: ${formatShare(part, "tr")}.`,
-      en: `${name} worked the most in this range: ${formatShare(part, "en")}.`,
+      text: t("pandaFacts.workedTheMostInThisRange", { model: name, share: formatShare(part, language) }),
     });
   }
   return lines;

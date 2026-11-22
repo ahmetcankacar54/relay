@@ -17,6 +17,7 @@ import { Store } from "../electron/core/store";
 import { UsageManager } from "../electron/core/usage";
 import { localizeError } from "../shared/error-text";
 import type { Account, DesktopState } from "../shared/types";
+import "./i18n";
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
@@ -96,6 +97,27 @@ test("removing an account deletes its profile and its sealed sign-ins, and drops
   assert.equal(fs.existsSync(path.join(f.locks, f.b.id)), false);
 });
 
+test("a removed account leaves the gateway's pool order and left-out list; the client bindings stay", async (t) => {
+  const f = fixture(t);
+  const pool = path.join(f.root, "proxy-pool.json");
+  const bindings = { "claude-code": { ANTHROPIC_BASE_URL: null } };
+  fs.writeFileSync(
+    pool,
+    JSON.stringify({ accountOrder: [f.b.id, f.a.id], excludedAccountIds: [f.b.id], clientBindings: bindings }),
+  );
+  await removeAccount(f.b.id, f.options());
+  assert.deepEqual(JSON.parse(fs.readFileSync(pool, "utf8")), {
+    accountOrder: [f.a.id],
+    excludedAccountIds: [],
+    clientBindings: bindings,
+  });
+  if (process.platform !== "win32") assert.equal(fs.statSync(pool).mode & 0o777, 0o600);
+  // Without the file there is nothing to change, and none is made.
+  const g = fixture(t);
+  await removeAccount(g.b.id, g.options());
+  assert.equal(fs.existsSync(path.join(g.root, "proxy-pool.json")), false);
+});
+
 test("the account open in the Claude app, and one whose sign-in is pending, are refused and kept", async (t) => {
   const f = fixture(t);
   assert.equal(removalBlock(f.a.id, f.state), "active");
@@ -167,11 +189,13 @@ test("the app's removal refuses a running terminal and a usage sign-in in progre
   const options = { vault: f.vault, locks: f.locks, desktop: async () => ({ activeProfileId: f.a.id }) };
   const list = service.runner.list.bind(service.runner);
   service.runner.list = () => [{ accountId: f.b.id, status: "running" } as ReturnType<typeof list>[number]];
-  await assert.rejects(service.remove(f.b.id, options), /Bu hesapta çalışan oturumu önce durdur\./);
+  await assert.rejects(service.remove(f.b.id, options), /^Error: Stop the running session for this account first\.$/);
+  assert.equal(localizeError("Stop the running session for this account first.", "tr"), "Bu hesapta çalışan oturumu önce durdur.");
   service.runner.list = list;
   const active = service.auth.active.bind(service.auth);
   service.auth.active = (id: string) => id === f.b.id;
-  await assert.rejects(service.remove(f.b.id, options), /limit okuma girişini tamamla ya da iptal et/);
+  await assert.rejects(service.remove(f.b.id, options), /Finish or cancel this account’s usage sign-in first\./);
+  assert.match(localizeError("Finish or cancel this account’s usage sign-in first.", "tr"), /limit okuma girişini tamamla ya da iptal et/);
   service.auth.active = active;
   await assert.rejects(service.remove(f.a.id, options), AccountRemovalRefused);
   assert.equal(fs.existsSync(log), false);

@@ -8,6 +8,7 @@ import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type RelayAPI } from "../shared/types";
 import type { LostFoundCollection, LostItem } from "../shared/lost-found";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
+import { i18nValue, testT } from "./i18n";
 
 const ZONE = "Europe/Istanbul";
 const NOW = Date.parse("2026-10-19T10:00:00Z");
@@ -16,9 +17,8 @@ const a: Account = { id: "a", name: "Kişisel", kind: "personal", group: "person
 const b: Account = { ...a, id: "b", name: "Vertex" };
 const accounts = [a, b];
 const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_SETTINGS.planning, timeZone: ZONE } };
-const t = (language: Language) => (tr: string, en: string) => (language === "tr" ? tr : en);
 const week = { start: "2026-10-12", end: "2026-10-18" };
-const say = (item: LostItem, language: Language = "tr") => describe(item, week, ZONE, t(language), language);
+const say = (item: LostItem, language: Language = "tr") => describe(item, week, ZONE, testT(language), language);
 
 test("week labels name the month once within it, and both months across two", () => {
   assert.equal(weekLabel("2026-10-12", "2026-10-18", "tr"), "12–18 Eki");
@@ -138,7 +138,7 @@ test("token and cost finds tell their money, and every moment the ledger can tel
   const scroll = say({ kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16, spend: { tokens: 12_400_000, cost: 38.2 } });
   assert.match(scroll.spend!, /^12,4\sMn token · \$38,20 API karşılığı$/);
   assert.match(
-    describe({ kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16, spend: { tokens: 12_400_000, cost: 38.2 } }, week, ZONE, t("en"), "en").spend!,
+    describe({ kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16, spend: { tokens: 12_400_000, cost: 38.2 } }, week, ZONE, testT("en"), "en").spend!,
     /^12\.4m tokens · \$38\.20 API value$/,
   );
   // A chest already tells its money, so it has no second line.
@@ -169,7 +169,7 @@ function relayFor(api: Partial<RelayAPI>, list: Account[] = accounts): Relay {
 const tree = (child: ReactElement, relay: Relay, language: Language = "tr") =>
   createElement(
     I18nContext.Provider,
-    { value: { language, setLanguage() {}, t: t(language) } },
+    { value: i18nValue(language) },
     createElement(RelayContext.Provider, { value: relay }, child),
   );
 

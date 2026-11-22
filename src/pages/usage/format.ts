@@ -2,6 +2,7 @@
 import type { Account } from "../../../shared/types";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import { FORMER_KEY } from "../../../shared/usage-statistics-view";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import type { Language, T } from "@/data/i18n";
 
 export type StatisticsRow = UsageStatisticsView["accounts"][number];
@@ -11,9 +12,6 @@ const DAY_MINUTES = 24 * 60;
 /** A Monday, used to name weekday 0 = Monday … 6 = Sunday. */
 const MONDAY = Date.parse("2026-10-12T12:00:00Z");
 
-export const locale = (language: Language) =>
-  language === "tr" ? "tr-TR" : "en-GB";
-
 // Building an Intl formatter is costly and a heatmap formats hundreds of
 // cells, so formatters are kept per language and options.
 const numberFormats = new Map<string, Intl.NumberFormat>();
@@ -22,7 +20,7 @@ function numberFormat(language: Language, fractionDigits: number) {
   const key = `${language}:${fractionDigits}`;
   let f = numberFormats.get(key);
   if (!f) {
-    f = new Intl.NumberFormat(locale(language), {
+    f = new Intl.NumberFormat(FORMAT_LOCALE[language], {
       maximumFractionDigits: fractionDigits,
     });
     numberFormats.set(key, f);
@@ -33,7 +31,7 @@ function dateFormat(language: Language, options: Intl.DateTimeFormatOptions) {
   const key = `${language}:${JSON.stringify(options)}`;
   let f = dateFormats.get(key);
   if (!f) {
-    f = new Intl.DateTimeFormat(locale(language), options);
+    f = new Intl.DateTimeFormat(FORMAT_LOCALE[language], options);
     dateFormats.set(key, f);
   }
   return f;
@@ -48,7 +46,7 @@ export { formatChange, formatCost, formatTokens } from "../../../shared/number-f
 
 /** "12,4 dolu dönem" / "12.4 full periods": 5-hour periods used. */
 export const formatPeriods = (value: number, language: Language, t: T) =>
-  `${formatNumber(value, language)} ${t("dolu dönem", value === 1 ? "full period" : "full periods")}`;
+  t("format.fullPeriods", { count: value, value: formatNumber(value, language) });
 
 /** "12:00–15:00" for a busiest window of local hours; the end may pass midnight. */
 export const hourRange = (start: number, end: number) =>
@@ -56,7 +54,7 @@ export const hourRange = (start: number, end: number) =>
 
 /** "1.840 Pro birimi" / "1,840 Pro units". */
 export const formatUnits = (value: number, language: Language, t: T) =>
-  `${formatNumber(value, language)} ${t("Pro birimi", "Pro units")}`;
+  `${formatNumber(value, language)} ${t("format.proUnits")}`;
 
 /** "14 Eki" / "14 Oct" for a YYYY-MM-DD calendar date. */
 export function formatDay(date: string, language: Language) {
@@ -96,7 +94,7 @@ export const rowKey = (row: StatisticsRow) => row.accountId ?? FORMER_KEY;
 
 /** Unmatched identities: the view names them in Turkish only. */
 export const rowName = (row: { former?: true; name: string }, t: T) =>
-  row.former ? t("Eski hesap", "Former account") : row.name;
+  row.former ? t("format.formerAccount") : row.name;
 
 /**
  * Colour slot of a row: its account's position in the account list, former
@@ -113,20 +111,19 @@ export function toneIndex(row: { accountId?: string }, accounts: Account[]) {
 export const toneFill = (index: number) => `var(--tone-${(index % 4) + 1})`;
 
 /** "1 sa 10 dk" / "2 gün 3 sa"; English "1 h 10 min" / "2 days 3 h". */
-export function formatDuration(ms: number, language: Language) {
+export function formatDuration(ms: number, t: T) {
   const total = Math.max(1, Math.round(ms / MINUTE));
-  const tr = language === "tr";
   const days = Math.floor(total / DAY_MINUTES);
   const hours = Math.floor((total % DAY_MINUTES) / 60);
   const minutes = total % 60;
   const parts = days
     ? [
-        tr ? `${days} gün` : `${days} ${days === 1 ? "day" : "days"}`,
-        hours ? (tr ? `${hours} sa` : `${hours} h`) : "",
+        t("format.days", { days }),
+        hours ? t("format.hours", { hours }) : "",
       ]
     : [
-        hours ? (tr ? `${hours} sa` : `${hours} h`) : "",
-        minutes ? (tr ? `${minutes} dk` : `${minutes} min`) : "",
+        hours ? t("format.hours", { hours }) : "",
+        minutes ? t("format.minutes", { minutes }) : "",
       ];
   return parts.filter(Boolean).join(" ");
 }

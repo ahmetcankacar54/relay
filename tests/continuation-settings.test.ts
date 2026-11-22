@@ -7,6 +7,8 @@ import {
   type ContinuationSettingsView,
 } from "../src/features/ContinuationSettings";
 import type { Account } from "../shared/types";
+import type { Locale } from "../shared/i18n/locales";
+import { testT } from "./i18n";
 
 const account = (id: string, name: string): Account => ({
   id,
@@ -53,7 +55,7 @@ const consentTag = (html: string) =>
 function render(
   patch: Partial<ContinuationSettingsView> = {},
   blockingReason?: string,
-  language = "en",
+  language: Locale = "en",
 ) {
   return renderToStaticMarkup(
     createElement(ContinuationSettings, {
@@ -66,7 +68,7 @@ function render(
       onRefresh: () => {},
       onArm: () => {},
       onDisable: () => {},
-      t: (tr, en) => (language === "tr" ? tr : en),
+      t: testT(language),
     }),
   );
 }

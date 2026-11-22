@@ -19,6 +19,7 @@ const AllSettings = () =>
   );
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type RelaySettings, type Snapshot } from "../shared/types";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
@@ -55,12 +56,13 @@ test("the system group offers the diagnostics files, and say which ones to send"
   relay.action = (async (name: string, fn: () => Promise<unknown>) => {
     calls.push(name);
     await fn();
+    return true;
   }) as Relay["action"];
   const html = (language: "tr" | "en") =>
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(RelayContext.Provider, { value: relay }, createElement(AllSettings)),
       ),
     );
@@ -89,7 +91,7 @@ test("Settings has two tabs, general and advanced; switching, planning and the g
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
     ),
   );
@@ -99,7 +101,9 @@ test("Settings has two tabs, general and advanced; switching, planning and the g
     ["Genel", "Gelişmiş"],
   );
   for (const re of [
-    /Tema/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
+    /Tema/, /Sistem/, /Açık/, /Koyu/,
+    // The language is a select labelled "Arayüz dili", showing the chosen language by its own name.
+    /for="language"[^>]*>Arayüz dili<\/label>/, /<button[^>]*id="language"[\s\S]*?>Türkçe</,
     /Menü çubuğu/, /Limitleri otomatik yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
     // The path the missing-CLI error names: Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç.
     /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
@@ -116,7 +120,7 @@ test("Settings offers the menu bar animation switch, on unless turned off", () =
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        { value: i18nValue("tr") },
         createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(AllSettings)),
       ),
     );
@@ -135,7 +139,7 @@ test("the menu bar animation switch is shown on macOS only", () => {
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        { value: i18nValue("tr") },
         createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(AllSettings)),
       ),
     );
@@ -157,7 +161,7 @@ test("Settings offers the switch window, on unless turned off, on macOS only", (
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        { value: i18nValue("tr") },
         createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(AllSettings)),
       ),
     );
@@ -180,7 +184,7 @@ test("Settings offers the panda pranks setting on every platform", () => {
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        { value: i18nValue("tr") },
         createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(AllSettings)),
       ),
     );
@@ -195,8 +199,10 @@ test("Settings offers the panda pranks setting on every platform", () => {
     for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /İmleci kısa süre saklayabilir\./])
       assert.match(html, re, platform);
     assert.match(html, /id="panda-pranks-label"/, platform);
-    assert.deepEqual(selected(html), ["Ara sıra"], platform);
-    assert.deepEqual(selected(render({ platform, pranks: "off" })), ["Kapalı"], platform);
+    // The pranks live under "Eğlence" and stay off until the user picks a level.
+    assert.match(html, /id="settings-panda"[\s\S]*?Eğlence/, platform);
+    assert.deepEqual(selected(html), ["Kapalı"], platform);
+    assert.deepEqual(selected(render({ platform, pranks: "sometimes" })), ["Ara sıra"], platform);
     assert.deepEqual(selected(render({ platform, pranks: "rarely" })), ["Nadiren"], platform);
   }
 });
@@ -205,7 +211,7 @@ test("Settings shows the panda pranks setting in English", () => {
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
+      { value: i18nValue("en") },
       createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
     ),
   );
@@ -218,12 +224,12 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(RelayContext.Provider, { value: relayFor() }, child),
       ),
     );
   const notes = (language: "tr" | "en") =>
-    render(language, createElement(PrivacyNotes, { t: (tr: string, en: string) => (language === "tr" ? tr : en) }));
+    render(language, createElement(PrivacyNotes, { t: testT(language) }));
   const tr = notes("tr");
   const en = notes("en");
   const note = (html: string) => /<p class="[^"]*text-muted-foreground[^"]*">(Relay [^<]*(?:Anahtarlık|Keychain)[^<]*)<\/p>/.exec(html)?.[1];
@@ -250,7 +256,7 @@ test("Settings → Switching holds the warnings and their threshold; General the
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(AllSettings)),
       ),
     );
@@ -282,7 +288,7 @@ test("Settings → Switching holds the warnings and their threshold; General the
     const updates: Partial<RelaySettings>[] = [];
     const relay = relayFor();
     relay.api = { ...relay.api, updateSettings: async (patch: Partial<RelaySettings>) => void updates.push(patch) } as unknown as Relay["api"];
-    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => (await fn(), true)) as Relay["action"];
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () =>
@@ -292,7 +298,7 @@ test("Settings → Switching holds the warnings and their threshold; General the
           null,
           createElement(
             I18nContext.Provider,
-            { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+            { value: i18nValue("tr") },
             createElement(RelayContext.Provider, { value: relay }, createElement(SwitchingPage)),
           ),
         ),
@@ -325,14 +331,14 @@ test("the system group shows how Relay starts Claude, and changes it through mai
         return choice;
       },
     } as unknown as Relay["api"];
-    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => (await fn(), true)) as Relay["action"];
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () =>
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "gelismis" })),
         ),
       ),
@@ -360,7 +366,7 @@ test("the menu bar group says what the title can show, on macOS only", () => {
     return renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(AllSettings)),
       ),
     );
@@ -402,14 +408,14 @@ async function menuBarSettings(state: { items: string[]; now?: () => unknown }) 
     },
     ...(state.now ? { menuBarNow: async () => state.now!() } : {}),
   } as unknown as Relay["api"];
-  relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+  relay.action = (async (_name: string, fn: () => Promise<unknown>) => (await fn(), true)) as Relay["action"];
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(dom.container as unknown as Element);
   await act(async () =>
     root.render(
       createElement(
         I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        { value: i18nValue("tr") },
         createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "genel" })),
       ),
     ),

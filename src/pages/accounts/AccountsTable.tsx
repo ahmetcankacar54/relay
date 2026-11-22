@@ -14,7 +14,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { Account, AccountProvider } from "../../../shared/types";
+import type { Account } from "../../../shared/types";
 import type { Relay } from "@/data/relay-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,17 +38,20 @@ import {
 import { fullLimitNote } from "@/lib/account-row";
 import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
-import { accountPlan, planTitle, providerShortLabel } from "./accountLabels";
+import { accountPlan, accountProvider, planTitle } from "./accountLabels";
+import { groupAccounts, sectionCount, type AccountGroupBy, type AccountSection, type AccountSort } from "./accountGroups";
 import { isClaudeAccount } from "@/lib/account-health";
 import { limitColumns } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
 import { AccountDot } from "@/components/AccountDot";
 import { LimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListRow, narrowHidden } from "@/components/ListCard";
+import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, narrowHidden } from "@/components/ListCard";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import { StatusLabel } from "@/components/StatusLabel";
 import { relayProviders } from "@/features/Providers";
 import { accountStatus } from "@/lib/account-status";
 import { inUseIds } from "@/lib/provider-view";
+import type { T } from "../../../shared/i18n/translate";
 
 /**
  * Says an account runs in its own Claude window, beside the main Claude. `compact`, in the table,
@@ -58,16 +61,16 @@ export function WindowBadge({
   t,
   compact = false,
 }: {
-  t: (tr: string, en: string) => string;
+  t: T;
   compact?: boolean;
 }) {
-  const label = t("ayrı pencere", "separate window");
+  const label = t("accountsTable.separateWindow");
   return (
     <Badge
       variant="outline"
       data-slot="window-badge"
       className={cn("shrink-0 gap-1 text-2xs", compact ? "px-1" : "px-1.5")}
-      title={t("Ayrı Claude penceresinde açık", "Open in a separate Claude window")}
+      title={t("accountsTable.openInASeparateClaudeWindow")}
     >
       <AppWindow className="size-3" />
       {compact ? <span className="sr-only">{label}</span> : label}
@@ -103,19 +106,19 @@ export interface RowAction {
 export function rowActions(
   a: Account,
   relay: Relay,
-  t: (tr: string, en: string) => string,
+  t: T,
+  language: Language,
   link: (id: string) => void = () => {},
   options: {
     /** Asks to remove the account (the confirmation dialog). */
     remove?: (id: string) => void;
     /** Opens the account's name, type and group for editing. */
     edit?: (id: string) => void;
-    language?: Language;
     now?: number;
   } = {},
 ): RowAction[] {
   const { desktop, desktopBusy, pendingDesktop } = relay;
-  const { language = "tr", now = Date.now() } = options;
+  const { now = Date.now() } = options;
   const isActive = a.id === relay.active?.id;
   const switchBlocked =
     desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired;
@@ -125,14 +128,14 @@ export function rowActions(
   const windows = relay.data?.windows;
   // Its own window holds its sign-in: the main Claude cannot take it over until it closes.
   const inWindow = windowAccounts(relay.data).has(a.id);
-  const windowNote = t("Önce ayrı penceresini kapat", "Close its separate window first");
+  const windowNote = t("accountsTable.closeItsSeparateWindowFirst");
   const items: RowAction[] = [];
   // Codex and Antigravity accounts feed the gateway: the Claude app, its windows and Claude Code sign-in do not apply.
   const claude = isClaudeAccount(a);
   if (claude && a.desktop && !isActive)
     items.push({
       key: "switch",
-      label: t("Geç", "Switch"),
+      label: t("common.switch"),
       icon: ArrowLeftRight,
       disabled: switchBlocked || inWindow,
       run: () => relay.requestDesktop(a, "switch"),
@@ -150,14 +153,14 @@ export function rowActions(
         ? [
             {
               key: "window-show" as const,
-              label: t("Penceresini öne getir", "Bring its window forward"),
+              label: t("accountsTable.bringItsWindowForward"),
               icon: AppWindow,
               disabled: false,
               run: () => void relay.action(`window:${a.id}`, () => relay.api.openWindow(a.id)),
             },
             {
               key: "window-close" as const,
-              label: t("Penceresini kapat", "Close its window"),
+              label: t("accountsTable.closeItsWindow"),
               icon: X,
               disabled: desktopBusy,
               run: () => void relay.action(`window:${a.id}`, () => relay.api.closeWindow(a.id)),
@@ -166,7 +169,7 @@ export function rowActions(
         : [
             {
               key: "window" as const,
-              label: t("Ayrı pencerede aç", "Open in a separate window"),
+              label: t("accountsTable.openInASeparateWindow"),
               icon: AppWindow,
               disabled: switchBlocked,
               run: () => void relay.action(`window:${a.id}`, () => relay.api.openWindow(a.id)),
@@ -176,7 +179,7 @@ export function rowActions(
   if (claude && a.desktop && isActive)
     items.push({
       key: "open",
-      label: t("Claude uygulamasını aç", "Open the Claude app"),
+      label: t("accountsTable.openTheClaudeApp"),
       icon: ArrowUpRight,
       disabled: switchBlocked,
       run: () =>
@@ -186,8 +189,8 @@ export function rowActions(
     items.push({
       key: "cli",
       label: a.auth?.email
-        ? t("Limit okuma girişini yenile", "Renew usage sign-in")
-        : t("Limit okuma girişi yap", "Sign in to read usage"),
+        ? t("common.renewUsageSignIn")
+        : t("common.signInToReadUsage"),
       icon: Globe2,
       disabled: !!relay.busy || pendingFlow(authFlow),
       run: () => void relay.startCli(a),
@@ -200,7 +203,7 @@ export function rowActions(
       label:
         renewal === "keychain-locked"
           ? keychainWords(relay.data?.diagnostics?.platform, t).allow
-          : t("Yenilemeye izin ver", "Allow renewal"),
+          : t("common.allowRenewal"),
       icon: KeyRound,
       disabled: relay.usageBusy.has(a.id),
       run: () => void relay.refreshUsage(a, true),
@@ -210,10 +213,7 @@ export function rowActions(
     a.desktop
       ? {
           key: "desktop-reconnect",
-          label: t(
-            "Claude uygulaması girişini yenile…",
-            "Renew Claude app sign-in…",
-          ),
+          label: t("accountsTable.renewClaudeAppSignIn"),
           icon: Monitor,
           disabled: desktopBusy || !!pendingDesktop || inWindow,
           ...(inWindow && { note: windowNote }),
@@ -221,10 +221,7 @@ export function rowActions(
         }
       : {
           key: "desktop-link",
-          label: t(
-            "Claude uygulaması girişini kaydet",
-            "Save Claude app sign-in",
-          ),
+          label: t("common.saveClaudeAppSignIn"),
           icon: Monitor,
           disabled:
             desktopBusy ||
@@ -236,7 +233,7 @@ export function rowActions(
   );
   items.push({
     key: "refresh",
-    label: t("Limitleri yenile", "Refresh limits"),
+    label: t("common.refreshLimits"),
     icon: RefreshCw,
     disabled: relay.usageBusy.has(a.id),
     run: () => void relay.refreshUsage(a),
@@ -244,7 +241,7 @@ export function rowActions(
   if (options.edit)
     items.push({
       key: "edit",
-      label: t("Adı ve türü düzenle…", "Edit name and type…"),
+      label: t("accountsTable.editNameAndType"),
       icon: Pencil,
       disabled: !!relay.busy,
       run: () => options.edit?.(a.id),
@@ -254,27 +251,21 @@ export function rowActions(
     (r) => r.accountId === a.id && r.status === "running",
   );
   const removeBlock = isActive
-    ? t("Önce başka bir hesaba geç", "Switch to another account first")
+    ? t("accountsTable.switchToAnotherAccountFirst")
     : inWindow
-      ? t("Önce ayrı penceresini kapat", "Close its separate window first")
+      ? t("accountsTable.closeItsSeparateWindowFirst")
       : pendingDesktop?.id === a.id
-      ? t(
-          "Önce Claude uygulaması girişini tamamla ya da iptal et",
-          "Finish or cancel its Claude app sign-in first",
-        )
+      ? t("accountsTable.finishOrCancelItsClaudeApp")
       : pendingFlow(authFlow)
-        ? t(
-            "Önce limit okuma girişini tamamla ya da iptal et",
-            "Finish or cancel its usage sign-in first",
-          )
+        ? t("accountsTable.finishOrCancelItsUsageSign")
         : running
-          ? t("Önce çalışan oturumu durdur", "Stop its active session first")
+          ? t("accountsTable.stopItsActiveSessionFirst")
           : desktopBusy
-            ? t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is in progress")
+            ? t("accountsTable.aClaudeAppActionIsIn")
             : undefined;
   items.push({
     key: "remove",
-    label: t("Hesabı kaldır", "Remove account"),
+    label: t("accountsTable.removeAccount"),
     icon: Trash2,
     tone: "destructive",
     disabled: !!removeBlock,
@@ -341,6 +332,10 @@ export function itemHandlers(
 
 export function AccountsTable({
   accounts,
+  groupBy = "provider",
+  sort = "default",
+  collapsed = [],
+  toggle,
   selected,
   open,
   link,
@@ -348,6 +343,12 @@ export function AccountsTable({
   edit,
 }: {
   accounts: Account[];
+  groupBy?: AccountGroupBy;
+  sort?: AccountSort;
+  /** Keys of the sections whose rows are hidden under their header. */
+  collapsed?: readonly string[];
+  /** Opens or closes a section; without it the headers are not buttons. */
+  toggle?: (key: string) => void;
   selected?: string;
   /** Opens the detail sheet for an account. */
   open: (id: string) => void;
@@ -377,137 +378,146 @@ export function AccountsTable({
   const now = Date.now();
   const inUse = inUseIds(relayProviders(relay, now));
   const inWindows = windowAccounts(relay.data);
-  const groups = PROVIDER_ORDER.flatMap((provider) => {
-    const own = accounts.filter((a) => (a.provider ?? "claude") === provider);
-    return own.length ? [{ provider, own }] : [];
-  });
+  const sections = groupAccounts(accounts, { by: groupBy, sort, usage: data?.usage ?? {}, now, language, t });
+  // Grouped by provider, the header names it; otherwise each row carries its provider's mark.
+  const markRows = groupBy !== "provider";
+  const row = (a: Account) => {
+    const isActive = a.id === active?.id;
+    const usage = data?.usage[a.id];
+    const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
+    const waiting = pendingFlow(authFlow);
+    const plan = accountPlan(a);
+    const health = accountHealth(
+      a,
+      usage,
+      { active: isActive, desktopRunning: !!desktop?.running, waiting, platform: data?.diagnostics?.platform, language },
+      t,
+    );
+    const status = accountStatus({ account: a, usage, health, inUse: inUse.has(a.id), now, t });
+    const actions = rowActions(a, relay, t, language, link, { remove, edit, now });
+    // The one visible step: what fixes the account first, then a refresh of an old reading,
+    // then the suggested switch. Everything else is in the ⋯ menu.
+    const fix = health.tone !== "ok" && !health.limit && health.fix ? actions.find((x) => x.key === health.fix) : undefined;
+    const stale = !waiting && !health.fix && !!usage && (usage.stale || usage.status === "error");
+    const refresh = stale ? actions.find((x) => x.key === "refresh") : undefined;
+    const suggested = relay.suggestion?.id === a.id;
+    const switchTo = suggested && !inWindows.has(a.id) ? actions.find((x) => x.key === "switch") : undefined;
+    const step = fix ?? refresh;
+    // The two columns as every list fills them: Antigravity's from its pools (`limitColumns`).
+    const { five, week, pooled } = limitColumns(usage, now);
+    const faded = !!usage && !freshUsage(usage, now);
+    const cell = (window: typeof five, name: string) =>
+      window ? (
+        <LimitLine
+          label=""
+          ariaLabel={pooled ? `${name} · ${(window as { label?: string }).label ?? ""}` : name}
+          usedPercent={window.usedPercent}
+          resetsAt={window.resetsAt}
+          now={now}
+          t={t}
+          faded={faded}
+          showReset={false}
+        />
+      ) : (
+        <span className="text-xs text-muted-foreground">—</span>
+      );
+    const stop = (e: MouseEvent) => e.stopPropagation();
+    return (
+      <Fragment key={a.id}>
+        <ListRow columns="accounts" onOpen={() => open(a.id)} selected={selected === a.id} data={{ "data-account": a.id }}>
+          <AccountDot color={a.color} />
+          <div className="flex min-w-0 items-center gap-1.5">
+            {markRows && <ProviderLogo provider={accountProvider(a)} />}
+            <ListOpen onOpen={() => open(a.id)} title={a.name}>
+              {a.name}
+            </ListOpen>
+            {plan && (
+              <span className={cn("shrink-0 text-2xs text-muted-foreground", narrowHidden)} title={planTitle(a, plan, t)}>
+                {plan.short}
+              </span>
+            )}
+            {inWindows.has(a.id) && <WindowBadge t={t} compact />}
+          </div>
+          <StatusLabel status={status} />
+          {cell(five, t("common.n5Hours"))}
+          <div className={narrowHidden}>{cell(week, t("common.week"))}</div>
+          <div className="flex justify-end" onClick={stop}>
+            {a.provider === "antigravity" && !step ? (
+              <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
+            ) : step ? (
+              <Button size="xs" variant="outline" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
+                {step === refresh ? t("accountsTable.refresh") : shortFix(step.key, t) ?? step.label}
+              </Button>
+            ) : switchTo ? (
+              <Button size="xs" aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
+                {t("common.switch")}
+              </Button>
+            ) : null}
+          </div>
+          <div onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={t("accountsTable.actions", { aName: a.name })}>
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              {/* Portaled, but React events still bubble to the row. */}
+              <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+                <RowActionItems actions={actions} prank={prank} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </ListRow>
+        {a.provider === "antigravity" && promptOn(a.id) && (
+          <ListNote>
+            <AntigravityPrompt ask={antigravityAsk} onClose={() => setAntigravityAsk(undefined)} now={now} size="sm" />
+          </ListNote>
+        )}
+      </Fragment>
+    );
+  };
+  // A section is its header, then its rows (or its work groups) indented below it.
+  const section = (s: AccountSection) => {
+    const id = `accounts-${s.key}`;
+    const shown = !collapsed.includes(s.key);
+    return (
+      <Fragment key={s.key}>
+        <ListGroup
+          provider={s.provider}
+          name={s.label}
+          count={sectionCount(s)}
+          level={s.level}
+          open={shown}
+          onToggle={toggle && (() => toggle(s.key))}
+          controls={toggle && id}
+        />
+        <ListSection id={id} level={s.level} label={s.label} hidden={!shown}>
+          {s.accounts.map(row)}
+          {s.children.map(section)}
+        </ListSection>
+      </Fragment>
+    );
+  };
   return (
-    <ListCard label={t("Hesaplar", "Accounts")} slot="accounts-list">
+    <ListCard label={t("common.accounts")} slot="accounts-list">
       <ListHead columns="accounts">
         <span />
-        <span>{t("Hesap", "Account")}</span>
-        <span>{t("Durum", "Status")}</span>
-        <span>{t("5 saat", "5 hours")}</span>
-        <span className={narrowHidden}>{t("Hafta", "Week")}</span>
+        <span>{t("common.account")}</span>
+        <span>{t("accountsTable.status")}</span>
+        <span>{t("common.n5Hours")}</span>
+        <span className={narrowHidden}>{t("common.week")}</span>
         <span />
         <span />
       </ListHead>
-      {groups.map(({ provider, own }) => (
-        <Fragment key={provider}>
-          <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />
-          {own.map((a) => {
-            const isActive = a.id === active?.id;
-            const usage = data?.usage[a.id];
-            const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
-            const waiting = pendingFlow(authFlow);
-            const plan = accountPlan(a);
-            const health = accountHealth(
-              a,
-              usage,
-              { active: isActive, desktopRunning: !!desktop?.running, waiting, platform: data?.diagnostics?.platform },
-              t,
-            );
-            const status = accountStatus({ account: a, usage, health, inUse: inUse.has(a.id), now, t });
-            const actions = rowActions(a, relay, t, link, { remove, edit, language, now });
-            // The one visible step: what fixes the account first, then a refresh of an old reading,
-            // then the suggested switch. Everything else is in the ⋯ menu.
-            const fix = health.tone !== "ok" && !health.limit && health.fix ? actions.find((x) => x.key === health.fix) : undefined;
-            const stale = !waiting && !health.fix && !!usage && (usage.stale || usage.status === "error");
-            const refresh = stale ? actions.find((x) => x.key === "refresh") : undefined;
-            const suggested = relay.suggestion?.id === a.id;
-            const switchTo = suggested && !inWindows.has(a.id) ? actions.find((x) => x.key === "switch") : undefined;
-            const step = fix ?? refresh;
-            // The two columns as every list fills them: Antigravity's from its pools (`limitColumns`).
-            const { five, week, pooled } = limitColumns(usage, now);
-            const faded = !!usage && !freshUsage(usage, now);
-            const cell = (window: typeof five, name: string) =>
-              window ? (
-                <LimitLine
-                  label=""
-                  ariaLabel={pooled ? `${name} · ${(window as { label?: string }).label ?? ""}` : name}
-                  usedPercent={window.usedPercent}
-                  resetsAt={window.resetsAt}
-                  now={now}
-                  t={t}
-                  faded={faded}
-                  showReset={false}
-                />
-              ) : (
-                <span className="text-xs text-muted-foreground">—</span>
-              );
-            const stop = (e: MouseEvent) => e.stopPropagation();
-            return (
-              <Fragment key={a.id}>
-                <ListRow
-                  columns="accounts"
-                  onOpen={() => open(a.id)}
-                  selected={selected === a.id}
-                  label={a.name}
-                  data={{ "data-account": a.id }}
-                >
-                  <AccountDot color={a.color} />
-                  <div className="flex min-w-0 items-baseline gap-1.5">
-                    <span className="truncate text-sm font-semibold" title={a.name}>
-                      {a.name}
-                    </span>
-                    {plan && (
-                      <span className={cn("shrink-0 text-2xs text-muted-foreground", narrowHidden)} title={planTitle(a, plan, t)}>
-                        {plan.short}
-                      </span>
-                    )}
-                    {inWindows.has(a.id) && <WindowBadge t={t} compact />}
-                  </div>
-                  <StatusLabel status={status} />
-                  {cell(five, t("5 saat", "5 hours"))}
-                  <div className={narrowHidden}>{cell(week, t("Hafta", "Week"))}</div>
-                  <div className="flex justify-end" onClick={stop}>
-                    {a.provider === "antigravity" && !step ? (
-                      <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
-                    ) : step ? (
-                      <Button size="xs" variant="outline" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
-                        {step === refresh ? t("Yenile", "Refresh") : shortFix(step.key, t) ?? step.label}
-                      </Button>
-                    ) : switchTo ? (
-                      <Button size="xs" aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
-                        {t("Geç", "Switch")}
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label={t(`${a.name} işlemleri`, `${a.name} actions`)}>
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      {/* Portaled, but React events still bubble to the row. */}
-                      <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
-                        <RowActionItems actions={actions} prank={prank} />
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </ListRow>
-                {a.provider === "antigravity" && promptOn(a.id) && (
-                  <div className="border-b px-4 py-2 last:border-b-0">
-                    <AntigravityPrompt ask={antigravityAsk} onClose={() => setAntigravityAsk(undefined)} now={now} size="sm" />
-                  </div>
-                )}
-              </Fragment>
-            );
-          })}
-        </Fragment>
-      ))}
+      {groupBy === "none" ? sections.flatMap((s) => s.accounts).map(row) : sections.map(section)}
     </ListCard>
   );
 }
 
-/** The providers' order in a list: Claude first, then the gateway's. */
-const PROVIDER_ORDER: AccountProvider[] = ["claude", "codex", "antigravity", "gemini"];
-
 /** A fix's button in a narrow column: one or two words; the menu item keeps the full label. */
-function shortFix(key: string, t: (tr: string, en: string) => string): string | undefined {
-  if (key === "desktop-link") return t("Kaydet", "Save");
-  if (key === "cli") return t("Bağla", "Connect");
-  if (key === "renew") return t("Yenile", "Renew");
+function shortFix(key: string, t: T): string | undefined {
+  if (key === "desktop-link") return t("accountsTable.save");
+  if (key === "cli") return t("common.connect");
+  if (key === "renew") return t("accountsTable.renew");
   return undefined;
 }

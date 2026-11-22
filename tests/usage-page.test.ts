@@ -25,6 +25,7 @@ import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 import type { UsageStatisticsView } from "../shared/usage-statistics-view";
 import { TooltipProvider } from "../src/components/ui/tooltip";
 import { fakeDom, readableText, textOf, type Fake } from "./fake-dom";
+import { i18nValue } from "./i18n";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const ZONE = "Europe/Istanbul";
@@ -86,10 +87,7 @@ const view: UsageStatisticsView = {
     { accountId: "a", name: "Kişisel · Max", kind: "five-hour", at: "2026-10-14T12:40:00.000Z", until: "2026-10-14T13:50:00.000Z" },
     { former: true, name: "Eski hesap", kind: "weekly", at: "2026-10-12T08:05:00.000Z" },
   ],
-  insight: {
-    tr: "Vertex (Team) dönemlerinin ortalama yalnızca %9 kadarını dolduruyor.",
-    en: "Vertex (Team) fills only 9% of its windows.",
-  },
+  insight: { id: "usageStatisticsView.fillsOnlyOfItsPeriods", params: { label: "Vertex (Team)", fill: 0.09 } },
 };
 const emptyView = (status: UsageStatisticsView["status"]): UsageStatisticsView => ({
   range: 30, status, coveragePercent: 0,
@@ -110,11 +108,6 @@ function relayFor(): Relay {
     startCli: async () => {}, refreshUsage: async () => {}, action: async () => {}, setData() {},
   } as unknown as Relay;
 }
-const i18n = (language: Language) => ({
-  language,
-  setLanguage() {},
-  t: (tr: string, en: string) => (language === "tr" ? tr : en),
-});
 /** The page inside the shell's providers: the sections' ⓘ tips need the tooltip provider, as in the shell. */
 const tree = (child: ReactElement, language: Language = "tr") =>
   createElement(
@@ -122,7 +115,7 @@ const tree = (child: ReactElement, language: Language = "tr") =>
     null,
     createElement(
       I18nContext.Provider,
-      { value: i18n(language) },
+      { value: i18nValue(language) },
       createElement(RelayContext.Provider, { value: relayFor() }, child),
     ),
   );
@@ -411,7 +404,7 @@ test("each Usage page draws its own section, and the range and account filter on
         root.render(
           createElement(
             I18nContext.Provider,
-            { value: i18n("tr") },
+            { value: i18nValue("tr") },
             createElement(RelayContext.Provider, { value: relay }, createElement(Usage, { section })),
           ),
         ),
@@ -468,14 +461,14 @@ test("statistics requests: only the latest response applies and changes refetch 
   assert.equal(requests.wait(60_000), 0);
 });
 
-test("statistics state keeps the last view while loading and after a failure", () => {
+test("statistics state keeps the last view while reloading and drops it after a failure", () => {
   const loaded = { view, loading: false };
   assert.deepEqual(statisticsLoading(loaded), { view, loading: true });
-  const failed = statisticsFailed(statisticsLoading(loaded), new Error("Error invoking remote method 'relay:usage-statistics': Error: boom"));
-  assert.deepEqual(failed, { view, loading: false, error: "boom" });
+  const failed = statisticsFailed(new Error("Error invoking remote method 'relay:usage-statistics': Error: boom"));
+  assert.deepEqual(failed, { loading: false, error: "boom" });
   // The error stays until the next response settles.
-  assert.deepEqual(statisticsLoading(failed), { view, loading: true, error: "boom" });
-  assert.deepEqual(statisticsFailed({ loading: true }, "down"), { loading: false, error: "down" });
+  assert.deepEqual(statisticsLoading(failed), { loading: true, error: "boom" });
+  assert.deepEqual(statisticsFailed("down"), { loading: false, error: "down" });
 });
 
 const ninetyDays = Array.from({ length: 90 }, (_, i) =>

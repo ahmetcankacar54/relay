@@ -11,11 +11,13 @@ import {
   overviewAccounts,
   usageWindowRows,
   windowElapsed,
+  usageRowLabel,
 } from "../src/data/selectors";
 import { accountHealth, modelLimitWords } from "../src/lib/account-health";
 import { meterFill } from "../src/lib/meter";
 import { quotaWindows } from "../shared/quota-windows";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type ModelWindow } from "../shared/types";
+import { i18nValue, testT } from "./i18n";
 
 // Saturday 2026-11-14 10:00 UTC; Fable's week opens on Monday at 05:00 UTC.
 const NOW = Date.parse("2026-11-14T10:00:00Z");
@@ -38,12 +40,10 @@ const acct = (id: string): Account => ({
   auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
   desktop: { accountUuid: "00000000-0000-4000-8000-000000000001", orgId: "00000000-0000-4000-8000-000000000002", savedAt: iso(NOW), email: `${id}@example.com` },
 });
-const tr = (a: string) => a;
-const en = (_: string, b: string) => b;
+const tr = testT("tr");
+const en = testT("en");
 const withI18n = (language: "tr" | "en", node: ReturnType<typeof createElement>) =>
-  renderToStaticMarkup(
-    createElement(I18nContext.Provider, { value: { language, setLanguage() {}, t: language === "tr" ? tr : en } }, node),
-  );
+  renderToStaticMarkup(createElement(I18nContext.Provider, { value: i18nValue(language) }, node));
 
 test("a model's own limit reads model first, then its period; an Antigravity model is its name alone", () => {
   const rows = usageWindowRows(
@@ -55,7 +55,7 @@ test("a model's own limit reads model first, then its period; an Antigravity mod
     ]),
   );
   // The account's two windows first, then the model limits fullest first.
-  assert.deepEqual(rows.map((r) => [r.key, r.label.tr, r.label.en, r.period]), [
+  assert.deepEqual(rows.map((r) => [r.key, usageRowLabel(r, tr), usageRowLabel(r, en), r.period]), [
     ["five_hour", "5 saatlik dönem", "5-hour period", "five_hour"],
     ["seven_day", "Haftalık · tüm modeller", "Weekly · all models", "seven_day"],
     ["seven_day_fable", "Fable · haftalık", "Fable · weekly", "seven_day"],
@@ -88,25 +88,21 @@ test("a spent Fable week is surfaced but never makes the account full", () => {
 
 test("the status names the spent model and when it opens, in both languages", () => {
   const spent = [fable(100)];
-  assert.deepEqual(modelLimitWords(spent, NOW, "UTC"), [
-    "Fable limiti dolu · Pzt 05:00’te açılır",
-    "Fable limit is full · opens Mon 05:00",
-  ]);
+  assert.equal(modelLimitWords(spent, NOW, "tr", tr, "UTC"), "Fable limiti dolu · Pzt 05:00’te açılır");
+  assert.equal(modelLimitWords(spent, NOW, "en", en, "UTC"), "Fable limit is full · opens Mon 05:00");
   // Within a day the clock alone.
-  assert.deepEqual(modelLimitWords([fable(100, iso(NOW + 4 * HOUR))], NOW, "UTC"), [
-    "Fable limiti dolu · 14:00’te açılır",
-    "Fable limit is full · opens 14:00",
-  ]);
-  assert.equal(modelLimitWords([], NOW), undefined);
+  assert.equal(modelLimitWords([fable(100, iso(NOW + 4 * HOUR))], NOW, "tr", tr, "UTC"), "Fable limiti dolu · 14:00’te açılır");
+  assert.equal(modelLimitWords([fable(100, iso(NOW + 4 * HOUR))], NOW, "en", en, "UTC"), "Fable limit is full · opens 14:00");
+  assert.equal(modelLimitWords([], NOW, "en", en), undefined);
   const a = acct("a");
   const context = { active: false, desktopRunning: false, waiting: false, now: NOW, zone: "UTC" };
-  const health = accountHealth(a, use("a", 20, 40, spent), context, tr);
+  const health = accountHealth(a, use("a", 20, 40, spent), { ...context, language: "tr" }, tr);
   assert.equal(health.tone, "warn");
   assert.equal(health.label, "Fable limiti dolu · Pzt 05:00’te açılır");
   assert.equal(health.fix, undefined);
-  assert.equal(accountHealth(a, use("a", 20, 40, spent), context, en).label, "Fable limit is full · opens Mon 05:00");
+  assert.equal(accountHealth(a, use("a", 20, 40, spent), { ...context, language: "en" }, en).label, "Fable limit is full · opens Mon 05:00");
   // Room left on Fable: plain "Ready".
-  assert.equal(accountHealth(a, use("a", 20, 40, [fable(60)]), context, tr).label, "Hazır");
+  assert.equal(accountHealth(a, use("a", 20, 40, [fable(60)]), { ...context, language: "tr" }, tr).label, "Hazır");
 });
 
 test("an account with Fable spent is recommended only when no other is clear", () => {

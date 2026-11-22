@@ -4,7 +4,10 @@ Relay is a small macOS menu-bar app for people with several Claude accounts
 (personal Pro/Max and company Team/Enterprise). Your work stays in the official
 **Claude Desktop** app and its **Code** tab; Relay only switches which account
 Claude is signed in to, keeps your Code conversations available on every account
-you choose, and shows how much of each account's quota is used. Turkish and English.
+you choose, and shows how much of each account's quota is used. Available in 15
+languages: English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano,
+日本語, 한국어, 简体中文, 繁體中文, Русский, Українська, Polski and Nederlands; it follows the
+system language until you pick one in Settings → General.
 Independent tool, not an Anthropic product.
 
 ## Download
@@ -20,8 +23,9 @@ A sidebar (a 56 px icon rail in narrow windows) opens four pages; the keyboard
 shortcuts are ⌘1–⌘3 and ⌘, for Settings.
 
 - **Overview** (Genel) — the active account, setup steps, today's plan and automation status.
-- **Accounts** (Hesaplar) — add accounts with a three-step wizard, see each account's
-  connections (Claude app, usage access, browser extension, terminal) and edit them.
+- **Accounts** (Hesaplar) — add accounts with a three-step wizard; the list groups them
+  by provider and work group (or not at all), sorts by name, 5-hour use or next reset,
+  and remembers which groups are collapsed. Arrow keys move through the list.
 - **Usage** (Kullanım) — limits (full 5-hour periods, when you work, account balance,
   limit hits), tokens and API value, and pins.
 - **Settings** (Ayarlar) — every setting in six tabs: Automation, What comes along,

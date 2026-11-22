@@ -4,8 +4,9 @@ import {
   terminalIdentities,
   type TerminalStatus,
 } from "../../shared/terminal-identity";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import type { T } from "../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 /** Where an account stands with the terminal's Claude Code sign-in, and what to do next. */
 export interface TerminalGuide {
@@ -21,21 +22,21 @@ export function terminalGuide(
   account: Account,
   status: TerminalStatus | undefined,
   t: T,
-  language: "tr" | "en",
+  language: Locale,
 ): TerminalGuide {
-  if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Check in progress…") };
+  if (!status) return { tone: "off", label: t("common.checkInProgress") };
   if (status.mode === "off")
     return {
       tone: "off",
-      label: t("Kapalı", "Off"),
-      detail: t("Relay terminale dokunmaz.", "Relay does not change the terminal."),
+      label: t("common.off"),
+      detail: t("terminalUi.relayDoesNotChangeTheTerminal"),
       action: "settings",
     };
   const ids = terminalIdentities(account);
   if (!ids.length)
     return {
       tone: "off",
-      label: t("Önce Claude uygulaması girişini kaydet.", "Save the Claude app sign-in first."),
+      label: t("terminalUi.saveTheClaudeAppSignIn"),
     };
   const current = status.current;
   const here =
@@ -47,37 +48,31 @@ export function terminalGuide(
   const saved = status.saved.find((s) => ids.some((x) => sameIdentity(x, s)));
   if (here || saved) {
     const date = saved
-      ? new Date(saved.savedAt).toLocaleDateString(language === "tr" ? "tr-TR" : "en-GB", {
+      ? new Date(saved.savedAt).toLocaleDateString(FORMAT_LOCALE[language], {
           day: "numeric",
           month: "short",
         })
       : undefined;
     return {
       tone: "ok",
-      label: here ? t("Bağlı, şu an bu hesapta", "Linked, on this account now") : t("Bağlı", "Linked"),
+      label: here ? t("terminalUi.linkedOnThisAccountNow") : t("terminalUi.linked"),
       ...(here
         ? {}
         : {
-            detail: t(
-              `Kayıt: ${date}. Bu hesaba geçince terminaldeki “claude” da bu hesaba geçer.`,
-              `Saved ${date}. “claude” in the terminal follows when you switch to this account.`,
-            ),
+            detail: t("terminalUi.savedClaudeInTheTerminalFollows", { date }),
           }),
     };
   }
   const email = account.desktop?.email ?? account.auth?.email;
   return {
     tone: "warn",
-    label: t("Giriş kayıtlı değil", "No sign-in saved"),
+    label: t("terminalUi.noSignInSaved"),
     steps: [
       email
-        ? t(`“Bağla”ya bas; tarayıcıda açılan sayfada ${email} ile onayla.`, `Select “Link” and approve with ${email} on the page that opens in your browser.`)
-        : t("“Bağla”ya bas; tarayıcıda açılan sayfada bu hesapla onayla.", "Select “Link” and approve with this account on the page that opens in your browser."),
+        ? t("terminalUi.selectLinkAndApproveWithOn", { email })
+        : t("terminalUi.selectLinkAndApproveWithThis"),
     ],
-    detail: t(
-      "Terminaldeki şimdiki giriş değişmez; bu hesaba geçince terminaldeki “claude” da geçer. Terminalde claude kullanmıyorsan bu adım gerekmez.",
-      "The terminal keeps its current sign-in; “claude” in the terminal follows when you switch to this account. Skip this if you do not use claude in a terminal.",
-    ),
+    detail: t("terminalUi.theTerminalKeepsItsCurrentSign"),
     action: "link",
   };
 }

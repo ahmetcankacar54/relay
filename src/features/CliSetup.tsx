@@ -15,7 +15,7 @@ export function CliSetupActions() {
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <ExternalLink href={EXTERNAL_LINKS.cliSetup}>
-        {t("Kurulum rehberi", "Setup guide")}
+        {t("cliSetup.setupGuide")}
       </ExternalLink>
       <Button
         variant="outline"
@@ -23,7 +23,7 @@ export function CliSetupActions() {
         disabled={!!relay.busy}
         onClick={() => chooseCliFile(relay)}
       >
-        {t("Dosyayı seç", "Choose file")}
+        {t("cliSetup.chooseFile")}
       </Button>
     </span>
   );

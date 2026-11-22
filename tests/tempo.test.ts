@@ -239,3 +239,47 @@ test("tempoAt and tempoRate read the profile of the local day type and hour", ()
   const past = to + 2 * 3_600_000;
   assert.equal(rate(past), tempo.weekday[localHour(past, ZONE)]);
 });
+
+test("in a half-hour zone a UTC hour is split between the two local hours it spans", () => {
+  // Kolkata is UTC+05:30: work 09:00–18:00 is 03:30–12:30Z, and the
+  // 10:00–11:00Z bucket is 15:30–16:30 local, half in hour 15, half in 16.
+  const rollups = emptyRollups();
+  for (const date of WEEKDAYS)
+    for (let hour = 3; hour < 12; hour++)
+      (rollups.hours[IDENTITY] ??= {})[
+        `${date}T${String(hour).padStart(2, "0")}:00:00.000Z`
+      ] = { points: hour === 10 ? 40 : 10, windows: 0, coveredMinutes: 60 };
+  const tempo = learn(rollups, { timeZone: "Asia/Kolkata" });
+  assert.equal(tempo.source, "learned");
+  // Hours 15 and 16 each get half the busy bucket and half a calm one.
+  assert.equal(tempo.weekday[15], tempo.weekday[16]);
+  assert.equal(tempo.weekday[14], tempo.weekday[17]);
+  assert.ok(
+    Math.abs(tempo.weekday[15] / tempo.weekday[14] - 2.5) < 0.05,
+    `${tempo.weekday[15]} vs ${tempo.weekday[14]}`,
+  );
+});
+
+test("in a half-hour zone no hour outside work is credited with work time", () => {
+  // Kolkata 09:00–18:00 is 03:30–12:30Z: the calm 03:00Z bucket is 08:30–09:30
+  // local, and only its 09:00–09:30 half is work.
+  const rollups = emptyRollups();
+  for (const date of WEEKDAYS)
+    for (let hour = 3; hour < 12; hour++)
+      (rollups.hours[IDENTITY] ??= {})[
+        `${date}T${String(hour).padStart(2, "0")}:00:00.000Z`
+      ] = { points: hour === 3 ? 10 : 60, windows: 0, coveredMinutes: 60 };
+  const tempo = learn(rollups, { timeZone: "Asia/Kolkata" });
+  assert.equal(tempo.source, "learned");
+  // Hour 8 is not part of the profile: it reads the busy-day rate.
+  assert.equal(tempo.weekday[8], tempo.rate.weekday);
+  // The work hours keep the busy-day rate on average instead of being
+  // inflated by a calm hour outside work.
+  const work = tempo.weekday.slice(9, 18);
+  const average = work.reduce((a, b) => a + b, 0) / work.length;
+  assert.ok(
+    Math.abs(average - tempo.rate.weekday) < 0.1,
+    `${average} vs ${tempo.rate.weekday}`,
+  );
+  assert.ok(tempo.weekday[9] < tempo.weekday[10]);
+});

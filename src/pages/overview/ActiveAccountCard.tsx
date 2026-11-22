@@ -1,4 +1,5 @@
 import { Private } from "@/components/Private";
+import { ListSkeleton } from "@/components/ListCard";
 import { PlusIcon } from "@/components/icons";
 import { freshUsage } from "../../../shared/usage";
 import { formatUsed } from "@/lib/meter";
@@ -33,6 +34,13 @@ export function ActiveAccountCard({
   const prank = usePrank();
   const { t, language } = useI18n();
   const { active, desktop, desktopBusy } = relay;
+  // Until the first snapshot the card holds placeholders, not the onboarding for an empty app.
+  if (relay.data === undefined)
+    return (
+      <div data-slot="active-account-skeleton" className="overflow-hidden rounded-lg border bg-card">
+        <ListSkeleton rows={2} />
+      </div>
+    );
   if (!active) return <Onboarding go={go} />;
   const usage = relay.data?.usage[active.id];
   const running = !!desktop?.running;
@@ -53,13 +61,13 @@ export function ActiveAccountCard({
   const health = accountHealth(
     active,
     usage,
-    { active: true, desktopRunning: running, waiting: pendingFlow(authFlow), platform: relay.data?.diagnostics?.platform },
+    { active: true, desktopRunning: running, waiting: pendingFlow(authFlow), platform: relay.data?.diagnostics?.platform, language },
     t,
   );
   // Closed, the Claude app uses no account: that is the state, before any limit.
   const status = running
     ? accountStatus({ account: active, usage, health, inUse: true, now, t })
-    : { tone: "off" as const, text: t("Claude kapalı", "Claude closed") };
+    : { tone: "off" as const, text: t("common.claudeClosed") };
   const header = (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
       <AccountDot color={active.color} size="md" />
@@ -77,7 +85,7 @@ export function ActiveAccountCard({
     </div>
   );
   return (
-    <section aria-label={t("Claude uygulamasında açık", "Open in the Claude app")} className="grid content-start">
+    <section aria-label={t("activeAccountCard.openInTheClaudeApp")} className="grid content-start">
       <div data-slot="active-account" className="overflow-hidden rounded-lg border bg-card">
         <div className="grid gap-3 px-4 pt-3.5 pb-3.5">
           {header}
@@ -102,12 +110,12 @@ export function ActiveAccountCard({
         </div>
         {suggestion && (
           <div data-slot="suggestion" className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t px-4 py-2.5 text-sm">
-            <span className="text-xs text-muted-foreground">{t("Sıradaki", "Next")}</span>
+            <span className="text-xs text-muted-foreground">{t("activeAccountCard.next")}</span>
             <AccountDot color={suggestion.color} />
             <span className="font-semibold">{suggestion.name}</span>
             {suggestedUsage?.fiveHour && (
               <span className="text-xs text-muted-foreground">
-                {t(`5 saat ${formatUsed(suggestedUsage.fiveHour.usedPercent, language)}`, `5 hours ${formatUsed(suggestedUsage.fiveHour.usedPercent, language)}`)}
+                {t("activeAccountCard.n5Hours", { formatUsed: formatUsed(suggestedUsage.fiveHour.usedPercent, language) })}
               </span>
             )}
             <Button
@@ -115,14 +123,14 @@ export function ActiveAccountCard({
               className="ml-auto"
               disabled={switchBlocked}
               title={switchReason}
-              aria-label={t(`${suggestion.name} hesabına geç`, `Switch to ${suggestion.name}`)}
+              aria-label={t("activeAccountCard.switchTo", { suggestionName: suggestion.name })}
               onClick={(e) =>
                 offerAfter(prank, "nibble-cursor", e, () =>
                   relay.requestDesktop(suggestion, "switch"),
                 )
               }
             >
-              {t("Geç", "Switch")}
+              {t("common.switch")}
             </Button>
             {switchReason && (
               <p data-slot="switch-reason" className="basis-full text-right text-xs text-muted-foreground">
@@ -136,7 +144,7 @@ export function ActiveAccountCard({
             <StatusDot tone={gateway.tone} />
             <span className="min-w-0 flex-1 text-muted-foreground">{gateway.text}</span>
             <Button size="xs" variant="ghost" onClick={() => go("proxy")}>
-              {t("Ağ geçidi", "Gateway")}
+              {t("common.gateway")}
             </Button>
           </div>
         )}
@@ -165,21 +173,15 @@ function Onboarding({ go }: { go: (to: Destination) => void }) {
           <div className="min-w-0">
             <div className="text-lg font-semibold">
               {first
-                ? t("İlk hesabını ekle", "Add your first account")
+                ? t("activeAccountCard.addYourFirstAccount")
                 : unlinked
-                  ? t("Claude uygulaması hesabı eşleştirilmedi", "Claude app account not linked")
-                  : t("İlk hesabını bağla", "Connect your first account")}
+                  ? t("activeAccountCard.claudeAppAccountNotLinked")
+                  : t("activeAccountCard.connectYourFirstAccount")}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {unlinked
-                ? t(
-                    "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir.",
-                    "Link the account open in the Claude app to a Relay profile.",
-                  )
-                : t(
-                    "Her hesabı bir kez bağla. Sonra buradan geç.",
-                    "Connect each account one time. Then switch here.",
-                  )}
+                ? t("activeAccountCard.linkTheAccountOpenInThe")
+                : t("activeAccountCard.connectEachAccountOneTimeThen")}
             </p>
           </div>
         </div>
@@ -195,8 +197,8 @@ function Onboarding({ go }: { go: (to: Destination) => void }) {
           >
             <PlusIcon />
             {linking
-              ? t("Hesabı eşleştir", "Link account")
-              : t("Hesap ekle", "Add account")}
+              ? t("activeAccountCard.linkAccount")
+              : t("common.addAccount")}
           </Button>
           {reason && (
             <p className="text-right text-xs text-muted-foreground">{reason}</p>

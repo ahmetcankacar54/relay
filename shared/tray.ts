@@ -6,11 +6,13 @@ import type {
   WindowAttempt,
 } from "./types";
 import { desktopCliMismatch } from "./account-state";
-import { formatPercent, formatUsed, percentUsed, usedWord } from "./percent";
+import { formatPercent, percentUsed } from "./percent";
 import { freshUsage, lastKnownUsage, windowHolds } from "./usage";
 import { activeReading, HUNGRY_PERCENT, mascotRest } from "./mascot";
 import { clockLocative } from "./tr-dative";
 import { formatCost } from "./number-format";
+import { FORMAT_LOCALE, type Locale } from "./i18n/locales";
+import { tFor, type MessageId } from "./i18n/translate";
 import { localDate } from "./planning";
 
 /** Today so far across all accounts and terminals, from the token ledger once its first pass is done. */
@@ -42,7 +44,6 @@ export interface TraySnapshot {
   today?: TrayToday;
 }
 
-export type TrayLanguage = "tr" | "en";
 export type TrayCommand =
   | { type: "show" }
   | { type: "review-switch"; profileId: string }
@@ -57,48 +58,25 @@ export type TrayMenuItem =
       command?: TrayCommand;
     };
 
-const labels = {
-  en: {
-    show: "Open Relay",
-    quit: "Quit Relay",
-    active: "Active",
-    unknownActive: "No saved account active",
-    empty: "Add an account in Relay",
-    review: "Select an account to switch",
-    unavailable: "Claude app not found",
-    statusUnavailable: "Claude app status unavailable",
-    loading: "Relay checks the Claude app…",
-    busy: "A Claude app action is running",
-    pending: "Finish the Claude app sign-in first",
-    authBusy: "Finish the usage sign-in first",
-    recovery: "Restore the backup first",
-    unlinked: "Save Claude app sign-in",
-    mismatch: "Sign-ins belong to different accounts",
-    outdated: "usage data is out of date",
-    fiveHour: "5 h",
-    week: "week",
-  },
-  tr: {
-    show: "Relay’i aç",
-    quit: "Relay’den çık",
-    active: "Aktif",
-    unknownActive: "Kayıtlı aktif hesap yok",
-    empty: "Relay’de hesap ekle",
-    review: "Geçmek için hesap seç",
-    unavailable: "Claude uygulaması bulunamadı",
-    statusUnavailable: "Claude uygulamasının durumu okunamadı",
-    loading: "Claude uygulaması kontrol ediliyor…",
-    busy: "Claude uygulamasında bir işlem sürüyor",
-    pending: "Önce Claude uygulaması girişini tamamla",
-    authBusy: "Önce limit okuma girişini tamamla",
-    recovery: "Önce yedeği geri yükle",
-    unlinked: "Claude uygulaması girişini kaydet",
-    mismatch: "Girişler farklı hesaplara ait",
-    outdated: "limit verisi eski",
-    fiveHour: "5 sa",
-    week: "hafta",
-  },
-};
+const LABELS = {
+  show: "common.openRelay",
+  quit: "appMenu.quitRelay",
+  unknownActive: "tray.noSavedAccountActive",
+  empty: "tray.addAnAccountInRelay",
+  review: "tray.selectAnAccountToSwitch",
+  unavailable: "tray.claudeAppNotFound",
+  statusUnavailable: "tray.claudeAppStatusUnavailable",
+  loading: "tray.relayChecksTheClaudeApp",
+  busy: "tray.aClaudeAppActionIsRunning",
+  pending: "tray.finishTheClaudeAppSignIn",
+  authBusy: "tray.finishTheUsageSignInFirst",
+  recovery: "tray.restoreTheBackupFirst",
+  unlinked: "common.saveClaudeAppSignIn",
+  mismatch: "tray.signInsBelongToDifferentAccounts",
+  outdated: "tray.usageDataIsOutOfDate",
+  fiveHour: "tray.n5H",
+  week: "tray.week",
+} satisfies Record<string, MessageId>;
 
 // Native menus interpret ampersands as access keys on some platforms. Keep
 // user-provided names readable and prevent line breaks from adding false rows.
@@ -107,7 +85,7 @@ export function trayAccountName(name: string) {
 }
 
 /** The percent used of a window, without its word ("94%"); "?" for a reading that cannot be right. */
-function quotaUsed(used: number | undefined, language: TrayLanguage) {
+function quotaUsed(used: number | undefined, language: Locale) {
   return used !== undefined && Number.isFinite(used) && used >= 0 && used <= 100
     ? formatPercent(percentUsed(used), language)
     : "?";
@@ -121,17 +99,17 @@ function quotaUsed(used: number | undefined, language: TrayLanguage) {
 export function trayUsageLabel(
   accountId: string,
   usage: AccountUsage | undefined,
-  language: TrayLanguage = "en",
+  language: Locale = "en",
   now = Date.now(),
 ) {
-  const t = labels[language];
+  const t = tFor(language);
   const own = usage?.accountId === accountId;
   const fresh =
     own &&
     freshUsage(usage, now) &&
     Date.parse(usage.checkedAt!) <= now + 60_000;
   if (!fresh && !(own && lastKnownUsage(usage, now)))
-    return `${t.fiveHour} ? · ${t.week} ?${usage?.checkedAt ? ` · ${t.outdated}` : ""}`;
+    return `${t(LABELS.fiveHour)} ? · ${t(LABELS.week)} ?${usage?.checkedAt ? ` · ${t(LABELS.outdated)}` : ""}`;
   const figure = (window: AccountUsage["fiveHour"]) => {
     if (!fresh && !windowHolds(window, now)) return "?";
     const used = quotaUsed(window?.usedPercent, language);
@@ -139,20 +117,24 @@ export function trayUsageLabel(
   };
   const five = figure(usage!.fiveHour);
   const week = figure(usage!.sevenDay);
-  // One word at the end covers both figures; with nothing to describe it is left out.
-  const word = five === "?" && week === "?" ? "" : ` ${usedWord(language)}`;
-  return `${t.fiveHour} ${five} · ${t.week} ${week}${word}${fresh ? "" : ` · ${t.outdated}`}`;
+  const labels = { fiveLabel: t(LABELS.fiveHour), weekLabel: t(LABELS.week) };
+  // One word covers both figures; with nothing to describe it is left out.
+  const line =
+    five === "?" && week === "?"
+      ? `${labels.fiveLabel} ? · ${labels.weekLabel} ?`
+      : t("tray.usageLine", { ...labels, five, week });
+  return `${line}${fresh ? "" : ` · ${t(LABELS.outdated)}`}`;
 }
 
-function blockedLabel(snapshot: TraySnapshot, language: TrayLanguage) {
-  const t = labels[language];
+function blockedLabel(snapshot: TraySnapshot, language: Locale) {
+  const t = tFor(language);
   const desktop = snapshot.desktop;
-  if (!desktop) return t.loading;
-  if (desktop.recoveryRequired) return t.recovery;
-  if (desktop.busy) return t.busy;
-  if (desktop.pendingProfileId) return t.pending;
-  if (snapshot.authBusy) return t.authBusy;
-  if (!desktop.available) return t.unavailable;
+  if (!desktop) return t(LABELS.loading);
+  if (desktop.recoveryRequired) return t(LABELS.recovery);
+  if (desktop.busy) return t(LABELS.busy);
+  if (desktop.pendingProfileId) return t(LABELS.pending);
+  if (snapshot.authBusy) return t(LABELS.authBusy);
+  if (!desktop.available) return t(LABELS.unavailable);
 }
 
 export function canRequestTraySwitch(
@@ -174,14 +156,14 @@ export function canRequestTraySwitch(
  * action is offered against unknown Claude app state.
  */
 export function unavailableTrayMenu(
-  language: TrayLanguage = "en",
+  language: Locale = "en",
 ): TrayMenuItem[] {
-  const t = labels[language];
+  const t = tFor(language);
   return [
-    { type: "normal", label: t.show, enabled: true, command: { type: "show" } },
-    { type: "normal", label: t.statusUnavailable, enabled: false },
+    { type: "normal", label: t(LABELS.show), enabled: true, command: { type: "show" } },
+    { type: "normal", label: t(LABELS.statusUnavailable), enabled: false },
     { type: "separator" },
-    { type: "normal", label: t.quit, enabled: true, command: { type: "quit" } },
+    { type: "normal", label: t(LABELS.quit), enabled: true, command: { type: "quit" } },
   ];
 }
 
@@ -189,27 +171,27 @@ export function unavailableTrayMenu(
  * outside this menu's contract and remains behind Relay's restart confirmation. */
 export function buildTrayMenu(
   snapshot: TraySnapshot,
-  language: TrayLanguage = "en",
+  language: Locale = "en",
   now = Date.now(),
 ): TrayMenuItem[] {
-  const t = labels[language];
+  const t = tFor(language);
   const active = snapshot.accounts.find(
     (a) => a.id === snapshot.desktop?.activeProfileId,
   );
   const blocked = blockedLabel(snapshot, language);
   return [
-    { type: "normal", label: t.show, enabled: true, command: { type: "show" } },
+    { type: "normal", label: t(LABELS.show), enabled: true, command: { type: "show" } },
     {
       type: "normal",
       label: active
-        ? `${t.active}: ${trayAccountName(active.name)}`
-        : t.unknownActive,
+        ? t("tray.activeName", { name: trayAccountName(active.name) })
+        : t(LABELS.unknownActive),
       enabled: false,
     },
     { type: "separator" },
     {
       type: "normal",
-      label: blocked ?? t.review,
+      label: blocked ?? t(LABELS.review),
       enabled: false,
     },
     ...snapshot.accounts.map((account): TrayMenuItem => {
@@ -217,9 +199,9 @@ export function buildTrayMenu(
         !!account.desktop?.accountUuid && !!account.desktop.orgId;
       const mismatch = desktopCliMismatch(account);
       const detail = !connected
-        ? t.unlinked
+        ? t(LABELS.unlinked)
         : mismatch
-          ? t.mismatch
+          ? t(LABELS.mismatch)
           : trayUsageLabel(
               account.id,
               snapshot.usage[account.id],
@@ -243,10 +225,10 @@ export function buildTrayMenu(
       };
     }),
     ...(!snapshot.accounts.length
-      ? [{ type: "normal" as const, label: t.empty, enabled: false }]
+      ? [{ type: "normal" as const, label: t(LABELS.empty), enabled: false }]
       : []),
     { type: "separator" },
-    { type: "normal", label: t.quit, enabled: true, command: { type: "quit" } },
+    { type: "normal", label: t(LABELS.quit), enabled: true, command: { type: "quit" } },
   ];
 }
 
@@ -323,11 +305,11 @@ function todayFigures(snapshot: TraySnapshot, now: number) {
 }
 
 const numberFormats = new Map<string, Intl.NumberFormat>();
-function trayNumber(language: TrayLanguage, options: Intl.NumberFormatOptions) {
+function trayNumber(language: Locale, options: Intl.NumberFormatOptions) {
   const key = `${language}:${JSON.stringify(options)}`;
   let format = numberFormats.get(key);
   if (!format) {
-    format = new Intl.NumberFormat(language === "tr" ? "tr-TR" : "en-GB", options);
+    format = new Intl.NumberFormat(FORMAT_LOCALE[language], options);
     numberFormats.set(key, format);
   }
   return format;
@@ -338,7 +320,7 @@ function trayNumber(language: TrayLanguage, options: Intl.NumberFormatOptions) {
  * billions ("1,8Mr" / "1.8B"; "milyar" in Turkish, where B would read as "bin"), so a busy day's
  * cache reads never make the menu bar title long.
  */
-export function trayTokens(tokens: number, language: TrayLanguage = "en") {
+export function trayTokens(tokens: number, language: Locale = "en") {
   const count = Math.max(0, Number.isFinite(tokens) ? tokens : 0);
   const billions = count >= 999.5e6;
   const value = billions ? count / 1e9 : count / 1e6;
@@ -347,11 +329,11 @@ export function trayTokens(tokens: number, language: TrayLanguage = "en") {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return `${format.format(value)}${billions ? (language === "tr" ? "Mr" : "B") : "M"}`;
+  return tFor(language)(billions ? "tray.billions" : "tray.millions", { value: format.format(value) });
 }
 
 /** An API value, short: "$18,20" / "$18.20"; whole dollars from $100 ("$184"); "≈" when partly estimated. */
-export function trayCost(cost: number, language: TrayLanguage = "en", estimated = false) {
+export function trayCost(cost: number, language: Locale = "en", estimated = false) {
   const value = Math.max(0, Number.isFinite(cost) ? cost : 0);
   const text =
     value < 99.995
@@ -366,15 +348,14 @@ export function trayCost(cost: number, language: TrayLanguage = "en", estimated 
 }
 
 /** How long ago a reading was taken: "12 dk önce" / "12 min ago". */
-function readAgo(checkedAt: string, now: number, language: TrayLanguage) {
+function readAgo(checkedAt: string, now: number, language: Locale) {
+  const t = tFor(language);
   const minutes = Math.max(0, Math.floor((now - Date.parse(checkedAt)) / 60_000));
-  const tr = language === "tr";
-  if (!minutes) return tr ? "az önce" : "just now";
-  if (minutes < 60) return tr ? `${minutes} dk önce` : `${minutes} min ago`;
+  if (!minutes) return t("tray.justNow");
+  if (minutes < 60) return t("tray.minutesAgo", { minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return tr ? `${hours} sa önce` : `${hours} h ago`;
-  const days = Math.floor(hours / 24);
-  return tr ? `${days} gün önce` : `${days} ${days === 1 ? "day" : "days"} ago`;
+  if (hours < 24) return t("tray.hoursAgo", { hours });
+  return t("tray.daysAgo", { days: Math.floor(hours / 24) });
 }
 
 /** From this percent used on, the menu bar also says when the five-hour window renews; the panda gets hungry. */
@@ -406,7 +387,7 @@ const resetClocks = new Map<string, Intl.DateTimeFormat>();
 export function trayResetClock(
   resetsAt: string | undefined,
   now: number,
-  language: TrayLanguage = "en",
+  language: Locale = "en",
   timeZone?: string,
 ): string | undefined {
   const at = resetsAt ? Date.parse(resetsAt) : NaN;
@@ -415,7 +396,7 @@ export function trayResetClock(
   let format = resetClocks.get(key);
   if (!format) {
     try {
-      format = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
+      format = new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
         hour: "2-digit",
         minute: "2-digit",
         hourCycle: "h23",
@@ -430,19 +411,18 @@ export function trayResetClock(
   return format.format(at);
 }
 
-/** Time left until `resetsAt` as "h:mm" ("1:50", "0:07"); undefined when past or unknown. */
-export function trayCountdown(resetsAt: string | undefined, now: number) {
+/** Whole minutes left until `resetsAt`, rounded up; undefined when past or unknown. */
+function minutesLeft(resetsAt: string | undefined, now: number) {
   const at = resetsAt ? Date.parse(resetsAt) : NaN;
   if (!Number.isFinite(at) || at <= now) return undefined;
-  const minutes = Math.ceil((at - now) / 60_000);
-  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+  return Math.ceil((at - now) / 60_000);
 }
 
-/** A "h:mm" countdown as Turkish says it after a number: "1 sa 50 dk", "50 dk", "2 sa". */
-function spokenCountdown(left: string) {
-  const [hours, minutes] = left.split(":").map(Number);
-  if (!hours) return `${minutes} dk`;
-  return minutes ? `${hours} sa ${minutes} dk` : `${hours} sa`;
+/** Time left until `resetsAt` as "h:mm" ("1:50", "0:07"); undefined when past or unknown. */
+export function trayCountdown(resetsAt: string | undefined, now: number) {
+  const minutes = minutesLeft(resetsAt, now);
+  if (minutes === undefined) return undefined;
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -462,59 +442,58 @@ function trayRest(snapshot: TraySnapshot, now: number) {
  */
 export function trayTooltip(
   snapshot: TraySnapshot,
-  language: TrayLanguage = "en",
+  language: Locale = "en",
   now = Date.now(),
 ) {
+  const t = tFor(language);
   const target = switchTarget(snapshot);
-  if (target)
-    return language === "tr"
-      ? `Relay — ${oneLine(target.name)} hesabına geçiliyor…`
-      : `Relay switches to ${oneLine(target.name)}…`;
-  const tr = language === "tr";
+  if (target) return t("tray.relaySwitchesTo", { name: oneLine(target.name) });
   const active = activeAccount(snapshot);
   const items = snapshot.titleItems ?? DEFAULT_MENU_BAR_ITEMS;
   const rest = trayRest(snapshot, now);
   const reading = rest === "closed" ? undefined : titleReading(snapshot, now);
   const parts: string[] = active ? [oneLine(active.name)] : [];
-  if (rest === "closed")
-    parts.push(tr ? "Claude uygulaması kapalı" : "Claude app closed");
+  if (rest === "closed") parts.push(t("tray.claudeAppClosed"));
   else if (reading) {
     const mark = reading.stale ? LAST_KNOWN_MARK : "";
     const window = heldWindow(reading, "fiveHour", now);
     const used = window?.usedPercent;
-    if (used !== undefined) parts.push(mark + formatUsed(used, language));
+    if (used !== undefined)
+      parts.push(t("tray.fiveHourUsed", { percent: mark + formatPercent(percentUsed(used), language) }));
     const clock =
       percentUsed(used) === 100
         ? trayResetClock(window?.resetsAt, now, language, snapshot.timeZone)
         : undefined;
-    const left = trayCountdown(window?.resetsAt, now);
+    const left = minutesLeft(window?.resetsAt, now);
     // A full window opens again at a clock time; one with room renews after the time left.
-    if (clock) parts.push(tr ? `${clockLocative(clock)} açılır` : `opens at ${clock}`);
-    else if (left)
-      parts.push(tr ? `${spokenCountdown(left)} sonra yenilenir` : `renews in ${left}`);
+    if (clock) parts.push(t("tray.opensAt", { clock, clockLocative: clockLocative(clock) }));
+    else if (left !== undefined)
+      parts.push(
+        t("tray.renewsIn", {
+          left: t("tray.timeLeft", { hours: Math.floor(left / 60), minutes: left % 60 }),
+        }),
+      );
     const week = heldWindow(reading, "sevenDay", now);
     if (week && items.includes("week"))
-      parts.push(`${tr ? "hafta" : "week"} ${mark}${formatUsed(week.usedPercent, language)}`);
-    if (reading.stale) {
-      const ago = readAgo(reading.usage.checkedAt!, now, language);
       parts.push(
-        tr ? `limit verisi eski, ${ago} okundu` : `usage data is out of date, read ${ago}`,
+        t("tray.weekUsed", {
+          weekLabel: t(LABELS.week),
+          percent: mark + formatPercent(percentUsed(week.usedPercent), language),
+        }),
       );
-    }
-  } else if (rest === "unknown")
-    parts.push(tr ? "limit verisi eski" : "usage data is out of date");
+    if (reading.stale)
+      parts.push(t("tray.usageDataIsOutOfDateRead", { ago: readAgo(reading.usage.checkedAt!, now, language) }));
+  } else if (rest === "unknown") parts.push(t(LABELS.outdated));
   const today = todayFigures(snapshot, now);
   const figures = !today
     ? []
     : [
-        ...(items.includes("tokens")
-          ? [`${trayTokens(today.tokens, language)} ${tr ? "token" : "tokens"}`]
-          : []),
+        ...(items.includes("tokens") ? [t("tray.tokens", { tokens: trayTokens(today.tokens, language) })] : []),
         ...(items.includes("cost")
-          ? [`${trayCost(today.cost, language, today.costEstimated)} ${tr ? "API karşılığı" : "API value"}`]
+          ? [t("tray.apiValue", { cost: trayCost(today.cost, language, today.costEstimated) })]
           : []),
       ];
-  if (figures.length) parts.push(`${tr ? "bugün" : "today"} ${figures.join(", ")}`);
+  if (figures.length) parts.push(t("tray.today", { figures: figures.join(", ") }));
   return parts.length ? `Relay — ${parts.join(" · ")}` : "Relay";
 }
 
@@ -536,7 +515,7 @@ export function trayTooltip(
 export function trayTitle(
   snapshot: TraySnapshot,
   now = Date.now(),
-  language: TrayLanguage = "en",
+  language: Locale = "en",
 ) {
   const target = switchTarget(snapshot);
   if (target) return `${trayShortName(target.name)}…`;
@@ -603,7 +582,7 @@ export function trayTitle(
  */
 export function menuBarPreview(
   items: readonly MenuBarItem[],
-  language: TrayLanguage = "en",
+  language: Locale = "en",
   name = "Max",
   now = Date.now(),
 ) {

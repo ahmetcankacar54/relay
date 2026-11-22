@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { Check, CircleAlert } from "lucide-react";
-import { PageFrame } from "@/app/PageFrame";
+import { PageBody, PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { usePrivacyBlur } from "@/components/Private";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Note,
+  OptionSelect,
   SettingGroup,
   SettingRow,
 } from "@/components/SettingRow";
-import { useI18n, type Language } from "@/data/i18n";
+import { systemLocale, useI18n, type LanguagePref } from "@/data/i18n";
+import { FORMAT_LOCALE, LOCALE_NAMES, LOCALES, type Locale } from "../../shared/i18n/locales";
 import { useRelay } from "@/data/relay-context";
 import type {
   ClaudeLaunchChoice,
@@ -65,12 +67,9 @@ function ClaudeLaunchRow({
   return (
     <>
       <SettingRow
-        label={t("Claude uygulaması gri ekranda kalıyorsa", "If the Claude app stays on a grey screen")}
+        label={t("settings.ifTheClaudeAppStaysOn")}
         htmlFor="claude-quic-off"
-        description={t(
-          "Claude uygulamasını HTTP/3 olmadan açar. Takılan bir geçişten sonra Relay bunu kendisi açar.",
-          "Opens the Claude app without HTTP/3. Relay turns this on by itself after a stuck switch.",
-        )}
+        description={t("settings.opensTheClaudeAppWithoutHttp")}
       >
         <Switch
           id="claude-quic-off"
@@ -100,12 +99,9 @@ export function SeparateWindowsRow({
   return (
     <>
       <SettingRow
-        label={t("Ayrı Claude pencereleri", "Separate Claude windows")}
+        label={t("settings.separateClaudeWindows")}
         htmlFor="separate-windows"
-        description={t(
-          "Hesabın ⋯ menüsüne “Ayrı pencerede aç” ekler.",
-          "Adds “Open in a separate window” to the account ⋯ menu.",
-        )}
+        description={t("settings.addsOpenInASeparateWindow")}
       >
         <Switch
           id="separate-windows"
@@ -116,12 +112,9 @@ export function SeparateWindowsRow({
         />
       </SettingRow>
       <div className="pb-3">
-        <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
+        <Disclosure title={t("settings.howDoesItWork")}>
           <Note>
-            {t(
-              "Ayrı pencere açıkken ana Claude uygulaması o hesaba geçemez. Relay kendiliğinden geçmez ve konuşmaları sürdürmez. Claude in Chrome yalnızca ana Claude uygulamasında çalışır. Claude uygulaması bunu resmi olarak desteklemez; bir güncelleme bozabilir.",
-              "While the separate window is open, the main Claude app cannot switch to that account. Relay does not switch or continue conversations automatically. Claude in Chrome works only in the main Claude app. The Claude app does not support this officially. An update can break it.",
-            )}
+            {t("settings.whileTheSeparateWindowIsOpen")}
           </Note>
         </Disclosure>
       </div>
@@ -142,31 +135,31 @@ export function UpdatesGroup({
   language,
 }: Pick<ReturnType<typeof useRelay>, "api" | "action" | "data" | "busy"> & {
   t: ReturnType<typeof useI18n>["t"];
-  language: Language;
+  language: Locale;
 }) {
   const update = data?.update;
   if (!update) return null;
   const checked = update.checkedAt
-    ? new Date(update.checkedAt).toLocaleString(language === "tr" ? "tr-TR" : "en-US", {
+    ? new Date(update.checkedAt).toLocaleString(FORMAT_LOCALE[language], {
         dateStyle: "medium",
         timeStyle: "short",
       })
     : undefined;
   const status =
     update.status === "checking"
-      ? t("Kontrol ediliyor…", "Check in progress…")
+      ? t("common.checkInProgress")
       : update.status === "error"
-        ? `${t("Kontrol edilemedi", "Check failed")}: ${localizeError(update.error ?? "", language)}`
+        ? `${t("settings.checkFailed")}: ${localizeError(update.error ?? "", language)}`
         : updateShown(update)
           ? updateTitle(update, t)
           : update.status === "up-to-date"
-            ? t("Relay güncel.", "Relay is up to date.")
+            ? t("settings.relayIsUpToDate")
             : "";
   return (
-    <SettingGroup id="settings-updates" title={t("Güncellemeler", "Updates")}>
+    <SettingGroup id="settings-updates" title={t("settings.updates")}>
       <SettingRow
-        label={t(`Relay ${update.current}`, `Relay ${update.current}`)}
-        description={[status, checked && t(`Son kontrol: ${checked}`, `Last checked: ${checked}`)]
+        label={t("settings.relay", { updateCurrent: update.current })}
+        description={[status, checked && t("settings.lastChecked", { checked })]
           .filter(Boolean)
           .join(" · ")}
       >
@@ -176,16 +169,13 @@ export function UpdatesGroup({
           disabled={!!busy || update.status === "checking" || update.status === "downloading"}
           onClick={() => void action("update-check", () => api.checkUpdate())}
         >
-          {t("Şimdi kontrol et", "Check now")}
+          {t("settings.checkNow")}
         </Button>
       </SettingRow>
       <SettingRow
-        label={t("Güncellemeleri kendiliğinden ara", "Check for updates automatically")}
+        label={t("settings.checkForUpdatesAutomatically")}
         htmlFor="update-auto"
-        description={t(
-          "Yeni sürümü indirir; kurmak için onayını bekler.",
-          "Downloads a new version. Relay installs it only when you approve.",
-        )}
+        description={t("settings.downloadsANewVersionRelayInstalls")}
       >
         <Switch
           id="update-auto"
@@ -214,8 +204,8 @@ function Status({ ok, children }: { ok: boolean; children: string }) {
 /** Settings' tab names, in the tabs' order. */
 export function settingsTabTitle(tab: SettingsTab, t: ReturnType<typeof useI18n>["t"]) {
   return {
-    genel: t("Genel", "General"),
-    gelismis: t("Gelişmiş", "Advanced"),
+    genel: t("settings.general"),
+    gelismis: t("settings.advanced"),
   }[tab];
 }
 
@@ -241,10 +231,10 @@ function useSettingsTab(initial?: SettingsTab): [SettingsTab, (tab: SettingsTab)
 export function SwitchingPage() {
   const { t } = useI18n();
   return (
-    <PageFrame automationInline title={t("Geçiş", "Switching")}>
-      <div className="grid gap-4 px-5 pb-6">
+    <PageFrame automationInline title={t("common.switching")}>
+      <PageBody>
         <SwitchingTab />
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }
@@ -261,19 +251,21 @@ export function PlanningPage() {
 export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
   const relay = useRelay();
   const { api, data, desktop, settings, busy, version, action, active } = relay;
-  const { t, language, setLanguage } = useI18n();
+  const { t, language, pref, setLanguage } = useI18n();
   const [tab, setTab] = useSettingsTab(initialTab);
   const [privacyBlur, setPrivacyBlur] = usePrivacyBlur();
   const disabled = !!busy || !!desktop?.busy;
   const update = (patch: Partial<RelaySettings>) =>
     void action("settings", () => api.updateSettings(patch));
+  const mac = macWording(data?.diagnostics.platform);
   return (
     <PageFrame
       automationInline
-      title={t("Ayarlar", "Settings")}
+      title={t("common.settings")}
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-4 px-5 pb-6">
-        <TabsList aria-label={t("Ayar bölümleri", "Settings sections")} className="h-auto w-fit flex-wrap justify-start">
+      <PageBody>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-4">
+        <TabsList aria-label={t("settings.settingsSections")} className="h-auto w-fit flex-wrap justify-start">
           {SETTINGS_TABS.map((id) => (
             <TabsTrigger key={id} value={id}>
               {settingsTabTitle(id, t)}
@@ -282,28 +274,20 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
         </TabsList>
         <TabsContent value="genel">
           <div className="grid max-w-2xl gap-4">
-            <SettingGroup id="settings-general" title={t("Genel", "General")}>
-              <SettingRow
-                label={
-                  <span id="language-label">
-                    {t("Arayüz dili", "Interface language")}
-                  </span>
-                }
-              >
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  size="sm"
-                  aria-labelledby="language-label"
-                  value={language}
-                  onValueChange={(v) => v && setLanguage(v as Language)}
-                >
-                  <ToggleGroupItem value="tr">Türkçe</ToggleGroupItem>
-                  <ToggleGroupItem value="en">English</ToggleGroupItem>
-                </ToggleGroup>
+            <SettingGroup id="settings-general" title={t("settings.general")}>
+              <SettingRow label={t("settings.interfaceLanguage")} htmlFor="language">
+                <OptionSelect<LanguagePref>
+                  id="language"
+                  value={pref}
+                  onChange={setLanguage}
+                  options={[
+                    { value: "system", label: t("settings.systemLanguage", { language: LOCALE_NAMES[systemLocale()] }) },
+                    ...LOCALES.map((locale) => ({ value: locale, label: LOCALE_NAMES[locale] })),
+                  ]}
+                />
               </SettingRow>
               <SettingRow
-                label={<span id="appearance-label">{t("Tema", "Theme")}</span>}
+                label={<span id="appearance-label">{t("settings.theme")}</span>}
               >
                 <ToggleGroup
                   type="single"
@@ -317,23 +301,20 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   }
                 >
                   <ToggleGroupItem value="system">
-                    {t("Sistem", "System")}
+                    {t("settings.system")}
                   </ToggleGroupItem>
                   <ToggleGroupItem value="light">
-                    {t("Açık", "Light")}
+                    {t("settings.light")}
                   </ToggleGroupItem>
                   <ToggleGroupItem value="dark">
-                    {t("Koyu", "Dark")}
+                    {t("settings.dark")}
                   </ToggleGroupItem>
                 </ToggleGroup>
               </SettingRow>
               <SettingRow
-                label={t("Hesap bilgilerini bulanıklaştır", "Blur account details")}
+                label={t("settings.blurAccountDetails")}
                 htmlFor="privacy-blur"
-                description={t(
-                  "E-postalar ve kuruluşlar tıklanana kadar bulanık görünür; ekran paylaşırken işe yarar.",
-                  "E-mails and organizations stay blurred until clicked; useful while sharing your screen.",
-                )}
+                description={t("settings.eMailsAndOrganizationsStayBlurred")}
               >
                 <Switch id="privacy-blur" checked={privacyBlur} onCheckedChange={setPrivacyBlur} />
               </SettingRow>
@@ -341,7 +322,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             </SettingGroup>
             {/* The menu bar title and the switch window are macOS-only; other platforms keep the R icon. */}
             {data?.diagnostics.platform === "darwin" && (
-              <SettingGroup id="settings-menu-bar" title={t("Menü çubuğu", "Menu bar")}>
+              <SettingGroup id="settings-menu-bar" title={t("settings.menuBar")}>
                 <MenuBarTitleRows
                   data={data}
                   api={api}
@@ -352,34 +333,31 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                 />
               </SettingGroup>
             )}
-            <SettingGroup id="settings-panda" title="Panda">
+            <SettingGroup id="settings-panda" title={t("settings.fun")}>
               <SettingRow
                 label={
                   <span id="panda-pranks-label">
-                    {t("Panda şakaları", "Panda pranks")}
+                    {t("settings.pandaPranks")}
                   </span>
                 }
-                description={t(
-                  "İmleci kısa süre saklayabilir.",
-                  "Can hide the cursor for a short time.",
-                )}
+                description={t("settings.canHideTheCursorForA")}
               >
                 <ToggleGroup
                   type="single"
                   variant="outline"
                   size="sm"
                   aria-labelledby="panda-pranks-label"
-                  value={settings.pranks ?? "sometimes"}
+                  value={settings.pranks ?? "off"}
                   disabled={disabled}
                   onValueChange={(v) => v && update({ pranks: v as PrankLevel })}
                 >
                   <ToggleGroupItem value="sometimes">
-                    {t("Ara sıra", "Sometimes")}
+                    {t("settings.sometimes")}
                   </ToggleGroupItem>
                   <ToggleGroupItem value="rarely">
-                    {t("Nadiren", "Rarely")}
+                    {t("settings.rarely")}
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="off">{t("Kapalı", "Off")}</ToggleGroupItem>
+                  <ToggleGroupItem value="off">{t("common.off")}</ToggleGroupItem>
                 </ToggleGroup>
               </SettingRow>
               {data?.diagnostics.platform === "darwin" && (
@@ -387,13 +365,10 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   <SettingRow
                     label={
                       <span id="menu-bar-animation-label">
-                        {t("Panda animasyonları", "Panda animations")}
+                        {t("settings.pandaAnimations")}
                       </span>
                     }
-                    description={t(
-                      "Menü çubuğunda. Kapalıyken panda yalnızca ifade değiştirir.",
-                      "In the menu bar. When off, the panda only changes expression.",
-                    )}
+                    description={t("settings.inTheMenuBarWhenOff")}
                   >
                     <Switch
                       aria-labelledby="menu-bar-animation-label"
@@ -405,7 +380,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   <SettingRow
                     label={
                       <span id="switch-window-label">
-                        {t("Geçişte panda penceresini göster", "Show the panda window during a switch")}
+                        {t("settings.showThePandaWindowDuringA")}
                       </span>
                     }
                   >
@@ -425,19 +400,16 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
         <TabsContent value="gelismis">
           <div className="grid max-w-2xl gap-4">
             <p className="px-1 text-sm text-muted-foreground">
-              {t(
-                "Çoğu kullanıcının burada bir şeyi değiştirmesi gerekmez.",
-                "Most people never need to change anything here.",
-              )}
+              {t("settings.mostPeopleNeverNeedToChange")}
             </p>
-            <SettingGroup id="settings-system" title={t("Sistem", "System")}>
+            <SettingGroup id="settings-system" title={t("settings.system")}>
               {/* An install Relay does not look for (every Linux build) is chosen here: Konumu seç. */}
               <SettingRow label="Claude Desktop">
                 <span className="flex items-center gap-3">
                   <Status ok={!!desktop?.available}>
                     {desktop?.available
-                      ? t("Bulundu", "Found")
-                      : t("Bulunamadı", "Not found")}
+                      ? t("settings.found")
+                      : t("common.notFound")}
                   </Status>
                   <Button
                     variant="outline"
@@ -445,7 +417,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                     disabled={!!busy}
                     onClick={() => chooseClaudeApp({ api, action })}
                   >
-                    {t("Konumu seç", "Choose location")}
+                    {t("settings.chooseLocation")}
                   </Button>
                 </span>
               </SettingRow>
@@ -454,16 +426,13 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                 label="Claude Code CLI"
                 description={
                   data?.diagnostics.source === "claude-app"
-                    ? t(
-                        "Claude uygulamasının indirdiği kopya kullanılır.",
-                        "Uses the copy that the Claude app downloaded.",
-                      )
+                    ? t("settings.usesTheCopyThatTheClaude")
                     : undefined
                 }
               >
                 <span className="flex items-center gap-3">
                   <Status ok={!!data?.diagnostics.version}>
-                    {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
+                    {data?.diagnostics.version ?? t("common.notFound")}
                   </Status>
                   <Button
                     variant="outline"
@@ -471,52 +440,46 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                     disabled={!!busy}
                     onClick={() => chooseCliFile({ api, action })}
                   >
-                    {t("Dosyayı seç", "Choose file")}
+                    {t("settings.chooseFile")}
                   </Button>
                 </span>
               </SettingRow>
               <SettingRow
-                label={t("Tanılama dosyaları", "Diagnostics files")}
-                description={t(
-                  "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder. Diğer dosyalarda kayıtlı girişlerin var.",
-                  "Send only draft-events.json and usage-issues.json. The other files hold your saved sign-ins.",
-                )}
+                label={t("settings.diagnosticsFiles")}
+                description={t("settings.sendOnlyDraftEventsJsonAnd")}
               >
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => void showDiagnostics({ api, action })}
                 >
-                  {t("Finder’da göster", "Show in Finder")}
+                  {mac ? t("settings.showInFinder") : t("settings.showInFolder")}
                 </Button>
               </SettingRow>
             </SettingGroup>
-            <SettingGroup id="settings-troubleshooting" title={t("Sorun giderme", "Troubleshooting")}>
+            <SettingGroup id="settings-troubleshooting" title={t("settings.troubleshooting")}>
               <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
               <ClaudeAppAccessRow api={api} t={t} />
             </SettingGroup>
-            <SettingGroup id="settings-experimental" title={t("Deneysel", "Experimental")}>
+            <SettingGroup id="settings-experimental" title={t("settings.experimental")}>
               <p className="py-2 text-xs text-muted-foreground">
-                {t(
-                  "Deneysel özellikler Claude uygulamasının bir güncellemesiyle bozulabilir.",
-                  "Experimental features can break with an update of the Claude app.",
-                )}
+                {t("settings.experimentalFeaturesCanBreakWithAn")}
               </p>
               <SeparateWindowsRow api={api} action={action} data={data} t={t} />
               <ExperimentalSwitchRows />
             </SettingGroup>
             <div id="settings-privacy" className="px-1">
-              <Disclosure title={t("Gizlilik ve güvenlik", "Privacy and security")}>
+              <Disclosure title={t("settings.privacyAndSecurity")}>
                 <PrivacyNotes t={t} />
               </Disclosure>
             </div>
             <p className="px-1 text-center text-xs text-muted-foreground">
-              {t("Yerelde saklanır.", "Stored locally.")}{" "}
-              {t("Bağımsız araç", "Independent tool")} · {version}
+              {t("settings.storedLocallyIndependentTool", { version })}
             </p>
           </div>
         </TabsContent>
       </Tabs>
+      </PageBody>
     </PageFrame>
   );
 }
@@ -545,14 +508,11 @@ export function ClaudeAppAccessRow({
   if (!state?.supported) return null;
   return (
     <SettingRow
-      label={t("Claude uygulaması erişimi", "Claude app access")}
-      description={t(
-        "Claude Code girişleri yaklaşık 30 günde biter. Bu izinle Relay onları Claude uygulamasındaki oturumla kendiliğinden yeniler ve o arada limitleri uygulamadan okur. macOS sorduğunda “Her Zaman İzin Ver”i seç.",
-        "Claude Code sign-ins end after about 30 days. With this, Relay renews them by itself from the Claude app’s session and reads the limits through the app meanwhile. When macOS asks, select “Always Allow”.",
-      )}
+      label={t("settings.claudeAppAccess")}
+      description={t("settings.claudeCodeSignInsEndAfter")}
     >
       {state.allowed ? (
-        <Status ok>{t("İzin verildi", "Allowed")}</Status>
+        <Status ok>{t("settings.allowed")}</Status>
       ) : (
         <Button
           variant="outline"
@@ -567,7 +527,7 @@ export function ClaudeAppAccessRow({
               .finally(() => setAsking(false));
           }}
         >
-          {t("İzin ver", "Allow")}
+          {t("settings.allow")}
         </Button>
       )}
     </SettingRow>
@@ -580,27 +540,15 @@ export function PrivacyNotes({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
   return (
     <>
       <Note>
-        {t(
-          "Claude uygulaması girişleri bu cihazda, işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code ile yapılır.",
-          "Relay keeps Claude app sign-ins on this device, encrypted by the operating system. Relay makes a backup before each switch. The usage sign-in uses the official Claude Code.",
-        )}
+        {t("settings.relayKeepsClaudeAppSignIns")}
       </Note>
       <Note>
         {mac
-          ? t(
-              "Relay şifreleme anahtarını macOS Anahtarlık’ta tutar. Relay güncellendikten sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
-              "Relay keeps the encryption key in the macOS Keychain. After a Relay update, macOS can ask for your password once. Select “Always Allow”.",
-            )
-          : t(
-              "Relay şifreleme anahtarını masaüstünün anahtar deposunda (KWallet ya da Secret Service) tutar. Depo kilitliyse açılırken bir kez parolanı sorabilir.",
-              "Relay keeps the encryption key in your desktop’s keyring (KWallet or Secret Service). A locked keyring can ask for your password once when it opens.",
-            )}
+          ? t("settings.relayKeepsTheEncryptionKeyIn")
+          : t("settings.relayKeepsTheEncryptionKeyIn2")}
       </Note>
       <Note>
-        {t(
-          "Geçiş deneyseldir ve Claude uygulamasının yerel dosya biçimine bağlıdır. Code oturumları ve yerel projeler seçtiğin paylaşım kapsamında birleşir. Chat geçmişi ve sunucudaki projeler her hesapta ayrı kalır.",
-          "Account switch is experimental and depends on the Claude app’s local file format. Code sessions and local projects merge within the sharing scope you set. Chat history and server projects stay with each account.",
-        )}
+        {t("settings.accountSwitchIsExperimentalAndDepends")}
       </Note>
     </>
   );

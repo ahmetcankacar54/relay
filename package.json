@@ -14,6 +14,7 @@
     "icons": "node scripts/icon.mjs && node --import tsx scripts/mascot.ts",
     "mascot": "node --import tsx scripts/mascot.ts",
     "mascot:placeholders": "node --import tsx scripts/mascot-placeholders.ts",
+    "i18n:widget": "node --import tsx scripts/i18n/widget-strings.ts",
     "build": "tsc --noEmit && vite build && node scripts/build.mjs",
     "build:cli": "node scripts/build-cli.mjs",
     "start": "electron .",
@@ -33,11 +34,9 @@
   },
   "dependencies": {
     "classic-level": "3.0.0",
-    "node-pty": "^1.1.0"
+    "node-pty": "1.1.0"
   },
   "devDependencies": {
-    "@fontsource/dm-sans": "^5.2.8",
-    "@fontsource/manrope": "^5.2.8",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
@@ -46,10 +45,11 @@
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "electron": "^44.7.0",
+    "electron": "44.7.0",
     "electron-builder": "^26.0.12",
     "electron-updater": "6.8.11",
     "esbuild": "^0.25.0",
+    "intl-messageformat": "^12.2.0",
     "lucide-react": "^0.468.0",
     "prettier": "^3.9.10",
     "radix-ui": "1.6.7",
@@ -93,7 +93,20 @@
     ],
     "electronLanguages": [
       "en",
-      "tr"
+      "tr",
+      "de",
+      "fr",
+      "es",
+      "pt-BR",
+      "it",
+      "ja",
+      "ko",
+      "zh-CN",
+      "zh-TW",
+      "ru",
+      "uk",
+      "pl",
+      "nl"
     ],
     "asarUnpack": [
       "node_modules/node-pty/**/*",
@@ -111,6 +124,23 @@
     },
     "mac": {
       "identity": "-",
+      "electronLanguages": [
+        "en",
+        "tr",
+        "de",
+        "fr",
+        "es",
+        "pt_BR",
+        "it",
+        "ja",
+        "ko",
+        "zh_CN",
+        "zh_TW",
+        "ru",
+        "uk",
+        "pl",
+        "nl"
+      ],
       "extraFiles": [
         {
           "from": "dist-electron/RelayWidget.appex",
@@ -122,7 +152,26 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "CFBundleLocalizations": [
+          "en",
+          "tr",
+          "de",
+          "fr",
+          "es",
+          "pt-BR",
+          "it",
+          "ja",
+          "ko",
+          "zh-Hans",
+          "zh-Hant",
+          "ru",
+          "uk",
+          "pl",
+          "nl"
+        ]
+      }
     },
     "publish": [
       {

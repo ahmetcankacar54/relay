@@ -10,6 +10,7 @@ import { PanelUpdate } from "../src/panel/PanelUpdate";
 import { UpdatesGroup } from "../src/pages/Settings";
 import { updateHint, updateShown } from "../src/lib/update-text";
 import { DEFAULT_SETTINGS, type Snapshot, type UpdateState } from "../shared/types";
+import { i18nValue, testT } from "./i18n";
 
 const base: UpdateState = { status: "ready", current: "0.15.0", autoCheck: true, version: "0.16.0" };
 
@@ -27,7 +28,7 @@ const render = (relay: Relay, el: ReactElement, language: "tr" | "en" = "tr") =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+      { value: i18nValue(language) },
       createElement(RelayContext.Provider, { value: relay }, el),
     ),
   );
@@ -69,7 +70,7 @@ test("downloading, installing and by-hand updates read as such; nothing shows wh
   assert.equal(render(relayFor(undefined), createElement(SidebarUpdate)), "");
   assert.equal(updateShown({ ...base, version: undefined }), false);
   for (const reason of ["no-asset", "not-writable", "not-appimage"] as const)
-    assert.ok(updateHint({ ...base, status: "manual", manualReason: reason }, (tr) => tr).length > 10, reason);
+    assert.ok(updateHint({ ...base, status: "manual", manualReason: reason }, testT("tr")).length > 10, reason);
 });
 
 test("the panel shows one row: Update when ready, Download by hand", () => {
@@ -82,13 +83,13 @@ test("the panel shows one row: Update when ready, Download by hand", () => {
 });
 
 test("Settings shows the version, the last check and the automatic switch; only where Relay updates itself", () => {
-  const t = (tr: string) => tr;
+  const t = testT("tr");
   const group = (update: UpdateState | undefined) =>
     render(
       relayFor(update),
       createElement(UpdatesGroup, {
         api: {} as Relay["api"],
-        action: async () => {},
+        action: async () => true,
         data: { update } as unknown as Snapshot,
         busy: "",
         t,

@@ -5,6 +5,8 @@ import {
   SwitchStory, pickDisguise, sceneDeadline, sceneLine, sceneView, switchScene, switchWindowVisible,
   type Disguise, type SwitchSceneEvent, type SwitchSceneState,
 } from "../shared/switch-scene";
+import type { Locale } from "../shared/i18n/locales";
+import "./i18n";
 
 const start: SwitchSceneEvent = { phase: "start", kind: "switch", profileId: "b" };
 const ended = (ok = true): SwitchSceneEvent => ({ phase: "end", kind: "switch", profileId: "b", ok });
@@ -114,7 +116,7 @@ test("each switched story asks the picker to avoid the disguise worn in the stor
 
 test("the line names the target and the result, in Turkish and English", () => {
   const name = (id: string) => (id === "b" ? "Vertex" : undefined);
-  const lines = (language: "tr" | "en", steps: [number, SwitchSceneEvent][]) =>
+  const lines = (language: Locale, steps: [number, SwitchSceneEvent][]) =>
     run(steps).map((s) => sceneLine(s, language, name));
   assert.deepEqual(lines("tr", [[0, start], [LEAVING_MS, tick], [2_000, ended()]]), [
     "Vertex hesabına geçiliyor", "Vertex hesabına geçiliyor", "Vertex hesabındasın",

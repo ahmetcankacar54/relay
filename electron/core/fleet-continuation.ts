@@ -20,6 +20,8 @@ import type {
   QuotaStop,
 } from "./desktop-continuation-evidence";
 import { DesktopSwitchRefused } from "./desktop";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import { tFor } from "../../shared/i18n/translate";
 
 export { sourceExhausted } from "../../shared/usage";
 
@@ -231,36 +233,23 @@ export function chooseTarget(
 export function fleetNotice(
   last: NonNullable<FleetContinuationState["last"]>,
   name: string,
-  language: "tr" | "en",
+  language: Locale,
   reason?: string,
 ): string {
-  const en = language === "en";
-  const head = en
-    ? `Limit reached: the Claude app switched to ${name}.`
-    : `Limit doldu: Claude uygulaması ${name} hesabına geçti.`;
-  const chats = (n: number) => `${n} ${n === 1 ? "conversation" : "conversations"}`;
-  const go = (n: number) => `${chats(n)} ${n === 1 ? "continues" : "continue"}`;
+  const t = tFor(language);
+  const head = t("fleetContinuation.limitReachedTheClaudeApp", { name });
   if (reason || last.started + last.uncertain + last.skipped === 0)
-    return en
-      ? `${head} Its conversations were not continued; continue them yourself.`
-      : `${head} Konuşmalar devam ettirilemedi; onları sen sürdür.`;
+    return `${head} ${t("fleetContinuation.itsConversationsWereNotContinued")}`;
   if (last.started === last.conversations)
-    return en
-      ? `${head} ${go(last.started)} where ${last.started === 1 ? "it" : "they"} stopped.`
-      : `${head} ${last.started} konuşma kaldığı yerden devam ediyor.`;
-  const parts = en
-    ? [
-        last.started ? go(last.started) : "",
-        last.skipped ? `continue ${chats(last.skipped)} yourself` : "",
-        last.uncertain ? `check ${chats(last.uncertain)}` : "",
-      ]
-    : [
-        last.started ? `${last.started} konuşma devam ediyor` : "",
-        last.skipped ? `${last.skipped} konuşmayı sen sürdür` : "",
-        last.uncertain ? `${last.uncertain} konuşmanın durumuna bak` : "",
-      ];
-  const text = parts.filter(Boolean).join("; ");
-  return `${head} ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+    return `${head} ${t("fleetContinuation.conversationsContinueWhereTheyStopped", { started: last.started })}`;
+  const text = [
+    last.started ? t("fleetContinuation.conversationsContinue", { started: last.started }) : "",
+    last.skipped ? t("fleetContinuation.continueConversationsYourself", { skipped: last.skipped }) : "",
+    last.uncertain ? t("fleetContinuation.checkConversations", { uncertain: last.uncertain }) : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return `${head} ${text.charAt(0).toLocaleUpperCase(FORMAT_LOCALE[language])}${text.slice(1)}.`;
 }
 
 /**

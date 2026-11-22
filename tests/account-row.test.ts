@@ -9,11 +9,12 @@ import {
 } from "../src/lib/account-row";
 import type { OverviewRow } from "../src/data/selectors";
 import type { Account, AccountUsage, UsageIssue } from "../shared/types";
+import { testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-23T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
-const tr = (a: string) => a;
-const en = (_: string, b: string) => b;
+const tr = testT("tr");
+const en = testT("en");
 const acct = (extra: Partial<Account> = {}): Account => ({
   id: "x", name: "X", kind: "personal", group: "personal", color: "olive", createdAt: iso(NOW),
   planning: { plan: "team", capacityWeight: 1 },
@@ -50,38 +51,38 @@ test("ringState reads how far an account's limits can be trusted", () => {
   assert.equal(ringState(old(use(100, 35)), NOW), "stale");
 });
 
-test("the Overview line leads with the plan, as the Accounts table names it", () => {
-  assert.equal(accountTileLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "Team · dönem açık · 3 sa 10 dk kaldı");
-  assert.equal(accountTileLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Team · period open · 3 h 10 min left");
-  assert.equal(accountTileLine(row("ready", use(0, 35)), tr, "tr", "UTC", NOW), "Team · hazır");
+test("the Overview line leads with the plan, as the Accounts table names it; the status keeps its own case", () => {
+  assert.equal(accountTileLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "Team · Dönem açık · 3 sa 10 dk kaldı");
+  assert.equal(accountTileLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Team · Period open · 3 h 10 min left");
+  assert.equal(accountTileLine(row("ready", use(0, 35)), tr, "tr", "UTC", NOW), "Team · Hazır");
   // Without a plan picked, the subscription the sign-in reported; without either, the status alone.
-  assert.equal(accountTileLine(row("ready", use(0, 35), max()), tr, "tr", "UTC", NOW), "Max · hazır");
+  assert.equal(accountTileLine(row("ready", use(0, 35), max()), tr, "tr", "UTC", NOW), "Max · Hazır");
   const bare = acct({ planning: undefined });
   assert.equal(accountTileLine(row("ready", use(0, 35), bare), tr, "tr", "UTC", NOW), "Hazır");
   assert.equal(accountTileLine(row("window-open", use(22, 35), bare), en, "en", "UTC", NOW), "Period open · 3 h 10 min left");
   // A full account says when it opens.
   const at = iso(NOW + 3_600_000);
   assert.equal(accountTileLine(row("exhausted", use(100, 35), acct(), at), tr, "tr", "UTC", NOW), "Team · 11:00’de açılır (1 sa)");
-  assert.equal(accountTileLine(row("exhausted", use(100, 35), acct(), at), en, "en", "UTC", NOW), "Team · opens 11:00 (1 h)");
-  assert.equal(accountTileLine(row("not-linked", undefined, acct({ desktop: undefined })), tr, "tr", "UTC", NOW), "Team · giriş kaydedilmedi");
+  assert.equal(accountTileLine(row("exhausted", use(100, 35), acct(), at), en, "en", "UTC", NOW), "Team · Opens 11:00 (1 h)");
+  assert.equal(accountTileLine(row("not-linked", undefined, acct({ desktop: undefined })), tr, "tr", "UTC", NOW), "Team · Giriş kaydedilmedi");
 });
 
 test("an old reading says its age on the Overview line, and a problem still outranks it", () => {
   const stale = row("unknown", old(use(22, 35)), max());
   // Its period's reset is still ahead, and a reset time does not grow old.
-  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce okundu · 3 sa 10 dk sonra yenilenir");
-  assert.equal(accountTileLine(stale, en, "en", "UTC", NOW), "Max · usage data read 2 h ago · resets in 3 h 10 min");
+  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW), "Max · Limit verisi 2 sa önce okundu · 3 sa 10 dk sonra yenilenir");
+  assert.equal(accountTileLine(stale, en, "en", "UTC", NOW), "Max · Usage data read 2 h ago · resets in 3 h 10 min");
   // Marked stale by a failed read that kept the limits: also its age.
   const kept = row("unknown", old(use(22, 35, { status: "error", issue: "rate-limited", stale: true })), max());
-  assert.equal(accountTileLine(kept, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce okundu · 3 sa 10 dk sonra yenilenir");
+  assert.equal(accountTileLine(kept, tr, "tr", "UTC", NOW), "Max · Limit verisi 2 sa önce okundu · 3 sa 10 dk sonra yenilenir");
   // Nothing kept: no age to tell.
   const lost = row("unknown", { accountId: "x", status: "error", issue: "unavailable", stale: false }, max());
-  assert.equal(accountTileLine(lost, tr, "tr", "UTC", NOW), "Max · limit verisi eski");
-  // A sign-in problem or a pending approval is said instead; proper names keep their capitals.
+  assert.equal(accountTileLine(lost, tr, "tr", "UTC", NOW), "Max · Limit verisi eski");
+  // A sign-in problem or a pending approval is said instead.
   const locked = row("unknown", old(use(22, 35, { status: "error", issue: "keychain-locked", stale: true })), max());
-  assert.equal(accountTileLine(locked, tr, "tr", "UTC", NOW), "Max · anahtarlık izni gerekli");
+  assert.equal(accountTileLine(locked, tr, "tr", "UTC", NOW), "Max · Anahtarlık izni gerekli");
   assert.equal(accountTileLine(locked, en, "en", "UTC", NOW), "Max · Keychain access needed");
-  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW, true), "Max · tarayıcıda onayla");
+  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW, true), "Max · Tarayıcıda onayla");
 });
 
 test("the panel line leads with the time left, so a narrow panel cuts the percents instead", () => {

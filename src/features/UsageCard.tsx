@@ -8,7 +8,7 @@ import type {
 } from "../../shared/types";
 import { Button } from "@/components/ui/button";
 import { displayedIssue, renewalIssue } from "@/lib/account-health";
-import { usageWindowRows } from "@/data/selectors";
+import { usageRowLabel, usageWindowRows } from "@/data/selectors";
 import { keychainWords, usePlatform } from "@/data/platform";
 import {
   formatPercent,
@@ -18,47 +18,21 @@ import {
   usedWord,
 } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-type T = (tr: string, en: string) => string;
+import type { MessageId, T } from "../../shared/i18n/translate";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
 /** How long before a Claude Code sign-in's end the card says so (Claude Code itself warns 3 days ahead). */
 const SIGN_IN_END_WARNING_MS = 3 * 86_400_000;
 /** The Keychain's (Linux: keyring's) sentence comes from keychainWords. */
-const issues: Record<Exclude<UsageIssue, "keychain-locked">, [string, string]> = {
-  "connect-cli": [
-    "Henüz limit okuma girişi yok.",
-    "No usage sign-in yet.",
-  ],
-  "credentials-missing": [
-    "Bu profilin giriş bilgisi okunamadı.",
-    "Relay cannot read this profile’s sign-in.",
-  ],
-  "renewal-required": [
-    "Limit okuma girişinin yenilenmesi gerekiyor.",
-    "The usage sign-in needs to be renewed.",
-  ],
-  expired: [
-    "Limit okuma girişi kendiliğinden yenilenemedi.",
-    "Relay cannot renew the usage sign-in automatically.",
-  ],
-  scope: [
-    "Bu giriş kullanım verisine erişemiyor.",
-    "This sign-in cannot read usage.",
-  ],
-  "identity-mismatch": [
-    "Limit okuma girişi bu profilin hesabına ait değil.",
-    "The usage sign-in does not belong to this profile’s account.",
-  ],
-  "rate-limited": [
-    "Kullanım servisi kısa bir süre beklenmesini istedi.",
-    "The usage service asked Relay to wait.",
-  ],
-  unavailable: [
-    "Kullanım servisine ulaşılamadı.",
-    "Cannot reach the usage service.",
-  ],
-  unsupported: [
-    "Bu hesap için limit verisi okunamıyor.",
-    "Relay cannot read limits for this account.",
-  ],
+const issues: Record<Exclude<UsageIssue, "keychain-locked">, MessageId> = {
+  "connect-cli": "usageCard.noUsageSignInYet",
+  "credentials-missing": "usageCard.relayCannotReadThisProfilesSign",
+  "renewal-required": "usageCard.theUsageSignInNeedsTo",
+  expired: "usageCard.relayCannotRenewTheUsageSign",
+  scope: "usageCard.thisSignInCannotReadUsage",
+  "identity-mismatch": "usageCard.theUsageSignInDoesNot",
+  "rate-limited": "usageCard.theUsageServiceAskedRelayTo",
+  unavailable: "usageCard.cannotReachTheUsageService",
+  unsupported: "usageCard.relayCannotReadLimitsForThis",
 };
 export function UsageCard({
   usage,
@@ -83,7 +57,7 @@ export function UsageCard({
   usage?: AccountUsage;
   settings: RelaySettings;
   t: T;
-  language: string;
+  language: Locale;
   refresh: (allowPrompt?: boolean) => void;
   connect: () => void;
   busy?: boolean;
@@ -112,11 +86,12 @@ export function UsageCard({
     endsInDays !== undefined;
   const retry = usage?.retryAt && Date.parse(usage.retryAt) > now;
   const clock = (date: string) =>
-    new Date(date).toLocaleString(language, {
+    new Date(date).toLocaleString(FORMAT_LOCALE[language], {
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      hourCycle: "h23",
     });
   /** One limit: the account's five hours or week (`key`), or a model's own limit (`"model"`). */
   const meter = (
@@ -196,8 +171,8 @@ export function UsageCard({
               {shown !== undefined
                 ? usedWord(language)
                 : notReported
-                  ? t("Limit bildirilmiyor", "No limit reported")
-                  : t("Veri yok", "No data")}
+                  ? t("usageCard.noLimitReported")
+                  : t("usageCard.noData")}
             </small>
           </strong>
         </div>
@@ -217,29 +192,29 @@ export function UsageCard({
                 ? "bg-muted-foreground/40"
                 : meterFill(window?.usedPercent),
             )}
-            style={{ width: `${used ?? 0}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, used ?? 0))}%` }}
           />
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
           {currentResetIsFresh ? (
             <>
-              {t("Yenilenir", "Resets")}{" "}
+              {t("usageCard.resets")}{" "}
               <time dateTime={currentReset} title={currentReset}>
                 {clock(currentReset!)}
               </time>
             </>
           ) : unused ? (
-            t("Sonraki mesajla başlar", "Starts with the next message")
+            t("usageCard.startsWithTheNextMessage")
           ) : historical ? (
             <>
               {Date.parse(historical.resetsAt) <= now
-                ? t("Önceki dönem", "Previous period")
-                : t("Son bilinen yenilenme", "Last known reset")}{" "}
+                ? t("usageCard.previousPeriod")
+                : t("usageCard.lastKnownReset")}{" "}
               <time dateTime={historical.resetsAt} title={historical.resetsAt}>
                 {clock(historical.resetsAt)}
               </time>
               <div>
-                {t("Son doğrulama", "Last verified")}{" "}
+                {t("usageCard.lastVerified")}{" "}
                 <time
                   dateTime={historical.checkedAt}
                   title={historical.checkedAt}
@@ -249,13 +224,13 @@ export function UsageCard({
               </div>
             </>
           ) : notReported ? null : (
-            t("Yenilenme zamanı yok", "No reset time")
+            t("usageCard.noResetTime")
           )}
           {warning && (
             <b className="font-semibold text-crit">
               {window?.usedPercent === 100
-                ? t(" · Limit doldu", " · Limit reached")
-                : t(" · Limit yaklaşıyor", " · Near limit")}
+                ? t("usageCard.limitReached")
+                : t("usageCard.nearLimit")}
             </b>
           )}
         </div>
@@ -265,10 +240,10 @@ export function UsageCard({
   if (usage?.issue === "connect-cli")
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground">
-        <span>{t(...issues["connect-cli"])}</span>
+        <span>{t(issues["connect-cli"])}</span>
         {!connectElsewhere && (
           <Button size="sm" variant="outline" disabled={connectBusy} onClick={connect}>
-            {t("Limit okuma girişi yap", "Sign in to read usage")}
+            {t("common.signInToReadUsage")}
           </Button>
         )}
       </div>
@@ -276,42 +251,34 @@ export function UsageCard({
   return (
     <div className="grid gap-2">
       <div className="grid grid-cols-2 gap-3">
-        {meter(usage?.fiveHour, t("5 saatlik", "5-hour"), "fiveHour")}
-        {meter(usage?.sevenDay, t("Haftalık", "Weekly"), "sevenDay")}
+        {meter(usage?.fiveHour, t("usageCard.n5Hour"), "fiveHour")}
+        {meter(usage?.sevenDay, t("usageCard.weekly"), "sevenDay")}
         {/* A model's own limit (Fable's week) stays in an old reading too, faded like the others. */}
         {usageWindowRows(usage)
           .filter((row) => row.model)
-          .map((row) => meter(row, t(row.label.tr, row.label.en), "model"))}
+          .map((row) => meter(row, usageRowLabel(row, t), "model"))}
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="min-w-0">
-          {usage?.stale && <b className="font-semibold text-warn-foreground">{t("Limit verisi eski · ", "Usage data is out of date · ")}</b>}
+          {usage?.stale && <b className="font-semibold text-warn-foreground">{t("usageCard.usageDataIsOutOfDate")}</b>}
           {loading
-            ? t("Limitler okunuyor…", "Relay reads the limits…")
+            ? t("usageCard.relayReadsTheLimits")
             : shownIssue
               ? shownIssue === "keychain-locked"
                 ? keychain.needed
-                : t(...issues[shownIssue])
+                : t(issues[shownIssue])
               : usage?.checkedAt
-                ? `${t("Güncellendi", "Updated")} ${clock(usage.checkedAt)}${
-                    usage.source === "desktop"
-                      ? t(" · Claude uygulamasından", " · via the Claude app")
-                      : ""
-                  }${
-                    usage.cliSignInEnded
-                      ? t(" · Claude Code girişinin süresi doldu", " · the Claude Code sign-in ended")
-                      : endsInDays !== undefined
-                        ? t(
-                            ` · Claude Code girişi ${endsInDays} gün içinde bitiyor`,
-                            ` · the Claude Code sign-in ends in ${endsInDays} ${endsInDays === 1 ? "day" : "days"}`,
-                          )
-                        : ""
-                  }`
-                : t("Henüz sorgulanmadı", "Not checked yet")}
+                ? t("usageCard.updatedAt", {
+                    time: clock(usage.checkedAt),
+                    source: usage.source ?? "",
+                    signIn: usage.cliSignInEnded ? "ended" : endsInDays !== undefined ? "ending" : "",
+                    days: endsInDays ?? 0,
+                  })
+                : t("usageCard.notCheckedYet")}
           {retry &&
             !reconnect &&
             !renewal &&
-            ` ${t("Tekrar", "Next try")} ${clock(usage!.retryAt!)}`}
+            ` ${t("usageCard.nextTry", { time: clock(usage!.retryAt!) })}`}
         </span>
         {appSignIn && usage?.issue === "expired" && (
           <Button
@@ -321,11 +288,11 @@ export function UsageCard({
             disabled={loading}
             onClick={() => refresh(true)}
           >
-            {t("Claude uygulamasından oku", "Read via the Claude app")}
+            {t("usageCard.readViaTheClaudeApp")}
           </Button>
         )}
         {reconnect && connectElsewhere ? (
-          <span className="shrink-0">{t("Bağlantılar’dan yenile", "Renew it under Connections")}</span>
+          <span className="shrink-0">{t("usageCard.renewItUnderConnections")}</span>
         ) : reconnect ? (
           <Button
             size="sm"
@@ -335,8 +302,8 @@ export function UsageCard({
             onClick={connect}
           >
             {usage?.source === "desktop" && !usage.cliSignInEnded
-              ? t("Limit okuma girişi yap", "Sign in to read usage")
-              : t("Limit okuma girişini yenile", "Renew usage sign-in")}
+              ? t("common.signInToReadUsage")
+              : t("common.renewUsageSignIn")}
           </Button>
         ) : renewal ? (
           <Button
@@ -347,7 +314,7 @@ export function UsageCard({
             onClick={() => refresh(true)}
           >
             {renewal === "renewal-required"
-              ? t("Yenilemeye izin ver", "Allow renewal")
+              ? t("common.allowRenewal")
               : keychain.allow}
           </Button>
         ) : (
@@ -355,7 +322,7 @@ export function UsageCard({
             size="icon-xs"
             variant="ghost"
             className="shrink-0"
-            aria-label={t("Limitleri yenile", "Refresh limits")}
+            aria-label={t("common.refreshLimits")}
             disabled={loading || !!retry}
             onClick={() => refresh()}
           >

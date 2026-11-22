@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts } from "../src/pages/Accounts";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
-import { AccountDetailBody } from "../src/pages/accounts/AccountDetail";
+import { AccountDetailBody } from "../src/pages/accounts/account-detail/Body";
 import { AddAccountFlow } from "../src/pages/accounts/AddAccountDialog";
 import { suggestAccountName } from "../src/pages/accounts/AddAccountProviders";
 import {
@@ -18,14 +18,15 @@ import { ProviderBadge } from "../src/components/ProviderBadge";
 import { accountHealth, usageSignInStatus } from "../src/lib/account-health";
 import { overviewAccounts } from "../src/data/selectors";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { I18nContext, type T } from "../src/data/i18n";
+import { I18nContext, type Language } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DetectedProviderSession, type Snapshot } from "../shared/types";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const NOW = Date.parse("2026-11-09T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
-const t: T = (tr: string) => tr;
-const en: T = (_tr: string, e: string = _tr) => e;
+const t = testT("tr");
+const en = testT("en");
 const desktop = { accountUuid: "00000000-0000-4000-8000-000000000001", orgId: "00000000-0000-4000-8000-000000000002", savedAt: iso(NOW), email: "a@example.com" };
 const base = { kind: "personal" as const, group: "personal", color: "olive", createdAt: iso(NOW) };
 const claude: Account = {
@@ -66,14 +67,14 @@ function relayFor(extra: Partial<Relay> = {}, list: Account[] = accounts, api: o
     ...extra,
   } as unknown as Relay;
 }
-const wrap = (relay: Relay, child: ReturnType<typeof createElement>, translate: T = t) =>
+const wrap = (relay: Relay, child: ReturnType<typeof createElement>, language: Language = "tr") =>
   createElement(
     I18nContext.Provider,
-    { value: { language: "tr", setLanguage() {}, t: translate } },
+    { value: i18nValue(language) },
     createElement(RelayContext.Provider, { value: relay }, child),
   );
-const render = (relay: Relay, child: ReturnType<typeof createElement>, translate: T = t) =>
-  renderToStaticMarkup(wrap(relay, child, translate));
+const render = (relay: Relay, child: ReturnType<typeof createElement>, language: Language = "tr") =>
+  renderToStaticMarkup(wrap(relay, child, language));
 
 test("an account without a provider is a Claude account; every provider has its names and tint", () => {
   assert.equal(accountProvider(legacy), "claude");
@@ -119,7 +120,7 @@ test("the provider badge names the provider in its own tint", () => {
 });
 
 test("a Codex or Antigravity account is healthy while signed in, never missing a Claude app sign-in", () => {
-  const ctx = { active: false, desktopRunning: true, waiting: false };
+  const ctx = { active: false, desktopRunning: true, waiting: false, language: "tr" as const };
   for (const a of [codex, antigravity]) {
     const health = accountHealth(a, usage[a.id], ctx, t);
     assert.equal(health.tone, "ok", a.id);
@@ -142,12 +143,12 @@ test("a Codex or Antigravity account is healthy while signed in, never missing a
   const stale = { ...usage.cx, stale: true };
   assert.equal(accountHealth(codex, stale, ctx, t).label, "Limit verisi eski");
   assert.equal(accountHealth(codex, undefined, { ...ctx, waiting: true }, t).tone, "warn");
-  assert.equal(accountHealth(codex, usage.cx, ctx, en).label, "Ready");
+  assert.equal(accountHealth(codex, usage.cx, { ...ctx, language: "en" }, en).label, "Ready");
 });
 
 test("only Claude accounts are switched to in the Claude app; the others have no Claude app actions", () => {
   const relay = relayFor({ active: undefined });
-  const keys = (a: Account) => rowActions(a, relay, t).map((x) => x.key);
+  const keys = (a: Account) => rowActions(a, relay, t, "tr").map((x) => x.key);
   assert.ok(keys(claude).includes("desktop-reconnect"));
   assert.ok(keys(legacy).includes("desktop-link"));
   for (const a of [codex, antigravity]) {
@@ -195,7 +196,7 @@ test("an account the gateway is serving says so in its status", () => {
     } as never,
     data: { settings: DEFAULT_SETTINGS, usage: { cx: fresh("cx"), ag: fresh("ag") }, accounts, authFlows: [], diagnostics: { platform: "linux" } } as unknown as Snapshot,
   });
-  const [served, pooled] = listRows(render(relay, createElement(AccountsTable, { accounts: [codex, antigravity], open() {}, link() {} }), en));
+  const [served, pooled] = listRows(render(relay, createElement(AccountsTable, { accounts: [codex, antigravity], open() {}, link() {} }), "en"));
   assert.deepEqual(statusOf(served), ["ok", "In use", "In use"]);
   assert.deepEqual(statusOf(pooled), ["ok", "Ready", "Ready"]);
 });
@@ -221,7 +222,7 @@ test("the Accounts page offers a provider filter with counts once more than one 
   assert.doesNotMatch(claudeOnly, /data-slot="provider-filter"/);
   // Every account shows with its provider while All is chosen.
   for (const name of ["Kişisel · Max", "Eski hesap", "OpenAI · Codex", "Google · Antigravity"]) assert.match(html, new RegExp(name));
-  const english = render(relayFor(), createElement(Accounts), en);
+  const english = render(relayFor(), createElement(Accounts), "en");
   assert.match(english, />All<span[^>]*>4<\/span>/);
 });
 

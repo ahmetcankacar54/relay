@@ -24,6 +24,7 @@ test("the built app's policy names no dev server; development keeps its hot-relo
     assert.match(policy, /(^|; )object-src 'none'(;|$)/);
     assert.match(policy, /(^|; )base-uri 'none'(;|$)/);
     assert.match(policy, /(^|; )frame-src 'none'(;|$)/);
+    assert.match(policy, /(^|; )form-action 'none'(;|$)/);
   }
 });
 

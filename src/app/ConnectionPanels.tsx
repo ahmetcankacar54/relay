@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { useI18n } from "@/data/i18n";
+import { Trans, useI18n, type Locale } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { duplicateCliAccount } from "../../shared/account-state";
@@ -14,6 +14,7 @@ import { WorkspaceSelect } from "../features/DesktopSetup";
 import { codeTabStep } from "@/lib/onboarding";
 import { localizeError } from "../messages";
 import type { AutoCaptureState } from "../../shared/types";
+import type { T } from "../../shared/i18n/translate";
 
 const cardClass = "gap-3 px-4 py-4";
 const panelClass = `mx-5 mb-3 ${cardClass}`;
@@ -28,44 +29,26 @@ const actionsClass = "flex flex-wrap items-center gap-2";
 export function autoCaptureLine(
   state: AutoCaptureState | undefined,
   accountId: string,
-  t: (tr: string, en: string) => string,
-  language: "tr" | "en",
+  t: T,
+  language: Locale,
 ): string | undefined {
   if (state?.accountId !== accountId) return undefined;
   switch (state.status) {
     case "waiting":
       return state.alreadySaved
-        ? t(
-            `Claude uygulamasında ${state.alreadySaved} açık; o zaten kayıtlı. Yeni hesapla giriş yap.`,
-            `The Claude app is signed in as ${state.alreadySaved}, which is already saved. Sign in with the new account.`,
-          )
-        : t(
-            "Code’u açınca Relay girişi kaydeder.",
-            "Relay saves the sign-in when you open Code.",
-          );
+        ? t("connectionPanels.theClaudeAppIsSignedIn", { stateAlreadySaved: state.alreadySaved })
+        : t("connectionPanels.relaySavesTheSignInWhen");
     case "choose-org":
-      return t(
-        "Bu hesabın birden çok Code çalışma alanı var; kaydedilecek olanı seç.",
-        "This account has more than one Code workspace. Select the one to save.",
-      );
+      return t("connectionPanels.thisAccountHasMoreThanOne");
     case "saving":
-      return t(
-        "Giriş kaydediliyor; Claude uygulaması yeniden başlıyor…",
-        "Relay saves the sign-in. The Claude app restarts…",
-      );
+      return t("connectionPanels.relaySavesTheSignInThe");
     case "saved":
-      return t("Claude uygulaması girişi kaydedildi.", "Claude app sign-in saved.");
+      return t("connectionPanels.claudeAppSignInSaved");
     case "failed":
       return state.error === "timeout"
-        ? t(
-            "Bekleme süresi doldu. Giriş yaptıysan “Girişi kaydet”e bas.",
-            "The wait timed out. If you signed in, select “Save sign-in”.",
-          )
+        ? t("connectionPanels.theWaitTimedOutIfYou")
         : state.error === "other-pending"
-          ? t(
-              "Başka bir hesabın girişi sürüyor; önce onu tamamla veya iptal et.",
-              "Another account’s sign-in is in progress. Finish or cancel it first.",
-            )
+          ? t("connectionPanels.anotherAccountSSignInIs")
           : localizeError(state.error ?? "", language);
   }
 }
@@ -134,7 +117,7 @@ export function DesktopPendingActions() {
           onClick={() => void action("open", () => api.openCodeTab())}
         >
           <ArrowUpRight />
-          {t("Code’u aç", "Open Code")}
+          {t("common.openCode")}
         </Button>
         <Button
           variant="ghost"
@@ -142,10 +125,7 @@ export function DesktopPendingActions() {
           disabled={desktopBusy || auto?.status === "saving"}
           onClick={() => relay.requestDesktop(pendingDesktop, "cancel")}
         >
-          {t(
-            "İptal et ve önceki hesaba dön",
-            "Cancel and return to previous account",
-          )}
+          {t("connectionPanels.cancelAndReturnToPreviousAccount")}
         </Button>
         {manual && identityReady && targetOrg && (
           <Button
@@ -153,7 +133,7 @@ export function DesktopPendingActions() {
             disabled={desktopBusy}
             onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
           >
-            {t("Girişi kaydet", "Save sign-in")}
+            {t("common.saveSignIn")}
           </Button>
         )}
       </div>
@@ -176,7 +156,7 @@ export function DesktopPendingPanel() {
         <div className="min-w-0">
           <h3 className="font-semibold">
             {pendingDesktop.name} ·{" "}
-            {t("Claude uygulaması girişi", "Claude app sign-in")}
+            {t("connectionPanels.claudeAppSignIn")}
           </h3>
         </div>
       </div>
@@ -187,19 +167,19 @@ export function DesktopPendingPanel() {
         }
         label={
           desktop?.busy
-            ? t("Giriş kaydediliyor", "Save in progress")
+            ? t("connectionPanels.saveInProgress")
             : desktop?.error
-              ? t("Giriş kaydedilemedi", "Sign-in not saved")
+              ? t("connectionPanels.signInNotSaved")
               : desktopIdentityReady
                 ? targetOrg
-                  ? t("Claude uygulaması girişini kaydet", "Save Claude app sign-in")
-                  : t("Code’u aç", "Open Code")
-                : t("Claude uygulamasına giriş yap", "Sign in to the Claude app")
+                  ? t("common.saveClaudeAppSignIn")
+                  : t("common.openCode")
+                : t("common.signInToTheClaudeApp")
         }
         steps={[
-          { title: t("Claude uygulaması açık", "Claude app open") },
-          { title: t("Giriş yap", "Sign in") },
-          { title: t("Code’u aç", "Open Code") },
+          { title: t("connectionPanels.claudeAppOpen") },
+          { title: t("connectionPanels.signIn") },
+          { title: t("common.openCode") },
         ]}
       />
       <DesktopPendingActions />
@@ -227,32 +207,22 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
     flow.status === "failed" ? (
       localizeError(flow.error ?? "", language)
     ) : waiting && flow.inWindow ? (
-      t(
-        "Açılan Relay penceresinde Claude’a bu hesapla gir ve izin ver. Google ile giriş açılmazsa e-posta ile gir ya da “Tarayıcıda aç”a bas.",
-        "In the Relay window, sign in to Claude with this account. Then allow access. If Google sign-in does not open, use email or select “Open in browser”.",
-      )
+      t("connectionPanels.inTheRelayWindowSignIn")
     ) : waiting ? (
       <>
-        {t(
-          "Tarayıcında açılan sayfada izin ver.",
-          "Allow access on the page that opened in your browser.",
-        )}{" "}
+        {t("connectionPanels.allowAccessOnThePageThat")}{" "}
         {expected ? (
           <>
-            {t("Sayfa şu hesapla açık olmalı:", "The page must be signed in as")}{" "}
-            <Private>{expected}</Private>
-            {". "}
+            <Trans
+              id="connectionPanels.thePageMustBeSignedIn"
+              params={{ email: expected }}
+              components={{ private: (c) => <Private>{c}</Private> }}
+            />{" "}
           </>
         ) : null}
         {flow.windowAvailable
-          ? t(
-              "Tarayıcı başka bir Claude hesabıyla açıksa “Relay penceresinde aç”ı kullan.",
-              "If the browser is signed in to another Claude account, select “Open in Relay window”.",
-            )
-          : t(
-              "Tarayıcı başka bir Claude hesabıyla açıksa önce claude.ai’da hesabı değiştir.",
-              "If the browser is signed in to another Claude account, switch accounts on claude.ai first.",
-            )}
+          ? t("connectionPanels.ifTheBrowserIsSignedIn")
+          : t("connectionPanels.ifTheBrowserIsSignedIn2")}
       </>
     ) : undefined;
   return (
@@ -272,7 +242,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
         )}
         <div className="min-w-0">
           <h3 className="font-semibold">
-            {flowAccount?.name} · {t("Limit okuma girişi", "Usage sign-in")}
+            {flowAccount?.name} · {t("connectionPanels.usageSignIn")}
           </h3>
           {note && <p className="text-sm text-muted-foreground">{note}</p>}
         </div>
@@ -289,10 +259,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
         flowAccount &&
         duplicateCliAccount(flowAccount, accounts) && (
           <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-sm text-amber-700 dark:text-amber-400">
-            {t(
-              "Bu hesap başka bir profile de bağlı. İki profil aynı limitleri paylaşır.",
-              "This account is also connected to another profile. Both profiles share the same limits.",
-            )}
+            {t("connectionPanels.thisAccountIsAlsoConnectedTo")}
           </p>
         )}
       <ConnectionProgress
@@ -312,27 +279,27 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
         }
         label={
           flow.status === "connected"
-            ? t("Hesap doğrulandı", "Account verified")
+            ? t("connectionPanels.accountVerified")
             : flow.status === "failed"
-              ? t("Giriş tamamlanmadı", "Sign-in not completed")
+              ? t("connectionPanels.signInNotCompleted")
               : flow.status === "cancelled"
-                ? t("Giriş iptal edildi", "Sign-in cancelled")
+                ? t("connectionPanels.signInCancelled")
                 : flow.status === "verifying"
-                  ? t("Hesap doğrulanıyor", "Relay verifies the account")
+                  ? t("connectionPanels.relayVerifiesTheAccount")
                   : flow.status === "waiting"
                     ? flow.inWindow
-                      ? t("Pencerede onayla", "Approve in the window")
-                      : t("Tarayıcıda onayla", "Approve in the browser")
-                    : t("Giriş başlıyor", "Sign-in starts")
+                      ? t("connectionPanels.approveInTheWindow")
+                      : t("connectionPanels.approveInTheBrowser")
+                    : t("connectionPanels.signInStarts")
         }
         steps={[
-          { title: t("Girişi başlat", "Start sign-in") },
+          { title: t("connectionPanels.startSignIn") },
           {
             title: flow.inWindow
-              ? t("Pencerede onayla", "Approve in the window")
-              : t("Tarayıcıda onayla", "Approve in the browser"),
+              ? t("connectionPanels.approveInTheWindow")
+              : t("connectionPanels.approveInTheBrowser"),
           },
-          { title: t("Hesabı doğrula", "Verify the account") },
+          { title: t("connectionPanels.verifyTheAccount") },
         ]}
       />
       {flow.codeRequested && (
@@ -346,10 +313,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
           }}
         >
           <label className="grid min-w-56 flex-1 gap-1.5 text-sm font-medium">
-            {t(
-              "Tarayıcı bir kod gösterdiyse buraya yapıştır",
-              "If the browser shows a code, paste it here",
-            )}
+            {t("connectionPanels.ifTheBrowserShowsACode")}
             <Input
               type="password"
               autoComplete="off"
@@ -359,7 +323,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
             />
           </label>
           <Button variant="outline" disabled={!!busy || !code.trim()}>
-            {t("Kodu gönder", "Submit code")}
+            {t("connectionPanels.submitCode")}
           </Button>
         </form>
       )}
@@ -378,8 +342,8 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
             >
               <ArrowUpRight />
               {flow.inWindow
-                ? t("Tarayıcıda aç", "Open in browser")
-                : t("Tarayıcıyı yeniden aç", "Reopen browser")}
+                ? t("connectionPanels.openInBrowser")
+                : t("connectionPanels.reopenBrowser")}
             </Button>
             {(flow.inWindow || flow.windowAvailable) && (
               <Button
@@ -393,8 +357,8 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                 }
               >
                 {flow.inWindow
-                  ? t("Pencereyi göster", "Show the window")
-                  : t("Relay penceresinde aç", "Open in Relay window")}
+                  ? t("connectionPanels.showTheWindow")
+                  : t("connectionPanels.openInRelayWindow")}
               </Button>
             )}
             <Button
@@ -407,7 +371,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                 )
               }
             >
-              {t("İptal et", "Cancel")}
+              {t("connectionPanels.cancel")}
             </Button>
           </>
         ) : (
@@ -423,8 +387,8 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                 }}
               >
                 {flowAccount?.auth?.email
-                  ? t("Limit okuma girişini yenile", "Renew usage sign-in")
-                  : t("Limit okuma girişi yap", "Sign in to read usage")}
+                  ? t("common.renewUsageSignIn")
+                  : t("common.signInToReadUsage")}
               </Button>
             )}
             <Button
@@ -434,7 +398,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                 relay.dismissFlow();
               }}
             >
-              {t("Tamam", "Done")}
+              {t("connectionPanels.done")}
             </Button>
           </>
         )}

@@ -11,23 +11,14 @@ export const EXTENSION_SYNC_KEY = "extension-sync";
 /** Where the extension was left: on another account, signed out, or somewhere Relay cannot name. */
 export function extensionOfferLine(offer: ExtensionOffer, t: T): string {
   if (offer.on)
-    return t(
-      `Eklenti ${offer.on} hesabında kaldı`,
-      `The extension is still on ${offer.on}`,
-    );
+    return t("panelExtension.theExtensionIsStillOn", { offerOn: offer.on });
   if (offer.signedOut)
-    return t("Eklentide giriş yok", "The extension is signed out");
+    return t("panelExtension.theExtensionIsSignedOut");
   if (offer.reconnect)
-    return t(
-      `Eklenti ${offer.to} hesabına giriş yapamıyor`,
-      `The extension cannot sign in to ${offer.to}`,
-    );
+    return t("panelExtension.theExtensionCannotSignInTo", { offerTo: offer.to });
   if (offer.expired)
-    return t("Eklenti girişinin süresi doldu", "The extension’s sign-in expired");
-  return t(
-    `Eklenti ${offer.to} hesabına geçmedi`,
-    `The extension did not switch to ${offer.to}`,
-  );
+    return t("panelExtension.theExtensionSSignInExpired");
+  return t("panelExtension.theExtensionDidNotSwitchTo", { offerTo: offer.to });
 }
 
 /** What bringing it along does, before and while the user confirms. */
@@ -37,29 +28,14 @@ export function extensionOfferHint(
   t: T,
 ): string {
   if (offer.reconnect)
-    return t(
-      `claude.ai’de ${offer.to} ile giriş yap, sonra eklentide “Log in”e bas.`,
-      `Sign in to claude.ai with ${offer.to}, then select “Log in” in the extension.`,
-    );
+    return t("panelExtension.signInToClaudeAiWith", { offerTo: offer.to });
   if (offer.expired)
     return confirming
-      ? t(
-          `${offer.browser} kapanıp sekmeleriyle yeniden açılacak; eklenti ${offer.to} ile yeniden giriş yapacak.`,
-          `${offer.browser} quits and reopens with its tabs; the extension signs in to ${offer.to} again.`,
-        )
-      : t(
-          "Claude’un tarayıcı araçları çalışmıyor. Düzelt işe yaramazsa eklentinin yan panelinden giriş yap.",
-          "Claude’s browser tools do not work. If Fix does not help, sign in from the extension’s side panel.",
-        );
+      ? t("panelExtension.quitsAndReopensWithItsTabs", { offerBrowser: offer.browser, offerTo: offer.to })
+      : t("panelExtension.claudeSBrowserToolsDoNot");
   return confirming
-    ? t(
-        `${offer.browser} kapanıp sekmeleriyle yeniden açılacak, claude.ai oturumu da ${offer.to} olacak.`,
-        `${offer.browser} quits and reopens with its tabs; its claude.ai login changes to ${offer.to}.`,
-      )
-    : t(
-        `${offer.to} hesabının eklenti girişi kayıtlı.`,
-        `${offer.to}’s extension sign-in is saved.`,
-      );
+    ? t("panelExtension.quitsAndReopensWithItsTabs2", { offerBrowser: offer.browser, offerTo: offer.to })
+    : t("panelExtension.sExtensionSignInIsSaved", { offerTo: offer.to });
 }
 
 /** Runs the extension step for Desktop's account; says what happened unless it simply switched. */
@@ -90,7 +66,7 @@ export function PanelExtension() {
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
-        {t("Tarayıcı eklentisi", "Browser extension")}
+        {t("panelExtension.browserExtension")}
       </div>
       <div
         // While confirming, the longer sentence takes the width and the buttons go under it.
@@ -100,7 +76,7 @@ export function PanelExtension() {
           <div className="min-w-0 font-semibold">
             {offer
               ? extensionOfferLine(offer, t)
-              : t("Eklenti geçirilemedi", "The extension did not switch")}
+              : t("panelExtension.theExtensionDidNotSwitch")}
           </div>
           <div
             className="min-w-0 text-xs text-muted-foreground"
@@ -117,9 +93,9 @@ export function PanelExtension() {
             <Button
               size="xs"
               disabled={disabled}
-              onClick={() => void relay.api.openExtensionSettings()}
+              onClick={() => void relay.report(() => relay.api.openExtensionSettings())}
             >
-              {t("Yeniden bağla", "Reconnect")}
+              {t("panelExtension.reconnect")}
             </Button>
           )}
           {offer && !offer.reconnect && !confirming && (
@@ -131,7 +107,7 @@ export function PanelExtension() {
                 setConfirming(true);
               }}
             >
-              {offer.expired ? t("Düzelt", "Fix") : t("Geçir", "Switch")}
+              {offer.expired ? t("panelExtension.fix") : t("panelExtension.switch")}
             </Button>
           )}
           {offer && confirming && (
@@ -145,7 +121,7 @@ export function PanelExtension() {
                   )
                 }
               >
-                {offer.expired ? t("Evet, düzelt", "Yes, fix") : t("Evet, geçir", "Yes, switch")}
+                {offer.expired ? t("panelExtension.yesFix") : t("panelExtension.yesSwitch")}
               </Button>
               <Button
                 size="xs"
@@ -153,7 +129,7 @@ export function PanelExtension() {
                 disabled={running}
                 onClick={() => setConfirming(false)}
               >
-                {t("Vazgeç", "Cancel")}
+                {t("common.cancel")}
               </Button>
             </>
           )}
@@ -163,7 +139,7 @@ export function PanelExtension() {
               variant="ghost"
               onClick={() => setResult(undefined)}
             >
-              {t("Kapat", "Dismiss")}
+              {t("common.dismiss")}
             </Button>
           )}
         </span>

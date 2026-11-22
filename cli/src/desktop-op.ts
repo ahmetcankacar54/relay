@@ -11,11 +11,8 @@ import { shielded } from "./shield";
 export function quitLines(ctx: CliContext): string[] {
   const { t } = ctx;
   return [
-    t("Claude uygulamasında çalışan Code oturumları duracak.", "The Claude app’s running Code sessions will stop."),
-    t(
-      "CLI gönderilmemiş taslakları yeniden yazmaz; Claude uygulaması yeniden açılınca silinebilirler.",
-      "The CLI doesn’t re-type unsent drafts; the Claude app may clear them when it reopens.",
-    ),
+    t("desktopOp.theClaudeAppSRunningCode"),
+    t("desktopOp.theCliDoesnTReType"),
   ];
 }
 
@@ -28,23 +25,17 @@ export async function assertCanQuitClaude(ctx: CliContext, options: { allowPendi
   const state = await ctx.desktop.snapshot();
   if (state.pendingProfileId && !options.allowPending)
     throw new CliError(
-      t(
-        "Yarım kalan bir giriş var: relay add --resume ile bitir ya da relay add --cancel ile iptal et.",
-        "A sign-in is pending: finish it with relay add --resume or cancel it with relay add --cancel.",
-      ),
+      t("desktopOp.aSignInIsPendingFinish"),
       EXIT.busy,
     );
   if (state.recoveryRequired)
     throw new CliError(
-      t("Yarıda kalan bir geçiş var: önce relay recover çalıştır.", "A switch was interrupted: run relay recover first."),
+      t("desktopOp.aSwitchWasInterruptedRunRelay"),
       EXIT.busy,
     );
   if (anyExclusiveProfileLock(ctx.paths.locks))
     throw new CliError(
-      t(
-        "Bir hesabın bağlantısı şu an yenileniyor ya da giriş yapılıyor. Bitince yeniden dene.",
-        "An account’s connection is being renewed or signed in right now. Try again when it ends.",
-      ),
+      t("desktopOp.anAccountSConnectionIsBeing"),
       EXIT.busy,
     );
   guiSessionGuard(ctx.deps, t);
@@ -65,15 +56,12 @@ export async function runDesktopOperation<T>(ctx: CliContext, fn: () => Promise<
     const full = error instanceof Error ? error.message : String(error);
     if (AUTOMATION.test(full))
       throw new CliError(
-        t(
-          "macOS bu terminalin Claude’u kapatmasına izin vermedi. Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon’da terminal uygulamanın altındaki Claude anahtarını aç, sonra yeniden dene. Hiçbir dosya değişmedi.",
-          "macOS did not let this terminal quit Claude. In System Settings → Privacy & Security → Automation, turn on Claude for your terminal app, then try again. No files changed.",
-        ),
+        t("desktopOp.macosDidNotLetThisTerminal"),
         EXIT.environment,
       );
     if (await readObject(ctx.paths.vault, "journal.json").catch(() => null))
       throw new CliError(
-        `${localizeError(redact(full), ctx.lang)} ${t("Claude’u kapatıp relay recover çalıştır.", "Quit Claude and run relay recover.")}`,
+        `${localizeError(redact(full), ctx.lang)} ${t("desktopOp.quitClaudeAndRunRelayRecover")}`,
         EXIT.failed,
       );
     throw error;

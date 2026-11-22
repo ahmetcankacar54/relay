@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { I18nContext } from "@/data/i18n"
 import { XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
@@ -55,6 +56,8 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Outside an I18nProvider (a test, a stray portal) the label stays English instead of throwing.
+  const close = React.useContext(I18nContext)?.t("common.close") ?? "Close"
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -73,7 +76,7 @@ function DialogContent({
             className="absolute top-3.5 right-3.5 rounded-sm p-0.5 opacity-60 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none hover:bg-foreground/5 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{close}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -99,6 +102,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
+  const close = React.useContext(I18nContext)?.t("common.close") ?? "Close"
   return (
     <div
       data-slot="dialog-footer"
@@ -111,7 +115,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline">{close}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

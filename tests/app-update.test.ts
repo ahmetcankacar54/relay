@@ -27,6 +27,7 @@ import {
 import { ElectronUpdateDriver, type ElectronUpdater } from "../electron/core/win-linux-update";
 import type { UpdateState } from "../shared/types";
 import { localizeError } from "../shared/error-text";
+import "./i18n";
 
 const temp = (t: any) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-update-"));
@@ -359,7 +360,7 @@ function runScript(t: any, ditto = "/usr/bin/ditto", rsync = "/usr/bin/rsync") {
 }
 
 test("the install script updates the app in place once Relay has quit, and reopens it", (t) => {
-  if (process.platform === "win32") return t.skip("macOS script");
+  if (process.platform !== "darwin") return t.skip("macOS script");
   const r = runScript(t);
   assert.equal(r.status, 0, r.log);
   assert.equal(fs.readFileSync(path.join(r.target, "version"), "utf8"), "new");
@@ -371,7 +372,7 @@ test("the install script updates the app in place once Relay has quit, and reope
 });
 
 test("the install script keeps the old app when it cannot copy it first", (t) => {
-  if (process.platform === "win32") return t.skip("macOS script");
+  if (process.platform !== "darwin") return t.skip("macOS script");
   const r = runScript(t, "/usr/bin/false");
   assert.equal(r.status, 1);
   assert.equal(fs.readFileSync(path.join(r.target, "version"), "utf8"), "old");
@@ -379,7 +380,7 @@ test("the install script keeps the old app when it cannot copy it first", (t) =>
 });
 
 test("the install script puts the old app back when the copy fails", (t) => {
-  if (process.platform === "win32") return t.skip("macOS script");
+  if (process.platform !== "darwin") return t.skip("macOS script");
   const r = runScript(t, "/usr/bin/ditto", "/usr/bin/false");
   assert.equal(r.status, 1);
   assert.equal(fs.readFileSync(path.join(r.target, "version"), "utf8"), "old");

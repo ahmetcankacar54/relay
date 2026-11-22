@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -6,14 +6,14 @@ import { ProxyPage } from "../src/pages/Proxy";
 import { Sidebar } from "../src/app/Sidebar";
 import { TooltipProvider } from "../src/components/ui/tooltip";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { I18nContext, type T } from "../src/data/i18n";
+import { I18nContext, type Language } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { antigravitySnippet, claudeCodeSnippet, codexSnippet, gatewayUrl, proxyCurlSnippet, quotaTone, resetLabel } from "../src/lib/proxy-ui";
 import { DEFAULT_SETTINGS, type Account, type ProxyStatus, type Snapshot } from "../shared/types";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const KEY = "relay-sec-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
-const t: T = (tr: string) => tr;
-const en: T = (_tr: string, e: string = _tr) => e;
+const t = testT("tr");
 const account = (id: string, name: string, provider?: Account["provider"]): Account => ({
   id, name, kind: "personal", group: "personal", color: "olive", createdAt: "2026-11-01T00:00:00.000Z",
   ...(provider ? { provider } : {}),
@@ -52,13 +52,13 @@ function relayFor(proxy: ProxyStatus | undefined, api: object = {}, known: Accou
     setData() {},
   } as unknown as Relay;
 }
-const provide = (relay: Relay, node: Parameters<typeof createElement>[0], translate: T = t) =>
+const provide = (relay: Relay, node: Parameters<typeof createElement>[0]) =>
   createElement(
     TooltipProvider,
     null,
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: translate } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, createElement(node as never)),
     ),
   );
@@ -79,15 +79,14 @@ test("the page's helpers: endpoint, Codex and cURL snippets, quota tone, reset w
   assert.deepEqual([quotaTone(undefined), quotaTone(10), quotaTone(80), quotaTone(95)], ["none", "ok", "warn", "crit"]);
   assert.equal(resetLabel(5, t), "5 dk");
 });
-
-const tab = (relay: Relay, initialTab: "canli" | "araclar" | "kurallar", translate: T = t) =>
+const tab = (relay: Relay, initialTab: "canli" | "araclar" | "kurallar", language: Language = "tr") =>
   renderToStaticMarkup(
     createElement(
       TooltipProvider,
       null,
       createElement(
         I18nContext.Provider,
-        { value: { language: translate === en ? "en" : "tr", setLanguage() {}, t: translate } },
+        { value: i18nValue(language) },
         createElement(RelayContext.Provider, { value: relay }, createElement(ProxyPage, { initialTab })),
       ),
     ),
@@ -101,7 +100,7 @@ test("the head reads what the gateway does in one line, with the address and a h
   assert.match(html, /data-slot="chip-endpoint"[^>]*>http:\/\/127\.0\.0\.1:8317/);
   assert.doesNotMatch(html, new RegExp(KEY));
   assert.match(html, /relay-sec-••••/);
-  const off = tab(relayFor(status({ running: false, error: "port busy" })), "canli", en);
+  const off = tab(relayFor(status({ running: false, error: "port busy" })), "canli", "en");
   assert.match(off, /Gateway off/);
   assert.match(off, /role="alert"[^>]*>port busy/);
 });
@@ -214,7 +213,7 @@ test("the Rules tab holds the strategies, the session time and who may connect, 
   // A Tailscale bind is a private network: no warning. Any other network address warns.
   assert.doesNotMatch(tab(relayFor(status({ host: "100.101.12.34", tailscaleAddress: "100.101.12.34" })), "kurallar"), /Bu adres yerel değil/);
   assert.match(tab(relayFor(status({ host: "192.168.1.5" })), "kurallar"), /Bu adres yerel değil/);
-  const english = tab(relayFor(status()), "kurallar", en);
+  const english = tab(relayFor(status()), "kurallar", "en");
   for (const text of ["Expiring first \\(recommended\\)", "Balanced", "In order", "Who can connect"])
     assert.match(english, new RegExp(text));
 });
@@ -229,6 +228,7 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
     let current = status({
       running: false,
       accounts: pooled,
+      tailscaleAddress: "100.101.12.34",
       clients: [{ id: "claude-code", installed: true, bound: false, stale: false, file: "~/.claude/settings.json" }],
     });
     const api = {
@@ -258,7 +258,7 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
         null,
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t } },
+          { value: i18nValue("tr") },
           createElement(RelayContext.Provider, { value: relayFor(current, api) }, createElement(ProxyPage, { initialTab })),
         ),
       );
@@ -297,11 +297,47 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
     await act(async () => dom.dispatch(radio("Sıralı")!, "click", { detail: 1 }));
     assert.deepEqual(calls.at(-1), ["configure", { routingStrategy: "strict-priority" }]);
     // A host preset fills the address; Uygula saves it with the port.
-    await act(async () => dom.dispatch(radio("Tüm yerel ağ")!, "click", { detail: 1 }));
+    await act(async () => dom.dispatch(radio("Tailscale ağım")!, "click", { detail: 1 }));
     await act(async () => dom.dispatch(button("Uygula")!, "click", { detail: 1 }));
-    assert.deepEqual(calls.at(-1), ["configure", { port: 8317, host: "0.0.0.0" }]);
+    assert.deepEqual(calls.at(-1), ["configure", { port: 8317, host: "100.101.12.34" }]);
     await act(async () => next.unmount());
   } finally {
+    dom.uninstall();
+  }
+});
+
+test("after three failed reads in a row the page says it cannot read the gateway, and a good read brings it back", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  mock.timers.enable({ apis: ["setInterval"] });
+  try {
+    let fail = true;
+    const api = {
+      proxyStatus: async () => {
+        if (fail) throw new Error("down");
+        return status();
+      },
+    };
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const container = dom.container as unknown as Fake;
+    const tick = () => act(async () => mock.timers.tick(3_000));
+    await act(async () => root.render(provide(relayFor(status(), api), () => createElement(ProxyPage, { initialTab: "canli" }))));
+    // One or two misses keep the last state on screen.
+    await tick();
+    assert.match(textOf(container), /Ağ geçidi çalışıyor/);
+    assert.match(textOf(container), /Claude Max/);
+    await tick();
+    assert.match(textOf(container), /Ağ geçidi durumu okunamıyor/);
+    assert.doesNotMatch(textOf(container), /Ağ geçidi çalışıyor|Claude Max/);
+    fail = false;
+    await tick();
+    assert.match(textOf(container), /Ağ geçidi çalışıyor/);
+    assert.doesNotMatch(textOf(container), /okunamıyor/);
+    await act(async () => root.unmount());
+  } finally {
+    mock.timers.reset();
     dom.uninstall();
   }
 });
@@ -309,7 +345,7 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
 test("the sidebar lists Proxy & Gateway after the usage pages, with a green dot and its address while it runs", () => {
   const render = (status: Record<string, unknown>, compact = false) =>
     renderToStaticMarkup(
-      createElement(TooltipProvider, null, createElement(Sidebar, { page: "proxy", go: () => {}, t, compact, status: status as never })),
+      createElement(TooltipProvider, null, createElement(Sidebar, { page: "proxy", go: () => {}, t, language: "tr", compact, status: status as never })),
     );
   const off = render({ accounts: 2, planning: false, switching: false, proxyRunning: false });
   // The usage pages are "Limit geçmişi", tokens and pins; the gateway comes after them.

@@ -21,9 +21,10 @@ import { supportsDesktop } from "../electron/core/environment";
 import { Service } from "../electron/core/service";
 import { localizeError } from "../src/messages";
 import type { Account, DesktopState, Diagnostics } from "../shared/types";
+import { testT } from "./i18n";
 
-const tr = (tr: string) => tr;
-const en = (_: string, en: string) => en;
+const tr = testT("tr");
+const en = testT("en");
 const ORG = "6f1c2d3e-4b5a-4c6d-8e7f-001122334455";
 const desktop = (extra: Partial<DesktopState> = {}): DesktopState => ({
   available: true,

@@ -14,13 +14,14 @@ import { DEFAULT_PROXY_CONFIG } from "../shared/proxy-types";
 import { pickLine, pickReasonLabel } from "../src/lib/proxy-ui";
 import { ProxyPage } from "../src/pages/Proxy";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { I18nContext, type T } from "../src/data/i18n";
+import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type ProxyStatus, type Snapshot } from "../shared/types";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const tr: T = (a: string) => a;
-const en: T = (_a: string, b: string = _a) => b;
+const tr = testT("tr");
+const en = testT("en");
 const account = (id: string, name = id): Account => ({
   id,
   name,
@@ -202,7 +203,7 @@ const render = (proxy: ProxyStatus, initialTab: "canli" | "kurallar") =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: tr } },
+      { value: i18nValue("tr") },
       createElement(
         TooltipProvider,
         null,

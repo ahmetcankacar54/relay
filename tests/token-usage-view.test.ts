@@ -5,7 +5,8 @@ import {
   buildTokenUsageView,
   TOKEN_ROW_LABELS,
 } from "../shared/token-usage-view";
-import { FORMER_KEY, FORMER_NAME } from "../shared/usage-statistics-view";
+import { FORMER_KEY } from "../shared/usage-statistics-view";
+import { testT } from "./i18n";
 import type {
   LedgerSnapshot,
   TokenCounts,
@@ -170,7 +171,7 @@ test("ids that are not Relay accounts share one former row", () => {
   const former = view.rows.find((r) => r.kind === "former");
   assert.ok(former);
   assert.equal(former.key, FORMER_KEY);
-  assert.equal(former.name, FORMER_NAME);
+  assert.equal(former.name, undefined);
   assert.equal(former.accountId, undefined);
   assert.equal(former.estimated, true);
   assert.equal(former.totals.input, 15);
@@ -179,7 +180,7 @@ test("ids that are not Relay accounts share one former row", () => {
     ...counts(15, 0, 0, 0, 2),
     estimated: true,
   });
-  assert.equal(TOKEN_ROW_LABELS.former.tr, "Eski hesap");
+  assert.equal(testT("tr")(TOKEN_ROW_LABELS.former), "Eski hesap");
 });
 
 test("terminal and unknown rows carry their labels and are never estimated", () => {
@@ -194,24 +195,22 @@ test("terminal and unknown rows carry their labels and are never estimated", () 
   const terminal = view.rows.find((r) => r.kind === "terminal")!;
   const unknown = view.rows.find((r) => r.kind === "unknown")!;
   assert.equal(terminal.key, "terminal");
-  assert.equal(terminal.name, "Relay dışı terminal");
+  assert.equal(terminal.name, undefined);
   assert.equal(terminal.accountId, undefined);
   assert.equal(terminal.estimated, false);
   assert.equal(unknown.key, "unknown");
-  assert.equal(unknown.name, "Hesabı bilinmeyen");
+  assert.equal(unknown.name, undefined);
   assert.equal(unknown.estimated, false);
-  assert.deepEqual(TOKEN_ROW_LABELS.terminal, {
-    tr: "Relay dışı terminal",
-    en: "Terminal outside Relay",
-  });
-  assert.deepEqual(TOKEN_ROW_LABELS.unknown, {
-    tr: "Hesabı bilinmeyen",
-    en: "Unknown account",
-  });
-  assert.deepEqual(TOKEN_ROW_LABELS.former, {
-    tr: "Eski hesap",
-    en: "Former account",
-  });
+  const tr = testT("tr");
+  const en = testT("en");
+  assert.deepEqual(
+    [TOKEN_ROW_LABELS.terminal, TOKEN_ROW_LABELS.unknown, TOKEN_ROW_LABELS.former].map((id) => [tr(id), en(id)]),
+    [
+      ["Relay dışı terminal", "Terminal outside Relay"],
+      ["Hesabı bilinmeyen", "Unknown account"],
+      ["Eski hesap", "Former account"],
+    ],
+  );
 });
 
 test("rows sort by total, largest first, with unknown and terminal last", () => {

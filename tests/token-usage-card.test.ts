@@ -13,6 +13,7 @@ import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type RelayAPI, type Snapshot } from "../shared/types";
 import { TOKEN_ROW_LABELS, type TokenCounts, type TokenRow, type TokenUsageView } from "../shared/token-usage-view";
 import { dayTip, fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
+import { i18nValue, testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const ZONE = "Europe/Istanbul";
@@ -87,18 +88,13 @@ function relayFor(api: Partial<RelayAPI> = {}): Relay {
     startCli: async () => {}, refreshUsage: async () => {}, action: async () => {}, setData() {},
   } as unknown as Relay;
 }
-const i18n = (language: Language) => ({
-  language,
-  setLanguage() {},
-  t: (tr: string, en: string) => (language === "tr" ? tr : en),
-});
 const tree = (child: ReactElement, language: Language = "tr", relay: Relay = relayFor()) =>
   createElement(
     TooltipProvider,
     null,
     createElement(
       I18nContext.Provider,
-      { value: i18n(language) },
+      { value: i18nValue(language) },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );
@@ -114,7 +110,7 @@ const chartOf = (container: Fake) =>
   find(container, (n) => n.tagName === "svg" && (n as { attributes?: Map<string, string> }).attributes?.get?.("role") === "group")!;
 /** The day table on its own: the card folds it under "Gün gün tablo". */
 const dayTable = (language: Language = "tr") =>
-  render(createElement(DayTable, { view, columns: tokenColumns(view, accounts, i18n(language).t), metric: "total" }), language);
+  render(createElement(DayTable, { view, columns: tokenColumns(view, accounts, testT(language)), metric: "total" }), language);
 /** Markup as seen on screen: without the text only screen readers hear. */
 const visible = (html: string) => text(html.replace(/<span class="sr-only">[^<]*<\/span>/g, ""));
 
@@ -164,7 +160,7 @@ test("the metric toggle offers total, input, output, cache and the API value, to
 });
 
 test("the chart stacks one part per row and day with tokens, each in its account's own colour", () => {
-  const columns = tokenColumns(view, accounts, (tr) => tr);
+  const columns = tokenColumns(view, accounts, testT("tr"));
   const days = chartDays(view, columns, "total" as never);
   // 14th: a and b; 13th: a; 12th: unknown and terminal; 11th: former.
   assert.equal(days.reduce((sum, day) => sum + day.parts.length, 0), 6);
@@ -192,7 +188,7 @@ test("the chart stacks one part per row and day with tokens, each in its account
 });
 
 test("each day adds up its rows; the busiest day sets the chart's top", () => {
-  const days = chartDays(view, tokenColumns(view, accounts, (tr) => tr), "total" as never);
+  const days = chartDays(view, tokenColumns(view, accounts, testT("tr")), "total" as never);
   const total = (date: string) => days.find((d) => d.date === date)!.total;
   // The 14th is the busiest day (2.175 million): a holds 2.05 of it, b 0.125.
   assert.equal(total("2026-10-14"), 2_175_000);
@@ -214,8 +210,8 @@ test("each row under the total sums it over the range, ≈ when any of its days 
 });
 
 test("the range's model mix and the price list are behind the chart's ⓘ, and the day table is folded", () => {
-  const tr = (a: string) => a;
-  const en = (_: string, e: string) => e;
+  const tr = testT("tr");
+  const en = testT("en");
   assert.match(tokenNotes(view, "total" as never, tr, "tr").join(" "), /Aralıktaki modeller: claude-opus-4 %80 · claude-sonnet-4 %20/);
   assert.match(tokenNotes(view, "total" as never, en, "en").join(" "), /Models in this range: claude-opus-4 80% · claude-sonnet-4 20%/);
   const plain = text(shown());
@@ -276,8 +272,8 @@ test("estimated cells and chart days tell screen readers they are estimated, not
 });
 
 test("the coverage note says since when accounts match exactly, in both languages", () => {
-  const tr = (a: string) => a;
-  const en = (_: string, e: string) => e;
+  const tr = testT("tr");
+  const en = testT("en");
   assert.match(
     tokenNotes(view, "total" as never, tr, "tr").join(" "),
     /Hesap eşleşmesi 12 Eki tarihinden beri kesin\. Önceki günler limit ölçümlerinden tahmin edildi\./,
@@ -348,9 +344,10 @@ test("the card shows loading and failure states, and keeps the last view under a
 });
 
 test("rows that are not accounts take their labels from the shared label table", () => {
-  assert.equal(TOKEN_ROW_LABELS.terminal.en, "Terminal outside Relay");
+  const label = (kind: keyof typeof TOKEN_ROW_LABELS) => testT("en")(TOKEN_ROW_LABELS[kind]);
+  assert.equal(label("terminal"), "Terminal outside Relay");
   const en = text(shown("en"));
-  for (const kind of ["former", "terminal", "unknown"] as const) assert.match(en, new RegExp(TOKEN_ROW_LABELS[kind].en));
+  for (const kind of ["former", "terminal", "unknown"] as const) assert.match(en, new RegExp(label(kind)));
   assert.doesNotMatch(en, /Eski hesap|Hesabı bilinmeyen|Relay dışı terminal/);
 });
 
@@ -401,11 +398,14 @@ test("TokenUsage loads on mount, on a new range or account, and follows its Rela
     assert.match(textOf(dom.container), /Toplam · \d+ gün3,2 Mn/);
     await mount(7, "b");
     assert.deepEqual(stub.calls.map((c) => c.input), [{ range: 30 }, { range: 7, accountId: "b" }]);
-    // The stale answer of the earlier request is dropped; the view stays.
+    // The view of the earlier range and account is not shown as this one's.
+    assert.doesNotMatch(textOf(dom.container), /3,2 Mn/);
+    assert.match(textOf(dom.container), /Token kaydı yükleniyor/);
+    // The stale answer of the earlier request is dropped.
     await act(async () => stub.calls[0].reject(new Error("late")));
     assert.doesNotMatch(textOf(dom.container), /late/);
     await act(async () => stub.calls[1].reject(new Error("Error invoking remote method 'relay:token-usage': Error: boom")));
-    assert.match(textOf(dom.container), /Token kullanımı yenilenemedi\.\s*boom/);
+    assert.match(textOf(dom.container), /Token kullanımı alınamadı\.\s*boom/);
     await act(async () => root.unmount());
     assert.equal(stub.listening(), false);
   } finally {
@@ -472,10 +472,10 @@ test("choosing a metric redraws the chart and the table for it; cache is write p
 });
 
 test("a day's detail names each row with its value and share; an estimated day and an empty day say so", () => {
-  const columns = tokenColumns(view, accounts, (tr) => tr);
+  const columns = tokenColumns(view, accounts, testT("tr"));
   const days = chartDays(view, columns, "total" as never);
   const detail = (date: string, language: Language = "tr") =>
-    text(render(createElement(DayDetail, { day: days.find((d) => d.date === date)!, metric: "total" as never, metricLabel: language === "tr" ? "Toplam" : "Total" }), language));
+    text(render(createElement(DayDetail, { day: days.find((d) => d.date === date)!, metric: "total" as never, metricLabel: testT(language)("common.total") }), language));
   // The 14th (a Wednesday): the total, then each row with its share of the day.
   assert.equal(detail("2026-10-14"), "14 Ekim ÇarşambaToplam2,2 MnKişisel · Max2,1 Mn%94Vertex125 B%6");
   assert.equal(detail("2026-10-13"), "13 Ekim SalıToplam≈1 MnKişisel · Max≈1 Mn%100≈ Limit ölçümlerinden tahmin edildi");
@@ -576,7 +576,7 @@ test("the panda takes the busiest day apart: its parts and its lines one by one,
 });
 
 test("asked about an empty day, the panda only dozes, with nothing more to say", () => {
-  const columns = tokenColumns(view, accounts, (tr) => tr);
+  const columns = tokenColumns(view, accounts, testT("tr"));
   // The 8th has no tokens: its detail says so, and the panda's lines for it are the one doze.
   const empty = chartDays(view, columns, "total" as never).find((d) => d.date === "2026-10-08")!;
   assert.equal(empty.total, 0);
@@ -622,7 +622,7 @@ test("the API value metric shows dollars in the legend and table, and the price 
     loading: false,
   });
   const plain = text(html);
-  assert.match(tokenNotes(view, "cost" as never, (tr) => tr, "tr").join(" "), /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
+  assert.match(tokenNotes(view, "cost" as never, testT("tr"), "tr").join(" "), /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
   assert.match(plain, /1,5 B token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı \(mystery\)\./);
   assert.match(
     text(card({ view: { ...view, unpricedModels: ["mystery"], totals: { ...view.totals, unpriced: 1500 } }, loading: false }, "en")),
@@ -634,7 +634,7 @@ test("the API value metric shows dollars in the legend and table, and the price 
         ...view,
         days: [{ date: "2026-10-14", byRow: { a: { ...cell(counts(1)), cost: 2.5, costEstimated: true as const } } }],
       },
-      columns: tokenColumns(view, accounts, (tr) => tr),
+      columns: tokenColumns(view, accounts, testT("tr")),
       metric: "cost" as never,
     }),
   );

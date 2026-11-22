@@ -48,31 +48,18 @@ export function TerminalPreference({
       : undefined;
   const other = [current?.email, current?.orgName].filter(Boolean).join(", ");
   const currentLine = !current
-    ? t("Terminal kontrol ediliyor…", "Terminal check in progress…")
+    ? t("terminalPreference.terminalCheckInProgress")
     : current.state === "signed-in"
       ? current.mismatch
-        ? t(
-            "Terminalin girişi başka bir hesaba ait. “claude auth login” ile yeniden gir.",
-            "The terminal sign-in belongs to another account. Sign in again with “claude auth login”.",
-          )
+        ? t("terminalPreference.theTerminalSignInBelongsTo")
         : on
-          ? t(
-              `Terminal şu an ${on.name} hesabında.`,
-              `The terminal is on ${on.name} now.`,
-            )
-          : t(
-              `Terminal, Relay’de olmayan bir hesapta${other ? ` (${other})` : ""}.`,
-              `The terminal is on an account that is not in Relay${other ? ` (${other})` : ""}.`,
-            )
+          ? t("terminalPreference.theTerminalIsOnNow", { onName: on.name })
+          : other
+            ? t("terminalPreference.theTerminalIsOnAnAccount2", { owner: other })
+            : t("terminalPreference.theTerminalIsOnAnAccount")
       : current.state === "signed-out"
-        ? t(
-            "Terminaldeki Claude Code’da giriş yok.",
-            "Claude Code in the terminal is signed out.",
-          )
-        : t(
-            "Terminaldeki Claude Code girişi okunamadı.",
-            "Relay cannot read the Claude Code sign-in in the terminal.",
-          );
+        ? t("terminalPreference.claudeCodeInTheTerminalIs")
+        : t("terminalPreference.relayCannotReadTheClaudeCode");
   const linked = accounts.filter((a) =>
     status.saved.some((s) =>
       terminalIdentities(a).some((x) => sameIdentity(x, s)),
@@ -90,25 +77,13 @@ export function TerminalPreference({
   );
   const savedLine = [
     linked.length
-      ? t(
-          `Terminal girişi kayıtlı hesaplar: ${linked.map((a) => a.name).join(", ")}.`,
-          `Terminal sign-in saved: ${linked.map((a) => a.name).join(", ")}.`,
-        )
-      : t(
-          "Henüz terminal girişi kayıtlı bir hesap yok.",
-          "No account has a terminal sign-in saved yet.",
-        ),
+      ? t("terminalPreference.terminalSignInSaved", { join: linked.map((a) => a.name).join(", ") })
+      : t("terminalPreference.noAccountHasATerminalSign"),
     unsure.length
-      ? t(
-          `${unsure.map((a) => a.name).join(", ")}: giriş kullanımdayken kaydedildi; geçişte bir kez “claude auth login” isteyebilir.`,
-          `${unsure.map((a) => a.name).join(", ")}: saved while in use. A switch can ask for “claude auth login” once.`,
-        )
+      ? t("terminalPreference.savedWhileInUseASwitch", { join: unsure.map((a) => a.name).join(", ") })
       : "",
     missing.length
-      ? t(
-          `Eksik: ${missing.map((a) => a.name).join(", ")}. Her birinin hesap sayfasında Terminal satırındaki “Bağla”ya bas.`,
-          `Missing: ${missing.map((a) => a.name).join(", ")}. On each one’s account page, select “Link” in the Terminal row.`,
-        )
+      ? t("terminalPreference.missingOnEachOneSAccount", { join: missing.map((a) => a.name).join(", ") })
       : "",
   ]
     .filter(Boolean)
@@ -121,18 +96,18 @@ export function TerminalPreference({
       const name = accounts.find((a) => a.id === desktop?.activeProfileId)?.name;
       setResult(
         terminalLine(outcome, t, name) ??
-          t("Terminalde değiştirilecek bir şey yok.", "Nothing to change in the terminal."),
+          t("terminalPreference.nothingToChangeInTheTerminal"),
       );
       void check();
     });
   return (
     <div className="grid gap-1">
       <SettingRow
-        label={<span className="font-medium">{t("Terminaldeki Claude Code", "Claude Code in the terminal")}</span>}
+        label={<span className="font-medium">{t("terminalPreference.claudeCodeInTheTerminal")}</span>}
         htmlFor="terminal-mode"
         description={
           mode === "off"
-            ? t("Relay terminaldeki girişe dokunmaz.", "Relay does not change the terminal sign-in.")
+            ? t("terminalPreference.relayDoesNotChangeTheTerminal")
             : currentLine
         }
       >
@@ -141,8 +116,8 @@ export function TerminalPreference({
             id="terminal-mode"
             value={mode}
             options={[
-              { value: "follow", label: t("Hesapla değişsin", "Follow the account") },
-              { value: "off", label: t("Dokunma", "Do not change") },
+              { value: "follow", label: t("terminalPreference.followTheAccount") },
+              { value: "off", label: t("terminalPreference.doNotChange") },
             ]}
             className="w-52"
             disabled={disabled}
@@ -150,47 +125,35 @@ export function TerminalPreference({
           />
           {mode !== "off" && (
             <Button variant="outline" disabled={checking} onClick={() => void check()}>
-              {t("Kontrol et", "Check")}
+              {t("common.check")}
             </Button>
           )}
         </span>
       </SettingRow>
-      <Disclosure title={t("Ayrıntılar", "Details")} defaultOpen={openDetails}>
+      <Disclosure title={t("terminalPreference.details")} defaultOpen={openDetails}>
         {status.viaGateway && (
           <Note>
-            {t(
-              "Claude Code ağ geçidine bağlı: istekleri, ağ geçidinin her istek için seçtiği hesaptan gider (Proxy sayfası). Buradaki giriş yalnızca Relay kapalıyken kullanılır; geçişte yine hesabı izler.",
-              "Claude Code is connected to the gateway: its requests use the account the gateway picks for each one (Proxy page). The sign-in here is used only while Relay is not running; it still follows the account at a switch.",
-            )}
+            {t("terminalPreference.claudeCodeIsConnectedToThe")}
           </Note>
         )}
         <Note>
-          {t(
-            "Relay geçişte yeni hesabın terminal girişini yerine koyar; tanımadığı bir girişe dokunmaz.",
-            "At a switch, Relay puts in the terminal sign-in of the new account. Relay does not change a sign-in that it does not know.",
-          )}
+          {t("terminalPreference.atASwitchRelayPutsIn")}
         </Note>
         {mode !== "off" && (
           <>
             <Note>
-              {t(
-                "Yeni terminal oturumları yeni hesapla başlar. Açık oturumları geçişten sonra yeniden başlat.",
-                "New terminal sessions start on the new account. Restart open sessions after a switch.",
-              )}
+              {t("terminalPreference.newTerminalSessionsStartOnThe")}
             </Note>
             <SettingRow
-              label={t("Kayıtlı hesaplar", "Saved accounts")}
+              label={t("terminalPreference.savedAccounts")}
               description={savedLine}
             >
               <Button variant="outline" disabled={disabled} onClick={sync}>
-                {t("Şimdi eşitle", "Sync now")}
+                {t("terminalPreference.syncNow")}
               </Button>
             </SettingRow>
             <Note>
-              {t(
-                "Terminalde bir hesapla giriş yaptıktan sonra “Kontrol et”e bas; o hesap bağlanır.",
-                "After you sign in to the terminal, select “Check” to link that account.",
-              )}
+              {t("terminalPreference.afterYouSignInToThe")}
             </Note>
           </>
         )}

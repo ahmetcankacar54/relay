@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { LimitLine, MiniMeter, countdown } from "@/components/LimitLine";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
-import { usageWindowRows } from "@/data/selectors";
+import { usageRowLabel, usageWindowRows, type UsageWindowRow } from "@/data/selectors";
 import { meterFill } from "@/lib/meter";
 import { providerViews, type ProviderId, type ProviderView } from "@/lib/provider-view";
 import { formatRelative } from "@/lib/time";
@@ -14,6 +14,8 @@ import { ProviderLogo } from "@/components/ProviderLogo";
 import { limitHeadline } from "../../shared/quota-windows";
 import { freshUsage } from "../../shared/usage";
 import type { Account, AccountUsage } from "../../shared/types";
+import { formatPercent } from "../../shared/percent";
+import type { Locale } from "../../shared/i18n/locales";
 import { accountPlan } from "../pages/accounts/accountLabels";
 import { AntigravityAction, AntigravityPrompt, AntigravitySteps, antigravityAccountState, type AntigravityAsk } from "./AntigravityAccount";
 
@@ -58,7 +60,7 @@ export function ProviderTabs({
 }) {
   const { t } = useI18n();
   return (
-    <div role="tablist" aria-label={t("Sağlayıcılar", "Providers")} className="grid auto-cols-fr grid-flow-col gap-1 rounded-lg border bg-card p-1">
+    <div role="tablist" aria-label={t("providers.providers")} className="grid auto-cols-fr grid-flow-col gap-1 rounded-lg border bg-card p-1">
       {views.map((view) => {
         const used = view.head?.usedPercent;
         return (
@@ -109,10 +111,10 @@ export function useProviderTab(views: ProviderView[], key: string): [ProviderId 
 }
 
 /** A limit's short name: "5 saat", "Hafta", or the model's. */
-function lineLabel(row: ReturnType<typeof usageWindowRows>[number], language: "tr" | "en", t: T) {
-  if (row.key === "five_hour") return t("5 saat", "5 hours");
-  if (row.key === "seven_day") return t("Hafta", "Week");
-  return language === "tr" ? row.label.tr : row.label.en;
+function lineLabel(row: UsageWindowRow, t: T) {
+  if (row.key === "five_hour") return t("common.n5Hours");
+  if (row.key === "seven_day") return t("common.week");
+  return usageRowLabel(row, t);
 }
 
 /** An account's limits as lines, the fullest model first; at most `max`. */
@@ -135,7 +137,7 @@ export function AccountLimits({
 }) {
   const { t, language } = useI18n();
   const rows = usageWindowRows(usage).slice(0, max);
-  if (!rows.length) return <p className={cn("text-muted-foreground", size === "sm" ? "text-2xs" : "text-xs")}>{t("Limit verisi yok", "No usage data")}</p>;
+  if (!rows.length) return <p className={cn("text-muted-foreground", size === "sm" ? "text-2xs" : "text-xs")}>{t("providers.noUsageData")}</p>;
   const faded = !freshUsage(usage, now);
   const readAt = usage?.checkedAt;
   return (
@@ -143,7 +145,7 @@ export function AccountLimits({
       className={cn(
         "grid",
         layout === "grid"
-          ? cn("gap-x-6 gap-y-3 sm:grid-cols-2", rows.length % 2 === 1 && "md:grid-cols-3")
+          ? cn("gap-x-6 gap-y-3 @lg:grid-cols-2", rows.length % 2 === 1 && "@2xl:grid-cols-3")
           : size === "sm"
             ? "gap-2"
             : "gap-3",
@@ -152,7 +154,7 @@ export function AccountLimits({
       {rows.map((row) => (
         <LimitLine
           key={row.key}
-          label={lineLabel(row, language, t)}
+          label={lineLabel(row, t)}
           usedPercent={row.usedPercent}
           resetsAt={row.resetsAt}
           period={row.period}
@@ -164,21 +166,21 @@ export function AccountLimits({
       ))}
       {note && faded && readAt && (
         <p className="text-2xs text-muted-foreground">
-          {t(`Eski okuma · ${formatRelative(readAt, now, language)}`, `Old reading · ${formatRelative(readAt, now, language)}`)}
+          {t("providers.oldReading", { formatRelative: formatRelative(readAt, now, language) })}
         </p>
       )}
     </div>
   );
 }
 
-/** "%6", "Dolu · 25 dk" or "—": an account's binding limit in a row. */
-export function headlineFigure(usage: AccountUsage | undefined, now: number, t: T) {
+/** "%6" / "6%", "Dolu · 25 dk" or "—": an account's binding limit in a row. */
+export function headlineFigure(usage: AccountUsage | undefined, now: number, t: T, language: Locale) {
   const head = limitHeadline(usage, now);
   if (!head) return { text: "—", used: undefined, full: false };
   const full = head.usedPercent >= 100;
   const left = countdown(head.resetsAt, now, t);
   return {
-    text: full ? (left ? t(`Dolu · ${left}`, `Full · ${left}`) : t("Dolu", "Full")) : `%${Math.round(head.usedPercent)}`,
+    text: full ? (left ? t("providers.full", { left }) : t("common.full")) : formatPercent(head.usedPercent, language),
     used: head.usedPercent,
     full,
   };
@@ -186,25 +188,25 @@ export function headlineFigure(usage: AccountUsage | undefined, now: number, t: 
 
 const via = (view: ProviderView, t: T) =>
   view.foreign
-    ? t("Relay dışı hesap", "Not in Relay")
+    ? t("providers.notInRelay")
     : view.via === "gateway"
-      ? t("Ağ geçidi", "Gateway")
+      ? t("common.gateway")
       : view.via === "app"
         ? view.id === "claude"
-          ? t("Claude uygulamasında", "In the Claude app")
-          : t("Uygulamada açık", "Open in the app")
+          ? t("providers.inTheClaudeApp")
+          : t("providers.openInTheApp")
         : view.via === "own"
-          ? t("Kendi girişi", "Own sign-in")
+          ? t("providers.ownSignIn")
           : undefined;
 
 const noCurrent = (view: ProviderView, t: T) =>
   view.foreign
-    ? t("Antigravity, Relay'de olmayan bir hesapla açık", "Antigravity uses an account Relay does not have")
+    ? t("providers.antigravityUsesAnAccountRelayDoes")
     : view.id === "antigravity"
-      ? t("Antigravity'de açık hesap yok", "No account is open in Antigravity")
+      ? t("providers.noAccountIsOpenInAntigravity")
       : view.id === "codex"
-        ? t("Henüz kullanılan bir hesap yok", "No account in use yet")
-        : t("Claude uygulamasında kayıtlı hesap açık değil", "No saved account is open in the Claude app");
+        ? t("providers.noAccountInUseYet")
+        : t("providers.noSavedAccountIsOpenIn");
 
 /**
  * A provider's accounts (variant A): the one in use on top with each of its limits, the others one
@@ -213,13 +215,13 @@ const noCurrent = (view: ProviderView, t: T) =>
  */
 export function ProviderPane({ view, now, size = "md" }: { view: ProviderView; now: number; size?: "sm" | "md" }) {
   const relay = useRelay();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [ask, setAsk] = useState<AntigravityAsk>();
   const usage = relay.data?.usage ?? {};
   const { current } = view;
   const others = view.accounts
     .filter((a) => a.id !== current?.id)
-    .map((account) => ({ account, figure: headlineFigure(usage[account.id], now, t) }))
+    .map((account) => ({ account, figure: headlineFigure(usage[account.id], now, t, language) }))
     .sort((a, b) => (a.figure.used ?? 101) - (b.figure.used ?? 101));
   const stuck = (view.head?.usedPercent ?? 0) >= 90;
   // The suggested move: the roomiest other account, when the one in use is (nearly) spent.

@@ -9,7 +9,9 @@ import {
   planningFromWorkday,
   planningPatchSchema,
   planningSchema,
+  settingsPatchSchema,
 } from "../electron/core/store";
+import { systemTimeZone, wallTimeOrNext } from "../shared/planning";
 import { DEFAULT_PLANNING, DEFAULT_SETTINGS } from "../shared/types";
 
 test("a legacy workday becomes weekday/weekend hours with its accounts and routine choice", () => {
@@ -167,4 +169,42 @@ test("adaptation is optional, validated, and kept by a patch that omits it", () 
   assert.equal("adaptive" in patch, false);
   const stored = planningSchema.parse({ ...valid, adaptive: false });
   assert.equal({ ...stored, ...patch }.adaptive, false);
+});
+
+test("a new registry plans in the system's time zone; a saved one keeps its own", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-planning-"));
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    assert.equal(systemTimeZone(), zone || "UTC");
+    const store = new Store(root);
+    assert.equal(store.state.settings.planning.timeZone, systemTimeZone());
+    assert.deepEqual(
+      { ...store.state.settings.planning, timeZone: DEFAULT_PLANNING.timeZone },
+      DEFAULT_PLANNING,
+    );
+    // The default object itself is never shared or changed.
+    assert.equal(DEFAULT_SETTINGS.planning.timeZone, "Europe/Istanbul");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("planning changes only through its own call, never a settings patch", () => {
+  assert.throws(() => settingsPatchSchema.parse({ planning: DEFAULT_PLANNING }));
+  assert.deepEqual(settingsPatchSchema.parse({ usageWarnings: false }), {
+    usageWarnings: false,
+  });
+});
+
+test("a clock a DST change skips moves to the first quarter hour after it", () => {
+  // Berlin skips 02:00–03:00 on 2026-03-29; Istanbul has no DST.
+  assert.equal(
+    wallTimeOrNext("2026-03-29", "02:30", "Europe/Berlin"),
+    Date.parse("2026-03-29T01:00:00Z"),
+  );
+  assert.equal(
+    wallTimeOrNext("2026-03-29", "01:30", "Europe/Berlin"),
+    Date.parse("2026-03-29T00:30:00Z"),
+  );
+  assert.equal(wallTimeOrNext("2026-03-29", "25:00", "Europe/Berlin"), undefined);
 });

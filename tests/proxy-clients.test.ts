@@ -22,6 +22,27 @@ function home(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "relay-clients-"));
 }
 
+test("a client file holding the gateway key is owner-only, also over a file that was readable by all", { skip: process.platform === "win32" && "POSIX file modes" }, async () => {
+  const dir = home();
+  const files = {
+    "claude-code": path.join(dir, ".claude", "settings.json"),
+    codex: path.join(dir, ".codex", "config.toml"),
+    omp: path.join(dir, ".omp", "agent", "models.yml"),
+  } as const;
+  for (const [id, file] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, id === "claude-code" ? "{}" : "", { mode: 0o644 });
+    fs.chmodSync(file, 0o644);
+    await bindClient(id as keyof typeof files, target, undefined, dir);
+    assert.match(fs.readFileSync(file, "utf8"), /relay-sec-test-key/, id);
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600, id);
+  }
+  // Putting the files back while quitting keeps them owner-only too.
+  fs.chmodSync(files.codex, 0o644);
+  releaseClientSync("codex", undefined, dir);
+  assert.equal(fs.statSync(files.codex).mode & 0o777, 0o600);
+});
+
 test("binding Claude Code writes the gateway into settings.json and unbinding restores the old values", async () => {
   const dir = home();
   const file = path.join(dir, ".claude", "settings.json");

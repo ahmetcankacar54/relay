@@ -7,6 +7,7 @@ import {
   usedWord,
 } from "../shared/percent";
 import * as meter from "../src/lib/meter";
+import "./i18n";
 
 test("a percentage reads %6 in Turkish and 6% in English, rounded, and a dash when unknown", () => {
   assert.equal(formatPercent(6, "tr"), "%6");
@@ -15,6 +16,7 @@ test("a percentage reads %6 in Turkish and 6% in English, rounded, and a dash wh
   assert.equal(formatPercent(5.4, "en"), "5%");
   assert.equal(formatPercent(undefined, "tr"), "—");
   assert.equal(formatPercent(NaN, "en"), "—");
+  assert.equal(formatPercent(94, "de"), "94\u00a0%");
 });
 
 test("the meter module hands out the same helpers", () => {

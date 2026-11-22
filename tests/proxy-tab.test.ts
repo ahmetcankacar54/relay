@@ -5,7 +5,8 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ProxyPage } from "../src/pages/Proxy";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { I18nContext, type T } from "../src/data/i18n";
+import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import {
   claudeCodeSnippet,
   clientHost,
@@ -34,8 +35,8 @@ const status = (over: Partial<ProxyStatus> = {}): ProxyStatus => ({
   ],
   ...over,
 });
-const t: T = (tr: string, _en: string = tr) => tr;
-const en: T = (_tr: string, e: string = _tr) => e;
+const t = testT("tr");
+const en = testT("en");
 
 function relayFor(proxy: ProxyStatus | undefined, api: object = {}): Relay {
   const settings = { ...DEFAULT_SETTINGS };
@@ -78,11 +79,11 @@ function relayFor(proxy: ProxyStatus | undefined, api: object = {}): Relay {
 /** A switch's state, whatever the order of its attributes. */
 const checked = (html: string, id: string) =>
   new RegExp(`<button[^>]*role="switch"[^>]*aria-checked="(true|false)"[^>]*id="${id}"`).exec(html)?.[1];
-const render = (relay: Relay, node: Parameters<typeof createElement>[0], translate: T = t) =>
+const render = (relay: Relay, node: Parameters<typeof createElement>[0]) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: translate } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, createElement(node as never)),
     ),
   );

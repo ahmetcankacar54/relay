@@ -45,7 +45,8 @@ export interface LiveInput {
  * The simulation inputs for the rest of today's work from live usage: what
  * happens if work goes on at the planned tempo (times `factor`). Accounts
  * with fresh usage start from their open window (weekly limit used up: out of
- * reach); the others from the plan's window chain with a full quota. With
+ * reach until the week resets; a week that ends sooner is used first); the
+ * others from the plan's window chain with a full quota. With
  * `autoStart` a closed window starts when the keeper would start it (now, or
  * when the account's active range begins), else at first use; a `schedule`
  * entry holds an open window's restart, or starts a closed window, at its time
@@ -145,6 +146,9 @@ export function liveSetup({
       const restartAt =
         next ?? (keepAlive && reset < p.activeFrom ? p.activeFrom : undefined);
       const left = 100 * capacity * Math.max(0, 1 - used / 100);
+      const weekEnds = Date.parse(u.sevenDay?.resetsAt ?? "");
+      const weekKnown = Number.isFinite(weekEnds);
+      const weekSpent = (u.sevenDay?.usedPercent ?? 0) >= 100;
       return {
         id: p.accountId,
         capacity,
@@ -153,7 +157,11 @@ export function liveSetup({
           open && p.accountId === active
             ? Math.max(0, left - usedSince(Date.parse(u.checkedAt!)))
             : left,
-        blocked: (u.sevenDay?.usedPercent ?? 0) >= 100,
+        // A used-up week is out of reach until it resets (all day when no
+        // reset is known).
+        blocked: weekSpent,
+        ...(weekSpent && weekKnown ? { blockedUntil: weekEnds } : {}),
+        ...(weekKnown ? { weekEnds } : {}),
         ...(open
           ? {
               firstReset: reset,

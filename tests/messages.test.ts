@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { localizeError } from "../src/messages";
+import "./i18n";
 
 // The backend errors, word for word (electron/core/desktop.ts and desktop-host.ts). The lookup is
 // keyed by this text, so it must keep matching while the display names the sign-in as the app does.

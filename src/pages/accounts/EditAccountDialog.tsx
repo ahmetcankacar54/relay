@@ -33,7 +33,7 @@ export function EditAccountDialog({
     <Dialog open={!!account} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>{t("Hesabı düzenle", "Edit account")}</DialogTitle>
+          <DialogTitle>{t("editAccountDialog.editAccount")}</DialogTitle>
         </DialogHeader>
         {account && <EditAccountBody key={account.id} account={account} close={() => onOpenChange(false)} />}
       </DialogContent>
@@ -63,11 +63,11 @@ export function EditAccountBody({ account, close }: { account: Account; close: (
       <ProfileFields id="edit-account" value={value} onChange={setValue} exceptId={account.id} />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={close}>
-          {t("Vazgeç", "Cancel")}
+          {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={!!busy || !value.name.trim()}>
           {busy === "profile" && <LoaderCircle className="animate-spin" />}
-          {t("Kaydet", "Save")}
+          {t("editAccountDialog.save")}
         </Button>
       </div>
     </form>

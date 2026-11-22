@@ -7,12 +7,16 @@ import {
   Menu,
   nativeTheme,
   Notification,
+  powerMonitor,
   shell,
   systemPreferences,
 } from "electron";
 import { themeSource } from "./core/appearance";
 import { appMenuTemplate } from "./app-menu";
-import { pick } from "./language";
+import { getAppLocale, say, setAppLocale } from "./i18n";
+import { LOCALES, resolveLocale, type LanguagePref } from "../shared/i18n/locales";
+import { tFor } from "../shared/i18n/translate";
+import { loadLanguagePref, writeLanguagePref } from "./core/language-file";
 import { routineFailureNotice } from "../shared/routine-failure";
 import { localizeError } from "../shared/error-text";
 import {
@@ -38,6 +42,7 @@ import { SignInBusyError } from "./core/auth";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
 import os from "node:os";
 import { z } from "zod";
@@ -180,7 +185,8 @@ import {
   unbindClient,
   type ClientTarget,
 } from "./core/proxy/proxy-clients";
-import { gatewayUrl } from "../shared/proxy-url";
+import { gatewayHostAllowed, gatewayUrl } from "../shared/proxy-url";
+import { redact } from "./core/redact";
 import { listenOAuthCallback, type CallbackServer } from "./core/oauth-callback-server";
 import { proxyExtrasSchema, type ProxyExtras } from "./core/proxy/proxy-status";
 import {
@@ -237,6 +243,7 @@ import {
 } from "../shared/tray";
 import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
+import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
 
 let window: BrowserWindow | null = null;
 /**
@@ -408,9 +415,8 @@ let widgetFile: WidgetFile | undefined;
 let widgetMidnight: ReturnType<typeof setTimeout> | undefined;
 /** The account open in Claude when the widget file was last written. */
 let widgetActiveId: string | undefined;
-let trayLanguage: "tr" | "en" = "tr";
-/** Main's own copy (menus, dialogs, notifications) in the app's language. */
-const say = (tr: string, en: string) => pick(trayLanguage)(tr, en);
+/** The saved language choice (language.json); `appLocale` is what it resolves to. */
+let languagePref: LanguagePref = "system";
 let keeper: WindowKeeper;
 let observedDesktop: DesktopState | undefined;
 let initialized = false;
@@ -634,7 +640,7 @@ function writeWidget(force = false) {
         today: tokens.today,
         days: tokens.days,
         progress: { complete, percent },
-        language: trayLanguage,
+        language: getAppLocale(),
         zone,
         now,
         limits: {
@@ -738,6 +744,35 @@ function startTokenScan() {
 }
 const keeperAbort = new AbortController();
 let quitting = false;
+/** When the system said it is shutting down or restarting: quitting is not vetoed shortly after. */
+let systemShutdownAt: number | undefined;
+/** The error log is started over once it passes this size. */
+const MAIN_ERROR_LOG_BYTES = 1024 * 1024;
+/**
+ * An error no code in the main process caught, appended to `<logs>/main-errors.log` with the
+ * time, each line redacted, for a bug report. Relay keeps running.
+ */
+function recordMainError(kind: string, error: unknown) {
+  try {
+    const file = path.join(app.getPath("logs"), "main-errors.log");
+    const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    const lines = text.split(/\r?\n/).map((line) => redact(line, 500));
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) > MAIN_ERROR_LOG_BYTES)
+      fs.truncateSync(file, 0);
+    fs.appendFileSync(file, `${new Date().toISOString()} ${kind} ${lines.join("\n  ")}\n`, {
+      mode: 0o600,
+    });
+  } catch {
+    // Nowhere to write it: the error is dropped, never thrown again.
+  }
+}
+process.on("unhandledRejection", (reason) => recordMainError("unhandledRejection", reason));
+process.on("uncaughtException", (error) => recordMainError("uncaughtException", error));
+// No Relay page embeds another one.
+app.on("web-contents-created", (_event, contents) =>
+  contents.on("will-attach-webview", (event) => event.preventDefault()),
+);
 app.setName("Relay");
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -786,6 +821,10 @@ else {
         (url) => shell.openExternal(url),
         (accountId, kind) => acquireProfileLock(profileLocks(), accountId, kind),
       );
+      // Main speaks before any window opens (tray, menu, widget): the saved language, which
+      // installs from before the setting get as Turkish (what they saw), new ones as the system's.
+      languagePref = loadLanguagePref(service.store.root, service.store.state.accounts.length > 0);
+      setAppLocale(resolveLocale(languagePref, app.getPreferredSystemLanguages()));
       // A browser login may finish after its dialog closed or Relay restarted.
       // Recover only credentials that CLIProxyAPI actually saved and validated.
       for (const account of service.store.state.accounts) {
@@ -813,6 +852,10 @@ else {
           path.join(__dirname, "icon.png"),
         );
       watchRegistry();
+      // A shutdown or restart quits Relay without asking: a veto there would stall the system.
+      powerMonitor.on("shutdown", () => {
+        systemShutdownAt = Date.now();
+      });
       nativeTheme.themeSource = themeSource(service.store.state.settings);
       const vaultDir = path.join(app.getPath("userData"), "desktop-vault");
       operationLock = new ProcessLock(path.join(vaultDir, "operation.lock"), "app");
@@ -1044,7 +1087,8 @@ else {
       // While separate windows run, the helper looks only at the main Claude.
       const automationTarget = async () => host.automationTarget?.();
       automation = nativeDesktopAutomation(automationHelper, undefined, automationTarget);
-      if (process.platform === "darwin" && process.env.RELAY_UI_OUTLINE === "1")
+      // A diagnosis aid for development; a packaged Relay never reads it.
+      if (process.platform === "darwin" && !app.isPackaged && process.env.RELAY_UI_OUTLINE === "1")
         void writeUiOutline(
           automationHelper,
           path.join(app.getPath("userData"), "diagnostics", "ui-outline.json"),
@@ -1433,8 +1477,8 @@ else {
         notify: (account, reason) => {
           if (!Notification.isSupported()) return;
           new Notification({
-            title: say("Önceden başlatılamadı", "Early start failed"),
-            body: routineFailureNotice(account.name, reason, trayLanguage),
+            title: say("electronMain.earlyStartFailed"),
+            body: routineFailureNotice(account.name, reason, getAppLocale()),
           }).show();
         },
         adapted: notifyAdapted,
@@ -1511,7 +1555,7 @@ else {
         showWindow,
         requestSwitch: (profileId) => void traySwitch(profileId),
         quit: () => app.quit(),
-        language: () => trayLanguage,
+        language: () => getAppLocale(),
         panel: trayPanel,
         motionAllowed: () =>
           motionAllowed(service.store.state.settings, () =>
@@ -1532,7 +1576,7 @@ else {
             show: (state) =>
               switchWindow?.show(
                 sceneView(state, {
-                  language: trayLanguage,
+                  language: getAppLocale(),
                   name: (id) =>
                     service.store.state.accounts.find((a) => a.id === id)?.name,
                   percent: (id) => usage.snapshot()[id]?.fiveHour?.usedPercent,
@@ -1617,7 +1661,7 @@ else {
         .catch(() => {});
     })
     .catch((error) => {
-      dialog.showErrorBox(say("Relay açılamadı", "Relay did not start"), String(error));
+      dialog.showErrorBox(say("electronMain.relayDidNotStart"), String(error));
       app.exit(1);
     });
 }
@@ -1639,34 +1683,25 @@ async function settleInstallLocation(): Promise<boolean> {
   }
   logDraftEvent("install-location", { place });
   // Settings are not read yet; the system language decides.
-  const t = pick(app.getLocale().toLowerCase().startsWith("tr") ? "tr" : "en");
+  const t = tFor(resolveLocale("system", app.getPreferredSystemLanguages()));
   const { response } = await dialog.showMessageBox({
     type: "warning",
-    buttons: [t("Uygulamalar klasörüne taşı", "Move to Applications"), t("Şimdi değil", "Not now")],
+    buttons: [t("electronMain.moveToApplications"), t("electronMain.notNow")],
     defaultId: 0,
     cancelId: 1,
-    message: t("Relay’i Uygulamalar klasörüne taşı", "Move Relay to Applications"),
+    message: t("electronMain.moveRelayToApplications"),
     detail:
       place === "disk-image"
-        ? t(
-            "Relay disk görüntüsünden çalıştığı sürece macOS her açılışta izin ister. Relay kendini Uygulamalar klasörüne taşır ve oradan açılır.",
-            "While Relay runs from the disk image, macOS asks for approval at every launch. Relay moves itself to Applications and opens from there.",
-          )
-        : t(
-            "Relay indirildiği yerden çalıştığı sürece macOS her açılışta izin ister. Relay kendini Uygulamalar klasörüne taşır ve oradan açılır.",
-            "While Relay runs from its download location, macOS asks for approval at every launch. Relay moves itself to Applications and opens from there.",
-          ),
+        ? t("electronMain.whileRelayRunsFromTheDisk")
+        : t("electronMain.whileRelayRunsFromItsDownload"),
   });
   if (response !== 0) return false;
   try {
     return app.moveToApplicationsFolder();
   } catch (error) {
     dialog.showErrorBox(
-      t("Relay taşınamadı", "Relay was not moved"),
-      t(
-        "Relay’i Finder’da Uygulamalar klasörüne sürükle, disk görüntüsünü çıkar ve Relay’i Uygulamalar’dan aç.",
-        "Drag Relay to Applications in Finder, eject the disk image and open Relay from Applications.",
-      ) + `\n\n${error instanceof Error ? error.message : String(error)}`,
+      t("electronMain.relayWasNotMoved"),
+      t("electronMain.dragRelayToApplicationsInFinder") + `\n\n${error instanceof Error ? error.message : String(error)}`,
     );
     return false;
   }
@@ -1761,22 +1796,13 @@ async function traySwitch(profileId: string) {
   const { response } = await dialog.showMessageBox({
     type: "question",
     buttons: [
-      say(
-        "Geç ve Claude uygulamasını yeniden başlat",
-        "Switch and restart the Claude app",
-      ),
-      say("Vazgeç", "Cancel"),
+      say("electronMain.switchAndRestartTheClaudeApp"),
+      say("common.cancel"),
     ],
     defaultId: 0,
     cancelId: 1,
-    message: say(
-      `Claude uygulaması ${account.name} hesabına geçsin mi?`,
-      `Switch the Claude app to ${account.name}?`,
-    ),
-    detail: say(
-      "Claude uygulaması kapanır ve bu hesapla yeniden açılır. Önce çalışan yanıtların bitmesini bekle.",
-      "The Claude app quits and reopens with this account. Wait for running replies to finish first.",
-    ),
+    message: say("electronMain.switchTheClaudeAppTo", { accountName: account.name }),
+    detail: say("electronMain.theClaudeAppQuitsAndReopens"),
   });
   if (response !== 0) return;
   try {
@@ -1785,10 +1811,10 @@ async function traySwitch(profileId: string) {
     notifyExtensionLeft(account);
   } catch (error) {
     dialog.showErrorBox(
-      say("Geçiş yapılamadı", "Switch failed"),
+      say("electronMain.switchFailed"),
       localizeError(
         error instanceof Error ? error.message : String(error),
-        trayLanguage,
+        getAppLocale(),
       ),
     );
   } finally {
@@ -1834,12 +1860,9 @@ function notifyExtensionLeft(target: Account) {
       : undefined;
   const notice = new Notification({
     title: on
-      ? say(`Eklenti ${on} hesabında kaldı`, `Extension still on ${on}`)
-      : say("Eklenti geçmedi", "Extension not switched"),
-    body: say(
-      `Claude’un tarayıcı araçları ${target.name} ile çalışmıyor; düzeltmek için tıkla.`,
-      `Claude’s browser tools do not work with ${target.name}; click to fix.`,
-    ),
+      ? say("electronMain.extensionStillOn", { on })
+      : say("electronMain.extensionNotSwitched"),
+    body: say("electronMain.claudeSBrowserToolsDoNot", { targetName: target.name }),
   });
   notice.on("click", () => openPage("gecis"));
   notice.show();
@@ -1854,11 +1877,8 @@ function notifyLoopAlarm(alarm: ProxyLoopAlarm) {
   if (!Notification.isSupported()) return;
   const account = service.store.state.accounts.find((a) => a.id === alarm.accountId)?.name;
   const notice = new Notification({
-    title: say("Bir istem durmadan istek gönderiyor", "A prompt keeps sending requests"),
-    body: say(
-      `${alarm.requests} istek, ${alarm.subagents} alt ajan${account ? ` · ${account}` : ""}. Döngüde olabilir; Claude Code'da Esc ile durdurabilirsin.`,
-      `${alarm.requests} requests, ${alarm.subagents} subagents${account ? ` · ${account}` : ""}. It may be in a loop; Esc in Claude Code stops it.`,
-    ),
+    title: say("electronMain.aPromptKeepsSendingRequests"),
+    body: say("electronMain.requestsSubagentsItMayBeIn", { alarmRequests: alarm.requests, alarmSubagents: alarm.subagents, p1: account ? ` · ${account}` : "" }),
   });
   notice.on("click", () => openPage("proxy"));
   notice.show();
@@ -1866,11 +1886,8 @@ function notifyLoopAlarm(alarm: ProxyLoopAlarm) {
 function notifyExtensionBroken(account: Account) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: say("Eklenti giriş yapamıyor", "Extension cannot sign in"),
-    body: say(
-      `Claude’un tarayıcı araçları ${account.name} ile çalışmıyor; yeniden bağlamak için tıkla.`,
-      `Claude’s browser tools do not work with ${account.name}; click to reconnect.`,
-    ),
+    title: say("electronMain.extensionCannotSignIn"),
+    body: say("electronMain.claudeSBrowserToolsDoNot2", { accountName: account.name }),
   });
   notice.on("click", () => openPage("gecis"));
   notice.show();
@@ -1965,12 +1982,9 @@ function notifySignInEnding(account: Account, endsAt?: string) {
   const days = Number.isFinite(end) && end > Date.now() ? Math.max(1, Math.ceil((end - Date.now()) / 86_400_000)) : 0;
   const notice = new Notification({
     title: days
-      ? say(`${account.name}: Claude Code girişi ${days} gün içinde bitiyor`, `${account.name}: Claude Code sign-in ends in ${days} ${days === 1 ? "day" : "days"}`)
-      : say(`${account.name}: Claude Code girişinin süresi doldu`, `${account.name}: Claude Code sign-in ended`),
-    body: say(
-      "Claude uygulamasında bu hesaba yeniden girersen Relay kendisi yeniler; ya da tıkla ve tarayıcıdan yenile.",
-      "Sign in to this account again in the Claude app and Relay renews it by itself, or click to renew it in the browser.",
-    ),
+      ? say("electronMain.claudeCodeSignInEndsIn", { accountName: account.name, days })
+      : say("electronMain.claudeCodeSignInEnded", { accountName: account.name }),
+    body: say("electronMain.signInToThisAccountAgain"),
   });
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
@@ -1980,11 +1994,8 @@ let signInRenewal: SignInRenewal | undefined;
 function notifySignInEnded(account: Account) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: say("Claude girişi sona ermiş", "Claude sign-in ended"),
-    body: say(
-      `${account.name} hesabının kayıtlı girişi artık geçerli değil; yeniden giriş yapmak için tıkla.`,
-      `The saved sign-in of ${account.name} no longer works; click to sign in again.`,
-    ),
+    title: say("electronMain.claudeSignInEnded"),
+    body: say("electronMain.theSavedSignInOfNo", { accountName: account.name }),
   });
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
@@ -1993,11 +2004,8 @@ function notifySignInEnded(account: Account) {
 function notifyUpdate(version: string) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: say("Güncelleme hazır", "Update ready"),
-    body: say(
-      `Relay ${version} sürümünü kurmak için tıkla.`,
-      `Click to install Relay ${version}.`,
-    ),
+    title: say("electronMain.updateReady"),
+    body: say("electronMain.clickToInstallRelay", { version }),
   });
   notice.on("click", () => openPage("genel"));
   notice.show();
@@ -2005,10 +2013,10 @@ function notifyUpdate(version: string) {
 /**
  * Starts Relay's own updates: on macOS Relay downloads, verifies and swaps its app itself; on
  * Windows and Linux electron-updater does. A development run never updates unless
- * RELAY_UPDATE_FEED points it at a test feed.
+ * RELAY_UPDATE_FEED points it at a test feed; a packaged Relay never reads that variable.
  */
 function startAppUpdates() {
-  const testFeed = process.env.RELAY_UPDATE_FEED;
+  const testFeed = app.isPackaged ? undefined : process.env.RELAY_UPDATE_FEED;
   if (!app.isPackaged && !testFeed) return;
   const folder = path.join(app.getPath("userData"), "updates");
   const current = app.getVersion();
@@ -2030,7 +2038,8 @@ function startAppUpdates() {
               ),
             ),
           spawnDetached: (file, args) => {
-            // Nothing of Relay's environment reaches the app the script opens (it uses env -i).
+            // Only PATH: the script's RELAY_UPDATE_* tool overrides (tests set them) never come from
+            // Relay's environment, and nothing of it reaches the app the script opens (env -i).
             spawn(file, args, { detached: true, stdio: "ignore", env: { PATH: "/usr/bin:/bin" } }).unref();
           },
           writable: (dir) => {
@@ -2077,11 +2086,8 @@ function startAppUpdates() {
 function notifySwitched(name: string) {
   if (!Notification.isSupported()) return;
   new Notification({
-    title: say("Geçiş tamamlandı", "Switch complete"),
-    body: say(
-      `Claude uygulaması ${name} hesabına geçti.`,
-      `The Claude app switched to ${name}.`,
-    ),
+    title: say("electronMain.switchComplete"),
+    body: say("electronMain.theClaudeAppSwitchedTo", { name }),
   }).show();
 }
 /** After the fleet switched at the limit: where Claude went, and what became of the conversations. */
@@ -2092,17 +2098,17 @@ function notifyFleet(
   if (!Notification.isSupported()) return;
   const name =
     service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
-    say("diğer", "another");
+    say("electronMain.another");
   new Notification({
-    title: say("Otomatik geçiş", "Automatic switch"),
-    body: fleetNotice(last, name, trayLanguage, reason),
+    title: say("electronMain.automaticSwitch"),
+    body: fleetNotice(last, name, getAppLocale(), reason),
   }).show();
 }
 /** After a draft restore: how many drafts were typed back, and how many wait in the panel. */
 function notifyDrafts(summary: { restored: number; left: number }) {
-  const body = draftNotice(summary, trayLanguage);
+  const body = draftNotice(summary, getAppLocale());
   if (!body || !Notification.isSupported()) return;
-  new Notification({ title: say("Kurtarılan taslaklar", "Rescued drafts"), body }).show();
+  new Notification({ title: say("common.rescuedDrafts"), body }).show();
 }
 /** Today's plan was re-planned at today's pace, or is back to normal. */
 function notifyAdapted(
@@ -2125,27 +2131,23 @@ function notifyAdapted(
         : [];
     })
     .join(", ");
-  const en = trayLanguage === "en";
   new Notification({
-    title: en ? "Early start" : "Önceden başlatma",
+    title: say("electronMain.earlyStart"),
     body:
       notice.kind === "normal"
-        ? en
-          ? "The plan is back to normal."
-          : "Plan normale döndü."
-        : en
-          ? `Plan adapted to today’s pace: ${list}`
-          : `Plan bugünkü hıza uyarlandı: ${list}`,
+        ? say("electronMain.thePlanIsBackToNormal")
+        : say("electronMain.planAdaptedToTodaySPace", { list }),
   }).show();
 }
 /**
  * Reloads the account list when another process (the relay CLI) writes it, and tells the
- * windows and the menu bar. Relay's own writes are noticed and skipped by `reload`.
+ * windows and the menu bar. Relay's own writes are noticed and skipped by `reload`. A watch that
+ * fails (the folder replaced, the system out of watches) is started again 5 s later.
  */
 function watchRegistry() {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    fs.watch(service.store.root, (_event, name) => {
+    const watcher = fs.watch(service.store.root, (_event, name) => {
       if (name !== "state.json") return;
       clearTimeout(timer);
       timer = setTimeout(() => {
@@ -2158,6 +2160,11 @@ function watchRegistry() {
         broadcastChanged();
         void tray?.update();
       }, 250);
+    });
+    watcher.on("error", () => {
+      clearTimeout(timer);
+      watcher.close();
+      setTimeout(watchRegistry, 5_000).unref();
     });
   } catch {
     // Without a watch, another process's changes show after Relay restarts.
@@ -2226,7 +2233,7 @@ let antigravityStarting = false;
 
 function antigravityBridge(accountId: string): AntigravityBridge {
   const account = service.store.account(accountId);
-  if (account.provider !== "antigravity") throw new Error(say("Antigravity hesabı değil.", "Not an Antigravity account."));
+  if (account.provider !== "antigravity") throw new Error(say("electronMain.notAnAntigravityAccount"));
   let bridge = antigravityBridges.get(accountId);
   if (!bridge) {
     bridge = new AntigravityBridge(
@@ -2258,7 +2265,7 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
   const completed = antigravityOAuthOutcomes.get(accountId);
   if (completed) return completed;
   if (pendingAntigravityOAuth.get(accountId) !== state)
-    throw new Error(say("Antigravity girişi artık beklemede değil.", "Antigravity sign-in is no longer pending."));
+    throw new Error(say("electronMain.antigravitySignInIsNoLonger"));
   const inFlight = antigravityOAuthPolls.get(accountId);
   if (inFlight) return inFlight;
   const work = (async (): Promise<AntigravityOAuthPoll> => {
@@ -2275,13 +2282,13 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
       a.auth?.email?.toLowerCase() === status.email.toLowerCase());
     if (duplicate) {
       await discardPendingAntigravity(accountId);
-      const result: AntigravityOAuthPoll = { status: "error", error: say("Bu Antigravity hesabı zaten bağlı.", "This Antigravity account is already connected.") };
+      const result: AntigravityOAuthPoll = { status: "error", error: say("electronMain.thisAntigravityAccountIsAlreadyConnected") };
       antigravityOAuthOutcomes.set(accountId, result);
       return result;
     }
     service.store.update((savedState) => {
       const account = savedState.accounts.find((a) => a.id === accountId);
-      if (!account) throw new Error(say("OAuth girişi sırasında hesap kayboldu.", "Account disappeared during OAuth sign-in."));
+      if (!account) throw new Error(say("electronMain.accountDisappearedDuringOauthSignIn"));
       // The plan (Google AI Pro, Ultra, free) is read with the account's first limits.
       account.auth = { loggedIn: true, checkedAt: new Date().toISOString(), email: status.email };
     });
@@ -2385,11 +2392,15 @@ function proxyExtras(): ProxyExtras {
   }
   return proxyExtrasCache;
 }
-const proxySettings = (): ProxyConfig => ({
-  ...DEFAULT_PROXY_CONFIG,
-  ...service.store.state.settings.proxy,
-  ...proxyExtras(),
-});
+const proxySettings = (): ProxyConfig => {
+  const config: ProxyConfig = {
+    ...DEFAULT_PROXY_CONFIG,
+    ...service.store.state.settings.proxy,
+    ...proxyExtras(),
+  };
+  // A host older Relays accepted (the whole local network) falls back to this computer only.
+  return gatewayHostAllowed(config.host) ? config : { ...config, host: DEFAULT_PROXY_CONFIG.host };
+};
 const saveProxySettings = (config: ProxyConfig) => {
   const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, ...base } = config;
   const extras: ProxyExtras = {
@@ -2557,10 +2568,7 @@ async function startProxy(): Promise<void> {
     const code = (error as NodeJS.ErrnoException).code;
     proxyError =
       code === "EADDRINUSE"
-        ? say(
-            `${config.host}:${config.port} kullanımda. Başka bir port seç.`,
-            `${config.host}:${config.port} is already in use. Choose another port.`,
-          )
+        ? say("electronMain.isAlreadyInUseChooseAnother", { configHost: config.host, configPort: config.port })
         : (error as Error).message;
     throw new Error(proxyError);
   }
@@ -2646,6 +2654,13 @@ function broadcastChanged() {
   if (window && !window.isDestroyed()) window.webContents.send("relay:changed");
   trayPanel?.webContents()?.send("relay:changed");
 }
+/** The Vite dev server the pages come from in development; undefined when they load from dist. */
+function devServer(): string | undefined {
+  const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
+  return devURL === "http://127.0.0.1:5173" ? devURL : undefined;
+}
+/** The built pages: index.html, panel.html, switch.html. */
+const PAGES_DIR = path.join(__dirname, "../dist");
 /** Loads a Vite entry from the dev server in development, else from dist. */
 function loadPage(
   win: BrowserWindow,
@@ -2653,17 +2668,31 @@ function loadPage(
   /** `#/planlama`: the page the main window opens on. */
   hash?: string,
 ) {
-  const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
-  if (devURL === "http://127.0.0.1:5173")
+  const devURL = devServer();
+  if (devURL)
     void win.loadURL(
       page === "index.html" ? `${devURL}/${hash ?? ""}` : `${devURL}/${page}`,
     );
   else
     void win.loadFile(
-      path.join(__dirname, "../dist", page),
+      path.join(PAGES_DIR, page),
       hash ? { hash: hash.replace(/^#/, "") } : undefined,
     );
 }
+/** Whether a frame shows one of Relay's own pages, from where `loadPage` loads them. */
+function relayPage(url: string | undefined): boolean {
+  if (!url) return false;
+  const devURL = devServer();
+  if (devURL) return url.startsWith(`${devURL}/`);
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "file:" && fileURLToPath(parsed).startsWith(PAGES_DIR + path.sep);
+  } catch {
+    return false;
+  }
+}
+/** How long the main window's page may stay unresponsive before it is restarted. */
+const UNRESPONSIVE_RESTART_MS = 10_000;
 function createWindow(hash?: string) {
   window = new BrowserWindow({
     width: 960,
@@ -2676,7 +2705,7 @@ function createWindow(hash?: string) {
     // elsewhere the window takes the page colour, so nothing flashes before the page draws.
     ...(process.platform === "darwin"
       ? { vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
-      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f11" : "#f4f4f5" }),
+      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#100f0e" : "#f5f4f2" }),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     // 16 px from the left: the three buttons end at 68 px, inside the 84 px collapsed rail.
     trafficLightPosition: { x: 16, y: 19 },
@@ -2686,6 +2715,7 @@ function createWindow(hash?: string) {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      devTools: !app.isPackaged,
     },
   });
   // A link opens in the browser only when it is one of the allow-listed pages; no window opens.
@@ -2701,6 +2731,42 @@ function createWindow(hash?: string) {
   applyAppMenu();
   loadPage(window, "index.html", hash);
   const own = window;
+  // A crashed or killed page loads again after a growing delay, a few times a minute at most; a
+  // page that stays hung is ended, and then loads again.
+  let pageReloadsAt: number[] = [];
+  let pageReload: ReturnType<typeof setTimeout> | undefined;
+  own.webContents.on("render-process-gone", (_event, details) => {
+    if (own.isDestroyed()) return;
+    const next = pageCrashAction(details.reason, pageReloadsAt, Date.now());
+    if (next.action === "ignore") return;
+    clearTimeout(pageReload);
+    if (next.action === "give-up") {
+      recordMainError(
+        "render-process-gone",
+        `${details.reason} (exit code ${details.exitCode}); the window is no longer reloaded`,
+      );
+      dialog.showErrorBox(
+        say("electronMain.relayWindowStopped"),
+        say("electronMain.relayWindowKeptStopping"),
+      );
+      return;
+    }
+    pageReloadsAt = next.reloadsAt;
+    pageReload = setTimeout(() => {
+      if (!own.isDestroyed()) own.webContents.reload();
+    }, next.delayMs);
+  });
+  own.on("closed", () => clearTimeout(pageReload));
+  let hung: ReturnType<typeof setTimeout> | undefined;
+  own.on("unresponsive", () => {
+    clearTimeout(hung);
+    hung = setTimeout(() => {
+      if (!own.isDestroyed()) own.webContents.forcefullyCrashRenderer();
+    }, UNRESPONSIVE_RESTART_MS);
+    hung.unref();
+  });
+  own.on("responsive", () => clearTimeout(hung));
+  own.on("closed", () => clearTimeout(hung));
   own.on("closed", () => {
     if (window !== own) return;
     windowRelease.cancel();
@@ -2713,7 +2779,9 @@ function createWindow(hash?: string) {
   own.on("close", (event) => {
     if (!quitting && tray) {
       event.preventDefault();
-      own.hide();
+      // Linux desktops without a tray area would leave a hidden window unreachable.
+      if (process.platform === "linux") own.minimize();
+      else own.hide();
       closeWindowToTray();
     }
   });
@@ -2722,13 +2790,19 @@ function createWindow(hash?: string) {
 function applyAppMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
-      appMenuTemplate(trayLanguage, {
+      appMenuTemplate(getAppLocale(), {
         closeToTray: () => closeToTray(),
         quit: () => app.quit(),
         closeWindow: () => closeFocusedWindow(),
       }),
     ),
   );
+}
+/** An open-file dialog over the main window while it is there, else on its own. */
+function openDialog(options: Electron.OpenDialogOptions) {
+  return window && !window.isDestroyed()
+    ? dialog.showOpenDialog(window, options)
+    : dialog.showOpenDialog(options);
 }
 /**
  * Cmd+W. The main window closes as its close button does: it hides and Relay stays in the menu
@@ -2740,7 +2814,10 @@ function closeFocusedWindow() {
   if (focused === window) focused.close();
   else if (focused.webContents === trayPanel?.webContents()) trayPanel?.hide();
 }
-/** Only the main frames of the main window and the menu bar panel may call Relay. */
+/**
+ * Only the main frames of the main window and the menu bar panel may call Relay, and only while
+ * they show Relay's own pages.
+ */
 function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
   const allowed = [
     window && !window.isDestroyed() ? window.webContents : undefined,
@@ -2748,9 +2825,10 @@ function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
   ];
   if (
     !allowed.includes(event.sender) ||
-    event.senderFrame !== event.sender.mainFrame
+    event.senderFrame !== event.sender.mainFrame ||
+    !relayPage(event.senderFrame?.url)
   )
-    throw new Error("Geçersiz IPC kaynağı.");
+    throw new Error("Invalid IPC source.");
 }
 /** Panel-only one-way messages; anything else (including the main window) is ignored. */
 function fromPanel(event: Electron.IpcMainEvent) {
@@ -2918,13 +2996,13 @@ function bindIPC() {
     if (!snapshot) return undefined;
     const now = Date.now();
     const alone = (item: (typeof MENU_BAR_ITEMS)[number]) => {
-      const text = trayTitle({ ...snapshot, titleItems: [item] }, now, trayLanguage);
+      const text = trayTitle({ ...snapshot, titleItems: [item] }, now, getAppLocale());
       return text === "—" ? "" : text;
     };
     // The saved choice, which the snapshot may not hold yet right after a change.
     const titleItems = menuBarTitle?.current.items ?? snapshot.titleItems;
     return {
-      title: trayTitle({ ...snapshot, titleItems }, now, trayLanguage),
+      title: trayTitle({ ...snapshot, titleItems }, now, getAppLocale()),
       values: Object.fromEntries(MENU_BAR_ITEMS.map((item) => [item, alone(item)])),
     };
   });
@@ -2938,15 +3016,21 @@ function bindIPC() {
     void tray?.update();
     return kept;
   });
-  handle("tray-language", (value) => {
-    const language = z.enum(["tr", "en"]).parse(value);
-    const changed = language !== trayLanguage;
-    trayLanguage = language;
-    if (changed) applyAppMenu();
-    // The widget's strings are in the app's language too.
-    if (changed) writeWidget(true);
+  handle("set-language", (value) => {
+    const pref = z.union([z.literal("system"), z.enum(LOCALES)]).parse(value);
+    writeLanguagePref(service.store.root, pref);
+    languagePref = pref;
+    if (setAppLocale(resolveLocale(pref, app.getPreferredSystemLanguages()))) {
+      applyAppMenu();
+      // The widget's strings are in the app's language too.
+      writeWidget(true);
+    }
     tray?.update();
   });
+  handle("get-language", () => ({
+    pref: languagePref,
+    locale: getAppLocale(),
+  }));
   handle("account-planning", (accountId, input) => {
     if (desktop.isBusy || desktopLock.busy)
       throw new Error(
@@ -3076,7 +3160,7 @@ function bindIPC() {
     // Checked and claimed before any await: a double click must not start two sign-ins on the
     // helper's one callback port.
     if (pendingAntigravityOAuth.size || antigravityStarting)
-      throw new Error(say("Önce açık Antigravity girişini tamamla.", "Finish the pending Antigravity sign-in first."));
+      throw new Error(say("electronMain.finishThePendingAntigravitySignIn"));
     const input = createAccountSchema.parse({ ...raw, provider: "antigravity" });
     antigravityStarting = true;
     const account = (() => {
@@ -3095,19 +3179,21 @@ function bindIPC() {
         port: ANTIGRAVITY_CALLBACK_PORT,
         path: "/oauth-callback",
         timeoutMs: 10 * 60_000,
+        // Set below, once the helper has named the sign-in; a redirect for another one waits.
+        state: () => pendingAntigravityOAuth.get(account.id),
         handle: async (address) => {
           const expected = pendingAntigravityOAuth.get(account.id);
           try {
-            if (!expected) throw new Error(say("Bekleyen giriş yok.", "No sign-in is pending."));
+            if (!expected) throw new Error(say("electronMain.noSignInIsPending"));
             await bridge.submitCallback(expected, address);
             return {
-              title: say("Giriş alındı", "Signed in"),
-              body: say("Relay’e dönebilirsin; bu sekme kapanabilir.", "You can go back to Relay; this tab can be closed."),
+              title: say("electronMain.signedIn"),
+              body: say("electronMain.youCanGoBackToRelay"),
             };
           } catch {
             return {
-              title: say("Giriş tamamlanamadı", "Sign-in not finished"),
-              body: say("Relay’e dönüp yeniden dene.", "Go back to Relay and try again."),
+              title: say("electronMain.signInNotFinished"),
+              body: say("electronMain.goBackToRelayAndTry"),
             };
           } finally {
             showWindow();
@@ -3123,7 +3209,7 @@ function bindIPC() {
       const timer = setInterval(() => {
         if (Date.now() - startedAt > 10 * 60_000) {
           void discardPendingAntigravity(account.id).then(() => {
-            antigravityOAuthOutcomes.set(account.id, { status: "error", error: say("Antigravity girişi zaman aşımına uğradı.", "Antigravity sign-in timed out.") });
+            antigravityOAuthOutcomes.set(account.id, { status: "error", error: say("electronMain.antigravitySignInTimedOut") });
           });
           return;
         }
@@ -3147,7 +3233,7 @@ function bindIPC() {
     await discardPendingAntigravity(input.accountId);
     antigravityOAuthOutcomes.set(input.accountId, {
       status: "error",
-      error: say("Antigravity girişi iptal edildi.", "Antigravity sign-in was cancelled."),
+      error: say("electronMain.antigravitySignInWasCancelled"),
     });
   });
   handle("antigravity-oauth-callback", async (raw) => {
@@ -3156,7 +3242,7 @@ function bindIPC() {
       .strict()
       .parse(raw);
     if (pendingAntigravityOAuth.get(input.accountId) !== input.state)
-      throw new Error(say("Antigravity girişi artık beklemede değil.", "Antigravity sign-in is no longer pending."));
+      throw new Error(say("electronMain.antigravitySignInIsNoLonger"));
     await antigravityBridge(input.accountId).submitCallback(input.state, input.url);
   });
   handle("antigravity-oauth-poll", async (raw) => {
@@ -3254,12 +3340,12 @@ function bindIPC() {
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
   handle("open-antigravity", () => openAntigravityApp());
   const antigravityOnly = () => {
-    if (!antigravitySwitcher) throw new Error(say("Antigravity hesap geçişi yalnızca macOS'ta çalışır.", "Antigravity account switching works on macOS only."));
+    if (!antigravitySwitcher) throw new Error(say("electronMain.antigravityAccountSwitchingWorksOnMacos"));
     return antigravitySwitcher;
   };
   const antigravityAccount = (accountId: unknown) => {
     const account = service.store.account(id.parse(accountId));
-    if (account.provider !== "antigravity") throw new Error(say("Antigravity hesabı değil.", "Not an Antigravity account."));
+    if (account.provider !== "antigravity") throw new Error(say("electronMain.notAnAntigravityAccount"));
     return account.id;
   };
   handle("switch-antigravity", (accountId) => antigravityOnly().switchTo(antigravityAccount(accountId)));
@@ -3416,7 +3502,7 @@ function bindIPC() {
     const { range, accountId } = usageStatisticsInput.parse(input);
     if (!tokenLedger)
       throw new Error(
-        say("Token kaydı açılamadı.", "Relay cannot read the token usage."),
+        say("electronMain.relayCannotReadTheTokenUsage"),
       );
     if (Date.now() - tokenTickedAt > TOKEN_FRESH_MS) {
       // Ticks until the pass is complete or about a second has passed.
@@ -3486,6 +3572,9 @@ function bindIPC() {
           desktop: () => desktop.snapshot(),
         });
         usage.forget(account);
+        // removeAccount took it out of proxy-pool.json; the gateway forgets its sessions.
+        proxyExtrasCache = undefined;
+        proxyServer?.sessionCache.evictAccount(account);
         // Its Antigravity app sign-in kept in the vault goes with it, like every other sign-in Relay keeps.
         await antigravitySwitcher?.forget(account).catch(() => {});
         void forgetSignInSession(account).catch(() => {});
@@ -3545,9 +3634,9 @@ function bindIPC() {
     ),
   );
   handle("pick-folder", async () => {
-    const result = await dialog.showOpenDialog(window!, {
+    const result = await openDialog({
       properties: ["openDirectory"],
-      title: say("Proje klasörünü seç", "Select the project folder"),
+      title: say("electronMain.selectTheProjectFolder"),
     });
     return result.canceled ? null : result.filePaths[0];
   });
@@ -3558,22 +3647,16 @@ function bindIPC() {
       .stat(installed)
       .then((s) => s.isDirectory())
       .catch(() => false);
-    const result = await dialog.showOpenDialog(window!, {
+    const result = await openDialog({
       properties: ["openFile", "showHiddenFiles"],
       ...(opensThere ? { defaultPath: installed } : {}),
-      title: say(
-        "Claude Code CLI dosyasını seç",
-        "Select the Claude Code CLI file",
-      ),
+      title: say("electronMain.selectTheClaudeCodeCliFile"),
     });
     if (!result.canceled) {
       // Claude Desktop is not the CLI: running it for `auth status` or `--version` only opens it.
       if (isClaudeDesktopExecutable(result.filePaths[0]))
         throw new Error(
-          say(
-            "Bu dosya Claude masaüstü uygulaması, Claude Code CLI değil. `claude` dosyasını seç (genellikle ~/.local/bin/claude).",
-            "This file is the Claude desktop app, not the Claude Code CLI. Select the `claude` file (usually ~/.local/bin/claude).",
-          ),
+          say("electronMain.thisFileIsTheClaudeDesktop"),
         );
       service.store.update((s) => {
         s.executable = result.filePaths[0];
@@ -3583,10 +3666,10 @@ function bindIPC() {
   });
   handle("pick-claude-app", async () => {
     const mac = process.platform === "darwin";
-    const result = await dialog.showOpenDialog(window!, {
+    const result = await openDialog({
       properties: ["openFile"],
       ...(mac ? { defaultPath: "/Applications" } : {}),
-      title: say("Claude uygulamasını seç", "Select the Claude app"),
+      title: say("electronMain.selectTheClaudeApp"),
     });
     if (result.canceled || !result.filePaths[0]) return;
     // The store's change reaches every window, which reads the Desktop state again.
@@ -3667,20 +3750,19 @@ app.on("window-all-closed", () => {
 });
 app.on("before-quit", (event) => {
   if (!service) return;
+  // The system is going down: nothing may hold it up; running work ends with Relay.
+  if (systemShuttingDown(systemShutdownAt, Date.now())) {
+    quitting = true;
+    return;
+  }
   if (usageCredentialRefresher?.anyActive) {
     event.preventDefault();
     showWindow();
     void dialog.showMessageBox({
       type: "info",
-      message: say(
-        "Limit okuma girişi yenileniyor.",
-        "A usage sign-in renewal is in progress.",
-      ),
-      detail: say(
-        "Relay, yenileme bitene kadar açık kalır. Sonra yeniden çık.",
-        "Relay stays open until the renewal ends. Then quit again.",
-      ),
-      buttons: [say("Tamam", "OK")],
+      message: say("electronMain.aUsageSignInRenewalIs"),
+      detail: say("electronMain.relayStaysOpenUntilTheRenewal"),
+      buttons: [say("electronMain.ok")],
     });
     return;
   }
@@ -3711,17 +3793,12 @@ app.on("before-quit", (event) => {
     .showMessageBox({
       type: "question",
       buttons: [
-        say("Relay’e dön", "Back to Relay"),
-        say("Durdur ve çık", "Stop and quit"),
+        say("electronMain.backToRelay"),
+        say("electronMain.stopAndQuit"),
       ],
       defaultId: 0,
       cancelId: 0,
-      message: say(
-        `${active.length} terminal çalışıyor.`,
-        active.length === 1
-          ? "1 terminal is running."
-          : `${active.length} terminals are running.`,
-      ),
+      message: say("electronMain.terminalsRunning", { count: active.length }),
     })
     .then(async (result) => {
       if (result.response !== 1) return;
@@ -3732,7 +3809,7 @@ app.on("before-quit", (event) => {
         app.quit();
       } catch (error) {
         dialog.showErrorBox(
-          say("Çıkış tamamlanmadı", "Quit did not finish"),
+          say("electronMain.quitDidNotFinish"),
           String(error),
         );
       }

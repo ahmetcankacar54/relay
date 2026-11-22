@@ -1,9 +1,10 @@
 // Kept free of browser-only imports so it can be unit tested under Node.
 
-type T = (tr: string, en: string) => string;
 
 import { clientHost, gatewayUrl } from "../../shared/proxy-url";
 import type { ProxyPick, ProxyPickReason } from "../../shared/proxy-types";
+import type { MessageId, T } from "../../shared/i18n/translate";
+import { hoursMinutes } from "./time";
 
 export { clientHost, gatewayUrl };
 
@@ -50,14 +51,10 @@ export const validHost = (value: string) => {
 /** "2 sa 10 dk" / "2 h 10 min" until a reset; "şimdi" at zero. */
 export function resetLabel(minutes: number | undefined, t: T): string {
   if (minutes === undefined) return "—";
-  if (minutes <= 0) return t("şimdi", "now");
+  if (minutes <= 0) return t("proxyUi.now");
   const days = Math.floor(minutes / 1_440);
-  if (days >= 1) return t(`${days} gün ${Math.floor((minutes % 1_440) / 60)} sa`, `${days} d ${Math.floor((minutes % 1_440) / 60)} h`);
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return hours
-    ? t(`${hours} sa${rest ? ` ${rest} dk` : ""}`, `${hours} h${rest ? ` ${rest} min` : ""}`)
-    : t(`${rest} dk`, `${rest} min`);
+  if (days >= 1) return t("libTime.dH", { days, hours: Math.floor((minutes % 1_440) / 60) });
+  return hoursMinutes(Math.floor(minutes / 60), minutes % 60, t);
 }
 
 /** Codex, Cursor and the OpenAI SDK read the base URL (with /v1) and the key from the environment. */
@@ -96,10 +93,10 @@ export function quotaTone(percent: number | undefined): "ok" | "warn" | "crit" |
 /** "4 sn önce" / "4 s ago": how long ago a request was answered. */
 export function agoLabel(at: number, now: number, t: T): string {
   const seconds = Math.max(0, Math.round((now - at) / 1000));
-  if (seconds < 60) return t(`${seconds} sn önce`, `${seconds} s ago`);
+  if (seconds < 60) return t("proxyUi.sAgo", { seconds });
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return t(`${minutes} dk önce`, `${minutes} min ago`);
-  return t(`${Math.round(minutes / 60)} sa önce`, `${Math.round(minutes / 60)} h ago`);
+  if (minutes < 60) return t("proxyUi.minAgo", { minutes });
+  return t("proxyUi.hAgo", { hours: Math.round(minutes / 60) });
 }
 
 /**
@@ -108,7 +105,8 @@ export function agoLabel(at: number, now: number, t: T): string {
  */
 export function compactCount(value: number, locale: string): string {
   const text = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-  return locale.startsWith("tr") ? text.replace(".", ",") : text;
+  const mark = new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === "decimal")?.value ?? ".";
+  return text.replace(".", mark);
 }
 
 /** Within this many minutes of a weekly reset, room left on the window is about to be lost. */
@@ -169,12 +167,12 @@ const CLIENT_LABELS: Record<string, string> = {
   codex: "Codex",
   omp: "omp",
 };
-const CLASS_LABELS: Record<string, [string, string]> = {
-  main: ["ana konuşma", "main"],
-  subagent: ["alt ajan", "subagent"],
-  compaction: ["sıkıştırma", "compaction"],
-  auxiliary: ["arka plan", "background"],
-  workflow: ["iş akışı", "workflow"],
+const CLASS_LABELS: Record<string, MessageId> = {
+  main: "proxyUi.classMain",
+  subagent: "proxyUi.classSubagent",
+  compaction: "proxyUi.classCompaction",
+  auxiliary: "proxyUi.classAuxiliary",
+  workflow: "proxyUi.classWorkflow",
 };
 
 /**
@@ -200,11 +198,11 @@ export function requestDetail(
   if (entry.client) parts.push(CLIENT_LABELS[entry.client] ?? entry.client);
   if (entry.requestClass) {
     const label = CLASS_LABELS[entry.requestClass];
-    parts.push(label ? t(...label) : entry.requestClass);
+    parts.push(label ? t(label) : entry.requestClass);
   }
   if (entry.ms !== undefined) {
     const seconds = (entry.ms / 1000).toLocaleString(locale, { maximumFractionDigits: 1 });
-    parts.push(entry.ms < 1000 ? `${entry.ms} ms` : t(`${seconds} sn`, `${seconds} s`));
+    parts.push(entry.ms < 1000 ? `${entry.ms} ms` : t("proxyUi.s", { seconds }));
   }
   const tokens = entry.tokens;
   if (tokens) {
@@ -214,50 +212,50 @@ export function requestDetail(
       const amount = compactCount(sent, locale);
       parts.push(
         cached
-          ? t(`${amount} girdi, %${cached} önbellekten`, `${amount} in, ${cached}% cached`)
-          : t(`${amount} girdi`, `${amount} in`),
+          ? t("proxyUi.inCached", { amount, cached })
+          : t("proxyUi.in", { amount }),
       );
     }
     if (tokens.output) {
       const amount = compactCount(tokens.output, locale);
-      parts.push(t(`${amount} çıktı`, `${amount} out`));
+      parts.push(t("proxyUi.out", { amount }));
     }
   }
   if (entry.cost !== undefined && entry.cost > 0) parts.push(`≈ ${usd(entry.cost, locale)}`);
   if (entry.miss) {
     const amount = compactCount(entry.miss.tokens, locale);
-    const why = t(...(MISS_LABELS[entry.miss.reason] ?? MISS_LABELS.unknown));
-    const share =
+    const why = t(MISS_LABELS[entry.miss.reason] ?? MISS_LABELS.unknown);
+    parts.push(
       dollarsPerPercent && entry.cost
-        ? t(`, 5 saatlik limitte ${windowShare(entry.cost / dollarsPerPercent, t, locale)}`, `, ${windowShare(entry.cost / dollarsPerPercent, t, locale)} of a 5-hour window`)
-        : "";
-    parts.push(t(`önbellek ıskası (${why}), ~${amount} yeniden yazıldı${share}`, `cache miss (${why}), ~${amount} written again${share}`));
+        ? t("proxyUi.cacheMissWrittenAgainShare", { why, amount, windowShare: windowShare(entry.cost / dollarsPerPercent, t, locale) })
+        : t("proxyUi.cacheMissWrittenAgain", { why, amount }),
+    );
   }
   if (entry.note === "refused")
-    parts.push(t("limit değil: Anthropic isteği geri çevirdi", "not a limit: Anthropic turned the request down"));
+    parts.push(t("proxyUi.notALimitAnthropicTurnedThe"));
   if (entry.note === "cold-move")
-    parts.push(t("önbelleği soğuktu, dolmak üzere olan hesaptan taşındı", "its cache was cold: moved off an account near its limit"));
+    parts.push(t("proxyUi.itsCacheWasColdMovedOff"));
   return parts.join(" · ");
 }
 
 /** How the gateway chose an account that was not the session's own, in words. */
-const PICK_LABELS: Record<Exclude<ProxyPickReason, "bound">, [string, string]> = {
-  "soonest-reset": ["haftası ilk biten hesap seçildi", "picked: its week ends first"],
-  balanced: ["en çok yeri olan hesap seçildi", "picked: most room left"],
-  priority: ["sıradaki hesap seçildi", "picked: next in order"],
-  only: ["uygun tek hesap buydu", "the only account available"],
+const PICK_LABELS: Record<Exclude<ProxyPickReason, "bound">, MessageId> = {
+  "soonest-reset": "proxyUi.pickedSoonestReset",
+  balanced: "proxyUi.pickedBalanced",
+  priority: "proxyUi.pickedPriority",
+  only: "proxyUi.pickedOnly",
 };
 
 /** A routing reason alone, for the pool's next-session line: what the strategy looks for. */
-const REASON_LABELS: Record<ProxyPickReason, [string, string]> = {
-  bound: ["oturumun hesabı", "the session's account"],
-  "soonest-reset": ["haftası ilk biten", "week ends first"],
-  balanced: ["en çok yeri olan", "most room left"],
-  priority: ["sırada ilk", "first in order"],
-  only: ["uygun tek hesap", "the only one available"],
+const REASON_LABELS: Record<ProxyPickReason, MessageId> = {
+  bound: "proxyUi.reasonBound",
+  "soonest-reset": "proxyUi.reasonSoonestReset",
+  balanced: "proxyUi.reasonBalanced",
+  priority: "proxyUi.reasonPriority",
+  only: "proxyUi.reasonOnly",
 };
 export function pickReasonLabel(reason: ProxyPickReason, t: T): string {
-  return t(...REASON_LABELS[reason]);
+  return t(REASON_LABELS[reason]);
 }
 
 /**
@@ -272,50 +270,44 @@ export function pickLine(
   if (!pick) return "";
   const names = (list: readonly string[]) => list.map((id) => nameOf(id) ?? "?").join(", ");
   const parts: string[] = [];
-  if (pick.reason !== "bound") parts.push(t(...PICK_LABELS[pick.reason]));
+  if (pick.reason !== "bound") parts.push(t(PICK_LABELS[pick.reason]));
   if (pick.moved && pick.from) {
     const from = names([pick.from]);
     parts.push(
       {
-        limit: t(`${from} limitte, oturum taşındı`, `${from} at its limit, session moved`),
-        cold: t(`önbellek soğumuştu, ${from} hesabından ücretsiz taşındı`, `cache had expired, moved off ${from} at no cost`),
-        drain: t(`${from} limite yaklaştı, yeni istemde taşındı`, `${from} near its limit, moved at a new prompt`),
-        rebalance: t(
-          `haftası daha erken biten hesaba, ${from} hesabından yeni istemde taşındı`,
-          `moved off ${from} at a new prompt, to a week that ends sooner`,
-        ),
+        limit: t("proxyUi.atItsLimitSessionMoved", { from }),
+        cold: t("proxyUi.cacheHadExpiredMovedOffAt", { from }),
+        drain: t("proxyUi.nearItsLimitMovedAtA", { from }),
+        rebalance: t("proxyUi.movedOffAtANewPrompt", { from }),
       }[pick.moved],
     );
   }
-  if (pick.overflow) parts.push(t("alt ajan, oturumdan ayrı hesapta", "subagent kept off its session's account"));
-  if (pick.after) parts.push(t(`önce ${names([pick.after])} denendi`, `tried ${names([pick.after])} first`));
+  if (pick.overflow) parts.push(t("proxyUi.subagentKeptOffItsSessionS"));
+  if (pick.after) parts.push(t("proxyUi.triedFirst", { names: names([pick.after]) }));
   if (pick.boundWaiting)
     parts.push(
-      t(
-        `oturumun hesabı ${names([pick.boundWaiting])} bekliyor, sonra ona döner`,
-        `its session's account ${names([pick.boundWaiting])} is waiting; it goes back after`,
-      ),
+      t("proxyUi.itsSessionSAccountIsWaiting", { names: names([pick.boundWaiting]) }),
     );
   if (pick.nearlyFull?.length)
-    parts.push(t(`${names(pick.nearlyFull)} limite yakın, atlandı`, `${names(pick.nearlyFull)} near the limit, passed over`));
+    parts.push(t("proxyUi.nearTheLimitPassedOver", { names: names(pick.nearlyFull) }));
   if (pick.noSignIn?.length)
-    parts.push(t(`${names(pick.noSignIn)}: giriş okunamadı`, `${names(pick.noSignIn)}: sign-in unreadable`));
+    parts.push(t("proxyUi.signInUnreadable", { names: names(pick.noSignIn) }));
   return parts.join(" · ");
 }
 
 /** Why a session's cache was written again, in words. */
-const MISS_LABELS: Record<string, [string, string]> = {
-  account: ["hesap değişti", "account changed"],
-  model: ["model değişti", "model changed"],
-  expired: ["süresi doldu", "it expired"],
-  unknown: ["istem değişti", "the prompt changed"],
+const MISS_LABELS: Record<string, MessageId> = {
+  account: "proxyUi.missAccount",
+  model: "proxyUi.missModel",
+  expired: "proxyUi.missExpired",
+  unknown: "proxyUi.missUnknown",
 };
 
 /** A share of a 5-hour window, without a suffix: "~%0,4", "<%0,1". */
 export function windowShare(percent: number, t: T, locale: string): string {
-  if (percent < 0.1) return t("<%0,1", "<0.1%");
+  if (percent < 0.1) return t("proxyUi.n01");
   const text = percent.toLocaleString(locale, { maximumFractionDigits: percent < 10 ? 1 : 0 });
-  return t(`~%${text}`, `~${text}%`);
+  return t("proxyUi.msg", { text });
 }
 
 /** An API-price amount, with the locale's decimal mark: three decimals under ten cents. */
@@ -340,12 +332,12 @@ export function classShareLine(
     .filter(({ part }) => part > 0)
     .map(({ share, part }) => {
       const label = CLASS_LABELS[share.requestClass];
-      const name = label ? t(...label) : share.requestClass === "other" ? t("diğer", "other") : share.requestClass;
-      return t(`${name} %${part}`, `${name} ${part}%`);
+      const name = label ? t(label) : share.requestClass === "other" ? t("proxyUi.other") : share.requestClass;
+      return t("proxyUi.msg2", { name, part });
     });
   return byCost
-    ? t(`Bugün, API fiyatıyla: ${parts.join(" · ")}`, `Today, at API prices: ${parts.join(" · ")}`)
-    : t(`Bugün, token olarak: ${parts.join(" · ")}`, `Today, in tokens: ${parts.join(" · ")}`);
+    ? t("proxyUi.todayAtApiPrices", { join: parts.join(" · ") })
+    : t("proxyUi.todayInTokens", { join: parts.join(" · ") });
 }
 
 /**
@@ -370,31 +362,36 @@ export function sessionCacheLine(
   const warm = left > 0;
   const size = compactCount(session.prefixTokens, locale);
   const minutes = Math.max(1, Math.ceil(left / 60_000));
-  const lifetime = session.ttlMs >= 3_600_000 ? t("1 saatlik", "1-hour") : t("5 dakikalık", "5-minute");
-  const cost = session.moveCost
-    ? `≈ ${usd(session.moveCost.dollars, locale)}${
-        session.moveCost.percent !== undefined
-          ? t(`, 5 saatlik limitte ${windowShare(session.moveCost.percent, t, locale)}`, `, ${windowShare(session.moveCost.percent, t, locale)} of a 5-hour window`)
-          : ""
-      }`
-    : "";
+  const lifetime = session.ttlMs >= 3_600_000 ? t("proxyUi.n1Hour") : t("proxyUi.n5Minute");
+  const cost = !session.moveCost
+    ? ""
+    : session.moveCost.percent !== undefined
+      ? t("proxyUi.costShare", { usd: usd(session.moveCost.dollars, locale), windowShare: windowShare(session.moveCost.percent, t, locale) })
+      : `≈ ${usd(session.moveCost.dollars, locale)}`;
   const parts = [
     agoLabel(session.lastAt, now, t),
     warm
-      ? t(`${size} token önbellekte (${lifetime})`, `${size} tokens cached (${lifetime})`)
-      : t(`dönünce ~${size} token yeniden yazılır${cost ? ` (${cost})` : ""}`, `coming back writes ~${size} tokens again${cost ? ` (${cost})` : ""}`),
+      ? t("proxyUi.tokensCached", { size, lifetime })
+      : cost
+        ? t("proxyUi.comingBackWritesTokensAgainCost", { size, cost })
+        : t("proxyUi.comingBackWritesTokensAgain", { size }),
   ];
-  if (warm && cost) parts.push(t(`başka hesaba taşınırsa ${cost}`, `moving it to another account: ${cost}`));
-  if (session.subagents) parts.push(t(`${session.subagents} alt ajan`, `${session.subagents} subagents`));
+  if (warm && cost) parts.push(t("proxyUi.movingItToAnotherAccount", { cost }));
+  if (session.subagents) parts.push(t("proxyUi.subagents", { sessionSubagents: session.subagents }));
   if (session.misses) {
-    const why = t(...(MISS_LABELS[session.lastMiss?.reason ?? "unknown"] ?? MISS_LABELS.unknown));
-    parts.push(t(`${session.misses} ıska, son: ${why}`, `${session.misses} misses, last: ${why}`));
+    const why = t(MISS_LABELS[session.lastMiss?.reason ?? "unknown"] ?? MISS_LABELS.unknown);
+    parts.push(t("proxyUi.missesLast", { sessionMisses: session.misses, why }));
   }
   return {
     warm,
-    state: warm ? t(`sıcak · ${minutes} dk`, `warm · ${minutes} min`) : t("soğuk", "cold"),
+    state: warm ? t("proxyUi.warmMin", { minutes }) : t("proxyUi.cold"),
     detail: parts.join(" · "),
   };
+}
+
+/** "A, B and C": commas, and the word only before the last name. */
+export function nameList(names: readonly string[], t: T): string {
+  return names.length > 1 ? t("proxyUi.namesAnd", { names: names.slice(0, -1).join(", "), last: names[names.length - 1] }) : names.join("");
 }
 
 const BOUND_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex CLI", omp: "omp" };
@@ -418,28 +415,17 @@ export function gatewayLine(
 ): { tone: "ok" | "crit"; text: string } | undefined {
   if (!status) return undefined;
   const bound = (status.clients ?? []).filter((c) => c.bound).map((c) => BOUND_NAMES[c.id] ?? c.id);
-  // "A, B and C": commas, and the word only before the last name.
-  const names = (and: string) => (bound.length > 1 ? `${bound.slice(0, -1).join(", ")}${and}${bound[bound.length - 1]}` : bound.join(""));
+  const names = nameList(bound, t);
+  const count = bound.length;
   if (!status.running)
-    return bound.length
-      ? {
-          tone: "crit",
-          text: t(
-            `${names(" ve ")} ağ geçidine bağlı ama geçit kapalı: istekleri gitmez.`,
-            `${names(" and ")} ${bound.length > 1 ? "are" : "is"} bound to the gateway, but it is off: requests fail.`,
-          ),
-        }
-      : undefined;
+    return count ? { tone: "crit", text: t("proxyUi.boundToTheGatewayButIt", { names, count }) } : undefined;
   const last = status.recent?.find((entry) => entry.accountId);
   const lastName = last && status.accounts.find((a) => a.id === last.accountId)?.name;
   const lastText = last && lastName
-    ? t(`son istek ${lastName}, ${agoLabel(last.at, now, t)}`, `last request ${lastName}, ${agoLabel(last.at, now, t)}`)
+    ? t("proxyUi.lastRequest", { lastName, agoLabel: agoLabel(last.at, now, t) })
     : undefined;
   if (!bound.length)
-    return lastText ? { tone: "ok", text: t(`Ağ geçidi açık · ${lastText}`, `Gateway on · ${lastText}`) } : undefined;
-  const head = t(
-    `${names(" ve ")} ağ geçidinden geçer, Claude uygulamasının hesabından değil`,
-    `${names(" and ")} ${bound.length > 1 ? "go" : "goes"} through the gateway, not the Claude app's account`,
-  );
+    return lastText ? { tone: "ok", text: t("proxyUi.gatewayOn", { lastText }) } : undefined;
+  const head = t("proxyUi.throughTheGatewayNotTheClaude", { names, count });
   return { tone: "ok", text: lastText ? `${head} · ${lastText}` : head };
 }

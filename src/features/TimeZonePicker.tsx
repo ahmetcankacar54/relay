@@ -21,6 +21,7 @@ import {
   timeZoneOptions,
   validTimeZone,
 } from "../../shared/time-zones";
+import type { T } from "../../shared/i18n/translate";
 
 type Props = {
   id: string;
@@ -28,7 +29,7 @@ type Props = {
   value: string;
   disabled?: boolean;
   onChange: (zone: string) => void;
-  t: (tr: string, en: string) => string;
+  t: T;
   now?: number;
 };
 
@@ -194,7 +195,7 @@ export function TimeZonePicker({
           ref={panel}
           align="start"
           collisionPadding={12}
-          aria-label={t("Saat dilimi seç", "Select a time zone")}
+          aria-label={t("timeZonePicker.selectATimeZone")}
           className="flex max-h-[min(420px,var(--radix-popover-content-available-height))] w-[min(max(var(--radix-popover-trigger-width),360px),calc(100vw-24px))] flex-col gap-0 p-0"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
@@ -240,20 +241,14 @@ export function TimeZonePicker({
               type="text"
               role="combobox"
               className="h-10 w-full min-w-0 rounded-none border-0 bg-transparent px-0 py-0 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none"
-              aria-label={t(
-                "Şehir, saat dilimi veya UTC farkı ara",
-                "Search city, time zone or UTC offset",
-              )}
+              aria-label={t("timeZonePicker.searchCityTimeZoneOrUtc")}
               aria-autocomplete="list"
               aria-expanded="true"
               aria-controls={`${id}-list`}
               aria-activedescendant={
                 results[active] ? `${id}-option-${active}` : undefined
               }
-              placeholder={t(
-                "Şehir veya UTC farkı ara…",
-                "Search city or UTC offset…",
-              )}
+              placeholder={t("timeZonePicker.searchCityOrUtcOffset")}
               autoComplete="off"
               spellCheck={false}
               value={query}
@@ -307,7 +302,7 @@ export function TimeZonePicker({
                 className="px-2.5 py-3 text-sm text-muted-foreground"
                 role="status"
               >
-                {t("Eşleşen saat dilimi yok", "No matching time zones")}
+                {t("timeZonePicker.noMatchingTimeZones")}
               </p>
             )}
           </div>
@@ -321,17 +316,14 @@ export function TimeZonePicker({
                 onClick={() => select(systemZone)}
               >
                 <LocateFixed aria-hidden="true" />
-                {t("Sistem saat dilimini kullan", "Use system time zone")}
+                {t("timeZonePicker.useSystemTimeZone")}
                 <small className="ml-auto truncate text-xs font-normal text-muted-foreground">
                   {systemZone}
                 </small>
               </Button>
             )}
             <small className="px-2 text-xs text-muted-foreground">
-              {t(
-                "UTC farkları yaz saatine göre değişebilir.",
-                "Offsets can change with daylight saving time.",
-              )}
+              {t("timeZonePicker.offsetsCanChangeWithDaylightSaving")}
             </small>
           </div>
         </PopoverContent>

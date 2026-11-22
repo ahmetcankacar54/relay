@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useI18n, type T } from "@/data/i18n";
+import { useI18n, type MessageId, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { errorMessage } from "@/data/error-message";
@@ -36,7 +36,7 @@ export function suggestAccountName(
 ): string {
   const base =
     provider === "claude"
-      ? t("Kişisel · Claude", "Personal · Claude")
+      ? t("addAccountProviders.personalClaude")
       : provider === "codex"
         ? "OpenAI · Codex"
         : provider === "antigravity"
@@ -113,7 +113,7 @@ export function CommonFields({
   return (
     <div className="grid gap-3">
       <div className="grid gap-1.5">
-        <Label htmlFor={`${idPrefix}-name`}>{t("Hesap adı", "Account name")}</Label>
+        <Label htmlFor={`${idPrefix}-name`}>{t("addAccountProviders.accountName")}</Label>
         <Input
           id={`${idPrefix}-name`}
           maxLength={64}
@@ -122,7 +122,7 @@ export function CommonFields({
         />
       </div>
       <div className="grid gap-1.5">
-        <Label id={`${idPrefix}-kind`}>{t("Hesap türü", "Account type")}</Label>
+        <Label id={`${idPrefix}-kind`}>{t("addAccountProviders.accountType")}</Label>
         <ToggleGroup
           type="single"
           variant="outline"
@@ -132,21 +132,21 @@ export function CommonFields({
           className="w-full"
         >
           <ToggleGroupItem value="personal" className="flex-1">
-            {t("Kişisel", "Personal")}
+            {t("common.personal")}
           </ToggleGroupItem>
           <ToggleGroupItem value="work" className="flex-1">
-            {t("İş", "Work")}
+            {t("addAccountProviders.work")}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
       {form.kind === "work" && (
         <div className="grid gap-1.5">
-          <Label htmlFor={`${idPrefix}-group`}>{t("Paylaşım grubu · isteğe bağlı", "Sharing group · optional")}</Label>
+          <Label htmlFor={`${idPrefix}-group`}>{t("addAccountProviders.sharingGroupOptional")}</Label>
           <Input
             id={`${idPrefix}-group`}
             maxLength={64}
             value={form.group}
-            placeholder={t("Örn. İş", "e.g. Work")}
+            placeholder={t("addAccountProviders.eGWork")}
             onChange={(e) => onChange({ ...form, group: e.target.value })}
           />
         </div>
@@ -155,11 +155,11 @@ export function CommonFields({
   );
 }
 
-const LAYER_WORDS: Record<CascadeLayerStatus, [string, string]> = {
-  done: ["Tamam", "Done"],
-  ready: ["Hazır", "Ready"],
-  skipped: ["Atlandı", "Skipped"],
-  pending: ["Bekliyor", "Waiting"],
+const LAYER_WORDS: Record<CascadeLayerStatus, MessageId> = {
+  done: "connectionPanels.done",
+  ready: "common.ready",
+  skipped: "setupChecklist.skipped",
+  pending: "switchingTabs.waiting",
 };
 
 /**
@@ -169,10 +169,10 @@ const LAYER_WORDS: Record<CascadeLayerStatus, [string, string]> = {
 export function CascadeResult({ result }: { result: OneClickCascadeResult }) {
   const { t } = useI18n();
   const rows: [string, CascadeLayerStatus][] = [
-    [t("Claude uygulaması", "Claude app"), result.layers.desktop],
-    [t("Limitler", "Limits"), result.layers.usage],
-    [t("Terminal", "Terminal"), result.layers.terminal],
-    [t("Eklenti ve ağ geçidi", "Extension and gateway"), result.layers.extensionAndProxy],
+    [t("common.claudeApp"), result.layers.desktop],
+    [t("addAccountProviders.limits"), result.layers.usage],
+    [t("addAccountProviders.terminal"), result.layers.terminal],
+    [t("addAccountProviders.extensionAndGateway"), result.layers.extensionAndProxy],
   ];
   const shown = rows.filter(([, status]) => status !== "skipped");
   return (
@@ -181,7 +181,7 @@ export function CascadeResult({ result }: { result: OneClickCascadeResult }) {
         <li key={label} data-state={status} className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <StatusDot tone={status === "done" || status === "ready" ? "ok" : "warn"} />
           <span>{label}</span>
-          <span className="sr-only">{t(...LAYER_WORDS[status])}</span>
+          <span className="sr-only">{t(LAYER_WORDS[status])}</span>
         </li>
       ))}
     </ul>
@@ -251,28 +251,20 @@ export function DetectedImport({
     void action("import", async () => {
       onDone(await importSessions(chosen, (input) => api.oneClickConnect(input), accounts.map((a) => a.name), t));
     });
-  const where: Record<string, [string, string]> = {
-    claude: ["Claude uygulaması", "Claude app"],
-    codex: ["Codex CLI", "Codex CLI"],
-    antigravity: ["Google oturumu", "Google sign-in"],
-  };
   return (
     <section data-slot="detected-import" aria-labelledby="detected-import-title" className="grid gap-3 rounded-lg border bg-card px-3.5 py-3">
       <div className="grid gap-0.5">
         <h3 id="detected-import-title" className="text-base font-semibold">
           {mac
             ? sessions.length === 1
-              ? t("Bu Mac’te 1 hesap bulduk", "We found 1 account on this Mac")
-              : t(`Bu Mac’te ${sessions.length} hesap bulduk`, `We found ${sessions.length} accounts on this Mac`)
+              ? t("addAccountProviders.weFound1AccountOnThis")
+              : t("addAccountProviders.weFoundAccountsOnThisMac", { sessionsLength: sessions.length })
             : sessions.length === 1
-              ? t("Bu bilgisayarda 1 hesap bulduk", "We found 1 account on this computer")
-              : t(`Bu bilgisayarda ${sessions.length} hesap bulduk`, `We found ${sessions.length} accounts on this computer`)}
+              ? t("addAccountProviders.weFound1AccountOnThis2")
+              : t("addAccountProviders.weFoundAccountsOnThisComputer", { sessionsLength: sessions.length })}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {t(
-            "İşaretli olanlar tek seferde eklenir. İsimleri sonra değiştirebilirsin.",
-            "The ticked ones are added in one go. You can rename them later.",
-          )}
+          {t("addAccountProviders.theTickedOnesAreAddedIn")}
         </p>
       </div>
       <ul className="grid">
@@ -304,7 +296,17 @@ export function DetectedImport({
                     {session.email || session.name ? <Private>{session.email ?? session.name}</Private> : session.source}
                   </span>
                   <span className="truncate text-2xs text-muted-foreground">
-                    {[t(...(where[session.provider] ?? [session.source ?? "", session.source ?? ""])), providerPlan(session.provider, session.plan)?.label, session.orgName]
+                    {[
+                      session.provider === "claude"
+                        ? t("common.claudeApp")
+                        : session.provider === "codex"
+                          ? "Codex CLI"
+                          : session.provider === "antigravity"
+                            ? t("addAccountProviders.googleSignIn")
+                            : session.source,
+                      providerPlan(session.provider, session.plan)?.label,
+                      session.orgName,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
@@ -317,14 +319,11 @@ export function DetectedImport({
       <div className="flex flex-wrap items-center gap-2">
         <Button disabled={!!busy || chosen.length === 0} onClick={run}>
           {busy === "import" ? <LoaderCircle className="animate-spin" /> : <Zap />}
-          {chosen.length === 1 ? t("Hesabı ekle", "Add account") : t(`${chosen.length} hesabı ekle`, `Add ${chosen.length} accounts`)}
+          {t("addAccountProviders.addAccounts", { count: chosen.length })}
         </Button>
         {chosen.some((s) => s.provider === "claude") && (
           <span className="text-xs text-muted-foreground">
-            {t(
-              "Claude hesabı, Claude uygulamasında Code bir kez açıldığında kaydedilir.",
-              "The Claude account is saved once Code has been opened in the Claude app.",
-            )}
+            {t("addAccountProviders.theClaudeAccountIsSavedOnce")}
           </span>
         )}
       </div>
@@ -386,7 +385,7 @@ export function ProviderForm({
       {detected ? (
         <div data-slot="detected-session" className="grid gap-0.5 rounded-lg border border-ok/40 bg-ok/5 px-3 py-2 text-sm">
           <span>
-            {t("Yerel oturum algılandı", "Local session detected")}:{" "}
+            {t("addAccountProviders.localSessionDetected")}:{" "}
             <b className="font-semibold">{session?.email ? <Private>{session.email}</Private> : session?.source}</b>
           </span>
           <span className="text-xs text-muted-foreground">
@@ -394,32 +393,23 @@ export function ProviderForm({
           </span>
           {session?.alreadyLinkedAccountName && (
             <span className="text-xs text-warn-foreground">
-              {t(
-                `Bu oturum zaten “${session.alreadyLinkedAccountName}” olarak bağlı.`,
-                `This session is already connected as “${session.alreadyLinkedAccountName}”.`,
-              )}
+              {t("addAccountProviders.thisSessionIsAlreadyConnectedAs", { sessionAlreadyLinkedAccountName: session.alreadyLinkedAccountName })}
             </span>
           )}
         </div>
       ) : (
         <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
           {mac
-            ? t(
-                "Bu Mac'te Codex CLI girişi bulunamadı. `codex login` ile giriş yap ya da bir OpenAI API anahtarı gir.",
-                "No Codex CLI sign-in on this Mac. Sign in with `codex login`, or enter an OpenAI API key.",
-              )
-            : t(
-                "Bu bilgisayarda Codex CLI girişi bulunamadı. `codex login` ile giriş yap ya da bir OpenAI API anahtarı gir.",
-                "No Codex CLI sign-in on this computer. Sign in with `codex login`, or enter an OpenAI API key.",
-              )}
+            ? t("addAccountProviders.noCodexCliSignInOn")
+            : t("addAccountProviders.noCodexCliSignInOn2")}
         </p>
       )}
       <CommonFields form={form} onChange={onChange} idPrefix={`add-${provider}`} />
       <div className="grid gap-1.5">
           <Label htmlFor={`add-${provider}-key`}>
             {detected
-              ? t("OpenAI API anahtarı · isteğe bağlı", "OpenAI API key · optional")
-              : t("OpenAI API anahtarı", "OpenAI API key")}
+              ? t("addAccountProviders.openaiApiKeyOptional")
+              : t("addAccountProviders.openaiApiKey")}
           </Label>
           <Input
             id={`add-${provider}-key`}
@@ -433,20 +423,17 @@ export function ProviderForm({
           />
           <p className="text-xs text-muted-foreground">
             {detected
-              ? t(
-                  "Boş bırakırsan algılanan giriş kullanılır. Anahtar kaydedilmeden önce OpenAI'ye sorulur.",
-                  "Leave it empty to use the detected sign-in. A key is checked with OpenAI before it is saved.",
-                )
-              : t("Anahtar kaydedilmeden önce OpenAI'ye sorulur.", "The key is checked with OpenAI before it is saved.")}
+              ? t("addAccountProviders.leaveItEmptyToUseThe")
+              : t("addAccountProviders.theKeyIsCheckedWithOpenai")}
           </p>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" onClick={close}>
-          {t("Vazgeç", "Cancel")}
+          {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={disabled || !canConnect}>
           {connecting ? <LoaderCircle className="animate-spin" /> : <Zap />}
-          {t("Bağla", "Connect")}
+          {t("common.connect")}
         </Button>
       </div>
     </form>
@@ -531,13 +518,12 @@ export function AntigravityOAuthForm({
       <RelayErrorAlert />
       {oauthError && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive">{oauthError}</p>}
       <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-        {t("Google hesabında bir kez oturum aç. Relay, Antigravity OAuth oturumunu yerel olarak saklar ve proxy için kullanır. API anahtarı gerekmez.",
-          "Sign in to your Google account once. Relay stores the Antigravity OAuth session locally for the gateway. No API key is needed.")}
+        {t("addAccountProviders.signInToYourGoogleAccount")}
       </p>
       <CommonFields form={form} onChange={onChange} idPrefix="add-antigravity" />
       {pending && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
         <LoaderCircle className="size-4 animate-spin" />
-        {t("Tarayıcıda Google girişini tamamla…", "Finish Google sign-in in your browser…")}
+        {t("addAccountProviders.finishGoogleSignInInYour")}
       </p>}
       {pending && (
         <form
@@ -549,10 +535,7 @@ export function AntigravityOAuthForm({
           }}
         >
           <Label htmlFor="antigravity-callback" className="text-xs">
-            {t(
-              "Tarayıcı “localhost:51121” ile başlayan bir sayfada kaldıysa adresini buraya yapıştır",
-              "If the browser stopped on a page starting with “localhost:51121”, paste its address here",
-            )}
+            {t("addAccountProviders.ifTheBrowserStoppedOnA")}
           </Label>
           <div className="flex gap-2">
             <Input
@@ -566,7 +549,7 @@ export function AntigravityOAuthForm({
             />
             <Button type="submit" size="sm" variant="outline" disabled={finishing || !pasted.trim()}>
               {finishing && <LoaderCircle className="animate-spin" />}
-              {t("Tamamla", "Finish")}
+              {t("addAccountProviders.finish")}
             </Button>
           </div>
         </form>
@@ -581,11 +564,11 @@ export function AntigravityOAuthForm({
             close();
           }}
         >
-          {pending ? t("İptal et", "Cancel") : t("Kapat", "Close")}
+          {pending ? t("addAccountProviders.cancel") : t("common.close")}
         </Button>
         <Button type="button" disabled={!!busy || !!pending || !form.name.trim()} onClick={start}>
           {busy === "antigravity-oauth" ? <LoaderCircle className="animate-spin" /> : <Zap />}
-          {t("Google ile bağlan", "Connect with Google")}
+          {t("addAccountProviders.connectWithGoogle")}
         </Button>
       </div>
     </div>
@@ -610,7 +593,7 @@ export function ConnectionDone({
   return (
     <div className="grid gap-3" data-slot="connection-done">
       <h3 className="flex flex-wrap items-center gap-2 text-lg leading-snug font-semibold">
-        {t("Hesap eklendi", "Account added")}
+        {t("addAccountProviders.accountAdded")}
         <ProviderBadge provider={provider} full />
       </h3>
       <p className="text-sm text-muted-foreground">
@@ -621,10 +604,10 @@ export function ConnectionDone({
       {children}
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onAnother}>
-          {t("Başka hesap ekle", "Add another account")}
+          {t("addAccountProviders.addAnotherAccount")}
         </Button>
         <Button type="button" onClick={close}>
-          {t("Bitti", "Done")}
+          {t("addAccountProviders.done")}
         </Button>
       </div>
     </div>

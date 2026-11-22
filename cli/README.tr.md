@@ -138,7 +138,7 @@ kimliğinin tek bir hesaba uyan başı da yeterlidir.
 
 Bu seçenekler her komutta çalışır:
 - `--yes` (`-y`)
-- `--lang tr|en`. Verilmezse Relay önce `RELAY_LANG`'e, sonra sistem diline bakar.
+- `--lang <kod>`: `en`, `tr`, `de`, `fr`, `es`, `pt-BR`, `it`, `ja`, `ko`, `zh-Hans`, `zh-Hant`, `ru`, `uk`, `pl`, `nl`. Verilmezse Relay önce `RELAY_LANG`'e, sonra sistem diline (`LC_ALL`, `LC_MESSAGES`, `LANG`) bakar; desteklenmeyen dilde İngilizce konuşur.
 - `--no-color`
 - `--version`
 - `--help`

@@ -4,6 +4,7 @@ import { modelOnlyUsage, spentModelWindows } from "../../shared/quota-windows";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
 import { tempoAt } from "../../shared/tempo";
 import { clientHost } from "../lib/proxy-ui";
+import type { T } from "../../shared/i18n/translate";
 
 export const pendingFlow = (f?: AuthFlow) =>
   !!f && ["starting", "waiting", "verifying"].includes(f.status);
@@ -33,7 +34,12 @@ export function limitFull(
   if (!freshUsage(u, now)) return undefined;
   const full = (quotaWindows(u) ?? []).filter((w) => w.usedPercent >= 100);
   if (!full.length) return undefined;
-  const availableAt = full.map((w) => w.resetsAt).filter((r): r is string => !!r).sort().at(-1);
+  // By time: the same instant can be written with different offsets or precision.
+  const availableAt = full
+    .map((w) => w.resetsAt)
+    .filter((r): r is string => !!r && Number.isFinite(Date.parse(r)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b))
+    .at(-1);
   return availableAt ? { availableAt } : {};
 }
 
@@ -118,7 +124,8 @@ export type WindowPeriod = keyof typeof PERIOD_MS;
 
 export interface UsageWindowRow {
   key: string;
-  label: { tr: string; en: string };
+  /** A model's own limit: the model's or pool's name ("Fable", "Gemini"); `usageRowLabel` words the row. */
+  name?: string;
   usedPercent: number;
   resetsAt?: string;
   /** A five-hour or weekly window; undefined for one of unknown length (an Antigravity model). */
@@ -135,15 +142,16 @@ const periodOf = (w: Pick<ModelWindow, "key" | "period">): WindowPeriod | undefi
   w.period ?? (w.key.startsWith("seven_day") ? "seven_day" : w.key.startsWith("five_hour") ? "five_hour" : undefined);
 
 /**
- * A model window's name: the model or pool first, then its period ("Fable · haftalık", "Gemini ·
- * 5 saat"). A window of unknown length is the name alone.
+ * A limit row's name: the account's two windows by their kind; a model window the model or pool
+ * first, then its period ("Fable · haftalık", "Gemini · 5 saat"). A window of unknown length is the
+ * name alone.
  */
-function modelRowLabel(w: ModelWindow): { tr: string; en: string } {
-  const period = periodOf(w);
-  if (!period) return { tr: w.label, en: w.label };
-  return period === "seven_day"
-    ? { tr: `${w.label} · haftalık`, en: `${w.label} · weekly` }
-    : { tr: `${w.label} · 5 saat`, en: `${w.label} · 5-hour` };
+export function usageRowLabel(row: Pick<UsageWindowRow, "key" | "name" | "period" | "model">, t: T): string {
+  if (!row.model) return row.key === "five_hour" ? t("selectors.fiveHourPeriod") : t("selectors.weeklyAllModels");
+  const model = row.name ?? row.key;
+  if (row.period === "seven_day") return t("selectors.modelWeekly", { model });
+  if (row.period === "five_hour") return t("selectors.modelFiveHour", { model });
+  return model;
 }
 
 /**
@@ -157,9 +165,9 @@ export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
   // window is only the roomiest of them.
   const own = !modelOnlyUsage(usage);
   if (own && usage.fiveHour)
-    rows.push({ key: "five_hour", label: { tr: "5 saatlik dönem", en: "5-hour period" }, period: "five_hour", ...usage.fiveHour });
+    rows.push({ key: "five_hour", period: "five_hour", ...usage.fiveHour });
   if (own && usage.sevenDay)
-    rows.push({ key: "seven_day", label: { tr: "Haftalık · tüm modeller", en: "Weekly · all models" }, period: "seven_day", ...usage.sevenDay });
+    rows.push({ key: "seven_day", period: "seven_day", ...usage.sevenDay });
   // Antigravity's pools keep the reader's order (as the app lists them: Gemini first, five hours
   // before the week), so a line never moves; other model limits read fullest first.
   const models = own
@@ -168,7 +176,7 @@ export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
   for (const w of models)
     rows.push({
       key: w.key,
-      label: modelRowLabel(w),
+      name: w.label,
       usedPercent: w.usedPercent,
       resetsAt: w.resetsAt,
       period: periodOf(w),

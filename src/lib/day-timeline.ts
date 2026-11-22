@@ -21,7 +21,8 @@ import { fallbackTempo, type Tempo } from "../../shared/tempo";
 import type { Forecast, ForecastSegment } from "../../shared/capacity-plan";
 import { liveForecast } from "../../shared/live-forecast";
 import { freshUsage } from "../../shared/usage";
-import type { Language } from "../data/language";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import { tFor } from "../../shared/i18n/translate";
 import { formatClock } from "./time";
 
 /** Planned settings without deleted accounts; deleted accounts take no slot, exactly as in the window keeper. */
@@ -362,19 +363,17 @@ export function startDayLabel(
   at: number | string,
   now: number,
   zone: string,
-  language: Language,
+  language: Locale,
 ): string {
   const time = typeof at === "number" ? at : Date.parse(at);
   if (!Number.isFinite(time)) return "";
-  const tr = language === "tr";
   const clock = formatClock(time, language, zone);
   const today = localDate(now, zone);
   const date = localDate(time, zone);
-  if (date === today) return `${tr ? "bugün" : "today"} ${clock}`;
-  if (date === shiftDate(today, 1))
-    return `${tr ? "yarın" : "tomorrow"} ${clock}`;
+  if (date === today) return tFor(language)("dayTimeline.todayAt", { clock });
+  if (date === shiftDate(today, 1)) return tFor(language)("dayTimeline.tomorrowAt", { clock });
   const week = date > today && date < shiftDate(today, 7);
-  const day = new Intl.DateTimeFormat(tr ? "tr-TR" : "en-GB", {
+  const day = new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
     timeZone: zone,
     ...(week
       ? { weekday: "long" as const }
@@ -389,7 +388,7 @@ export const nextStartLabel = (
   at: number | string,
   now: number,
   zone: string,
-  language: Language,
+  language: Locale,
 ) => `${name} ${startDayLabel(at, now, zone, language)}`;
 
 /** Timeline window colours, cycled per planned account (theme variables `--tone-1..4`). */

@@ -1,6 +1,7 @@
 import type { Account, AccountProvider } from "../../../shared/types";
+import { tFor, type T } from "../../../shared/i18n/translate";
+import type { Locale } from "../../../shared/i18n/locales";
 
-type T = (tr: string, en: string) => string;
 
 /** An account's plan as every screen names it: the header, the table, the Overview, Planning. */
 export interface AccountPlanInfo {
@@ -118,22 +119,19 @@ export function planLabel(account: Account): string | undefined {
 
 /** The plan badge's tooltip: where its plan came from. */
 export function planTitle(account: Account, plan: AccountPlanInfo, t: T): string {
-  if (plan.source === "chosen") return t("Planlama için seçildi", "Chosen for planning");
+  if (plan.source === "chosen") return t("accountLabels.chosenForPlanning");
   // A Claude subscription without its tier (Max: 5× or 20×?) still leaves planning's plan to pick.
   if (plan.provider === "claude" && !planLabel(account))
-    return t(
-      "Abonelik · planlama için plan seçilmedi",
-      "Subscription · no plan selected for planning",
-    );
-  return t("Hesaptan algılandı", "Detected from the account");
+    return t("accountLabels.subscriptionNoPlanSelectedForPlanning");
+  return t("accountLabels.detectedFromTheAccount");
 }
 
 /** History-sharing group shown to the user. */
 export const groupName = (account: Account, t: T) =>
   account.kind === "personal"
-    ? t("Kişisel", "Personal")
+    ? t("common.personal")
     : account.group === `work:${account.id}`
-      ? t("Ayrı çalışma alanı", "Separate workspace")
+      ? t("accountLabels.separateWorkspace")
       : account.group.slice(5);
 
 
@@ -175,10 +173,10 @@ export function filterAccounts(
   accounts: Account[],
   query: string,
   filter: AccountFilter,
-  language: string,
+  language: Locale,
   provider: ProviderFilter = "all",
 ) {
-  const t: T = (tr, en) => (language === "tr" ? tr : en);
+  const t = tFor(language);
   const needle = query.trim().toLocaleLowerCase(language);
   return accounts.filter(
     (a) =>
@@ -191,11 +189,3 @@ export function filterAccounts(
         (filter === "connected" && !!a.desktop)),
   );
 }
-
-/** Avatar colours keyed by `Account.color`, with dark-mode variants. */
-export const avatarClass: Record<string, string> = {
-  terra: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",
-  olive: "bg-lime-100 text-lime-800 dark:bg-lime-950 dark:text-lime-200",
-  blue: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
-  plum: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200",
-};

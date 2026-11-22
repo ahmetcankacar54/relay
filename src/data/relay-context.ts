@@ -15,6 +15,7 @@ import type {
   Snapshot,
 } from "../../shared/types";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
+import type { ActionOutcome } from "./relay-action";
 
 export interface Relay {
   api: RelayAPI;
@@ -35,7 +36,10 @@ export interface Relay {
   targetOrg: string;
   setOrg(id: string): void;
   refresh(): Promise<unknown>;
-  action(key: string, fn: () => Promise<unknown>): Promise<void>;
+  /** One action at a time: true once `fn` resolved, false when it did not run or failed. */
+  action(key: string, fn: () => Promise<unknown>): Promise<boolean>;
+  /** A call that changes no Relay state, outside the action lock; a failure is shown. */
+  report(fn: () => Promise<unknown>): Promise<void>;
   setNotice(text: string): void;
   dismissError(): Promise<void>;
   refreshUsage(account: Account, allowPrompt?: boolean): Promise<void>;
@@ -50,7 +54,8 @@ export interface Relay {
   setSetupId(id: string | undefined): void;
   flow?: AuthFlow;
   flowAccount?: Account;
-  startCli(account: Account): Promise<void>;
+  /** The usage sign-in through `action`: whether it ran, the lock refused it, or it failed. */
+  startCli(account: Account): Promise<ActionOutcome>;
   dismissFlow(): void;
   submitCode(code: string): void;
   historyRevision: number;

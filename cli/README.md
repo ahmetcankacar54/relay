@@ -135,7 +135,7 @@ the name or of the account id also works.
 
 These options work with every command:
 - `--yes` (`-y`)
-- `--lang tr|en`. Without it, Relay follows `RELAY_LANG`, then the system locale.
+- `--lang <code>`: `en`, `tr`, `de`, `fr`, `es`, `pt-BR`, `it`, `ja`, `ko`, `zh-Hans`, `zh-Hant`, `ru`, `uk`, `pl`, `nl`. Without it, Relay follows `RELAY_LANG`, then the system locale (`LC_ALL`, `LC_MESSAGES`, `LANG`), else English.
 - `--no-color`
 - `--version`
 - `--help`

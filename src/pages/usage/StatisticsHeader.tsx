@@ -27,24 +27,24 @@ export function StatisticsHeader({
       <ToggleGroup
         type="single"
         variant="outline"
-        aria-label={t("Aralık", "Range")}
+        aria-label={t("statisticsHeader.range")}
         value={String(range)}
         onValueChange={(v) => v && onRange(Number(v) as StatisticsRange)}
       >
         {RANGES.map((n) => (
           <ToggleGroupItem key={n} value={String(n)}>
-            {t(`${n} gün`, `${n} days`)}
+            {t("statisticsHeader.days", { n })}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
       <label htmlFor="usage-account" className="sr-only">
-        {t("Hesap", "Account")}
+        {t("common.account")}
       </label>
       <OptionSelect
         id="usage-account"
         value={accountId ?? ALL}
         options={[
-          { value: ALL, label: t("Tüm hesaplar", "All accounts") },
+          { value: ALL, label: t("statisticsHeader.allAccounts") },
           ...accounts.map((a) => ({ value: a.id, label: a.name })),
         ]}
         onChange={(v) => onAccount(v === ALL ? undefined : v)}

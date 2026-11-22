@@ -1,5 +1,6 @@
 import { useContext } from "react";
 import { RelayContext } from "./relay-context";
+import type { T } from "../../shared/i18n/translate";
 
 /**
  * Relay's platform (`diagnostics.platform`), or undefined before the first snapshot and outside a
@@ -20,27 +21,18 @@ export const macWording = (platform?: string) =>
  * The store that keeps Claude's and Relay's secrets, as a button and a sentence say it: the
  * Keychain on macOS, the desktop's keyring (KWallet or the Secret Service) on Linux.
  */
-export function keychainWords(platform: string | undefined, t: (tr: string, en: string) => string) {
+export function keychainWords(platform: string | undefined, t: T) {
   return macWording(platform)
     ? {
-        allow: t("Anahtarlık erişimine izin ver", "Allow Keychain access"),
-        needed: t("Limitleri okumak için Anahtarlık erişimi gerekiyor.", "Relay needs Keychain access to read limits."),
+        allow: t("platform.allowKeychainAccess"),
+        needed: t("platform.relayNeedsKeychainAccessToRead"),
         neededFor: (name: string) =>
-          t(
-            `${name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
-            `${name} · Relay needs Keychain access to read the limits.`,
-          ),
+          t("platform.relayNeedsKeychainAccessToRead2", { name }),
       }
     : {
-        allow: t("Anahtar deposu erişimine izin ver", "Allow keyring access"),
-        needed: t(
-          "Limitleri okumak için anahtar deposu (KWallet ya da Secret Service) erişimi gerekiyor.",
-          "Relay needs keyring access (KWallet or Secret Service) to read limits.",
-        ),
+        allow: t("platform.allowKeyringAccess"),
+        needed: t("platform.relayNeedsKeyringAccessKwalletOr"),
         neededFor: (name: string) =>
-          t(
-            `${name} · limitleri okumak için anahtar deposu (KWallet ya da Secret Service) erişimi gerekiyor.`,
-            `${name} · Relay needs keyring access (KWallet or Secret Service) to read the limits.`,
-          ),
+          t("platform.relayNeedsKeyringAccessKwalletOr2", { name }),
       };
 }

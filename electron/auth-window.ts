@@ -1,18 +1,28 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { BrowserWindow, session, shell } from "electron";
+import { app, BrowserWindow, session, shell } from "electron";
 import type { AuthBrowser } from "./core/auth";
 import {
   localCallback,
   signInNavigationAllowed,
   signInPartition,
 } from "./core/auth-page-policy";
+import type { T } from "../shared/i18n/translate";
 
 /** Writes the page the CLI hands to BROWSER into the file Relay named for that attempt. */
 const HANDOFF_SCRIPT = `#!/bin/sh
 [ -n "$RELAY_AUTH_PAGE_FILE" ] && printf '%s' "$1" > "$RELAY_AUTH_PAGE_FILE"
 `;
+
+/** Whether `target` is an https: address: the only kind a sign-in pop-up visits or hands on. */
+function isHttps(target: string): boolean {
+  try {
+    return new URL(target).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The usage sign-in in Relay's own window, one per account, each with its own claude.ai session:
@@ -21,7 +31,7 @@ const HANDOFF_SCRIPT = `#!/bin/sh
  */
 export function authWindows(
   dataDir: string,
-  t: (tr: string, en: string) => string,
+  t: T,
   icon?: string,
 ): AuthBrowser {
   const dir = path.join(dataDir, "auth-pages");
@@ -53,7 +63,7 @@ export function authWindows(
       const win = new BrowserWindow({
         width: 520,
         height: 720,
-        title: t("Claude ile giriş", "Sign in with Claude"),
+        title: t("authWindow.signInWithClaude"),
         ...(icon ? { icon } : {}),
         autoHideMenuBar: true,
         webPreferences: {
@@ -61,6 +71,7 @@ export function authWindows(
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,
+          devTools: !app.isPackaged,
         },
       });
       windows.set(accountId, win);
@@ -72,7 +83,7 @@ export function authWindows(
       const guard = (event: { preventDefault(): void }, target: string) => {
         if (signInNavigationAllowed(target, callback)) return;
         event.preventDefault();
-        if (target.startsWith("https://")) void shell.openExternal(target);
+        if (isHttps(target)) void shell.openExternal(target);
       };
       contents.on("will-navigate", (event, target) => guard(event, target));
       contents.on("will-redirect", (event, target) => guard(event, target));
@@ -88,11 +99,22 @@ export function authWindows(
                 sandbox: true,
                 contextIsolation: true,
                 nodeIntegration: false,
+                devTools: !app.isPackaged,
               },
             },
           };
-        if (target.startsWith("https://")) void shell.openExternal(target);
+        if (isHttps(target)) void shell.openExternal(target);
         return { action: "deny" };
+      });
+      // A provider's pop-up stays on https: pages and opens no windows of its own.
+      contents.on("did-create-window", (child) => {
+        const popup = child.webContents;
+        const httpsOnly = (event: { preventDefault(): void }, target: string) => {
+          if (!isHttps(target)) event.preventDefault();
+        };
+        popup.on("will-navigate", (event, target) => httpsOnly(event, target));
+        popup.on("will-redirect", (event, target) => httpsOnly(event, target));
+        popup.setWindowOpenHandler(() => ({ action: "deny" }));
       });
       // The approval reached the CLI: the page it shows says so; the flow then closes the window.
       contents.on("did-navigate", (_event, target) => {

@@ -69,6 +69,11 @@ async function toolIdentity(file) {
  */
 export async function buildNativeHelpers() {
   if (process.platform !== "darwin") return [];
+  // The widget's own words come from the catalogs: regenerate them before it compiles.
+  execFileSync(process.execPath, ["--import", "tsx", path.resolve("scripts/i18n/widget-strings.ts")], {
+    stdio: "inherit",
+  });
+  const widgetStrings = path.resolve("electron/native/widget/WidgetStrings.swift");
   const outDir = path.resolve("dist-electron");
   // Keep compiler module/cache files out of the packaged dist-electron glob.
   const cacheDir = path.resolve("output/.native-build");
@@ -130,11 +135,13 @@ export async function buildNativeHelpers() {
       // Desktop widgets and containerBackground need macOS 14; on 13 Relay has no widget.
       name: "widget",
       source: path.resolve("electron/native/widget/RelayWidget.swift"),
+      extraSources: [widgetStrings],
       output: path.join(appex, "Contents/MacOS/RelayWidget"),
       plist: widgetPlist(
         version,
         widgetBuild(
           await fs.readFile(path.resolve("electron/native/widget/RelayWidget.swift")),
+          await fs.readFile(widgetStrings),
           ...(await Promise.all(pandas.flatMap((name) => [Buffer.from(name), fs.readFile(path.join(pandaDir, name))]))),
         ),
       ),
@@ -196,6 +203,7 @@ export async function buildNativeHelpers() {
     const recordFile = path.join(cacheDir, `${name}.json`);
     const args = [
       source,
+      ...(product.extraSources ?? []),
       "-O",
       "-sdk",
       sdk,
@@ -219,7 +227,7 @@ export async function buildNativeHelpers() {
     await fs.mkdir(path.dirname(output), { recursive: true });
     const sourceHash = sha256(
       Buffer.concat([
-        await fs.readFile(source),
+        ...(await Promise.all([source, ...(product.extraSources ?? [])].map((file) => fs.readFile(file)))),
         ...(product.header ? [await fs.readFile(product.header)] : []),
       ]),
     );
@@ -272,7 +280,7 @@ export async function buildNativeHelpers() {
       if (
         sha256(
           Buffer.concat([
-            await fs.readFile(source),
+            ...(await Promise.all([source, ...(product.extraSources ?? [])].map((file) => fs.readFile(file)))),
             ...(product.header ? [await fs.readFile(product.header)] : []),
           ]),
         ) !== sourceHash

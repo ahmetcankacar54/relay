@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { RefreshIcon } from "@/components/icons";
+import { Banner } from "@/components/Banner";
 import { Button } from "@/components/ui/button";
 import { Panda } from "@/components/Panda";
 import { useI18n } from "@/data/i18n";
@@ -86,7 +87,7 @@ export function Panel({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={t("Limitleri yenile", "Refresh limits")}
+              aria-label={t("common.refreshLimits")}
               disabled={refreshing || !accounts.length}
               onClick={(e) =>
                 offerAfter(prank, "wheel", e, () => {
@@ -99,16 +100,27 @@ export function Panel({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={t("Ayarlar", "Settings")}
-              title={t("Ayarlar", "Settings")}
-              onClick={() => void api.openPage("ayarlar")}
+              aria-label={t("common.settings")}
+              title={t("common.settings")}
+              onClick={() => void relay.report(() => api.openPage("ayarlar"))}
             >
               <Settings2 />
             </Button>
           </span>
         </header>
-        <div className="px-3 empty:hidden">
+        <div className="grid gap-1.5 px-3 empty:hidden">
           <RelayErrorAlert />
+          {/* The panel's own notices: a switch that did not start says why here. */}
+          {relay.notice ? (
+            <Banner
+              tone="info"
+              role="status"
+              onDismiss={() => relay.setNotice("")}
+              dismissLabel={t("panel.dismissNotification")}
+            >
+              <span>{relay.notice}</span>
+            </Banner>
+          ) : null}
         </div>
         <PanelUpdate />
         <PanelProviders
@@ -133,25 +145,22 @@ export function Panel({
             variant="link"
             size="sm"
             className="h-auto px-0 text-xs font-semibold text-foreground"
-            onClick={() => void api.openPage("genel")}
+            onClick={() => void relay.report(() => api.openPage("genel"))}
           >
-            {t("Relay’i aç", "Open Relay")}
+            {t("common.openRelay")}
           </Button>
           {latest && (
             <span className="truncate text-xs">
-              {t(
-                `${formatRelative(latest, now, language)} güncellendi`,
-                `Updated ${formatRelative(latest, now, language)}`,
-              )}
+              {t("panel.updated", { formatRelative: formatRelative(latest, now, language) })}
             </span>
           )}
           <Button
             variant="link"
             size="sm"
             className="h-auto px-0 text-xs text-muted-foreground"
-            onClick={() => void api.quit()}
+            onClick={() => void relay.report(() => api.quit())}
           >
-            {t("Çık", "Quit")}
+            {t("panel.quit")}
           </Button>
         </footer>
       </div>

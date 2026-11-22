@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { TokenUsageView } from "../../../shared/token-usage-view";
 import { PandaRig } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
-import { useI18n } from "@/data/i18n";
+import { useI18n, type MessageId } from "@/data/i18n";
 import { cn } from "@/lib/utils";
 import { formatDayLong, formatTokens } from "./format";
 import {
@@ -13,23 +13,12 @@ import {
 } from "./panda-facts";
 
 /** The parts a bar is taken apart into, largest kind first as they usually come. */
-const PARTS: { kind: keyof DayKinds; tr: string; en: string; fill: string }[] =
-  [
-    {
-      kind: "cacheRead",
-      tr: "Önbellek okuma",
-      en: "Cache read",
-      fill: "bg-muted-foreground/40",
-    },
-    {
-      kind: "cacheWrite",
-      tr: "Önbellek yazma",
-      en: "Cache write",
-      fill: "bg-muted-foreground/75",
-    },
-    { kind: "input", tr: "Girdi", en: "Input", fill: "bg-foreground/70" },
-    { kind: "output", tr: "Çıktı", en: "Output", fill: "bg-primary" },
-  ];
+const PARTS: { kind: keyof DayKinds; label: MessageId; fill: string }[] = [
+  { kind: "cacheRead", label: "pandaBench.cacheRead", fill: "bg-muted-foreground/40" },
+  { kind: "cacheWrite", label: "pandaBench.cacheWrite", fill: "bg-muted-foreground/75" },
+  { kind: "input", label: "tokenUsage.input", fill: "bg-foreground/70" },
+  { kind: "output", label: "tokenUsage.output", fill: "bg-primary" },
+];
 
 /**
  * The panda's workbench beside a bar it took out of the chart: the day, what the bar is made of and the line the
@@ -83,7 +72,7 @@ export function PandaBench({
     <div
       ref={root}
       role="group"
-      aria-label={t("Pandanın anlattığı gün", "The day the panda explains")}
+      aria-label={t("pandaBench.theDayThePandaExplains")}
       data-slot="panda-bench"
       className="token-bench absolute top-10 z-20 w-80 rounded-xl border bg-popover px-3 pt-3 pb-2.5 text-xs text-popover-foreground shadow-lg @max-[38rem]:relative @max-[38rem]:top-auto @max-[38rem]:right-auto! @max-[38rem]:left-auto! @max-[38rem]:mt-12 @max-[38rem]:w-full"
       style={
@@ -109,12 +98,12 @@ export function PandaBench({
           {formatDayLong(date, language)}
         </b>
         <span className="whitespace-nowrap tabular-nums">
-          <span className="text-muted-foreground">{t("Toplam", "Total")} </span>
+          <span className="text-muted-foreground">{t("common.total")} </span>
           <b>
             {estimated && (
               <>
                 <span aria-hidden="true">≈</span>
-                <span className="sr-only">{t("tahmini", "estimated")} </span>
+                <span className="sr-only">{t("pandaBench.estimated")} </span>
               </>
             )}
             {formatTokens(total, language)}
@@ -125,7 +114,7 @@ export function PandaBench({
         data-slot="panda-line"
         className="mt-2 rounded-lg bg-muted px-2.5 py-2 text-sm leading-snug"
       >
-        {t(line.tr, line.en)}
+        {line.text}
       </p>
       {total > 0 && (
         <ul className="mt-2 grid gap-1.5">
@@ -138,7 +127,7 @@ export function PandaBench({
                 className="grid grid-cols-[6.5rem_1fr_auto] items-center gap-2"
               >
                 <span className="text-muted-foreground">
-                  {t(part.tr, part.en)}
+                  {t(part.label)}
                 </span>
                 <span className="h-2 overflow-hidden rounded-full bg-track">
                   <span
@@ -166,11 +155,11 @@ export function PandaBench({
       <div className="mt-2.5 flex justify-end gap-1.5">
         {more && (
           <Button size="xs" variant="outline" onClick={onNext}>
-            {t("Bir daha", "One more")}
+            {t("pandaBench.oneMore")}
           </Button>
         )}
         <Button size="xs" variant="ghost" onClick={close}>
-          {t("Kapat", "Close")}
+          {t("common.close")}
         </Button>
       </div>
     </div>

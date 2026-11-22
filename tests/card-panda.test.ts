@@ -48,6 +48,7 @@ import { POSE_PARTS, POSE_PROPS } from "../shared/panda-poses";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DesktopState } from "../shared/types";
 import { mediaBlock } from "./css";
 import { fakeDom } from "./fake-dom";
+import { testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-20T09:00:00Z");
 const fresh = new Date(NOW - 60_000).toISOString();
@@ -418,7 +419,8 @@ const sidebar = (compact: boolean, extra: Record<string, unknown> = {}) =>
   createElement(Sidebar, {
     page: "genel",
     go: () => {},
-    t: (tr: string) => tr,
+    t: testT("tr"),
+    language: "tr",
     compact,
     status: { accounts: 2, planning: false, switching: false },
     summary: { name: "Kişisel · Max", running: true, fiveHour: 38 },

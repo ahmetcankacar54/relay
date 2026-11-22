@@ -87,35 +87,26 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
   const met = (key: SetupKey) => !!state.steps.find((s) => s.key === key)?.met;
   const connected = accounts.filter((a) => !!a.desktop).length;
   const mode = automationMode(settings, fleet);
-  const title = t("Relay’i kur", "Set up Relay");
+  const title = t("setupChecklist.setUpRelay");
   const rows: Record<RowKey, Row> = {
     desktop: {
-      title: t("Claude uygulaması", "Claude app"),
-      status: met("desktop") ? t("Bulundu", "Found") : t("Bulunamadı", "Not found"),
-      reason: t(
-        "Relay için Claude uygulaması gerekir.",
-        "Relay needs the Claude app.",
-      ),
+      title: t("common.claudeApp"),
+      status: met("desktop") ? t("setupChecklist.found") : t("common.notFound"),
+      reason: t("setupChecklist.relayNeedsTheClaudeApp"),
       action: <ClaudeAppActions />,
     },
     cli: {
       title: "Claude Code CLI",
       status: cliDetail(cliState(diagnostics), diagnostics?.version, t),
-      reason: t(
-        "Limitleri okumak için gerekir. Claude uygulamasında Code’u açınca iner; inmezse resmi CLI’yi kur.",
-        "Relay uses it to read the limits. Open Code in the Claude app to get it, or install the official CLI.",
-      ),
+      reason: t("setupChecklist.relayUsesItToReadThe"),
       action: <CliSetupActions />,
     },
     code: {
-      title: t("Code sekmesi açıldı", "Code tab opened"),
+      title: t("setupChecklist.codeTabOpened"),
       status: met("code")
-        ? t("Çalışma alanı bulundu", "Workspace found")
-        : t("Henüz açılmadı", "Not opened yet"),
-      reason: t(
-        "Claude uygulamasında sol menüden Code’u bir kez aç.",
-        "Open Code one time from the Claude app sidebar.",
-      ),
+        ? t("setupChecklist.workspaceFound")
+        : t("setupChecklist.notOpenedYet"),
+      reason: t("setupChecklist.openCodeOneTimeFromThe"),
       // Without the Claude app the first row already names the step.
       action: desktop?.available && (
         <Button
@@ -126,42 +117,30 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
             void relay.action("open", () => relay.api.openCodeTab())
           }
         >
-          {t("Code’u aç", "Open Code")}
+          {t("common.openCode")}
         </Button>
       ),
     },
     accounts: {
-      title: t("Hesaplarını ekle", "Add your accounts"),
+      title: t("setupChecklist.addYourAccounts"),
       status: `${connected} / 2`,
       reason:
         connected === 0
           ? macWording(diagnostics?.platform)
-            ? t(
-                "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Yukarıdaki “Hesap ekle” bu Mac’te bulunan hesapları tek seferde ekler.",
-                "Relay switches between accounts, so it needs at least two. “Add account” above adds the ones found on this Mac in one go.",
-              )
-            : t(
-                "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Yukarıdaki “Hesap ekle” bu bilgisayarda bulunan hesapları tek seferde ekler.",
-                "Relay switches between accounts, so it needs at least two. “Add account” above adds the ones found on this computer in one go.",
-              )
-          : t(
-              "Bir hesap daha gerekiyor. Diğer Claude hesabınla giriş yap; Relay girişi kendisi kaydeder.",
-              "One more account is needed. Sign in with your other Claude account; Relay saves it by itself.",
-            ),
+            ? t("setupChecklist.relaySwitchesBetweenAccountsSoIt")
+            : t("setupChecklist.relaySwitchesBetweenAccountsSoIt2")
+          : t("setupChecklist.oneMoreAccountIsNeededSign"),
       // With no account yet the welcome card above holds the button; one offer is enough.
       action: connected > 0 && (
         <Button variant="outline" size="sm" onClick={add}>
-          {t("Hesap ekle", "Add account")}
+          {t("common.addAccount")}
         </Button>
       ),
     },
     mode: {
-      title: t("Ne zaman geçileceğini seç", "Choose when to switch"),
-      status: met("mode") ? t(...MODE_TITLE[mode]) : t("Seçilmedi", "Not chosen"),
-      reason: t(
-        "Kendin mi geçeceksin, yoksa limit dolunca Relay mi geçsin?",
-        "Do you switch yourself, or does Relay switch when the limit is reached?",
-      ),
+      title: t("setupChecklist.chooseWhenToSwitch"),
+      status: met("mode") ? t(MODE_TITLE[mode]) : t("setupChecklist.notChosen"),
+      reason: t("setupChecklist.doYouSwitchYourselfOrDoes"),
       action: (
         <Button
           variant="outline"
@@ -171,28 +150,25 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
             open("gecis");
           }}
         >
-          {t("Seç", "Choose")}
+          {t("setupChecklist.choose")}
         </Button>
       ),
     },
     extension: {
-      title: t("Tarayıcı eklentisi de geçsin", "Let the browser extension switch too"),
+      title: t("setupChecklist.letTheBrowserExtensionSwitchToo"),
       status: met("extension")
-        ? t("Açık", "On")
+        ? t("setupChecklist.on")
         : seen.has("extension")
-          ? t("Atlandı", "Skipped")
-          : t("İsteğe bağlı", "Optional"),
-      reason: t(
-        "Claude in Chrome kullanıyorsan eklenti Claude uygulamasıyla aynı hesapta olmalı.",
-        "If you use Claude in Chrome, the extension must be on the same account as the Claude app.",
-      ),
+          ? t("setupChecklist.skipped")
+          : t("setupChecklist.optional"),
+      reason: t("setupChecklist.ifYouUseClaudeInChrome"),
       action: (
         <span className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => open("gecis")}>
-            {t("Ayarla", "Set up")}
+            {t("setupChecklist.setUp")}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => settle("extension")}>
-            {t("Atla", "Skip")}
+            {t("setupChecklist.skip")}
           </Button>
         </span>
       ),
@@ -218,7 +194,7 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
           {`${finished.length} / ${steps.length}`}
           {state.ready && (
             <Button variant="ghost" size="xs" onClick={() => settle("hidden")}>
-              {t("Gizle", "Hide")}
+              {t("common.hide")}
             </Button>
           )}
         </span>
@@ -228,7 +204,7 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
           <li data-step="done" className="flex items-start gap-2.5 py-2 text-sm text-muted-foreground">
             <Check aria-hidden="true" className="mt-px size-4 shrink-0 text-ok-foreground" />
             <span className="min-w-0">
-              <span className="sr-only">{t("Tamam: ", "Done: ")}</span>
+              <span className="sr-only">{t("setupChecklist.done")}</span>
               {finished.map((s) => rows[s.key].title).join(" · ")}
             </span>
           </li>
@@ -256,7 +232,7 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
                   <span className={cn("font-semibold", !expanded && "font-normal text-muted-foreground")}>
                     {row.title}
                   </span>
-                  <span className="sr-only">{optional ? t("İsteğe bağlı", "Optional") : t("Eksik", "Missing")}</span>
+                  <span className="sr-only">{optional ? t("setupChecklist.optional") : t("setupChecklist.missing")}</span>
                   <span className="text-xs text-muted-foreground">{row.status}</span>
                 </div>
                 {expanded && (

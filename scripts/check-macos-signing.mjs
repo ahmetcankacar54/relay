@@ -54,6 +54,13 @@ if (
   throw new Error(
     "The app signature does not bind Info.plist and bundled resources.",
   );
+// codesign lists the flags by name, e.g. "flags=0x10000(runtime)" or, ad hoc,
+// "flags=0x10002(adhoc,runtime)".
+const appFlags =
+  appSignature.match(/^CodeDirectory .*\bflags=0x[0-9a-f]+\(([^)]*)\)/m)?.[1] ??
+  "";
+if (!appFlags.split(",").includes("runtime"))
+  throw new Error("The app is not signed with the hardened runtime.");
 
 const helpers = ["desktop-automation"].map((name) => {
   const file = path.join(

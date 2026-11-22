@@ -12,6 +12,7 @@ import {
   resetDismissalsForTests,
 } from "../src/data/dismissals";
 import { fakeDom } from "./fake-dom";
+import { i18nValue, testT } from "./i18n";
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -41,8 +42,7 @@ const usage = (issue?: UsageIssue, accountId = "a"): AccountUsage => ({
   stale: true,
   ...(issue ? { issue } : {}),
 });
-const pick = (language: Language) => (tr: string, en: string) =>
-  language === "tr" ? tr : en;
+const pick = testT;
 
 const CAUSES: [string, UsageIssue | undefined, string, string][] = [
   [
@@ -147,7 +147,7 @@ const tree = (
 ) =>
   createElement(
     I18nContext.Provider,
-    { value: { language, setLanguage() {}, t: pick(language) } },
+    { value: i18nValue(language) },
     createElement(
       RelayContext.Provider,
       { value: relay },
@@ -440,7 +440,7 @@ test("the group opens and closes, and its dismiss buttons clear one row or all",
     const started: string[] = [];
     const relay = {
       ...relayFor(all3, [max, team, pro]),
-      startCli: async (a: Account) => void started.push(a.id),
+      startCli: async (a: Account) => (started.push(a.id), "ran" as const),
     } as Relay;
     const c = dom.container;
     let root = createRoot(c as unknown as Element);

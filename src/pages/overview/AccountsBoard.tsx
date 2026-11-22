@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { AccountDot } from "@/components/AccountDot";
 import { LimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListRow, narrowHidden } from "@/components/ListCard";
+import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, ListSkeleton, narrowHidden } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -10,12 +10,11 @@ import { AntigravityAction, AntigravityPrompt, AntigravitySteps, antigravityAcco
 import { inUseIds } from "@/lib/provider-view";
 import { boardOrder, limitStanding } from "@/lib/limit-standing";
 import { accountHash } from "../accounts/AccountDetail";
+import { PROVIDER_ORDER } from "../accounts/accountGroups";
 import { providerShortLabel } from "../accounts/accountLabels";
 import { limitColumns, spentModelWindows, usedAt, limitHeadline, type ColumnWindow } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
-import type { Account, AccountProvider, AccountUsage } from "../../../shared/types";
-
-const ORDER: AccountProvider[] = ["claude", "codex", "antigravity", "gemini"];
+import type { Account, AccountUsage } from "../../../shared/types";
 
 type Window = ColumnWindow;
 
@@ -25,13 +24,13 @@ type Window = ColumnWindow;
  */
 function otherLimit(usage: AccountUsage | undefined, shown: Window[], now: number, t: T): { text: string; full: boolean } | undefined {
   const spent = spentModelWindows(usage, now)[0];
-  if (spent && !shown.some((w) => w.label === spent.label)) return { text: t(`${spent.label} dolu`, `${spent.label} full`), full: true };
+  if (spent && !shown.some((w) => w.label === spent.label)) return { text: t("accountsBoard.full", { spentLabel: spent.label }), full: true };
   const used = (w: { usedPercent: number; resetsAt?: string }) => usedAt(w, now);
   const rest = (usage?.modelWindows ?? []).filter((w) => !shown.some((s) => s.label === w.label));
   const top = rest.sort((a, b) => used(b) - used(a))[0];
   if (!top) return undefined;
   const n = Math.round(used(top));
-  return { text: `${top.label} ${t(`%${n}`, `${n}%`)}`, full: n >= 100 };
+  return { text: `${top.label} ${t("accountsBoard.msg", { n })}`, full: n >= 100 };
 }
 
 /**
@@ -47,6 +46,15 @@ export function AccountsBoard({ now }: { now: number }) {
   const views = relayProviders(relay, now);
   const inUse = inUseIds(views);
   const listed = relay.accounts.filter((a) => a.id !== relay.active?.id);
+  // Until the first snapshot the board holds placeholders, not the empty Overview.
+  if (relay.data === undefined)
+    return (
+      <PageSection title={t("accountsBoard.allAccounts")} slot="accounts-board">
+        <ListCard label={t("accountsBoard.allAccounts")}>
+          <ListSkeleton />
+        </ListCard>
+      </PageSection>
+    );
   if (!listed.length) return null;
   // The same count the Limits board used: a read account with room in its five hours and week.
   const usable = relay.accounts.filter((a) => {
@@ -69,7 +77,7 @@ export function AccountsBoard({ now }: { now: number }) {
       : undefined;
   const promptOn = (id: string) =>
     ask ? ask.accountId === id : app?.busy ? app.signInFor === id : app?.result?.accountId === id;
-  const groups = ORDER.flatMap((provider) => {
+  const groups = PROVIDER_ORDER.flatMap((provider) => {
     // Within a provider: a week ending soon with room first, full ones after, unread last.
     const own = boardOrder(listed.filter((a) => (a.provider ?? "claude") === provider), usage, now);
     return own.length ? [{ provider, own }] : [];
@@ -81,7 +89,7 @@ export function AccountsBoard({ now }: { now: number }) {
         ariaLabel={name}
         usedPercent={window.usedPercent}
         resetsAt={window.resetsAt}
-        period={name === t("Hafta", "Week") ? "seven_day" : "five_hour"}
+        period={name === t("common.week") ? "seven_day" : "five_hour"}
         now={now}
         t={t}
         faded={faded}
@@ -96,21 +104,16 @@ export function AccountsBoard({ now }: { now: number }) {
     const other = otherLimit(u, [five, week].filter((w): w is Window => !!w), now, t);
     return (
       <Fragment key={a.id}>
-        <ListRow
-          columns="board"
-          onOpen={() => (window.location.hash = accountHash(a.id))}
-          label={a.name}
-          data={{ "data-account": a.id }}
-        >
+        <ListRow columns="board" onOpen={() => (window.location.hash = accountHash(a.id))} data={{ "data-account": a.id }}>
           <AccountDot color={a.color} />
           <div className="flex min-w-0 items-baseline gap-1.5">
-            <span className="truncate text-sm font-semibold" title={a.name}>
+            <ListOpen onOpen={() => (window.location.hash = accountHash(a.id))} title={a.name}>
               {a.name}
-            </span>
-            {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("açık", "in use")}</span>}
+            </ListOpen>
+            {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("accountsBoard.inUse")}</span>}
           </div>
-          {line(five, t("5 saat", "5 hours"), pooled, faded)}
-          {line(week, t("Hafta", "Week"), pooled, faded)}
+          {line(five, t("common.n5Hours"), pooled, faded)}
+          {line(week, t("common.week"), pooled, faded)}
           <span className={narrowHidden}>
             {other && (
               <span data-slot="other-limit" className="inline-flex max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
@@ -123,41 +126,43 @@ export function AccountsBoard({ now }: { now: number }) {
           </div>
         </ListRow>
         {a.provider === "antigravity" && promptOn(a.id) && (
-          <div className="border-b px-4 py-2 last:border-b-0">
+          <ListNote>
             <AntigravityPrompt ask={ask} onClose={() => setAsk(undefined)} now={now} size="sm" />
-          </div>
+          </ListNote>
         )}
       </Fragment>
     );
   };
   return (
     <PageSection
-      title={t("Tüm hesaplar", "All accounts")}
+      title={t("accountsBoard.allAccounts")}
       slot="accounts-board"
       aside={
         <span className="text-xs text-muted-foreground">
-          {t(`${usable}/${relay.accounts.length} kullanılabilir`, `${usable}/${relay.accounts.length} usable`)}
+          {t("accountsBoard.usable", { usable, accountsLength: relay.accounts.length })}
         </span>
       }
     >
-      <ListCard label={t("Tüm hesaplar", "All accounts")}>
+      <ListCard label={t("accountsBoard.allAccounts")}>
         <ListHead columns="board">
           <span />
-          <span>{t("Hesap", "Account")}</span>
-          <span>{t("5 saat", "5 hours")}</span>
-          <span>{t("Hafta", "Week")}</span>
-          <span className={narrowHidden}>{t("Model limiti", "Model limit")}</span>
+          <span>{t("common.account")}</span>
+          <span>{t("common.n5Hours")}</span>
+          <span>{t("common.week")}</span>
+          <span className={narrowHidden}>{t("accountsBoard.modelLimit")}</span>
           <span />
         </ListHead>
         {groups.map(({ provider, own }) => (
           <Fragment key={provider}>
             <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />
-            {own.map(row)}
-            {provider === "antigravity" && handSteps && (
-              <div className="border-b px-4 py-2.5 last:border-b-0">
-                <AntigravitySteps target={handSteps} size="sm" />
-              </div>
-            )}
+            <ListSection id={`board-${provider}`} label={providerShortLabel(provider)}>
+              {own.map(row)}
+              {provider === "antigravity" && handSteps && (
+                <ListNote className="py-2.5">
+                  <AntigravitySteps target={handSteps} size="sm" />
+                </ListNote>
+              )}
+            </ListSection>
           </Fragment>
         ))}
       </ListCard>

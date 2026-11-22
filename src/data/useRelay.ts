@@ -22,10 +22,13 @@ import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
 import { pendingFlow, tempoRateNow, windowAccounts } from "./selectors";
 import {
+  attemptAction,
   errorAfterRefresh,
   hiddenRefresh,
   relayAction,
+  relayReport,
   reportedVisibility,
+  serialRead,
   shouldPoll,
 } from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
@@ -81,6 +84,9 @@ export const api: RelayAPI =
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
+/** What one refresh read. */
+type Fresh = { snapshot: Snapshot; status: DesktopState };
+
 function useRelayState(
   options: { pollWhenHidden?: boolean; reportsVisibility?: boolean } = {},
 ): Relay {
@@ -100,7 +106,8 @@ function useRelayState(
   const [historyRevision, setHistoryRevision] = useState(0);
   const [dismissed, setDismissed] = useState<string>();
   const lock = useRef(false);
-  const sequence = useRef(0);
+  // Bumped to drop the result of a request that started before a local change.
+  const epoch = useRef(0);
   const showError = useCallback((e: unknown) => setError(errorMessage(e)), []);
   // A background refresh that failed once (a busy moment) must not leave its error behind
   // after refreshes work again.
@@ -110,23 +117,28 @@ function useRelayState(
     refreshError.current = message;
     setError(message);
   }, []);
-  const refresh = useCallback(async () => {
-    const request = ++sequence.current;
-    const [snapshot, status] = await Promise.all([
-      api.panelSnapshot(),
-      api.desktopSnapshot(),
-    ]);
-    if (request === sequence.current) {
-      setData(snapshot);
-      setDesktop(status);
-      const stale = refreshError.current;
-      if (stale !== undefined) {
-        refreshError.current = undefined;
-        setError((current) => errorAfterRefresh(current, stale));
-      }
-    }
-    return { snapshot, status };
-  }, []);
+  // One snapshot request at a time; calls while one runs share exactly one follow-up.
+  const [refresh] = useState(() =>
+    serialRead<Fresh>(
+      epoch,
+      async () => {
+        const [snapshot, status] = await Promise.all([
+          api.panelSnapshot(),
+          api.desktopSnapshot(),
+        ]);
+        return { snapshot, status };
+      },
+      ({ snapshot, status }) => {
+        setData(snapshot);
+        setDesktop(status);
+        const stale = refreshError.current;
+        if (stale !== undefined) {
+          refreshError.current = undefined;
+          setError((current) => errorAfterRefresh(current, stale));
+        }
+      },
+    ),
+  );
   useEffect(() => {
     void refresh().catch(showRefreshError);
     // The menu bar panel follows main's shown/hidden reports: its document reads "visible"
@@ -174,6 +186,7 @@ function useRelayState(
     refresh,
     showError,
   });
+  const report = relayReport(showError);
   const accounts = data?.accounts ?? [];
   const active = accounts.find((a) => a.id === desktop?.activeProfileId);
   const settings = data?.settings ?? DEFAULT_SETTINGS;
@@ -204,7 +217,7 @@ function useRelayState(
     setError("");
     if (desktop?.error) {
       const revision = desktop.errorRevision;
-      ++sequence.current;
+      ++epoch.current;
       setDesktop((previous) =>
         previous ? { ...previous, error: undefined } : previous,
       );
@@ -233,7 +246,7 @@ function useRelayState(
       else if (request.kind === "cancel") await api.cancelDesktopLogin();
       else {
         if (!account)
-          throw new Error(t("Hesap bulunamadı.", "Account not found."));
+          throw new Error(t("useRelay.accountNotFound"));
         if (request.kind === "switch") {
           // Automation may have switched while the review was open.
           const [status, snapshot] = await Promise.all([
@@ -245,14 +258,8 @@ function useRelayState(
             setDesktopRequest(undefined);
             setNotice(
               stale === "already-active"
-                ? t(
-                    `${account.name} zaten Claude uygulamasında açık.`,
-                    `${account.name} is already open in the Claude app.`,
-                  )
-                : t(
-                    "Otomatik bir geçiş sürüyor; elle geçiş başlamadı.",
-                    "An automatic switch is in progress; your switch did not start.",
-                  ),
+                ? t("useRelay.isAlreadyOpenInTheClaude", { accountName: account.name })
+                : t("useRelay.anAutomaticSwitchIsInProgress"),
             );
             return;
           }
@@ -275,34 +282,16 @@ function useRelayState(
       setHistoryRevision((value) => value + 1);
       setNotice(
         request.kind === "history"
-          ? t(
-              "Ortak Code geçmişi açık hesapla birleştirildi.",
-              "Relay merged the shared Code history into the open account.",
-            )
+          ? t("useRelay.relayMergedTheSharedCodeHistory")
           : request.kind === "switch"
-            ? t(
-                `Claude uygulaması ${account?.name} hesabına geçti.`,
-                `The Claude app switched to ${account?.name}.`,
-              )
+            ? t("useRelay.theClaudeAppSwitchedTo", { accountName: account?.name })
             : later
-              ? t(
-                  "Girişi kaydetmek için Claude uygulamasında Code’u bir kez aç.",
-                  "Open Code once in the Claude app to save the sign-in.",
-                )
+              ? t("useRelay.openCodeOnceInTheClaude")
               : request.kind === "capture"
-              ? t(
-                  `${account?.name} · Claude uygulaması girişi kaydedildi.`,
-                  `${account?.name} · Claude app sign-in saved.`,
-                )
+              ? t("useRelay.claudeAppSignInSaved", { accountName: account?.name })
               : request.kind === "cancel" || request.kind === "recover"
-                ? t(
-                    "Önceki Claude uygulaması girişi geri yüklendi.",
-                    "Relay restored the previous Claude app sign-in.",
-                  )
-                : t(
-                    "Claude uygulamasında bu hesapla giriş yap, sonra Code’u aç.",
-                    "Sign in with this account in the Claude app, then open Code.",
-                  ),
+                ? t("useRelay.relayRestoredThePreviousClaudeApp")
+                : t("useRelay.signInWithThisAccountIn"),
       );
     });
   };
@@ -321,8 +310,9 @@ function useRelayState(
       });
     }
   };
+  // The add dialog starts it on its own and tries again only when the lock refused it.
   const startCli = (a: Account) =>
-    action(`cli:${a.id}`, async () => {
+    attemptAction(action)(`cli:${a.id}`, async () => {
       // Never a Claude sign-in for a Codex or Antigravity account (main refuses it too).
       if ((a.provider ?? "claude") !== "claude") return;
       setDismissed(undefined);
@@ -360,6 +350,7 @@ function useRelayState(
     setOrg,
     refresh,
     action,
+    report,
     setNotice,
     dismissError,
     refreshUsage,

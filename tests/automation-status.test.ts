@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   automationModeSupported,
-  automationStatus,
+  automationStatus as statusIn,
   staleManualSwitch,
   switchNowLabel,
   type AutomationStatusInput,
 } from "../shared/automation-status";
+import { testT } from "./i18n";
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -20,6 +21,13 @@ import {
 
 const NOW = Date.parse("2026-10-17T12:00:00.000Z");
 const at = (ms: number) => new Date(ms).toISOString();
+/** The status in Turkish and English side by side, as `[tr, en]` pairs. */
+function automationStatus(input: AutomationStatusInput) {
+  const tr = statusIn(input, "tr");
+  const en = statusIn(input, "en");
+  const pair = (a: string, b: string): [string, string] => [a, b];
+  return { ...tr, text: pair(tr.text, en.text), prefix: pair(tr.prefix, en.prefix) };
+}
 
 function account(id: string, name: string): Account {
   return {
@@ -126,6 +134,10 @@ test("the percent prefix says what is used, rounded down, and needs an active ac
     rounded.text[1],
     "Kişisel · Max 42% used · Off. When the limit is reached, you switch accounts yourself.",
   );
+  // Other languages place the word where their grammar puts it.
+  const usage42 = input({ usage: { [a.id]: usage(a.id, 42.6, { sevenDay: undefined }) } });
+  assert.equal(statusIn(usage42, "pl").prefix, "Kişisel · Max: wykorzystano 42% · ");
+  assert.equal(statusIn(usage42, "zh-Hans").prefix, "Kişisel · Max 已用 42% · ");
   const noUsage = automationStatus(input({ usage: {} }));
   assert.equal(
     noUsage.text[0],
@@ -842,10 +854,10 @@ test("a stale confirmation is detected from fresh state", () => {
 });
 
 test("the switch-now label uses the dative", () => {
-  assert.deepEqual(switchNowLabel("Kişisel · İkinci"), [
-    "Şimdi Kişisel · İkinci’ye geç",
-    "Switch to Kişisel · İkinci now",
-  ]);
+  assert.deepEqual(
+    [switchNowLabel("Kişisel · İkinci", testT("tr")), switchNowLabel("Kişisel · İkinci", testT("en"))],
+    ["Şimdi Kişisel · İkinci’ye geç", "Switch to Kişisel · İkinci now"],
+  );
 });
 
 test("Linux has preparing on quit; continuing at quota reads as macOS only there", () => {

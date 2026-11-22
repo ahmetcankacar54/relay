@@ -12,6 +12,8 @@ import { rowActions } from "../src/pages/accounts/AccountsTable";
 import type { Relay } from "../src/data/relay-context";
 import type { AccountFix } from "../src/lib/account-health";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type UsageIssue } from "../shared/types";
+import type { Locale } from "../shared/i18n/locales";
+import { testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -31,13 +33,13 @@ const issue = (value: NonNullable<AccountUsage["issue"]>): AccountUsage => ({
   accountId: "a", status: "error", issue: value, stale: true,
 });
 const idle = { active: false, desktopRunning: false, waiting: false };
-const tr = (language: "tr" | "en") => (a: string, b: string) => (language === "tr" ? a : b);
+const tr = (language: Locale) => testT(language);
 const health = (
   account: Account,
   usage: AccountUsage | undefined,
   context: Partial<typeof idle> = {},
-  language: "tr" | "en" = "tr",
-) => accountHealth(account, usage, { ...idle, ...context }, tr(language));
+  language: Locale = "tr",
+) => accountHealth(account, usage, { ...idle, ...context, language }, tr(language));
 
 test("1. a pending browser approval wins over every other problem and has no fix", () => {
   const h = health(base, ready, { waiting: true });
@@ -169,7 +171,7 @@ test("an account with several problems shows the highest one, and the next once 
 });
 
 test("detail names both sign-ins for each Claude app state", () => {
-  const app = (account: Account, context: Partial<typeof idle>, language: "tr" | "en" = "tr") =>
+  const app = (account: Account, context: Partial<typeof idle>, language: Locale = "tr") =>
     health(account, ready, context, language).detail;
   assert.equal(
     app(base, { active: true, desktopRunning: true }),
@@ -189,7 +191,7 @@ test("detail names both sign-ins for each Claude app state", () => {
 });
 
 test("detail names both sign-ins for each usage sign-in state", () => {
-  const usageState = (account: Account, usage: AccountUsage | undefined, language: "tr" | "en" = "tr") =>
+  const usageState = (account: Account, usage: AccountUsage | undefined, language: Locale = "tr") =>
     health(account, usage, {}, language).detail.split(" · ").at(-1);
   assert.equal(usageState(base, ready), "Limit okuma girişi: Bağlı");
   assert.equal(usageState(base, undefined), "Limit okuma girişi: Bağlı");
@@ -214,7 +216,7 @@ test("the usage sign-in row's status agrees with the header's tone and the detai
     account: Account,
     usage: AccountUsage | undefined,
     waiting = false,
-    language: "tr" | "en" = "tr",
+    language: Locale = "tr",
   ) => usageSignInStatus(account, usage, waiting, tr(language));
   const loggedOut: Account = { ...base, auth: { loggedIn: false, checkedAt: iso(NOW) } };
   const cases: [string, Account, AccountUsage | undefined, string, string][] = [
@@ -326,7 +328,7 @@ test("the status, the banner, the usage card and the row menu read the same issu
         settings: DEFAULT_SETTINGS,
         now: NOW,
         language: "en",
-        t: (_tr: string, en: string) => en,
+        t: testT("en"),
         refresh() {},
         connect() {},
       }),
@@ -337,7 +339,7 @@ test("the status, the banner, the usage card and the row menu read the same issu
     assert.equal(banner?.action === "renew", renew, `banner: ${name}`);
     if (banner) assert.equal(banner.issue, displayedIssue(usage), `banner key: ${name}`);
     assert.equal(/>(Allow renewal|Allow Keychain access)<\/button>/.test(card(usage)), renew, `usage card: ${name}`);
-    assert.equal(rowActions(base, relay(usage), (t) => t).some((x) => x.key === "renew"), renew, `row menu: ${name}`);
+    assert.equal(rowActions(base, relay(usage), (t) => t, "en").some((x) => x.key === "renew"), renew, `row menu: ${name}`);
   }
 });
 

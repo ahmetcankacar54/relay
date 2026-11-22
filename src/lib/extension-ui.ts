@@ -1,7 +1,6 @@
 import {
   BROWSERS,
   browserApps,
-  browserNames,
   type BrowserApp,
   type ExtensionInstance,
   type ExtensionMode,
@@ -9,8 +8,13 @@ import {
   type ExtensionTarget,
 } from "../../shared/browser-extension";
 import type { Account } from "../../shared/types";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import type { T } from "../../shared/i18n/translate";
+import { nameList } from "./proxy-ui";
 
-type T = (tr: string, en: string) => string;
+
+/** The browsers Relay looks in, by name: "Chrome, Brave, … and Comet". */
+const browserList = (apps: readonly BrowserApp[], t: T) => nameList(apps.map((app) => BROWSERS[app].name), t);
 
 /** "Brave · Default": a browser's name and a profile's. Neither ever takes a suffix. */
 export const instanceLabel = (i: ExtensionTarget & { name?: string }) =>
@@ -20,10 +24,10 @@ export const instanceValue = (i: ExtensionTarget) => `${i.app}:${i.profile}`;
 
 export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
   const labels: Record<ExtensionMode, string> = {
-    off: t("Dokunma", "Do not change"),
-    guide: t("Sadece haber ver", "Only tell me"),
-    closed: t("Tarayıcı kapalıysa", "If the browser is closed"),
-    restart: t("Tarayıcıyı kapatıp aç", "Quit and reopen the browser"),
+    off: t("extensionUi.doNotChange"),
+    guide: t("extensionUi.onlyTellMe"),
+    closed: t("extensionUi.ifTheBrowserIsClosed"),
+    restart: t("extensionUi.quitAndReopenTheBrowser"),
   };
   // From the least to the most Relay does.
   return (["off", "guide", "closed", "restart"] as const).map((value) => ({
@@ -37,45 +41,24 @@ export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
  * cannot be held up by the browser's own prompts, which "restart" says.
  */
 export function modeSentence(mode: ExtensionMode, t: T, platform?: string): string {
-  const web = t(
-    "Relay bu profildeki claude.ai oturumunu da değiştirir; claude.ai sekmeleri yeni hesapta açılır. Gündelik claude.ai hesabını korumak için eklentiyi ayrı bir tarayıcı profilinde kullan.",
-    "Relay also changes the claude.ai login in this browser profile, so claude.ai tabs open on the new account. To keep your everyday claude.ai account, use the extension in a separate browser profile.",
-  );
   switch (mode) {
     case "restart":
-      return `${t(
-        "Relay her geçişte eklenti girişini ve claude.ai oturumunu yeni hesabınkiyle değiştirir. Açık tarayıcı kısa süre kapanıp sekmeleriyle yeniden açılır.",
-        "At each switch, Relay puts in the extension sign-in and claude.ai login of the new account. An open browser closes for a moment and opens again with its tabs.",
-      )}${
-        platform === "linux"
-          ? ` ${t(
-              "Linux’ta tarayıcı oturum kapanışındaki gibi kapatılır: “sayfadan ayrıl” ya da indirme uyarısı gösterilmeyebilir ve tarayıcı yine de kapanabilir.",
-              "On Linux the browser is closed as at logout: a “leave this page” or downloads prompt may not be shown, and the browser may close anyway.",
-            )}`
-          : ""
-      } ${web}`;
+      return platform === "linux"
+        ? t("extensionUi.atEachSwitchRelayPutsInLinux")
+        : t("extensionUi.atEachSwitchRelayPutsIn");
     case "closed":
-      return `${t(
-        "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin de aynı hesaba geçmesini istiyorsan geçişten önce tarayıcıyı kapat.",
-        "Relay changes them only when the browser is closed. For the extension to follow, close the browser before a switch.",
-      )} ${web}`;
+      return t("extensionUi.relayChangesThemOnlyWhenThe");
     case "guide":
-      return t(
-        "Geçişte Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez. Eklenti başka bir hesapta kalırsa menü çubuğu panelinde “Geçir” çıkar.",
-        "Relay does not change the browser or the extension at a switch. If the extension stays on another account, the menu bar panel shows “Switch”.",
-      );
+      return t("extensionUi.relayDoesNotChangeTheBrowser");
     case "off":
-      return t("Relay eklentiye dokunmaz.", "Relay does not change the extension.");
+      return t("extensionUi.relayDoesNotChangeTheExtension");
   }
 }
 
 /** Why the extension cannot be found: macOS keeps these browsers' data from Relay. */
 export function deniedLine(denied: BrowserApp[], t: T): string {
   const names = denied.map((app) => BROWSERS[app].name).join(", ");
-  return t(
-    `macOS, Relay’in ${names} verilerini okumasına izin vermiyor. Sistem Ayarları › Gizlilik ve Güvenlik › Tam Disk Erişimi’nde Relay’i aç, sonra Relay’i yeniden başlat.`,
-    `macOS does not let Relay read the data of ${names}. Turn on Relay in System Settings › Privacy & Security › Full Disk Access, then restart Relay.`,
-  );
+  return t("extensionUi.macosDoesNotLetRelayRead", { names });
 }
 
 /** What the card says about the instance Relay manages, or why it manages none. */
@@ -83,23 +66,14 @@ export function instanceLine(status: ExtensionStatus, t: T, platform?: string): 
   if (!status.instances.length && status.denied?.length)
     return deniedLine(status.denied, t);
   if (!status.instances.length) {
-    const apps = browserApps(platform);
-    return t(
-      `Bu bilgisayarda Claude eklentisi bulunamadı (${browserNames("ve", apps)}).`,
-      platform === "linux"
-        ? `No Claude extension found on this computer (${browserNames("and", apps)}).`
-        : `No Claude extension found on this Mac (${browserNames("and", apps)}).`,
-    );
+    const browsers = browserList(browserApps(platform), t);
+    return platform === "linux"
+      ? t("extensionUi.noClaudeExtensionFoundOnThisComputerIn", { browsers })
+      : t("extensionUi.noClaudeExtensionFoundOnThisMacIn", { browsers });
   }
   if (!status.target)
-    return t(
-      "Claude eklentisi birden çok tarayıcı profilinde var. Birini seç.",
-      "The Claude extension is in several browser profiles. Select one.",
-    );
-  return t(
-    `${instanceLabel(status.target)} · eklenti yüklü`,
-    `${instanceLabel(status.target)} · extension installed`,
-  );
+    return t("extensionUi.theClaudeExtensionIsInSeveral");
+  return t("extensionUi.extensionInstalled", { instanceLabel: instanceLabel(status.target) });
 }
 
 /** The browser's own startup setting, and that Relay restores the session itself. */
@@ -107,14 +81,8 @@ export function startupLine(status: ExtensionStatus, t: T): string | undefined {
   if (!status.target || status.restoresTabs === undefined) return undefined;
   const name = BROWSERS[status.target.app].name;
   return status.restoresTabs
-    ? t(
-        `${name} önceki sekmeleri yeniden açar; Relay de geri yükler.`,
-        `${name} opens the last tabs again, and Relay also restores them.`,
-      )
-    : t(
-        `${name} yeni sekme sayfasıyla açılır; Relay sekmeleri kendisi geri yükler. Gizli sekmeler geri gelmez.`,
-        `${name} opens a new tab page, so Relay restores the tabs. Private tabs do not come back.`,
-      );
+    ? t("extensionUi.opensTheLastTabsAgainAnd", { name })
+    : t("extensionUi.opensANewTabPageSo", { name });
 }
 
 /** The instance a picker value names, among those found. */
@@ -212,34 +180,16 @@ export function reconnectGuide(
   const as = email ?? account.name;
   return {
     account,
-    title: t(
-      `Eklentiyi ${account.name} hesabına yeniden bağla`,
-      `Reconnect the extension to ${account.name}`,
-    ),
+    title: t("extensionUi.reconnectTheExtensionTo", { accountName: account.name }),
     why: broken
-      ? t(
-          `Eklenti, ${account.name} için kayıtlı claude.ai oturumuyla giriş yapamadı; oturum başka bir hesabın ya da süresi dolmuş. Relay onu sildi. Claude’un tarayıcı araçları sen yeniden bağlayana kadar çalışmaz.`,
-          `The extension cannot sign in with the saved claude.ai login of ${account.name}. The login is for another account, or it expired. Relay removed it. Claude’s browser tools do not work until you reconnect.`,
-        )
-      : t(
-          `Eklenti ${account.name} hesabında ama girişi düşmüş; Claude’un tarayıcı araçları çalışmaz.`,
-          `The extension is on ${account.name}, but its sign-in expired. Claude’s browser tools do not work.`,
-        ),
+      ? t("extensionUi.theExtensionCannotSignInWith", { accountName: account.name })
+      : t("extensionUi.theExtensionIsOnButIts", { accountName: account.name }),
     steps: [
       // Never "log out": claude.ai's log out ends that login on the server, and Relay keeps a
       // copy of it for the other account; deleting the site's data only forgets it here.
-      t(
-        `${browser}’da claude.ai’yi aç. Açılan hesap ${account.name} değilse çıkış yapma (çıkış, Relay’in diğer hesap için sakladığı girişi de bitirir): adres çubuğundaki site simgesinden claude.ai’nin site verilerini sil, sayfayı yenile, ${as} ile giriş yap.`,
-        `Open claude.ai in ${browser}. If it is not on ${account.name}, do not log out (that also ends the login Relay keeps for the other account): delete claude.ai’s site data from the site icon in the address bar, reload, and log in with ${as}.`,
-      ),
-      t(
-        `${browser}’ın araç çubuğundaki Claude simgesine tıkla, “Log in”e bas.`,
-        `Click the Claude icon in the ${browser} toolbar. Then click “Log in”.`,
-      ),
-      t(
-        "Relay bağlantıyı kendisi görür ve girişi saklar.",
-        "Relay finds the connection and saves the sign-in.",
-      ),
+      t("extensionUi.openClaudeAiInIfIt", { browser, accountName: account.name, as }),
+      t("extensionUi.clickTheClaudeIconInThe", { browser }),
+      t("extensionUi.relayFindsTheConnectionAndSaves"),
     ],
     canSync:
       !broken && !!status.cookiesSaved?.some((s) => uuids.includes(s.accountUuid)),
@@ -266,56 +216,47 @@ export function extensionGuide(
   status: ExtensionStatus | undefined,
   accounts: Account[],
   t: T,
-  language: "tr" | "en",
+  language: Locale,
   /** The account the Claude app is on (its uuid), for the reconnect guide. */
   desktopUuid?: string,
   /** Relay's platform (`diagnostics.platform`): which browsers were looked in, and "Mac" or not. */
   platform?: string,
 ): ExtensionGuide {
-  if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Check in progress…") };
+  if (!status) return { tone: "off", label: t("common.checkInProgress") };
   if (status.setting.mode === "off")
     return {
       tone: "off",
-      label: t("Kapalı", "Off"),
-      detail: t("Relay eklentiye dokunmaz.", "Relay does not change the extension."),
+      label: t("common.off"),
+      detail: t("extensionUi.relayDoesNotChangeTheExtension"),
       action: "settings",
     };
   if (!status.instances.length && status.denied?.length)
     return {
       tone: "warn",
-      label: t("macOS erişime izin vermiyor", "macOS blocks access"),
+      label: t("extensionUi.macosBlocksAccess"),
       detail: deniedLine(status.denied, t),
       action: "settings",
     };
   if (!status.instances.length) {
-    const apps = browserApps(platform);
     return {
       tone: "off",
       label:
         platform === "linux"
-          ? t(
-              "Bu bilgisayarda Claude eklentisi bulunamadı.",
-              "No Claude extension found on this computer.",
-            )
-          : t(
-              "Bu Mac’te Claude eklentisi bulunamadı.",
-              "No Claude extension found on this Mac.",
-            ),
-      detail: t(
-        `Bakılan tarayıcılar: ${browserNames("ve", apps)}.`,
-        `Looked in ${browserNames("and", apps)}.`,
-      ),
+          ? t("extensionUi.noClaudeExtensionFoundOnThis")
+          : t("extensionUi.noClaudeExtensionFoundOnThis2"),
+      detail: t("extensionUi.lookedIn", { browsers: browserList(browserApps(platform), t) }),
     };
   }
   if (!status.target)
     return {
       tone: "warn",
-      label: t("Birden çok tarayıcıda var, birini seç", "In several browsers. Select one"),
+      label: t("extensionUi.inSeveralBrowsersSelectOne"),
       action: "settings",
     };
   const where =
-    instanceLabel(status.target) +
-    (status.picked === "recent" ? t(" (en son kullanılan)", " (used last)") : "");
+    status.picked === "recent"
+      ? t("extensionUi.usedLast", { instance: instanceLabel(status.target) })
+      : instanceLabel(status.target);
   const uuids = accountUuids(account);
   const saved = status.saved.find((s) => uuids.includes(s.accountUuid));
   const current = status.current;
@@ -325,7 +266,7 @@ export function extensionGuide(
   if (reconnect && reconnect.account.id === account.id)
     return {
       tone: "crit",
-      label: t("Yeniden bağlanmalı", "Reconnect needed"),
+      label: t("extensionUi.reconnectNeeded"),
       detail: reconnect.why,
       steps: reconnect.steps,
       where,
@@ -337,30 +278,24 @@ export function extensionGuide(
   if (saved && !loginSaved && !here)
     return {
       tone: "warn",
-      label: t("Yarım bağlı: claude.ai girişi kayıtlı değil", "Half linked: no claude.ai login saved"),
-      detail: t(
-        "Relay eklentinin girişini sakladı ama bu hesabın claude.ai girişini saklamadı; bu hesaba geçişte eklenti yerinde kalır. Tarayıcıda claude.ai’ye ve eklentiye bu hesapla giriş yapıp “Kontrol et”e bas.",
-        "Relay saved the extension’s sign-in but not this account’s claude.ai login, so a switch to this account leaves the extension where it is. Sign in to claude.ai and the extension with this account in the browser, then select “Check”.",
-      ),
+      label: t("extensionUi.halfLinkedNoClaudeAiLogin"),
+      detail: t("extensionUi.relaySavedTheExtensionSSign"),
       action: "check",
       where,
     };
   if (saved || here) {
     const date = saved
-      ? new Date(saved.savedAt).toLocaleDateString(language === "tr" ? "tr-TR" : "en-GB", {
+      ? new Date(saved.savedAt).toLocaleDateString(FORMAT_LOCALE[language], {
           day: "numeric",
           month: "short",
         })
       : undefined;
     return {
       tone: "ok",
-      label: here ? t("Bağlı, şu an bu hesapta", "Linked, on this account now") : t("Bağlı", "Linked"),
+      label: here ? t("extensionUi.linkedOnThisAccountNow") : t("extensionUi.linked"),
       detail: here
         ? undefined
-        : t(
-            `Kayıt: ${date}. Bu hesaba geçince eklenti de bu hesaba geçer.`,
-            `Saved ${date}. The extension follows when you switch to this account.`,
-          ),
+        : t("extensionUi.savedTheExtensionFollowsWhenYou", { date }),
       where,
     };
   }
@@ -368,37 +303,31 @@ export function extensionGuide(
   if (!uuids.length)
     return {
       tone: "warn",
-      label: t("Önce Claude uygulaması girişini kaydet", "Save the Claude app sign-in first"),
-      detail: t(
-        "Relay hesabın kimliğini Claude uygulaması girişinden öğrenir. Sonra eklentiye bu hesapla giriş yapıp “Kontrol et”e bas.",
-        "Relay gets the account ID from the Claude app sign-in. Then sign in to the extension with this account and select “Check”.",
-      ),
+      label: t("extensionUi.saveTheClaudeAppSignIn"),
+      detail: t("extensionUi.relayGetsTheAccountIdFrom"),
       where,
     };
   const email = account.desktop?.email ?? account.auth?.email;
   const signIn = email
-    ? t(`${email} ile giriş yap.`, `Sign in with ${email}.`)
-    : t("Bu hesapla giriş yap.", "Sign in with this account.");
-  const check = t("“Kontrol et”e bas.", "Select “Check”.");
+    ? t("extensionUi.signInWith", { email })
+    : t("extensionUi.signInWithThisAccount");
+  const check = t("extensionUi.selectCheck");
   if (!current)
-    return { tone: "off", label: t("Kontrol ediliyor…", "Check in progress…"), where, action: "check" };
+    return { tone: "off", label: t("common.checkInProgress"), where, action: "check" };
   if (current.state === "unreadable")
     return {
       tone: "crit",
-      label: t("Eklentinin girişi okunamadı.", "Relay cannot read the extension sign-in."),
-      detail: t(
-        "Birkaç saniye sonra tekrar dene. Sürerse eklentinin yeni bir sürümü olabilir.",
-        "Try again in a few seconds. If the problem continues, a new extension version can be the cause.",
-      ),
+      label: t("extensionUi.relayCannotReadTheExtensionSign"),
+      detail: t("extensionUi.tryAgainInAFewSeconds"),
       where,
       action: "check",
     };
   if (current.state === "signed-out" && current.unopened)
     return {
       tone: "warn",
-      label: t("Eklenti hiç açılmamış", "The extension was never opened"),
+      label: t("extensionUi.theExtensionWasNeverOpened"),
       steps: [
-        t("Eklentiyi tarayıcıda bir kez aç.", "Open the extension in the browser once."),
+        t("extensionUi.openTheExtensionInTheBrowser"),
         signIn,
         check,
       ],
@@ -408,16 +337,13 @@ export function extensionGuide(
   if (current.state === "signed-out")
     return {
       tone: "warn",
-      label: t("Eklentide giriş yok", "The extension is signed out"),
+      label: t("extensionUi.theExtensionIsSignedOut"),
       steps: [
-        t("Tarayıcıda Claude eklentisini aç.", "Open the Claude extension in the browser."),
+        t("extensionUi.openTheClaudeExtensionInThe"),
         signIn,
         check,
       ],
-      detail: t(
-        "Giriş yaptığın hâlde bu yazı kalıyorsa Relay eklentinin girişini tanıyamıyor demektir.",
-        "If this stays after you sign in, Relay cannot identify the extension sign-in.",
-      ),
+      detail: t("extensionUi.ifThisStaysAfterYouSign"),
       where,
       action: "check",
     };
@@ -427,45 +353,30 @@ export function extensionGuide(
   if (!other && !current.other)
     return {
       tone: "warn",
-      label: t("Eklentideki hesap tanınamadı", "Relay cannot identify the extension account"),
+      label: t("extensionUi.relayCannotIdentifyTheExtensionAccount"),
       steps: [
         email
-          ? t(
-              `Eklentide ${email} ile giriş yaptığından emin ol.`,
-              `Make sure the extension is signed in with ${email}.`,
-            )
-          : t(
-              "Eklentide bu hesapla giriş yaptığından emin ol.",
-              "Make sure the extension is signed in with this account.",
-            ),
-        t("“Bu hesap olarak bağla”ya bas.", "Select “Link as this account”."),
+          ? t("extensionUi.makeSureTheExtensionIsSigned", { email })
+          : t("extensionUi.makeSureTheExtensionIsSigned2"),
+        t("extensionUi.selectLinkAsThisAccount"),
       ],
-      detail: t(
-        "Relay eklentideki hesabı okuyamıyor; bir kez sen söyle. Sonra Relay bunu hatırlar.",
-        "Relay cannot read the account from the extension, so tell it once. After that, Relay remembers it.",
-      ),
+      detail: t("extensionUi.relayCannotReadTheAccountFrom"),
       where,
       action: "claim",
     };
   return {
     tone: "warn",
     label: other
-      ? t(`Eklenti ${other.name} hesabında`, `The extension is on ${other.name}`)
-      : t("Eklenti başka bir claude.ai hesabında", "The extension is on another claude.ai account"),
+      ? t("extensionUi.theExtensionIsOn", { otherName: other.name })
+      : t("extensionUi.theExtensionIsOnAnotherClaude"),
     steps: [
-      t("Eklentide çıkış yap.", "Sign out in the extension."),
+      t("extensionUi.signOutInTheExtension"),
       signIn,
       check,
     ],
     detail: other
-      ? t(
-          `${other.name} için kayıt Relay’de duruyor; o hesaba geçince eklenti de geri gelir.`,
-          `Relay keeps the sign-in of ${other.name}. When you switch to it, the extension follows.`,
-        )
-      : t(
-          "Eklentideki claude.ai hesabı Relay’deki hiçbir hesaba ait değil. Tarayıcıdaki claude.ai oturumunu kontrol et; eklenti onun hesabını kullanır.",
-          "The claude.ai account in the extension is not in Relay. Check the claude.ai login in the browser. The extension uses that account.",
-        ),
+      ? t("extensionUi.relayKeepsTheSignInOf", { otherName: other.name })
+      : t("extensionUi.theClaudeAiAccountInThe"),
     where,
     action: "check",
   };

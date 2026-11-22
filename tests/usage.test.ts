@@ -294,6 +294,15 @@ test("usage deduplicates requests, hides secrets, retains stale data after 429, 
     now + 600_000,
   );
 });
+test("a Retry-After waits at most an hour, at least a minute, and an unreadable one takes the default", () => {
+  const now = Date.parse("2026-10-13T12:00:00Z");
+  assert.equal(retryTime("99999999", now), now + 3_600_000);
+  assert.equal(retryTime(new Date(now + 3 * 86_400_000).toUTCString(), now), now + 3_600_000);
+  assert.equal(retryTime("0", now), now + 60_000);
+  assert.equal(retryTime("9".repeat(400), now), now + 300_000);
+  assert.equal(retryTime("soon", now), now + 300_000);
+  assert.equal(retryTime(null, now), now + 300_000);
+});
 test("an expired credential does not get refreshed or sent; wrong identity clears old quota", async (t) => {
   const f = await fixture(t);
   let requests = 0,

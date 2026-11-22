@@ -14,35 +14,26 @@ import { paint } from "../output";
 export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
   const query = parsed.positionals[0];
   if (!query || parsed.positionals.length > 1)
-    throw new CliError(t("Kullanım: relay switch <ad>", "Usage: relay switch <name>"), EXIT.usage);
+    throw new CliError(t("commandsSwitch.usageRelaySwitchName"), EXIT.usage);
   const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: true });
   const accounts = ctx.store.state.accounts;
   const target = resolveAccount(accounts, query, t);
   if (!target.desktop)
     throw new CliError(
-      t(
-        `${target.name} hesabının Claude uygulaması girişi henüz kayıtlı değil. Kaydetmek için: relay add "${target.name}"`,
-        `${target.name} has no saved Claude app sign-in yet. Save it with: relay add "${target.name}"`,
-      ),
+      t("commandsSwitch.hasNoSavedClaudeAppSign", { targetName: target.name }),
       EXIT.failed,
     );
   const state = await assertCanQuitClaude(ctx);
   if (state.activeProfileId === target.id) {
-    io.stdout(t(`${target.name} zaten etkin.`, `${target.name} is already active.`));
+    io.stdout(t("commandsSwitch.isAlreadyActive", { targetName: target.name }));
     return EXIT.ok;
   }
   const settings = ctx.store.state.settings;
   const sources = historySources(target, accounts, settings).filter((a) => a.id !== target.id);
   const history =
     settings.desktopHistoryTransfer === "off" || !sources.length
-      ? t(
-          `Code geçmişi: taşınacak geçmiş yok (${historyModeText(settings.desktopHistoryTransfer, t)}).`,
-          `Code history: nothing to bring over (${historyModeText(settings.desktopHistoryTransfer, t)}).`,
-        )
-      : t(
-          `Code geçmişi şu hesaplardan gelir: ${sources.map((a) => a.name).join(", ")}.`,
-          `Code history comes over from: ${sources.map((a) => a.name).join(", ")}.`,
-        );
+      ? t("commandsSwitch.codeHistoryNothingToBringOver", { historyModeText: historyModeText(settings.desktopHistoryTransfer, t) })
+      : t("commandsSwitch.codeHistoryComesOverFrom", { join: sources.map((a) => a.name).join(", ") });
   const browser = await ctx.desktop.extensionQuitsBrowser();
   // The plain `claude` in a terminal follows the account too, unless that is turned off.
   const terminalStatus = await ctx.desktop.terminalStatus();
@@ -55,26 +46,17 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
       paint(
         ctx.color,
         "bold",
-        t(
-          `Claude uygulaması kapanıp ${target.name} hesabıyla yeniden açılacak.`,
-          `The Claude app will quit and reopen signed in as ${target.name}.`,
-        ),
+        t("commandsSwitch.theClaudeAppWillQuitAnd", { targetName: target.name }),
       ),
       ...quitLines(ctx),
       ...(browser
         ? [
-            t(
-              `Claude eklentisinin girişi için ${browser} tarayıcısı da kısa süreliğine kapanıp sekmeleriyle yeniden açılacak.`,
-              `${browser} will also quit for a moment and reopen with its tabs, for the Claude extension’s sign-in.`,
-            ),
+            t("commandsSwitch.willAlsoQuitForAMoment", { browser }),
           ]
         : []),
       ...(terminalFollows
         ? [
-            t(
-              `Terminaldeki claude’un girişi de (Anahtarlık ve ~/.claude.json) ${target.name} hesabına geçer; kapatmak için Relay.app → Ayarlar → Geçiş.`,
-              `The terminal claude’s sign-in (Keychain and ~/.claude.json) will move to ${target.name} too; turn that off in Relay.app → Settings → Switching.`,
-            ),
+            t("commandsSwitch.theTerminalClaudeSSignIn", { targetName: target.name }),
           ]
         : []),
       ...(inside ? [sessionEndsLine(ctx)] : []),
@@ -86,10 +68,7 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
   await runDesktopOperation(ctx, () => ctx.desktop.switchTo(target.id));
   const n = ctx.desktop.carriedCount;
   io.stdout(
-    t(
-      `${target.name} hesabına geçildi; ${n} konuşma taşındı.`,
-      `Switched to ${target.name}; ${n} conversation${n === 1 ? "" : "s"} carried.`,
-    ),
+    t("commandsSwitch.switchedToConversationSCarried", { targetName: target.name, n }),
   );
   // As the app does: what became of the Claude extension's sign-in, when there is something to say.
   const extension = ctx.desktop.extensionOutcome;

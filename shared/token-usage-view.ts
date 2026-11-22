@@ -2,14 +2,11 @@ import type {
   LedgerSnapshot,
   TokenCounts,
 } from "../electron/core/token-ledger";
+import type { MessageId } from "./i18n/translate";
 import { PRICES_CHECKED } from "./model-prices";
 import { localDate, localSlot, wallTime } from "./planning";
 import type { Account } from "./types";
-import {
-  FORMER_KEY,
-  FORMER_NAME,
-  type StatisticsRange,
-} from "./usage-statistics-view";
+import { FORMER_KEY, type StatisticsRange } from "./usage-statistics-view";
 
 export type { LedgerSnapshot, TokenCounts };
 
@@ -18,7 +15,7 @@ export interface TokenRow {
   key: string;
   kind: "account" | "former" | "terminal" | "unknown";
   accountId?: string;
-  /** The account's name, or the Turkish default of the other kinds; see `TOKEN_ROW_LABELS`. */
+  /** The account's name; the other kinds have none and show `TOKEN_ROW_LABELS[kind]`. */
   name?: string;
   /** Some of its tokens in the range were estimated from limit samples. */
   estimated: boolean;
@@ -80,11 +77,11 @@ export const TERMINAL_KEY = "terminal";
 export const UNKNOWN_KEY = "unknown";
 
 /** The labels of the rows that are not a current account. */
-export const TOKEN_ROW_LABELS = {
-  former: { tr: FORMER_NAME, en: "Former account" },
-  terminal: { tr: "Relay dışı terminal", en: "Terminal outside Relay" },
-  unknown: { tr: "Hesabı bilinmeyen", en: "Unknown account" },
-} as const;
+export const TOKEN_ROW_LABELS: Record<Exclude<TokenRow["kind"], "account">, MessageId> = {
+  former: "tokenUsageView.formerAccount",
+  terminal: "tokenUsageView.terminalOutsideRelay",
+  unknown: "tokenUsageView.unknownAccount",
+};
 
 const DAY_MS = 86_400_000;
 const BUCKET = /^(acct|est):(.+)$/;
@@ -129,7 +126,7 @@ interface Who {
   key: string;
   kind: TokenRow["kind"];
   accountId?: string;
-  name: string;
+  name?: string;
   estimated: boolean;
 }
 
@@ -139,7 +136,6 @@ export function classify(who: string, accounts: Map<string, Account>): Who {
     return {
       key: TERMINAL_KEY,
       kind: "terminal",
-      name: TOKEN_ROW_LABELS.terminal.tr,
       estimated: false,
     };
   const match = BUCKET.exec(who);
@@ -147,7 +143,6 @@ export function classify(who: string, accounts: Map<string, Account>): Who {
     return {
       key: UNKNOWN_KEY,
       kind: "unknown",
-      name: TOKEN_ROW_LABELS.unknown.tr,
       estimated: false,
     };
   const estimated = match[1] === "est";
@@ -160,7 +155,7 @@ export function classify(who: string, accounts: Map<string, Account>): Who {
       name: account.name,
       estimated,
     };
-  return { key: FORMER_KEY, kind: "former", name: FORMER_NAME, estimated };
+  return { key: FORMER_KEY, kind: "former", estimated };
 }
 
 /**
@@ -199,7 +194,7 @@ export function buildTokenUsageView(input: TokenUsageInput): TokenUsageView {
             key: target.key,
             kind: target.kind,
             ...(target.accountId ? { accountId: target.accountId } : {}),
-            name: target.name,
+            ...(target.name ? { name: target.name } : {}),
             estimated: false,
             totals: zero(),
           };

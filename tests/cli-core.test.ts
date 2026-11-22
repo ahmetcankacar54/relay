@@ -46,6 +46,12 @@ test("help follows the language", async (t) => {
   assert.match(f.out(), /Kullanım/);
 });
 
+test("--lang takes every locale and help lists them", async (t) => {
+  const f = await cliFixture(t);
+  assert.equal(await f.run("--lang", "ja", "help"), 0);
+  assert.match(f.out(), /--lang <code> .*en, tr, de, fr, es, pt-BR, it, ja, ko, zh-Hans, zh-Hant, ru, uk, pl, nl/);
+});
+
 test("language: --lang, then RELAY_LANG, then LC_ALL/LC_MESSAGES/LANG, else English", () => {
   assert.equal(pickLang(undefined, { LANG: "tr_TR.UTF-8" }), "tr");
   assert.equal(pickLang(undefined, { LC_ALL: "en_US.UTF-8", LANG: "tr_TR.UTF-8" }), "en");
@@ -53,7 +59,13 @@ test("language: --lang, then RELAY_LANG, then LC_ALL/LC_MESSAGES/LANG, else Engl
   assert.equal(pickLang(undefined, { RELAY_LANG: "tr", LANG: "en_US.UTF-8" }), "tr");
   assert.equal(pickLang("en", { RELAY_LANG: "tr" }), "en");
   assert.equal(pickLang(undefined, {}), "en");
-  assert.equal(translator("tr")("evet", "yes"), "evet");
+  // Every locale, by code or by POSIX locale; C/POSIX and unknown ones fall through.
+  assert.equal(pickLang("zh-Hant", { LANG: "tr_TR.UTF-8" }), "zh-Hant");
+  assert.equal(pickLang("xx", { LANG: "de_DE.UTF-8" }), "de");
+  assert.equal(pickLang(undefined, { RELAY_LANG: "system", LANG: "ja_JP.UTF-8" }), "ja");
+  assert.equal(pickLang(undefined, { LC_ALL: "C", LANG: "pt_PT.UTF-8" }), "pt-BR");
+  assert.equal(pickLang(undefined, { LANG: "zh_TW.UTF-8" }), "zh-Hant");
+  assert.equal(translator("tr")("confirm.yYes"), "e evet y yes");
 });
 
 test("arguments: global flags, command flags, positionals and -- passthrough", () => {
@@ -103,7 +115,7 @@ test("piped output has no ANSI codes", () => {
   assert.equal(text.split("\n")[1].indexOf("work"), text.split("\n")[0].indexOf("Kind"));
 });
 
-test("a format-1 vault, a newer marker and an old Relay.app refuse writes with exit 5; reads still work", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("a format-1 vault, a newer marker and an old Relay.app refuse writes with exit 5; reads still work", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await writeBytes(path.join(f.home, "desktop-vault"), "accounts/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.bin", Buffer.from("v10old"));
   const flags = { lang: "en" } as any;
@@ -118,7 +130,7 @@ test("a format-1 vault, a newer marker and an old Relay.app refuse writes with e
   await openContext(h.io, h.deps as any, flags, { write: false, desktop: false });
 });
 
-test("a schema-less registry next to an installed Relay.app refuses writes; without an app it is adopted", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("a schema-less registry next to an installed Relay.app refuses writes; without an app it is adopted", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { appVersion: "0.12.0" });
   await f.saved("A");
   const file = path.join(f.home, "state.json");
@@ -136,7 +148,7 @@ test("a schema-less registry next to an installed Relay.app refuses writes; with
   assert.equal(JSON.parse(fs.readFileSync(path.join(g.home, "state.json"), "utf8")).schema, STATE_SCHEMA);
 });
 
-test("a missing key with format-2 files exits 5 and never creates a key", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("a missing key with format-2 files exits 5 and never creates a key", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   f.security.removeItem("Relay Vault Key");
@@ -148,7 +160,7 @@ test("a missing key with format-2 files exits 5 and never creates a key", { skip
   assert.equal(f.security.stdinLog(), stdinBefore);
 });
 
-test("an empty vault gets a key and the marker on the first writing command", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("an empty vault gets a key and the marker on the first writing command", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await openContext(f.io, f.deps as any, { lang: "en" } as any, { write: true, desktop: true });
   assert.notEqual(f.security.stored(), "");
@@ -167,7 +179,7 @@ test("shielded ignores signals during the operation and prints one wait line", a
   assert.equal(f.hasSignalHandler(), false);
 });
 
-test("a registry this relay cannot read names state.json instead of printing raw schema errors", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("a registry this relay cannot read names state.json instead of printing raw schema errors", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const file = path.join(f.home, "state.json");
@@ -179,7 +191,7 @@ test("a registry this relay cannot read names state.json instead of printing raw
   assert.doesNotMatch(f.err(), /relay: \[/);
 });
 
-test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt, not to an update", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
+test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt, not to an update", { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { appVersion: "0.12.0" });
   await writeBytes(path.join(f.home, "desktop-vault"), "accounts/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.bin", Buffer.from("v10old"));
   await assert.rejects(
@@ -190,11 +202,11 @@ test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt,
 
 test("a core error the app knows in both languages is shown in the CLI's language", () => {
   const core = new Error("Connect this account in Claude Desktop first.");
-  assert.equal(describeError(core, translator("tr")).message, "Önce bu hesabı Claude uygulamasında bağla.");
-  assert.equal(describeError(core, translator("en")).message, "Connect this account in the Claude app first.");
+  assert.equal(describeError(core, "tr").message, "Önce bu hesabı Claude uygulamasında bağla.");
+  assert.equal(describeError(core, "en").message, "Connect this account in the Claude app first.");
   // The blocked ones keep their own words, with the relay command that clears them.
   assert.match(
-    describeError(new Error("Finish or cancel the current Desktop sign-in first."), translator("tr")).message,
+    describeError(new Error("Finish or cancel the current Desktop sign-in first."), "tr").message,
     /relay add --resume ile bitir/,
   );
 });

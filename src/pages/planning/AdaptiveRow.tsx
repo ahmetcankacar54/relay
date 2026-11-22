@@ -1,8 +1,8 @@
 import type { PlanningSettings } from "../../../shared/types";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import type { T } from "../../../shared/i18n/translate";
 
-type T = (tr: string, en: string) => string;
 
 // The page has one adapt row.
 const NOTE_ID = "planning-adaptive-note";
@@ -23,7 +23,7 @@ export function AdaptiveRow({
   update: (patch: Partial<PlanningSettings>) => void;
   t: T;
 }) {
-  const label = t("Uyarla", "Adapt");
+  const label = t("adaptiveRow.adapt");
   const on = settings.adaptive !== false;
   return (
     <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-3 border-t py-2.5 first:border-t-0">
@@ -44,10 +44,7 @@ export function AdaptiveRow({
           {label}
         </strong>
         <small id={NOTE_ID} className="text-xs text-muted-foreground">
-          {t(
-            "Gün içinde hızına göre planı güncelle",
-            "Update the plan for today’s pace",
-          )}
+          {t("adaptiveRow.updateThePlanForTodayS")}
         </small>
       </span>
     </div>

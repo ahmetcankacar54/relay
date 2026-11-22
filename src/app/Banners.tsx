@@ -20,6 +20,7 @@ import { pendingFlow } from "@/data/selectors";
 import { displayedIssue, isClaudeAccount, renewalIssue } from "@/lib/account-health";
 import { AutomationBanner } from "../features/AutomationControl";
 import { RelayErrorAlert } from "./RelayErrorAlert";
+import type { T } from "../../shared/i18n/translate";
 
 export interface ReconnectIssue {
   account: Account;
@@ -86,27 +87,24 @@ export function reconnectIssues(
 export function reconnectCause(
   account: Account,
   usage: AccountUsage | undefined,
-  t: (tr: string, en: string) => string,
+  t: T,
 ): string {
-  if (!account.auth?.loggedIn) return t("giriş yapılmamış", "not signed in");
+  if (!account.auth?.loggedIn) return t("banners.notSignedIn");
   const another = () =>
-    t("giriş başka bir hesaba ait", "the sign-in belongs to another account");
+    t("banners.theSignInBelongsToAnother");
   switch (usage?.issue ?? (usage?.cliSignInEnded ? "expired" : undefined)) {
     case "expired":
-      return t("girişin süresi doldu", "the sign-in expired");
+      return t("banners.theSignInExpired");
     case "credentials-missing":
-      return t("kayıtlı giriş bulunamadı", "the saved sign-in is missing");
+      return t("banners.theSavedSignInIsMissing");
     case "scope":
-      return t(
-        "giriş kullanım verisine erişemiyor",
-        "the sign-in cannot read usage",
-      );
+      return t("banners.theSignInCannotReadUsage");
     case "identity-mismatch":
       return another();
     default:
       return desktopCliMismatch(account)
         ? another()
-        : t("bağlantı kullanılamıyor", "the connection is unavailable");
+        : t("banners.theConnectionIsUnavailable");
   }
 }
 
@@ -160,10 +158,7 @@ export function Banners({
     pendingFlow(relay.data?.authFlows.find((f) => f.accountId === a.id));
   const explanation = (
     <p className="mt-0.5 text-xs text-muted-foreground">
-      {t(
-        "Tarayıcıda açılan girişi onayla.",
-        "Approve the sign-in that opens in the browser.",
-      )}
+      {t("banners.approveTheSignInThatOpens")}
     </p>
   );
   /** A warning's button. In the group, `named` adds the account to its name, after the visible label. */
@@ -173,10 +168,10 @@ export function Banners({
   ) => {
     const label =
       action === "login"
-        ? t("Limit okuma girişini yenile", "Renew usage sign-in")
+        ? t("common.renewUsageSignIn")
         : issue === "keychain-locked"
           ? keychain.allow
-          : t("Yenilemeye izin ver", "Allow renewal");
+          : t("common.allowRenewal");
     return action === "login" ? (
       <Button
         size="sm"
@@ -210,14 +205,8 @@ export function Banners({
         <div className="min-w-0">
           <span>
             {waiting(a)
-              ? t(
-                  `${a.name} · tarayıcı onayı bekleniyor.`,
-                  `${a.name} · browser approval pending.`,
-                )
-              : t(
-                  `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
-                  `${a.name} · the usage sign-in needs renewal: ${cause}.`,
-                )}
+              ? t("banners.browserApprovalPending", { aName: a.name })
+              : t("banners.theUsageSignInNeedsRenewal", { aName: a.name, cause })}
           </span>
           {explain && explanation}
         </div>
@@ -227,10 +216,7 @@ export function Banners({
       <span>
         {issue === "keychain-locked"
           ? keychain.neededFor(a.name)
-          : t(
-              `${a.name} · limit okuma girişinin yenilenmesi gerekiyor.`,
-              `${a.name} · the usage sign-in needs renewal.`,
-            )}
+          : t("banners.theUsageSignInNeedsRenewal2", { aName: a.name })}
       </span>
     );
   };
@@ -240,10 +226,7 @@ export function Banners({
         <Banner tone="info">
           <Monitor className="size-4 shrink-0" aria-hidden />
           <span>
-            {t(
-              "Tarayıcı önizlemesi · Hesaplar örnektir. Geçişler Relay uygulamasında çalışır.",
-              "Browser preview · Sample accounts. Switches work in the Relay app.",
-            )}
+            {t("banners.browserPreviewSampleAccountsSwitchesWork")}
           </span>
         </Banner>
       )}
@@ -253,7 +236,7 @@ export function Banners({
           tone="info"
           role="status"
           onDismiss={() => relay.setNotice("")}
-          dismissLabel={t("Bildirimi kapat", "Dismiss notification")}
+          dismissLabel={t("banners.dismissNotification")}
         >
           <Check className="size-4 shrink-0 text-ok" aria-hidden />
           <span>{notice}</span>
@@ -270,15 +253,12 @@ export function Banners({
               disabled={relay.desktopBusy}
               onClick={() => relay.requestDesktop(active, "recover")}
             >
-              {t("Yedeği geri yükle", "Restore backup")}
+              {t("banners.restoreBackup")}
             </Button>
           }
         >
           <span>
-            {t(
-              "Yarım kalan bir geçiş var. Önce yedeği geri yükle.",
-              "A switch did not finish. Restore the backup first.",
-            )}
+            {t("banners.aSwitchDidNotFinishRestore")}
           </span>
         </Banner>
       )}
@@ -287,7 +267,7 @@ export function Banners({
           key={issueKey(reconnect[0])}
           tone="warn"
           onDismiss={() => dismiss(issueKey(reconnect[0]))}
-          dismissLabel={t("Uyarıyı kapat", "Dismiss warning")}
+          dismissLabel={t("banners.dismissWarning")}
           action={issueAction(reconnect[0])}
         >
           {issueText(reconnect[0])}
@@ -297,7 +277,7 @@ export function Banners({
         <Banner
           tone="warn"
           onDismiss={() => dismissMany(reconnect.map(issueKey))}
-          dismissLabel={t("Tüm uyarıları kapat", "Dismiss all warnings")}
+          dismissLabel={t("banners.dismissAllWarnings")}
           action={
             <Button
               size="sm"
@@ -306,7 +286,7 @@ export function Banners({
               aria-controls={listId}
               onClick={() => setExpanded((open) => !open)}
             >
-              {expanded ? t("Gizle", "Hide") : t("Göster", "Show")}
+              {expanded ? t("common.hide") : t("common.show")}
             </Button>
           }
           detail={
@@ -329,10 +309,7 @@ export function Banners({
                           <Button
                             variant="ghost"
                             size="icon-xs"
-                            aria-label={t(
-                              `${item.account.name} uyarısını kapat`,
-                              `Dismiss warning for ${item.account.name}`,
-                            )}
+                            aria-label={t("banners.dismissWarningFor", { accountName: item.account.name })}
                             onClick={() => dismiss(key)}
                           >
                             <X />
@@ -349,10 +326,7 @@ export function Banners({
           }
         >
           <span>
-            {t(
-              `${reconnect.length} hesabın limit okuma girişi dikkat istiyor.`,
-              `${reconnect.length} usage sign-ins need attention.`,
-            )}
+            {t("banners.usageSignInsNeedAttention", { reconnectLength: reconnect.length })}
           </span>
         </Banner>
       )}

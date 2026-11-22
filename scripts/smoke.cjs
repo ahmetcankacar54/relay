@@ -450,7 +450,7 @@ app.whenReady().then(async () => {
       name: "Separate company",
       kind: "work",
     });
-    await call("setTrayLanguage", "en");
+    await call("setLanguage", "en");
     // The never-assigned tray switch request was removed with its IPC.
     assert.equal(
       await win.webContents.executeJavaScript(
@@ -458,7 +458,7 @@ app.whenReady().then(async () => {
       ),
       "undefined",
     );
-    await assert.rejects(call("setTrayLanguage", "invalid"));
+    await assert.rejects(call("setLanguage", "invalid"));
     const initialPlanning = (await call("panelSnapshot")).settings.planning;
     assert.equal(initialPlanning.autoStart, false);
     assert.deepEqual(initialPlanning.accounts, []);
@@ -581,7 +581,7 @@ app.whenReady().then(async () => {
     );
     await assert.rejects(
       call("terminalBuffer", login.id),
-      /Terminal bulunamadı/,
+      /Terminal not found/,
     );
     const runA = await call("launch", { accountId: a.id, cwd: project });
     await eventually(async () =>
@@ -615,11 +615,11 @@ app.whenReady().then(async () => {
     );
     await assert.rejects(
       call("launch", { accountId: b.id, sessionKey: original.key }),
-      /çalışan oturumu/,
+      /running session/,
     );
     await assert.rejects(
       call("switchAccount", runA.id, work.id),
-      /paylaşım grubunda/,
+      /sharing group/,
     );
     assert.equal(
       (await call("snapshot")).runs.find((r) => r.id === runA.id).status,
@@ -631,7 +631,7 @@ app.whenReady().then(async () => {
     );
     await assert.rejects(
       call("switchAccount", runA.id, b.id),
-      /Hedef hesaba giriş/,
+      /Sign in to the target account/,
     );
     assert.equal(
       (await call("snapshot")).runs.find((r) => r.id === runA.id).status,
@@ -666,16 +666,16 @@ app.whenReady().then(async () => {
     await call("setCooldown", b.id, 5);
     await assert.rejects(
       call("launch", { accountId: b.id, sessionKey: copied.key }),
-      /beklemede/,
+      /on hold/,
     );
     await call("setCooldown", b.id, 0);
     await assert.rejects(
       call("launch", { accountId: work.id, sessionKey: copied.key }),
-      /paylaşım grubunda/,
+      /sharing group/,
     );
     await assert.rejects(
       call("launch", { accountId: a.id, cwd: project, desktop: true }),
-      /doğrula/,
+      /right account is open in the Claude app/,
     );
     await assert.rejects(
       call("launch", { accountId: "../../invalid", cwd: project }),

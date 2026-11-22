@@ -8,7 +8,7 @@ import type { SwitchSceneView } from "../shared/switch-scene";
 import { mediaBlock } from "./css";
 
 const view = (extra: Partial<SwitchSceneView> = {}): SwitchSceneView => ({
-  visible: true, stage: "leaving", story: 1, line: "Vertex hesabına geçiliyor", motion: true, ...extra,
+  visible: true, stage: "leaving", story: 1, line: "Vertex hesabına geçiliyor", motion: true, locale: "tr", ...extra,
 });
 const draw = (v: SwitchSceneView) => renderToStaticMarkup(createElement(SwitchStage, { view: v }));
 const poses = (html: string) => [...html.matchAll(/data-pose="([^"]+)"/g)].map((m) => m[1]);

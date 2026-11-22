@@ -1,14 +1,22 @@
+import { FORMAT_LOCALE, type Locale } from "./i18n/locales";
+import { tFor } from "./i18n/translate";
+
 /**
  * Every limit percentage Relay shows is the percent USED, as on Claude's own usage page, so the number
  * and the bar say the same thing: `%94 kullanıldı` in Turkish, `94% used` in English. Storage, colours
  * and alert thresholds work with the same percent used; only the text is formatted here.
  */
 
-/** A rounded percentage: `%45` in Turkish, `45%` in English; `—` when unknown. */
-export function formatPercent(value: number | undefined, language: string) {
+const percentFormats = new Map<Locale, Intl.NumberFormat>();
+/** A rounded percentage in the language's style: `%45` in Turkish, `45%` in English, `45 %` in German; `—` when unknown. */
+export function formatPercent(value: number | undefined, language: Locale) {
   if (value === undefined || !Number.isFinite(value)) return "—";
-  const n = Math.round(value);
-  return language === "tr" ? `%${n}` : `${n}%`;
+  let f = percentFormats.get(language);
+  if (!f) {
+    f = new Intl.NumberFormat(FORMAT_LOCALE[language], { style: "percent", maximumFractionDigits: 0, useGrouping: false });
+    percentFormats.set(language, f);
+  }
+  return f.format(Math.round(value) / 100);
 }
 
 /**
@@ -22,13 +30,12 @@ export function percentUsed(usedPercent: number | undefined) {
 }
 
 /** The word that follows a percentage used. */
-export const usedWord = (language: string) =>
-  language === "tr" ? "kullanıldı" : "used";
+export const usedWord = (language: Locale) => tFor(language)("percent.usedWord");
 
 /** `%94 kullanıldı` / `94% used` from the percent used; `—` when unknown. */
-export function formatUsed(usedPercent: number | undefined, language: string) {
+export function formatUsed(usedPercent: number | undefined, language: Locale) {
   const used = percentUsed(usedPercent);
   return used === undefined
     ? "—"
-    : `${formatPercent(used, language)} ${usedWord(language)}`;
+    : tFor(language)("percent.used", { percent: formatPercent(used, language) });
 }

@@ -1,76 +1,52 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useI18n, type T } from "@/data/i18n";
+import { useI18n, type MessageId, type T } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
 import type { DraftSummary } from "../../shared/types";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
 /** A draft Relay tried to type: it may be in its composer already. */
-const MAYBE_TYPED = [
-  "Konuşmaya yazılmış olabilir, yapıştırmadan önce bak",
-  "Possibly in the conversation already; check before you paste",
-] as const;
-const BUSY = ["Konuşma meşguldü", "The conversation was busy"] as const;
-const UNSUPPORTED = [
-  "Claude uygulamasının arayüzü desteklenmiyor",
-  "The Claude app’s interface is not supported",
-] as const;
+const MAYBE_TYPED: MessageId = "panelDrafts.possiblyInTheConversationAlreadyCheck";
+const BUSY: MessageId = "panelDrafts.theConversationWasBusy";
+const UNSUPPORTED: MessageId = "panelDrafts.theClaudeAppsInterfaceIsNot";
 
-const REASONS: Record<string, readonly [string, string]> = {
-  accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
-  "composer-not-empty": ["Mesaj kutusunda zaten yazı vardı", "The message box already had text"],
-  "context-changed": ["Ekran değişti", "The screen changed"],
-  changed: ["Ekran değişti", "The screen changed"],
-  lost: ["Claude uygulaması taslağı sildi", "The Claude app cleared the draft"],
+const REASONS: Record<string, MessageId> = {
+  accessibility: "panelDrafts.accessibilityPermissionMissing",
+  "composer-not-empty": "panelDrafts.theMessageBoxAlreadyHadText",
+  "context-changed": "panelDrafts.theScreenChanged",
+  changed: "panelDrafts.theScreenChanged",
+  lost: "panelDrafts.theClaudeAppClearedTheDraft",
   busy: BUSY,
   "desktop-work-active": BUSY,
-  manual: ["Elle yapıştır", "Paste it yourself"],
-  error: ["Geri yazılamadı", "Restore failed"],
+  manual: "panelDrafts.pasteItYourself",
+  error: "panelDrafts.restoreFailed",
   "maybe-typed": MAYBE_TYPED,
   unconfirmed: MAYBE_TYPED,
   "delivery-ambiguous": MAYBE_TYPED,
-  "no-composer": ["Mesaj kutusu yüklenmedi", "The message box did not load"],
-  loading: ["Claude uygulaması henüz yüklenmemişti", "The Claude app was not loaded yet"],
+  "no-composer": "panelDrafts.theMessageBoxDidNotLoad",
+  loading: "panelDrafts.theClaudeAppWasNotLoaded",
   unsupported: UNSUPPORTED,
   "desktop-ui-unsupported": UNSUPPORTED,
-  "exact-session-not-observed": [
-    "Konuşma açılamadı",
-    "The conversation did not open",
-  ],
-  "not-ready": ["Claude uygulaması hazır değildi", "The Claude app was not ready"],
-  moved: ["Başka bir ekrana geçtin", "You went to another screen"],
-  "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
-  budget: ["Süre doldu", "Time ran out"],
-  "not-opened": [
-    "Konuşmayı 30 dakika içinde açmadın",
-    "You did not open the conversation in 30 minutes",
-  ],
+  "exact-session-not-observed": "panelDrafts.theConversationDidNotOpen",
+  "not-ready": "panelDrafts.theClaudeAppWasNotReady",
+  moved: "panelDrafts.youWentToAnotherScreen",
+  "claude-not-running": "panelDrafts.theClaudeAppWasNotRunning",
+  budget: "panelDrafts.timeRanOut",
+  "not-opened": "panelDrafts.youDidNotOpenTheConversation",
 };
 const UNKNOWN_REASON = REASONS.error;
 
 /** A new-session draft goes to Code's new-session screen, not a conversation. */
-const NEW_SESSION_MAYBE_TYPED = [
-  "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bak",
-  "Possibly on the new-session screen already; check before you paste",
-] as const;
-const NEW_SESSION_BUSY = [
-  "Yeni oturum ekranı meşguldü",
-  "The new-session screen was busy",
-] as const;
-const NEW_SESSION_REASONS: Record<string, readonly [string, string]> = {
+const NEW_SESSION_MAYBE_TYPED: MessageId = "panelDrafts.possiblyOnTheNewSessionScreen";
+const NEW_SESSION_BUSY: MessageId = "panelDrafts.theNewSessionScreenWasBusy";
+const NEW_SESSION_REASONS: Record<string, MessageId> = {
   "maybe-typed": NEW_SESSION_MAYBE_TYPED,
   unconfirmed: NEW_SESSION_MAYBE_TYPED,
   "delivery-ambiguous": NEW_SESSION_MAYBE_TYPED,
   busy: NEW_SESSION_BUSY,
   "desktop-work-active": NEW_SESSION_BUSY,
-  "exact-session-not-observed": [
-    "Yeni oturum ekranı açılamadı",
-    "The new-session screen did not open",
-  ],
-  "not-opened": [
-    "Yeni oturum ekranını 30 dakika içinde açmadın",
-    "You did not open the new-session screen in 30 minutes",
-  ],
+  "exact-session-not-observed": "panelDrafts.theNewSessionScreenDidNot",
+  "not-opened": "panelDrafts.youDidNotOpenTheNew",
 };
 
 /**
@@ -82,15 +58,15 @@ export function draftReason(
   t: T,
   newSession = false,
 ): string {
-  const known = (table: Record<string, readonly [string, string]>) =>
+  const known = (table: Record<string, MessageId>) =>
     reason !== undefined && Object.hasOwn(table, reason)
       ? table[reason]
       : undefined;
-  const [tr, en] =
+  return t(
     (newSession ? known(NEW_SESSION_REASONS) : undefined) ??
-    known(REASONS) ??
-    UNKNOWN_REASON;
-  return t(tr, en);
+      known(REASONS) ??
+      UNKNOWN_REASON,
+  );
 }
 
 export const copyDraftAction = (relay: Relay, id: string) =>
@@ -108,14 +84,14 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const relay = useRelay();
   const { t } = useI18n();
   const name = draft.newSession
-    ? t("Yeni oturum", "New session")
-    : draft.title.trim() || t("Adsız konuşma", "Untitled conversation");
+    ? t("panelDrafts.newSession")
+    : draft.title.trim() || t("panelDrafts.untitledConversation");
   // A draft still waiting can be copied, and stays: Relay types it into an empty composer.
   const waiting = draft.state === "pending";
   const reason = waiting
     ? draft.newSession
-      ? t("Bekliyor: yeni oturumu açınca geri yazılır", "Waiting: typed back when you open a new session")
-      : t("Bekliyor: konuşmayı açınca geri yazılır", "Waiting: typed back when you open the conversation")
+      ? t("panelDrafts.waitingTypedBackWhenYouOpen")
+      : t("panelDrafts.waitingTypedBackWhenYouOpen2")
     : draftReason(draft.reason, t, draft.newSession);
   // Only re-typing needs the permission: with it off, nothing here asks for it.
   const needsPermission =
@@ -139,7 +115,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
         </div>
         {draft.attachments && (
           <div className="text-xs text-muted-foreground">
-            {t("Ekler geri yüklenmedi", "Attachments not restored")}
+            {t("panelDrafts.attachmentsNotRestored")}
           </div>
         )}
       </div>
@@ -150,7 +126,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
             disabled={running}
             onClick={() => void allowAccessibilityAction(relay)}
           >
-            {t("İzin ver", "Allow")}
+            {t("panelDrafts.allow")}
           </Button>
         )}
         <Button
@@ -159,7 +135,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
           disabled={running}
           onClick={() => void copyDraftAction(relay, draft.id)}
         >
-          {t("Kopyala", "Copy")}
+          {t("common.copy")}
         </Button>
         {!waiting && (
           <Button
@@ -168,7 +144,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
             disabled={running}
             onClick={() => void dismissDraftAction(relay, draft.id)}
           >
-            {t("Kapat", "Dismiss")}
+            {t("common.dismiss")}
           </Button>
         )}
       </span>
@@ -195,13 +171,13 @@ export function PanelDrafts() {
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
         <span className="flex items-center gap-1.5">
-          {t("Kurtarılan taslaklar", "Rescued drafts")}
+          {t("common.rescuedDrafts")}
           {relay.settings.draftRetype === true && (
             <Badge
               variant="outline"
               className="px-1.5 text-xs text-muted-foreground"
             >
-              {t("deneysel", "experimental")}
+              {t("panelDrafts.experimental")}
             </Badge>
           )}
         </span>
@@ -210,18 +186,12 @@ export function PanelDrafts() {
         <p
           className="mb-1.5 text-xs text-muted-foreground"
         >
-          {t(
-            `${waiting} taslak geri yazılmayı bekliyor`,
-            waiting === 1 ? "1 draft waits to be restored" : `${waiting} drafts wait to be restored`,
-          )}
+          {t("panelDrafts.draftsWaitToBeRestored", { waiting })}
         </p>
       )}
       {left > 0 && (
         <p className="mb-1.5 text-xs text-muted-foreground">
-          {t(
-            "Geçişte geri yazılamayan taslaklar.",
-            "Relay did not type these drafts back after the switch.",
-          )}
+          {t("panelDrafts.relayDidNotTypeTheseDrafts")}
         </p>
       )}
       {rows.length > 0 && (

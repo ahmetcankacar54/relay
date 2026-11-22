@@ -6,6 +6,9 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { PlanSettings, PlanningPanel, planningModel, type PlanningPanelProps } from "../src/features/PlanningPanel";
 import { TooltipProvider } from "../src/components/ui/tooltip";
+import { I18nContext } from "../src/data/i18n";
+import type { Locale } from "../shared/i18n/locales";
+import { i18nValue, testT } from "./i18n";
 import { AdaptiveRow } from "../src/pages/planning/AdaptiveRow";
 import { Switch } from "../src/components/ui/switch";
 import { wallTime } from "../shared/planning";
@@ -68,9 +71,17 @@ const firstStart = (html: string, account: string) =>
   new RegExp(
     `>${account} ilk başlangıç</label>.*?role="spinbutton".*?\\svalue="(\\d\\d:\\d\\d)"`,
   ).exec(html)?.[1];
-/** The page, inside the shell's tooltip provider (the ⓘ notes need it). */
-const page = (props: PlanningPanelProps) =>
-  renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PlanningPanel, props)));
+/** Inside the shell's Turkish language and tooltip providers (the ⓘ notes need both). */
+const shell = (props: PlanningPanelProps, child: ReactElement) =>
+  renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: i18nValue(props.language) },
+      createElement(TooltipProvider, null, child),
+    ),
+  );
+/** The page. */
+const page = (props: PlanningPanelProps) => shell(props, createElement(PlanningPanel, props));
 /** The "Plan ayarları" sheet's content for the same props (the sheet itself opens only in a browser). */
 const sheetProps = (props: PlanningPanelProps) => ({
   settings: props.settings,
@@ -79,17 +90,18 @@ const sheetProps = (props: PlanningPanelProps) => ({
   disabled: props.disabled,
   update: props.update,
   t: props.t,
+  platform: props.platform,
   now: props.now,
 });
-const sheet = (props: PlanningPanelProps) =>
-  renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PlanSettings, sheetProps(props))));
+const sheet = (props: PlanningPanelProps) => shell(props, createElement(PlanSettings, sheetProps(props)));
 const panelProps = (settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot): PlanningPanelProps => ({
   settings: panelSettings(settings),
   keeper,
   accounts: [a, b],
   usage: {},
   disabled: false,
-  t: (tr: string) => tr,
+  t: testT("tr"),
+  language: "tr",
   now: NOW,
   update: () => {},
   updateAccount: () => {},
@@ -111,7 +123,7 @@ test("the sheet holds the switch and both hour rows; the page shows automatic fi
   const accounts = [{ id: a.id }, { id: b.id }];
   const html = render({ accounts });
   const settings = renderSheet({ accounts });
-  assert.match(settings, /Limit dönemlerini önceden başlat/);
+  assert.match(settings, /Çalışma saatlerinde limit dönemlerini açık tut/);
   assert.match(settings, /Hafta içi/);
   assert.match(settings, /Hafta sonu/);
   const [first, second] = todayPlan({ accounts }).accounts;
@@ -129,10 +141,10 @@ test("the page is the plan: today first, then the plan's accounts; the settings 
   assert.ok(today >= 0, "Bugün is drawn");
   assert.ok(today < list, "Bugün before the plan's accounts");
   assert.ok(list < accountRows, "the list heading before its rows");
-  assert.doesNotMatch(html, /Limit dönemlerini önceden başlat|Hafta içi|Saat dilimi/);
+  assert.doesNotMatch(html, /Çalışma saatlerinde limit dönemlerini açık tut|Hafta içi|Saat dilimi/);
   // The sheet: early start, then the hours and tempo, then the time zone.
   const settings = renderSheet({ accounts: [{ id: a.id }, { id: b.id }] });
-  const early = settings.indexOf("Limit dönemlerini önceden başlat");
+  const early = settings.indexOf("Çalışma saatlerinde limit dönemlerini açık tut");
   const hours = settings.indexOf("Hafta içi");
   const zone = settings.indexOf("Saat dilimi");
   assert.ok(early >= 0 && early < hours && hours < zone);
@@ -147,6 +159,35 @@ test("a manual first start is marked and can return to automatic", () => {
   const automatic = todayPlan({ accounts }).accounts[1];
   assert.equal(automatic.manual, false);
   assert.equal(firstStart(html, "Vertex"), clock(automatic.firstStart));
+  // A badge beside each time says whose time it is.
+  assert.equal(html.match(/data-variant="outline"[^>]*>Elle</g)?.length, 1);
+  assert.equal(html.match(/data-variant="outline"[^>]*>Otomatik</g)?.length, 1);
+  // The plan's rows sit in their own list section under an "In the plan" header.
+  assert.match(html, /data-slot="list-group"[^>]*>.*?Planda.*?data-slot="list-section" id="plan-included"[^>]*>.*?data-account=/);
+});
+
+test("without a work day ahead an automatic first start shows a dash, not a made-up time", () => {
+  const off = { enabled: false, start: "09:00", end: "18:00" };
+  const html = render({ accounts: [{ id: a.id }], weekday: off, weekend: off });
+  assert.equal(firstStart(html, "Kişisel - Max"), undefined);
+  assert.match(html, />—<\/span><span data-slot="badge"[^>]*>Otomatik</);
+  assert.doesNotMatch(html, /value="09:00"/);
+});
+
+test("on Windows the keep-running switch cannot be turned on, says why, and can be turned off", () => {
+  const toggleOf = (html: string) =>
+    html.match(/<button[^>]*aria-label="Çalışma saatlerinde limit dönemlerini açık tut"[^>]*>/)?.[0] ?? "";
+  const off = sheet({ ...panelProps({ accounts: [{ id: a.id }], autoStart: false }), platform: "win32" });
+  assert.match(toggleOf(off), /role="switch"/);
+  assert.match(toggleOf(off), /aria-checked="false"/);
+  assert.match(toggleOf(off), /disabled=""/);
+  assert.match(off, /Windows&#x27;ta kullanılamaz/);
+  // Already on (settings from another machine): it stays usable so it can be switched off.
+  const on = sheet({ ...panelProps({ accounts: [{ id: a.id }], autoStart: true }), platform: "win32" });
+  assert.match(toggleOf(on), /aria-checked="true"/);
+  assert.doesNotMatch(toggleOf(on), /disabled=""/);
+  assert.match(on, /Windows&#x27;ta kullanılamaz/);
+  assert.doesNotMatch(sheet(panelProps({ accounts: [{ id: a.id }] })), /Windows/);
 });
 
 test("keeper status, an empty plan and deleted accounts render safely", () => {
@@ -236,7 +277,8 @@ test("a day whose midnight is skipped by DST renders", () => {
     accounts: [a, b],
     usage: {},
     disabled: false,
-    t: (tr: string) => tr,
+    t: testT("tr"),
+    language: "tr",
     now: wallTime("2026-04-24", "12:00", zone)!,
     update: () => {},
     updateAccount: () => {},
@@ -306,7 +348,7 @@ const scenarioSettings = (accounts: PlanningSettings["accounts"]) =>
     accounts,
   });
 const automatic = scenarioAccounts.map(({ id }) => ({ id }));
-const tr = (text: string) => text;
+const tr = testT("tr");
 // The even spread's warm-ups, fixed by hand: the plan is the even spread.
 const evenByHand = [
   { id: a.id, firstStart: "04:50" },
@@ -333,6 +375,7 @@ const scenarioProps = (
   activeId,
   disabled: false,
   t: tr,
+  language: "tr",
   now,
   update: () => {},
   updateAccount: () => {},
@@ -343,11 +386,20 @@ function renderScenario(...args: Parameters<typeof scenarioProps>) {
 function renderScenarioSheet(...args: Parameters<typeof scenarioProps>) {
   return sheet(scenarioProps(...args));
 }
-/** The "Bu plan" stat: its value's title (who warms up when), its value, its note and the note's title. */
-const planStat = (html: string) =>
-  html.match(
-    /data-slot="plan-stat"[^>]*>.*?<strong class="([^"]*)" title="([^"]*)">([^<]*)<\/strong><span class="[^"]*" title="([^"]*)">([^<]*)</,
-  )?.slice(1, 6);
+/**
+ * The plan stat as [value classes, plan warm-ups, value, even warm-ups, note]. The warm-ups are
+ * the titles of the value and the note, and each shows as a line under them too.
+ */
+function planStat(html: string) {
+  const stat = html.match(
+    /data-slot="plan-stat"[^>]*>.*?<strong class="([^"]*)" title="([^"]*)">([^<]*)<\/strong><small class="[^"]*">([^<]*)<\/small><span class="[^"]*" title="([^"]*)">([^<]*)<\/span><small class="[^"]*">([^<]*)<\/small>/,
+  );
+  if (!stat) return undefined;
+  const [, valueClass, planWarmUps, value, planLine, evenWarmUps, note, evenLine] = stat;
+  assert.equal(planLine, planWarmUps);
+  assert.equal(evenLine, evenWarmUps);
+  return [valueClass, planWarmUps, value, evenWarmUps, note];
+}
 /** The lane block with this label: its fill's classes and its name, if shown. */
 function laneBlock(html: string, label: string) {
   const block = html.match(
@@ -489,7 +541,7 @@ function renderPlanning({
   tempo,
   choice,
   settings,
-  t = tr,
+  language = "tr",
 }: {
   planned: Account[];
   now?: number;
@@ -497,9 +549,9 @@ function renderPlanning({
   tempo?: Tempo;
   choice?: TempoChoice;
   settings?: Partial<PlanningSettings>;
-  t?: (tr: string, en: string) => string;
+  language?: Locale;
 }) {
-  return page(planningProps({ planned, now, tempo, choice, settings, t }));
+  return page(planningProps({ planned, now, tempo, choice, settings, language }));
 }
 function planningProps({
   planned,
@@ -507,7 +559,7 @@ function planningProps({
   tempo,
   choice,
   settings,
-  t = tr,
+  language = "tr",
 }: Parameters<typeof renderPlanning>[0]): PlanningPanelProps {
   return {
     settings: {
@@ -527,7 +579,8 @@ function planningProps({
     usage: {},
     activeId: a.id,
     disabled: false,
-    t,
+    t: testT(language),
+    language,
     now,
     update: () => {},
     updateAccount: () => {},
@@ -565,8 +618,10 @@ test("the sheet's tempo row shows the learned tempo and how long a window lasts 
 
 test("the default and a fixed tempo say so, and the toggle shows the choice", () => {
   const fallback = renderPlanningSheet({ planned: [a, pro] });
-  assert.ok(
-    fallback.includes("Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa"),
+  // The words show; the rate in Pro units is the title.
+  assert.match(
+    fallback,
+    /title="Veri birikene kadar orta tempo ≈ 50 Pro birimi\/sa">Veri birikene kadar orta tempo<\/p>/,
   );
   assert.match(toggleItem(fallback, "Otomatik"), /data-state="on"/);
   assert.ok(
@@ -575,7 +630,7 @@ test("the default and a fixed tempo say so, and the toggle shows the choice", ()
     ),
   );
   const heavy = renderPlanningSheet({ planned: [a, pro], choice: "heavy" });
-  assert.ok(heavy.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
+  assert.match(heavy, /title="Sabit tempo ≈ 120 Pro birimi\/sa">Sabit tempo<\/p>/);
   assert.doesNotMatch(heavy, /Sabit tempo ≈ 120 Pro birimi\/sa ·/);
   assert.match(toggleItem(heavy, "Yoğun"), /data-state="on"/);
   assert.match(toggleItem(heavy, "Otomatik"), /data-state="off"/);
@@ -703,8 +758,10 @@ test("the notes wait behind an ⓘ: the order in the list, the overnight hours i
   assert.doesNotMatch(settings, /Bitiş başlangıçtan önceyse aralık ertesi güne uzar\./);
   // The notes' words are the tooltips'.
   const source = readFileSync(new URL("../src/features/PlanningPanel.tsx", import.meta.url), "utf8");
-  assert.ok(source.includes("Sıra yalnızca eşitlikte öncelik verir"));
-  assert.ok(source.includes("Bitiş başlangıçtan önceyse aralık ertesi güne uzar."));
+  for (const id of ["planningPanel.relaySetsTheStartTimesFrom", "planningPanel.anEndBeforeTheStartRuns"] as const)
+    assert.ok(source.includes(`info={t("${id}")}`), id);
+  assert.match(tr("planningPanel.relaySetsTheStartTimesFrom"), /Sıra yalnızca eşitlikte öncelik verir/);
+  assert.equal(tr("planningPanel.anEndBeforeTheStartRuns"), "Bitiş başlangıçtan önceyse aralık ertesi güne uzar.");
 });
 
 // Saturday work with a learned weekend rate well below the weekday one.
@@ -816,7 +873,6 @@ test("a fixed tempo applies at once, before the keeper reports it", () => {
 });
 
 test("a pill for a later day says which day it forecasts", () => {
-  const en = (_: string, text: string) => text;
   // Friday 23:30 with Saturday work: tomorrow.
   const friday = wallTime("2026-10-16", "23:30", ZONE)!;
   assert.match(
@@ -825,7 +881,7 @@ test("a pill for a later day says which day it forecasts", () => {
       tempo: weekendTempo,
       now: friday,
       settings: weekendHours,
-      t: en,
+      language: "en",
     }),
     /<\/span>Tomorrow: No gaps · no switches</,
   );
@@ -849,7 +905,7 @@ test("a pill for a later day says which day it forecasts", () => {
       planned: scenarioAccounts,
       tempo: busyTempo,
       now: friday,
-      t: en,
+      language: "en",
     }),
     /<\/span>Monday: No gaps · 3 switches</,
   );
@@ -880,7 +936,7 @@ const adaptedProps = ({
     },
   ],
   usage = {},
-  t = tr,
+  language = "tr" as Locale,
   update = () => {},
 }: {
   now?: number;
@@ -888,7 +944,7 @@ const adaptedProps = ({
   adaptation?: KeeperAdaptation;
   statuses?: KeeperAccountStatus[];
   usage?: Record<string, AccountUsage>;
-  t?: (tr: string, en: string) => string;
+  language?: Locale;
   update?: (patch: Partial<PlanningSettings>) => void;
 } = {}) => ({
   settings: { ...scenarioSettings(automatic), ...settings },
@@ -905,7 +961,8 @@ const adaptedProps = ({
   usage,
   activeId: a.id,
   disabled: false,
-  t,
+  t: testT(language),
+  language,
   now,
   update,
   updateAccount: () => {},
@@ -1082,12 +1139,12 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   // In English, with one decimal.
   const en = renderAdapted({
     adaptation: adapted(2, [[pro, "13:30"]]),
-    t: (_, text) => text,
+    language: "en",
   });
   assert.ok(badgeClass(en, "Today: 2.0× the planned pace"));
   assert.ok(badgeClass(en, "Plan adapted"));
   assert.deepEqual(statusOf(en, "Plan adapted · starts at 13:30"), ["warn", "Adapted · 13:30"]);
-  const enSheet = renderAdaptedSheet({ adaptation: adapted(2, [[pro, "13:30"]]), t: (_, text) => text });
+  const enSheet = renderAdaptedSheet({ adaptation: adapted(2, [[pro, "13:30"]]), language: "en" });
   assert.match(enSheet, />Adapt</);
   assert.match(enSheet, />Update the plan for today’s pace</);
 });

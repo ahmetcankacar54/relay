@@ -4,15 +4,17 @@ import { planCapacity } from "../../../shared/planning";
 import { formatDuration, windowMinutes } from "@/lib/window-duration";
 import { planLabel } from "../accounts/accountLabels";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { MessageId, T } from "../../../shared/i18n/translate";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
+import { useI18n } from "@/data/i18n";
 
-type T = (tr: string, en: string) => string;
 
 const noteClass = "text-xs text-muted-foreground";
-const CHOICES: { value: TempoChoice; tr: string; en: string }[] = [
-  { value: "auto", tr: "Otomatik", en: "Automatic" },
-  { value: "light", tr: "Hafif", en: "Light" },
-  { value: "medium", tr: "Orta", en: "Medium" },
-  { value: "heavy", tr: "Yoğun", en: "Heavy" },
+const CHOICES: { value: TempoChoice; label: MessageId }[] = [
+  { value: "auto", label: "tempoRow.automatic" },
+  { value: "light", label: "tempoRow.light" },
+  { value: "medium", label: "tempoRow.medium" },
+  { value: "heavy", label: "tempoRow.heavy" },
 ];
 
 /** Plan name in the window line: "Team · 2" for Team, "3×" for an unchosen plan. */
@@ -49,30 +51,33 @@ export function TempoRow({
   onChange: (choice: TempoChoice) => void;
   t: T;
 }) {
-  const n = new Intl.NumberFormat(t("tr-TR", "en-GB"), {
+  const { language } = useI18n();
+  const n = new Intl.NumberFormat(FORMAT_LOCALE[language], {
     maximumFractionDigits: 0,
   }).format(rate);
   const days = tempo.days.weekday + tempo.days.weekend;
-  const summary =
+  const weekendRate = weekend && tempo.rate.weekend !== tempo.rate.weekday;
+  // The words show; the rate in Pro units, which means little at a glance, is in the title.
+  const [summary, detail] =
     tempo.source === "learned"
-      ? weekend && tempo.rate.weekend !== tempo.rate.weekday
-        ? t(
-            `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
-            `Busy weekend day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
-          )
-        : t(
-            `Yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
-            `Busy day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
-          )
+      ? weekendRate
+        ? [
+            t("tempoRow.busyWeekendDayFromWorkDays", { days }),
+            t("tempoRow.busyWeekendDayProUnitsH", { n, days }),
+          ]
+        : [
+            t("tempoRow.busyDayFromWorkDaysIn", { days }),
+            t("tempoRow.busyDayProUnitsHFrom", { n, days }),
+          ]
       : tempo.source === "preset"
-        ? t(
-            `Sabit tempo ≈ ${n} Pro birimi/sa`,
-            `Fixed tempo ≈ ${n} Pro units/h`,
-          )
-        : t(
-            "Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa",
-            "Medium tempo ≈ 50 Pro units/h until there is enough data",
-          );
+        ? [
+            t("tempoRow.fixedTempo"),
+            t("tempoRow.fixedTempoProUnitsH", { n }),
+          ]
+        : [
+            t("tempoRow.mediumTempoUntilThereIsEnough"),
+            t("tempoRow.mediumTempo50ProUnitsH"),
+          ];
   // Each kind of plan once, largest first.
   const kinds = new Map<string, number>();
   for (const account of accounts) {
@@ -92,9 +97,9 @@ export function TempoRow({
       {/* Keeps the label in line with the hour rows' labels after their switch. */}
       <span aria-hidden="true" />
       <span className="grid min-w-0">
-        <strong className="text-sm font-semibold">{t("Tempo", "Tempo")}</strong>
+        <strong className="text-sm font-semibold">{t("tempoRow.tempo")}</strong>
         <small className={noteClass}>
-          {t("ne hızla tüketiyorsun", "how fast you use quota")}
+          {t("tempoRow.howFastYouUseQuota")}
         </small>
       </span>
       <div className="col-span-full grid min-w-0 justify-items-start gap-1.5 @xl:col-span-1">
@@ -102,23 +107,23 @@ export function TempoRow({
           type="single"
           variant="outline"
           size="sm"
-          aria-label={t("Tempo", "Tempo")}
+          aria-label={t("tempoRow.tempo")}
           value={choice}
           disabled={disabled}
           onValueChange={(v) => v && onChange(v as TempoChoice)}
         >
           {CHOICES.map((c) => (
             <ToggleGroupItem key={c.value} value={c.value}>
-              {t(c.tr, c.en)}
+              {t(c.label)}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <p className="text-sm">{summary}</p>
+        <p className="text-sm" title={detail}>
+          {summary}
+        </p>
         {parts.length > 0 && (
           <p className={noteClass}>
-            {t("Bu tempoyla bir dönem: ", "At this tempo one period lasts: ") +
-              parts.join(", ") +
-              t(" yeter.", ".")}
+            {t("tempoRow.atThisTempoOnePeriodLasts", { parts: parts.join(", ") })}
           </p>
         )}
       </div>

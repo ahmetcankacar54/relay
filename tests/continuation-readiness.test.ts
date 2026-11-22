@@ -14,6 +14,7 @@ import {
   type RelaySettings,
 } from "../shared/types";
 import { ContinuationSettings } from "../src/features/ContinuationSettings";
+import { testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-13T14:00:00Z");
 const source: Account = {
@@ -289,7 +290,7 @@ function render(
       onRefresh: () => {},
       onArm: () => {},
       onDisable: () => {},
-      t: (_tr, en) => en,
+      t: testT("en"),
       usage: { [target.id]: usage },
       settings: { ...settings, usageRefreshMinutes: refreshMinutes },
       now: NOW,

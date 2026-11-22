@@ -15,7 +15,7 @@ export function ConnectionProgress({
 }) {
   const stopped = state === "failed" || state === "cancelled";
   return (
-    <div className="grid gap-2.5">
+    <div className="@container grid gap-2.5">
       <div className="flex items-center justify-between gap-2 text-sm">
         <span
           className={cn(
@@ -46,7 +46,7 @@ export function ConnectionProgress({
       </div>
       <ol
         className={cn(
-          "grid gap-2 sm:grid-cols-3",
+          "grid gap-2 @lg:grid-cols-3",
           stopped && "opacity-60",
         )}
         aria-label={label}

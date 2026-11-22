@@ -24,10 +24,7 @@ export const list: Command = async ({ io, deps, parsed, t }) => {
   }
   if (!accounts.length) {
     io.stdout(
-      t(
-        "Henüz kayıtlı hesap yok. Claude uygulamasında açık olan hesabı kaydetmek için: relay add <ad>",
-        "No accounts are saved yet. To save the account open in the Claude app: relay add <name>",
-      ),
+      t("list.noAccountsAreSavedYetTo"),
     );
     return 0;
   }
@@ -39,13 +36,13 @@ export const list: Command = async ({ io, deps, parsed, t }) => {
       active ? paint(ctx.color, "bold", a.name) : a.name,
       providerName,
       kindText(a, t),
-      a.desktop ? (a.desktop.email ?? t("kayıtlı", "saved")) : t("—", "—"),
+      a.desktop ? (a.desktop.email ?? t("list.saved")) : t("list.msg"),
       limitsText(limitsState(a), t),
     ];
   });
   io.stdout(
     table(
-      ["", t("Ad", "Name"), t("Sağlayıcı", "Provider"), t("Tür", "Kind"), t("Claude uygulaması", "Claude app"), t("Limit okuma", "Usage sign-in")],
+      ["", t("list.name"), t("common.provider"), t("list.kind"), t("common.claudeApp"), t("list.usageSignIn")],
       rows,
     ),
   );

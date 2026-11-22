@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 // Build tooling is intentionally plain JavaScript for use before transpilation.
 import {
+  APP_ENTITLEMENTS,
   architectureFailure,
   architecturePlan,
   findPinnedSigningIdentity,
@@ -408,6 +409,20 @@ test("the widget's entitlements are only its sandbox and read access to Relay's 
     ],
   );
   assert.match(xml, /<string>\/Library\/Application Support\/Relay\/widget\/<\/string>/);
+});
+
+test("the app's hardened-runtime exceptions are exactly JIT, its own native modules and Apple events", async () => {
+  const xml = await fs.readFile(APP_ENTITLEMENTS, "utf8");
+  assert.deepEqual(
+    [...xml.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]).sort(),
+    [
+      "com.apple.security.automation.apple-events",
+      "com.apple.security.cs.allow-jit",
+      "com.apple.security.cs.allow-unsigned-executable-memory",
+      "com.apple.security.cs.disable-library-validation",
+    ],
+  );
+  assert.equal(xml.match(/<true\/>/g)?.length, 4);
 });
 
 test("an update from a build without the widget passes continuity: only the previous targets are compared", async () => {

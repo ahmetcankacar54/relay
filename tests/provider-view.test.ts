@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { providerViews } from "../src/lib/provider-view";
+import { testT } from "./i18n";
 import { countdown } from "../src/components/LimitLine";
 import { antigravityAccountState } from "../src/features/AntigravityAccount";
 import type { Account, AccountUsage } from "../shared/types";
@@ -40,7 +41,7 @@ test("providers are listed only when they have accounts, Claude first, each with
 });
 
 test("a reset reads as a short countdown, a day or more in days", () => {
-  const t = (tr: string) => tr;
+  const t = testT("tr");
   assert.equal(countdown(iso(NOW + 25 * 60_000), NOW, t), "25 dk");
   assert.equal(countdown(iso(NOW + 110 * 60_000), NOW, t), "1 sa 50 dk");
   assert.equal(countdown(iso(NOW + 3 * 86_400_000 + 3_600_000), NOW, t), "3 gün");

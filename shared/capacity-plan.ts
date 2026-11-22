@@ -1,6 +1,8 @@
+import { weekBand } from "./account-order";
 import { WINDOW_MS } from "./work-hours";
 
 const HOUR_MS = 3_600_000;
+const WEEK_MS = 7 * 24 * HOUR_MS;
 const MINUTE_MS = 60_000;
 export const SIM_STEP_MS = 5 * MINUTE_MS;
 const EPSILON = 1e-6;
@@ -26,6 +28,13 @@ export interface SimAccount {
   remaining: number;
   /** Out of reach (for example, its weekly limit is used up). */
   blocked?: boolean;
+  /** When a `blocked` account is back (its week resets); absent means out all day. */
+  blockedUntil?: number;
+  /**
+   * When its week ends: a week that ends sooner is used first, since what is
+   * left of it is lost. Absent counts as a whole week away, as in the gateway.
+   */
+  weekEnds?: number;
 }
 export interface SimInput {
   from: number;
@@ -70,16 +79,20 @@ interface SimState {
   keepAlive: boolean;
   left: number;
   blocked: boolean;
+  blockedUntil?: number;
+  weekEnds: number;
 }
 
 const minute = (time: number) => Math.round(time / MINUTE_MS) * MINUTE_MS;
 
 /**
  * One person working on one account at a time: the open account serves the
- * demand; when it runs out, the account with quota whose window resets
- * soonest takes over (closed windows last, then larger capacity, then order).
+ * demand; when it runs out, the account with quota whose week ends first takes
+ * over (weeks within a few hours of each other tie), then the one whose window
+ * resets soonest (closed windows last), then larger capacity, then order.
  */
 export function simulateDay(input: SimInput): Forecast {
+  const unknownWeek = input.from + WEEK_MS;
   const states: SimState[] = input.accounts.map((a, order) => ({
     id: a.id,
     capacity: a.capacity,
@@ -90,10 +103,20 @@ export function simulateDay(input: SimInput): Forecast {
     keepAlive: a.keepAlive,
     left: a.remaining,
     blocked: !!a.blocked,
+    blockedUntil: a.blockedUntil,
+    // An unknown week counts as a whole week away, so weeks always compare.
+    weekEnds: a.weekEnds ?? unknownWeek,
   }));
+  let earliestWeek = Infinity;
+  for (const s of states)
+    if (s.weekEnds < earliestWeek) earliestWeek = s.weekEnds;
   const full = (s: SimState) => 100 * s.capacity;
   const advance = (time: number) => {
     for (const s of states) {
+      if (s.blocked && s.blockedUntil !== undefined && time >= s.blockedUntil)
+        s.blocked = false;
+      // A week that ended starts again: what it has left is no longer at risk.
+      while (s.weekEnds <= time) s.weekEnds += WEEK_MS;
       for (;;) {
         if (
           s.reset === undefined &&
@@ -121,7 +144,8 @@ export function simulateDay(input: SimInput): Forecast {
   };
   // Two closed windows give Infinity − Infinity = NaN, which falls through.
   const precedes = (a: SimState, b: SimState) =>
-    ((a.reset ?? Infinity) - (b.reset ?? Infinity) ||
+    (weekBand(a.weekEnds, earliestWeek) - weekBand(b.weekEnds, earliestWeek) ||
+      (a.reset ?? Infinity) - (b.reset ?? Infinity) ||
       b.capacity - a.capacity ||
       a.order - b.order) < 0;
   // Both run at every switch and gap, so neither allocates.
@@ -132,11 +156,19 @@ export function simulateDay(input: SimInput): Forecast {
         chosen = s;
     return chosen;
   };
+  // A blocked account coming back is an event too: an outage ends then.
   const nextEvent = (after: number) => {
     let next = Infinity;
     for (const s of states) {
       const time = s.reset ?? s.warmUp;
       if (time !== undefined && time > after && time < next) next = time;
+      if (
+        s.blocked &&
+        s.blockedUntil !== undefined &&
+        s.blockedUntil > after &&
+        s.blockedUntil < next
+      )
+        next = s.blockedUntil;
     }
     return next;
   };
@@ -263,9 +295,26 @@ const SEEDS = 8;
 const ROUNDS = 4;
 
 /**
+ * The smallest distance between two accounts' reset phases around the
+ * five-hour cycle; a lone account has the whole cycle.
+ */
+function minCircularGap(starts: number[], origin: number) {
+  if (starts.length < 2) return WINDOW_MS;
+  const phases = starts
+    .map((s) => (((s - origin) % WINDOW_MS) + WINDOW_MS) % WINDOW_MS)
+    .sort((a, b) => a - b);
+  let gap = phases[0] + WINDOW_MS - phases[phases.length - 1];
+  for (let i = 1; i < phases.length; i++)
+    gap = Math.min(gap, phases[i] - phases[i - 1]);
+  return gap;
+}
+
+/**
  * Warm-up times for the free accounts that leave the least unmet demand,
- * then the fewest switches, then start as late as possible. Manual starts
- * stay; the even spread is always a candidate, so the result is never worse.
+ * then the fewest switches, then resets spread widest around the cycle (a
+ * surprise in demand finds a fresh window sooner), then start as late as
+ * possible. Manual starts stay; the even spread is always a candidate, so the
+ * result is never worse.
  */
 export function optimizeStarts(input: StartPlanInput): StartPlan {
   const { start, end } = input.interval;
@@ -311,14 +360,27 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
       key: [
         Math.round(forecast.unmet * 2) / 2,
         forecast.switches,
+        -minCircularGap(starts, start),
         -Math.min(...starts),
         -starts.reduce((sum, s) => sum + s, 0),
       ],
     };
   };
+  /** The plan's order: every part of the key. */
   const better = (a: Scored, b: Scored) => {
     for (let i = 0; i < a.key.length; i++)
       if (a.key[i] !== b.key[i]) return a.key[i] < b.key[i];
+    return false;
+  };
+  /**
+   * The search's order: the key without the spread. Descents and the kept
+   * seeds follow it, so the search visits what it visited before the spread
+   * counted and the spread only chooses among what it finds; a descent led by
+   * the spread settles early and misses plans with fewer switches.
+   */
+  const leads = (a: Scored, b: Scored) => {
+    for (let i = 0; i < a.key.length; i++)
+      if (i !== 2 && a.key[i] !== b.key[i]) return a.key[i] < b.key[i];
     return false;
   };
   const evenScored = scored(input.even);
@@ -331,17 +393,22 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
       forecast: evenScored.forecast,
       evenForecast: evenScored.forecast,
     };
+  // Phase 0 is the work start itself: a window opened then costs no warm-up,
+  // so no candidate warms up five hours early for nothing.
   const fine = Array.from(
     { length: CANDIDATES },
-    (_, k) => start - WINDOW_MS + k * GRID_MS,
+    (_, k) => start - WINDOW_MS + (k + 1) * GRID_MS,
   );
-  const coarse = fine.filter((_, k) => k % 2 === 0);
+  const coarse = fine.filter((_, k) => k % 2 === 1);
   const fixed = input.accounts.map((a, i) => a.manual ?? input.even[i]);
   let best = evenScored;
+  /** The best by the search's order: where the last descent starts. */
+  let lead = evenScored;
   /** Scores `starts` and keeps the best; it may stop early against a `rival` that the best is no worse than. */
   const consider = (starts: number[], rival?: Scored) => {
     const candidate = scored(starts, rival);
     if (better(candidate, best)) best = candidate;
+    if (leads(candidate, lead)) lead = candidate;
     return candidate;
   };
   /** Moves one free account at a time while that improves the plan. */
@@ -357,7 +424,7 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
           // Only a candidate better than the current one matters (the best
           // is no worse than the current one).
           const candidate = consider(starts, current);
-          if (better(candidate, current)) {
+          if (leads(candidate, current)) {
             current = candidate;
             moved = true;
           }
@@ -377,7 +444,7 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
           [...starts],
           top.length < keep ? undefined : (top[keep - 1] ?? best),
         );
-        let at = top.findIndex((t) => better(candidate, t));
+        let at = top.findIndex((t) => leads(candidate, t));
         if (at < 0) at = top.length;
         if (at < keep) {
           top.splice(at, 0, candidate);
@@ -410,7 +477,7 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
     });
     for (const seed of [evenScored, consider(proportional)])
       descend(seed, coarse);
-    descend(best, fine);
+    descend(lead, fine);
   }
   return {
     starts: best.starts,

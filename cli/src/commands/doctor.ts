@@ -28,30 +28,30 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
   add(
     "node",
     olderThan(process.versions.node, "22.12.0") ? "fail" : "ok",
-    t(`Node ${process.versions.node} (22.12 veya üstü gerekir)`, `Node ${process.versions.node} (22.12 or newer needed)`),
+    t("doctor.node2212OrNewerNeeded", { versionsNode: process.versions.node }),
   );
   const app = claudeExecutable(ctx.paths.claudeApps);
-  add("claude-app", app ? "ok" : "fail", app ?? t("Claude uygulaması bulunamadı", "The Claude app was not found"));
+  add("claude-app", app ? "ok" : "fail", app ?? t("doctor.theClaudeAppWasNotFound"));
   const cli = await diagnoseCli(ctx.deps.claude(ctx.store.state.executable), ctx.paths.data);
   add(
     "claude-cli",
     !cli.executable || cli.error || !readsUsage(cli.version ?? "") ? "warn" : "ok",
     !cli.executable
-      ? t("Claude Code CLI yok (yalnız limitler ve run için gerekir)", "No Claude Code CLI (only needed for limits and run)")
+      ? t("doctor.noClaudeCodeCliOnlyNeeded")
       : cli.error
         ? localizeError(cli.error, ctx.lang)
         : readsUsage(cli.version ?? "")
           ? `${cli.executable} · ${cli.version}`
-          : t(`${cli.version}: limitler için 2.1.296 veya üstü gerekir`, `${cli.version}: limits need 2.1.296 or newer`),
+          : t("doctor.limitsNeed21296Or", { cliVersion: cli.version }),
   );
   let folder: Check["status"] = "ok";
   let folderDetail = ctx.paths.data;
   try {
     const stat = fs.lstatSync(ctx.paths.data);
-    if (stat.isSymbolicLink()) [folder, folderDetail] = ["fail", t(`${ctx.paths.data} sembolik bağlantı`, `${ctx.paths.data} is a symbolic link`)];
-    else if (stat.mode & 0o077) [folder, folderDetail] = ["warn", t(`${ctx.paths.data} yalnızca sana açık (0700) olmalı`, `${ctx.paths.data} should be private (0700)`)];
+    if (stat.isSymbolicLink()) [folder, folderDetail] = ["fail", t("doctor.isASymbolicLink", { pathsData: ctx.paths.data })];
+    else if (stat.mode & 0o077) [folder, folderDetail] = ["warn", t("doctor.shouldBePrivate0700", { pathsData: ctx.paths.data })];
   } catch {
-    [folder, folderDetail] = ["warn", t(`${ctx.paths.data} yok`, `${ctx.paths.data} does not exist`)];
+    [folder, folderDetail] = ["warn", t("doctor.doesNotExist", { pathsData: ctx.paths.data })];
   }
   add("data-folder", folder, folderDetail);
   const vault = ctx.vault;
@@ -60,30 +60,30 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     vault.kind === "legacy" || vault.kind === "newer" ? "fail" : "ok",
     vault.kind === "legacy"
       ? ctx.appVersion && !olderThan(ctx.appVersion, "0.12.0")
-        ? t("eski biçim: Relay.app’i açıp Anahtarlık sorusuna izin ver", "old format: open Relay.app and allow its Keychain prompt")
-        : t("eski biçim: Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç", "old format: update Relay.app to 0.12 or later and open it once")
+        ? t("doctor.oldFormatOpenRelayAppAnd")
+        : t("doctor.oldFormatUpdateRelayAppTo")
       : vault.kind === "newer"
-        ? t("daha yeni bir Relay yazmış: relay’i güncelle", "written by a newer Relay: update relay")
+        ? t("doctor.writtenByANewerRelayUpdate")
         : vault.kind === "empty"
-          ? t("boş (ilk hesapla oluşur)", "empty (made with the first account)")
-          : t("hazır", "ready"),
+          ? t("doctor.emptyMadeWithTheFirstAccount")
+          : t("doctor.ready"),
   );
   if (vault.kind === "ready" || vault.kind === "newer") {
     try {
       await readVaultKey(ctx.deps.securityTool);
-      add("key", "ok", t("Anahtarlık’ta \"Relay Vault Key\" okunabiliyor", "\"Relay Vault Key\" is readable in the Keychain"));
+      add("key", "ok", t("doctor.relayVaultKeyIsReadableIn"));
     } catch (error) {
       add(
         "key",
         "fail",
         error instanceof VaultKeyError && error.reason !== "locked"
-          ? `${localizeError(error.message, ctx.lang)} ${t("Baştan başlamak için: relay reset-vault", "To start over: relay reset-vault")}`
+          ? `${localizeError(error.message, ctx.lang)} ${t("doctor.toStartOverRelayResetVault")}`
           : error instanceof VaultKeyError
             ? localizeError(error.message, ctx.lang)
             : String(error),
       );
     }
-  } else add("key", "ok", t("ilk hesapla oluşturulur", "made with the first account"));
+  } else add("key", "ok", t("doctor.madeWithTheFirstAccount"));
   let appRunning = false;
   try {
     appRunning = relayAppRunning(await ctx.deps.processList());
@@ -94,20 +94,20 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     "relay-app",
     ctx.appVersion && olderThan(ctx.appVersion, "0.12.0") ? "fail" : "ok",
     ctx.appVersion
-      ? `${ctx.appVersion}${appRunning ? t(", açık", ", running") : t(", kapalı", ", not running")}${olderThan(ctx.appVersion, "0.12.0") ? t(" — 0.12 veya üstüne güncelle", " — update to 0.12 or later") : ""}`
-      : t("kurulu değil (gerekmez)", "not installed (not needed)"),
+      ? `${ctx.appVersion}${appRunning ? t("doctor.running") : t("doctor.notRunning")}${olderThan(ctx.appVersion, "0.12.0") ? t("doctor.updateTo012OrLater") : ""}`
+      : t("doctor.notInstalledNotNeeded"),
   );
   const holder = ctx.lock.holder();
-  add("lock", holder ? "warn" : "ok", holder ? `${holder.by} · ${holder.kind} · ${holder.startedAt}` : t("serbest", "free"));
+  add("lock", holder ? "warn" : "ok", holder ? `${holder.by} · ${holder.kind} · ${holder.startedAt}` : t("doctor.free"));
   const state = await ctx.desktop.snapshot();
   add(
     "desktop",
     state.pendingProfileId || state.recoveryRequired ? "warn" : "ok",
     state.recoveryRequired
-      ? t("yarıda kalan geçiş: relay recover", "interrupted switch: relay recover")
+      ? t("doctor.interruptedSwitchRelayRecover")
       : state.pendingProfileId
-        ? t("yarım giriş: relay add --resume / --cancel", "pending sign-in: relay add --resume / --cancel")
-        : t("geçişe hazır", "ready to switch"),
+        ? t("doctor.pendingSignInRelayAddResume")
+        : t("doctor.readyToSwitch"),
   );
   if (ctx.deps.terminal && (ctx.store.state.settings.terminalCli ?? DEFAULT_TERMINAL_MODE) !== "off") {
     const accounts = ctx.store.state.accounts;
@@ -121,33 +121,27 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
       "terminal",
       seen.state === "signed-in" && on && (!active || active.id === on.id) ? "ok" : "warn",
       seen.state === "unreadable"
-        ? t("terminaldeki claude’un girişi okunamadı", "could not read the terminal claude’s sign-in")
+        ? t("doctor.couldNotReadTheTerminalClaude")
         : seen.state === "signed-out"
-          ? t("terminaldeki claude’da giriş yok: claude auth login", "the terminal claude is signed out: claude auth login")
+          ? t("doctor.theTerminalClaudeIsSignedOut")
           : !on
-            ? t(
-                `terminaldeki claude Relay’de olmayan bir hesapta (${[seen.email, seen.orgName].filter(Boolean).join(" · ")}): claude auth login ile bir hesaba gir`,
-                `the terminal claude is on an account Relay does not have (${[seen.email, seen.orgName].filter(Boolean).join(" · ")}): sign it in to one with claude auth login`,
-              )
+            ? t("doctor.theTerminalClaudeIsOnAn", { join: [seen.email, seen.orgName].filter(Boolean).join(" · ") })
             : active && active.id !== on.id
-              ? t(`terminaldeki claude ${on.name} hesabında, Desktop ${active.name} hesabında`, `the terminal claude is on ${on.name}, Desktop is on ${active.name}`)
-              : t(`terminaldeki claude ${on.name} hesabında`, `the terminal claude is on ${on.name}`),
+              ? t("doctor.theTerminalClaudeIsOnDesktop", { onName: on.name, activeName: active.name })
+              : t("doctor.theTerminalClaudeIsOn", { onName: on.name }),
     );
   }
   add(
     "gui-session",
     ctx.deps.guiSession() ? "ok" : "warn",
     ctx.deps.guiSession()
-      ? t("macOS masaüstü oturumu", "macOS desktop session")
-      : t("masaüstü oturumu yok (SSH?): Claude buradan kapatılıp açılamaz", "no desktop session (SSH?): Claude cannot be quit or opened from here"),
+      ? t("doctor.macosDesktopSession")
+      : t("doctor.noDesktopSessionSshClaudeCannot"),
   );
   add(
     "automation",
     "ok",
-    t(
-      "macOS, terminalin Claude’u ilk kapatışında Otomasyon izni sorar. Reddedildiyse: Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon → terminal uygulaması → Claude.",
-      "macOS asks for the Automation permission the first time a terminal quits Claude. If it was refused: System Settings → Privacy & Security → Automation → your terminal app → Claude.",
-    ),
+    t("doctor.macosAsksForTheAutomationPermission"),
   );
   const failed = checks.some((c) => c.status === "fail");
   if (ctx.json) printJson(io, checks);

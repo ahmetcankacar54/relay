@@ -1,17 +1,17 @@
-import type { Language, T } from "@/data/i18n";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import { tFor, type T } from "../../shared/i18n/translate";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-const locale = (language: Language) => (language === "tr" ? "tr-TR" : "en-GB");
 
 function clockParts(
   time: number,
-  language: Language,
+  language: Locale,
   zone?: string,
   weekday = false,
 ) {
-  return new Intl.DateTimeFormat(locale(language), {
+  return new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
     timeZone: zone,
     hour: "2-digit",
     minute: "2-digit",
@@ -23,7 +23,7 @@ function clockParts(
 /** "14:20" in the given zone. */
 export function formatClock(
   time: number | string,
-  language: Language,
+  language: Locale,
   zone?: string,
 ) {
   const ms = typeof time === "number" ? time : Date.parse(time);
@@ -33,60 +33,48 @@ export function formatClock(
   return `${get("hour")}:${get("minute")}`;
 }
 
+/** Hours and minutes, the minutes alone under an hour: "2 sa 10 dk", "2 sa", "10 dk" / "2 h 10 min", "2 h", "10 min". */
+export const hoursMinutes = (h: number, m: number, t: T) =>
+  h ? (m ? t("planningPanel.hMin", { h, m }) : t("planningPanel.h", { h })) : t("libTime.min", { m });
+
 /** Reset time plus remaining: "14:20 · 2 sa 10 dk" within a day, "Pazar 09:00 · 4 gün" beyond. */
 export function formatReset(
   resetsAt: string,
   now: number,
-  language: Language,
+  language: Locale,
   zone?: string,
 ): string {
   const at = Date.parse(resetsAt);
   if (!Number.isFinite(at)) return "";
+  const t = tFor(language);
   const diff = at - now;
-  if (diff <= 0) return language === "tr" ? "şimdi" : "now";
+  if (diff <= 0) return t("proxyUi.now");
   const clock = formatClock(at, language, zone);
   if (diff < DAY) {
     const total = Math.max(1, Math.round(diff / MINUTE));
-    const h = Math.floor(total / 60);
-    const m = total % 60;
-    const parts =
-      language === "tr"
-        ? [h ? `${h} sa` : "", m ? `${m} dk` : ""]
-        : [h ? `${h} h` : "", m ? `${m} min` : ""];
-    return `${clock} · ${parts.filter(Boolean).join(" ")}`;
+    return `${clock} · ${hoursMinutes(Math.floor(total / 60), total % 60, t)}`;
   }
   const weekday =
     clockParts(at, language, zone, true).find((p) => p.type === "weekday")
       ?.value ?? "";
   const days = Math.max(1, Math.round(diff / DAY));
-  const span =
-    language === "tr"
-      ? `${days} gün`
-      : `${days} ${days === 1 ? "day" : "days"}`;
-  return `${weekday} ${clock} · ${span}`;
+  return `${weekday} ${clock} · ${t("format.days", { days })}`;
 }
 
 /** "1 dk önce" / "1 min ago"; under a minute "az önce" / "just now". */
 export function formatRelative(
   iso: string,
   now: number,
-  language: Language,
+  language: Locale,
 ): string {
   const at = Date.parse(iso);
   if (!Number.isFinite(at)) return "";
+  const t = tFor(language);
   const diff = now - at;
-  const tr = language === "tr";
-  if (diff < MINUTE) return tr ? "az önce" : "just now";
-  if (diff < HOUR) {
-    const n = Math.floor(diff / MINUTE);
-    return tr ? `${n} dk önce` : `${n} min ago`;
-  }
-  if (diff < DAY) {
-    const n = Math.floor(diff / HOUR);
-    return tr ? `${n} sa önce` : `${n} h ago`;
-  }
-  const n = Math.floor(diff / DAY);
-  return tr ? `${n} gün önce` : `${n} ${n === 1 ? "day" : "days"} ago`;
+  if (diff < MINUTE) return t("libTime.justNow");
+  if (diff < HOUR) return t("proxyUi.minAgo", { minutes: Math.floor(diff / MINUTE) });
+  if (diff < DAY) return t("proxyUi.hAgo", { hours: Math.floor(diff / HOUR) });
+  return t("libTime.daysAgo", { days: Math.floor(diff / DAY) });
 }
 
 /**
@@ -100,10 +88,8 @@ export function countdown(at: string | undefined, now: number, t: T): string | u
     // Whole days rounded down, never more than is left; under two days the hours still matter.
     const days = Math.floor(ms / 86_400_000);
     const hours = Math.floor((ms % 86_400_000) / 3_600_000);
-    return days < 2 && hours ? t(`${days} gün ${hours} sa`, `${days} d ${hours} h`) : t(`${days} gün`, `${days} d`);
+    return days < 2 && hours ? t("libTime.dH", { days, hours }) : t("libTime.d", { days });
   }
   const minutes = Math.ceil(ms / 60_000);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} min` : ""}`) : t(`${m} dk`, `${m} min`);
+  return hoursMinutes(Math.floor(minutes / 60), minutes % 60, t);
 }

@@ -19,6 +19,8 @@ import {
   type PlanningSettings,
 } from "../shared/types";
 import { planningAccount, planningUsage } from "./planning-fixtures";
+// Registers the real catalogs: start labels read in the language asked for.
+import "./i18n";
 
 const ZONE = "Europe/Istanbul";
 const H = 3_600_000;
@@ -291,7 +293,8 @@ const windowsOf = (view: { rows: { account: { id: string }; windows: { start: nu
   view.rows.find((r) => r.account.id === id)!.windows.map((w) => `${clockOf(w.start)}–${clockOf(w.end)}`);
 test("an adapted day forecasts the rest at today's pace with the adopted starts", () => {
   const accounts = [planningAccount("a"), planningAccount("b")];
-  const s = settings();
+  // Warm-ups set by hand, so b's planned window runs 08:00–13:00 (the plan alone spreads them wider).
+  const s = settings({ accounts: [{ id: "a", firstStart: "07:00" }, { id: "gone" }, { id: "b", firstStart: "08:00" }] });
   const tempo = presetTempo("medium");
   const now = at("2026-10-13", "12:00");
   // Fresh usage read at noon: no window open on either account.
@@ -327,7 +330,8 @@ test("an adapted day forecasts the rest at today's pace with the adopted starts"
 
 test("a held restart keeps the open window and starts the next one at the adopted time", () => {
   const accounts = [planningAccount("a"), planningAccount("b")];
-  const s = settings();
+  // Warm-ups set by hand, so b's planned window runs 08:00–13:00 (the plan alone spreads them wider).
+  const s = settings({ accounts: [{ id: "a", firstStart: "07:00" }, { id: "gone" }, { id: "b", firstStart: "08:00" }] });
   const tempo = presetTempo("medium");
   const now = at("2026-10-13", "12:00");
   const usage = {
@@ -346,7 +350,14 @@ test("two deferred accounts each start at their adopted time while the forecast 
   // Max 5× covers the rest of the day alone, so neither Pro account is used
   // before its adopted start.
   const accounts = [planningAccount("a", "max5"), planningAccount("b"), planningAccount("c")];
-  const s = settings({ accounts: [{ id: "a" }, { id: "b" }, { id: "c" }] });
+  // Every warm-up at 08:45, set by hand (the plan alone spreads them wider).
+  const s = settings({
+    accounts: [
+      { id: "a", firstStart: "08:45" },
+      { id: "b", firstStart: "08:45" },
+      { id: "c", firstStart: "08:45" },
+    ],
+  });
   const tempo = presetTempo("medium");
   const now = at("2026-10-13", "12:00");
   const usage = Object.fromEntries(accounts.map((x) => [x.id, planningUsage(x, now)]));
@@ -369,10 +380,10 @@ test("inside yesterday's overnight interval a deferral moves yesterday's chain, 
   const schedule = { b: at("2026-10-14", "03:30") };
   const view = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a", adaptation: { factor: 1, schedule } });
   const unadapted = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a" });
-  // Yesterday's 21:45 window is closed by 02:00; b starts again at 03:30,
-  // and tonight's warm-up stays as planned.
-  assert.deepEqual(windowsOf(unadapted, "b"), ["21:45–02:45", "02:45–07:45", "21:45–02:45"]);
-  assert.deepEqual(windowsOf(view, "b"), ["21:45–02:00", "03:30–08:30", "21:45–02:45"]);
+  // Yesterday's window, opened with work at 22:00, is closed by 02:00; b
+  // starts again at 03:30, and tonight's start stays as planned.
+  assert.deepEqual(windowsOf(unadapted, "b"), ["22:00–03:00", "03:00–08:00", "22:00–03:00"]);
+  assert.deepEqual(windowsOf(view, "b"), ["22:00–02:00", "03:30–08:30", "22:00–03:00"]);
   assert.deepEqual(windowsOf(view, "a"), windowsOf(unadapted, "a"));
   // The live part is yesterday's plan forecast with the adopted start.
   const context = planContext(accounts, tempo);

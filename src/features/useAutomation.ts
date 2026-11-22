@@ -1,3 +1,4 @@
+import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import {
   AUTOMATION_MODES,
@@ -39,22 +40,26 @@ export function useAutomation(now?: number): {
   setMode(mode: AutomationMode): void;
 } {
   const relay = useRelay();
+  const { language } = useI18n();
   const { api, accounts, settings, data, desktop } = relay;
   const fleet = data?.fleet;
   const continuation = data?.continuation;
   const mode = automationMode(settings, fleet);
   const platform = data?.diagnostics?.platform;
-  const status = automationStatus({
-    settings,
-    fleet,
-    autoSwitch: data?.autoSwitch,
-    continuation,
-    accounts,
-    usage: data?.usage ?? {},
-    desktop,
-    now: now ?? Date.now(),
-    platform,
-  });
+  const status = automationStatus(
+    {
+      settings,
+      fleet,
+      autoSwitch: data?.autoSwitch,
+      continuation,
+      accounts,
+      usage: data?.usage ?? {},
+      desktop,
+      now: now ?? Date.now(),
+      platform,
+    },
+    language,
+  );
   // A handoff in progress cannot be changed midway.
   const working =
     fleet?.status === "switching" || fleet?.status === "continuing";

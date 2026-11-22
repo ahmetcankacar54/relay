@@ -74,13 +74,13 @@ export async function assertContained(root: string, file: string) {
     relative === ".." ||
     path.isAbsolute(relative)
   )
-    throw new Error("Oturum yolu profil klasörünün dışında.");
+    throw new Error("The session path is outside the profile folder.");
   // Reject symlinks, including ancestors, even when they resolve inside the root.
   let cursor = root;
   for (const part of path.relative(root, file).split(path.sep)) {
     cursor = path.join(cursor, part);
     if ((await fsp.lstat(cursor)).isSymbolicLink())
-      throw new Error("Oturumlarda sembolik bağlantılar desteklenmiyor.");
+      throw new Error("Symbolic links are not supported in sessions.");
   }
 }
 export async function scanSessions(
@@ -201,7 +201,7 @@ export async function readTranscript(
 ): Promise<TranscriptMessage[]> {
   await assertContained(session.root, session.file);
   if ((await fsp.stat(session.file)).size > MAX_TRANSCRIPT)
-    throw new Error("Oturum önizleme sınırını aşıyor.");
+    throw new Error("The session exceeds the preview limit.");
   const messages: TranscriptMessage[] = [];
   for await (const row of rows(session.file)) {
     if (
@@ -227,11 +227,11 @@ export async function copyTranscript(
   await assertContained(session.root, session.file);
   const before = await fsp.stat(session.file);
   if (before.size > MAX_TRANSCRIPT)
-    throw new Error("Bu oturum aktarım sınırını aşıyor.");
+    throw new Error("This session exceeds the transfer limit.");
   const bytes = await fsp.readFile(session.file);
   const after = await fsp.stat(session.file);
   if (before.size !== after.size || before.mtimeMs !== after.mtimeMs)
-    throw new Error("Oturum hâlâ yazılıyor. Önce çalışan oturumu kapat.");
+    throw new Error("The session is still being written. Close the running session first.");
   // Every handoff gets a fresh ID. This permits A → B → A without overwriting an older branch.
   const newId = randomUUID();
   const cloned: string[] = [];
@@ -241,20 +241,16 @@ export async function copyTranscript(
     try {
       record = JSON.parse(line);
     } catch {
-      throw new Error(
-        "Oturumda eksik veya bozuk bir kayıt var. Kaynak terminali kapatıp tekrar dene.",
-      );
+      throw new Error("The session has a missing or damaged record. Close the source terminal and try again.");
     }
     if (!record || typeof record !== "object" || Array.isArray(record))
-      throw new Error("Oturum kayıt biçimi desteklenmiyor.");
+      throw new Error("The session record format is not supported.");
     if (record.sessionId !== undefined && record.sessionId !== session.id)
-      throw new Error(
-        "Dosyada farklı bir oturum kimliği bulundu. Aktarım durduruldu.",
-      );
+      throw new Error("The file holds a different session ID. The transfer stopped.");
     if (record.sessionId === session.id) record.sessionId = newId;
     cloned.push(JSON.stringify(record));
   }
-  if (!cloned.length) throw new Error("Boş oturum aktarılamaz.");
+  if (!cloned.length) throw new Error("An empty session cannot be transferred.");
   const targetDir = path.join(targetRoot, "projects", session.projectFolder);
   // Validate each ancestor before creating or writing beneath it.
   let cursor = targetRoot;
@@ -263,7 +259,7 @@ export async function copyTranscript(
     try {
       const s = await fsp.lstat(cursor);
       if (!s.isDirectory() || s.isSymbolicLink())
-        throw new Error("Hedef oturum klasörü geçersiz.");
+        throw new Error("The target session folder is invalid.");
     } catch (e: any) {
       if (e.code !== "ENOENT") throw e;
       await fsp.mkdir(cursor, { mode: 0o700 });

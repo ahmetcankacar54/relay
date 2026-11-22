@@ -103,8 +103,8 @@ on/off switch, the address and the client key; below it are three tabs.
   "Other tools (manual setup)".
 • Rules: which account a new session starts on ("Expiring first" is the
   default), how long a session stays on its account (prompt cache), and who
-  may connect: this Mac only, your Tailscale network when one is found, or
-  the whole local network.
+  may connect: this Mac only, or your Tailscale network when one is found
+  (by its address or MagicDNS name; other machines need the client key).
 • Using a Claude subscription outside Claude Code, from several machines at
   once, or signing in from a server or VPN can get an account restricted.
 • Codex accounts: a ChatGPT sign-in from the Codex CLI on this Mac serves the

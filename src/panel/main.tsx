@@ -1,8 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "../styles/fonts.css";
 import { ErrorBoundary } from "../app/ErrorBoundary";
-import { I18nProvider } from "../data/i18n";
+import { bootI18n, I18nProvider } from "../data/i18n";
 import { api, RelayProvider } from "../data/useRelay";
 import { setMotionPaused } from "../lib/motion";
 import { RelayPrankStage } from "../pranks/RelayPrankStage";
@@ -22,16 +21,20 @@ document.body.style.overflow = "hidden";
 setMotionPaused(true);
 api.onPanelVisibility((shown) => setMotionPaused(!shown));
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <I18nProvider api={api}>
-        <RelayProvider pollWhenHidden={false} reportsVisibility>
-          <RelayPrankStage>
-            <Panel />
-          </RelayPrankStage>
-        </RelayProvider>
-      </I18nProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
+// The language is chosen before the first paint, so nothing shows in the wrong one. A boot that
+// fails still renders: a blank panel is worse than one in the fallback language.
+void bootI18n(api).catch((error: unknown) => console.error(error)).then(() =>
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <I18nProvider api={api}>
+          <RelayProvider pollWhenHidden={false} reportsVisibility>
+            <RelayPrankStage>
+              <Panel />
+            </RelayPrankStage>
+          </RelayProvider>
+        </I18nProvider>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  ),
 );

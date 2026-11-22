@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { historyCopy } from "../src/pages/accounts/historyCopy";
+import { testT } from "./i18n";
 
-const tr = (turkish: string) => turkish;
-const en = (_: string, english: string) => english;
+const tr = testT("tr");
+const en = testT("en");
 
 test("same-group keeps today's group field and its two sentences", () => {
   for (const [t, placeholder, personal, work] of [

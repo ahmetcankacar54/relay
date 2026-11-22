@@ -17,6 +17,7 @@ import {
   EXTENSION_MODES,
   PROFILE_FOLDER,
 } from "../../shared/browser-extension";
+import { defaultPlanning } from "../../shared/planning";
 
 export const accountPlanningSchema = z
   .object({
@@ -215,8 +216,9 @@ export const settingsPatchSchema = settingsSchema
     autoSwitchMode: settingsSchema.shape.autoSwitchMode.removeDefault(),
     autoSwitchAccounts: settingsSchema.shape.autoSwitchAccounts.removeDefault(),
   })
-  // The gateway's settings change through its own calls, which restart it when needed.
-  .omit({ proxy: true })
+  // The gateway's settings change through its own calls, which restart it when needed;
+  // planning changes only through `update-planning`, which validates and re-plans.
+  .omit({ proxy: true, planning: true })
   .partial();
 // A new install starts with DEFAULT_SETTINGS' "same-group". A saved registry that never
 // wrote the mode shared across all accounts, and keeps doing so.
@@ -328,7 +330,7 @@ function parseNewer(raw: unknown): State {
 export function privateDir(dir: string) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (fs.lstatSync(dir).isSymbolicLink())
-    throw new Error("Veri klasörü sembolik bağlantı olamaz.");
+    throw new Error("The data folder cannot be a symbolic link.");
   if (process.platform !== "win32") fs.chmodSync(dir, 0o700);
 }
 export class Store {
@@ -377,7 +379,7 @@ export class Store {
     } else {
       this.state = {
         version: 1,
-        settings: { ...DEFAULT_SETTINGS },
+        settings: { ...DEFAULT_SETTINGS, planning: defaultPlanning() },
         accounts: [],
         pinned: [],
         importEnabled: false,
@@ -390,7 +392,7 @@ export class Store {
   /** Reads the file. Fail closed: a corrupt registry must never silently discard saved profiles. */
   private load() {
     const before = fs.lstatSync(this.file);
-    if (before.isSymbolicLink()) throw new Error("Geçersiz ayar dosyası.");
+    if (before.isSymbolicLink()) throw new Error("Invalid settings file.");
     const raw = JSON.parse(fs.readFileSync(this.file, "utf8"));
     const schema =
       raw && Number.isSafeInteger(raw.schema) && raw.schema >= 1 ? raw.schema : 1;
@@ -483,7 +485,7 @@ export class Store {
   }
   account(id: string): Account {
     const account = this.state.accounts.find((a) => a.id === id);
-    if (!account) throw new Error("Hesap bulunamadı.");
+    if (!account) throw new Error("Account not found.");
     return structuredClone(account);
   }
   profile(id: string): string {

@@ -10,6 +10,7 @@ import { accountPlan, planLabel, planTitle, providerPlan } from "../src/pages/ac
 import { accountTileLine } from "../src/lib/account-row";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountProvider, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-11-14T10:00:00Z");
@@ -21,9 +22,8 @@ const account = (provider: AccountProvider, extra: Partial<Account> = {}): Accou
 const signedIn = (subscription?: string, plan?: "pro" | "max5" | "max20" | "team"): Account["auth"] => ({
   loggedIn: true, checkedAt, ...(subscription ? { subscription } : {}), ...(plan ? { plan } : {}),
 });
-type T = (tr: string, en: string) => string;
-const tr: T = (tr) => tr;
-const en: T = (_tr, en) => en;
+const tr = testT("tr");
+const en = testT("en");
 
 test("Codex accounts are named by their ChatGPT plan, never by a Claude plan", () => {
   const words: Record<string, string> = {
@@ -117,7 +117,7 @@ const wrap = (relay: Relay, child: ReturnType<typeof createElement>) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );
@@ -128,7 +128,7 @@ test("the Accounts list, the account page and the Overview line name the plan th
   const html = wrap(relayFor([codex, google]), createElement(AccountsTable, { accounts: [codex, google], open() {}, link() {} }));
   // The list names it short beside the name, under the provider's group; where it came from is the title.
   assert.equal(accountPlan(codex)?.short, "Plus");
-  assert.match(html, /data-slot="list-group" data-provider="codex"[\s\S]*?title="Hesap codex">Hesap codex<\/span><span[^>]*title="Hesaptan algılandı">Plus<\/span>/);
+  assert.match(html, /data-slot="list-group" data-provider="codex"[\s\S]*?title="Hesap codex">Hesap codex<\/button><span[^>]*title="Hesaptan algılandı">Plus<\/span>/);
   // A placeholder plan word is never shown.
   assert.doesNotMatch(html, />(Oauth|OAuth|Antigravity OAuth)</);
   // The account page's chip names it in full beside the provider.

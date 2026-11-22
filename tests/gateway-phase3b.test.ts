@@ -9,6 +9,7 @@ import { ProxyServer } from "../electron/core/proxy/proxy-server";
 import { requestDetail, sessionCacheLine, windowShare } from "../src/lib/proxy-ui";
 import type { Account, AccountUsage } from "../shared/types";
 import type { UsageSample } from "../shared/usage-statistics";
+import { testT } from "./i18n";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -154,8 +155,8 @@ test("a session reads as cold once its cache has outlived its lifetime", () => {
 });
 
 test("the page words a move's cost and a miss's share of the 5-hour window", () => {
-  const tr = (a: string) => a;
-  const en = (_a: string, b: string) => b;
+  const tr = testT("tr");
+  const en = testT("en");
   assert.equal(windowShare(0.43, tr, "tr-TR"), "~%0,4");
   assert.equal(windowShare(0.04, en, "en-US"), "<0.1%");
   assert.equal(windowShare(12.4, en, "en-US"), "~12%");

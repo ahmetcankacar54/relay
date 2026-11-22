@@ -17,6 +17,7 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import type { OverviewRow } from "../src/data/selectors";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type DraftSummary, type ExtensionOffer, type KeeperAdaptation, type KeeperSnapshot, type SidebarGapSummary, type Snapshot, type UsageIssue } from "../shared/types";
+import { i18nValue, testT } from "./i18n";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -63,7 +64,7 @@ const wrap = (relay: Relay, el: ReactElement) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, el),
     ),
   );
@@ -97,7 +98,7 @@ test("panelRowState explains why a switch is unavailable", () => {
 });
 
 test("accountRowSubtitle keeps the overview wording", () => {
-  const t = (tr: string) => tr;
+  const t = testT("tr");
   assert.equal(accountRowSubtitle(row("ready"), t, "tr", "UTC", NOW), "Hazır · dönem başlamadı");
   assert.equal(accountRowSubtitle(row("not-linked"), t, "tr", "UTC", NOW), "Claude uygulaması girişi yok");
   assert.equal(accountRowSubtitle(row("unknown"), t, "tr", "UTC", NOW), "Limit verisi eski");
@@ -120,8 +121,8 @@ const problemRows = (): [string, OverviewRow, string, string][] => {
 };
 
 test("accountRowSubtitle shows the account's status when something is wrong", () => {
-  const tr = (a: string) => a;
-  const en = (_: string, b: string) => b;
+  const tr = testT("tr");
+  const en = testT("en");
   for (const [name, r, trLabel, enLabel] of problemRows()) {
     assert.equal(accountRowSubtitle(r, tr, "tr", "UTC", NOW), trLabel, name);
     assert.equal(accountRowSubtitle(r, en, "en", "UTC", NOW), enLabel, name);
@@ -193,7 +194,7 @@ test("the panel's active card renews with a prompt, and refreshes without one ot
         root.render(
           createElement(
             I18nContext.Provider,
-            { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+            { value: i18nValue("tr") },
             createElement(
               RelayContext.Provider,
               { value: relayFor(active, [active], { active: usage }, { refreshUsage } as Partial<Relay>) },
@@ -274,7 +275,7 @@ test("with no account yet, the panel offers adding one in the main window", asyn
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "en", setLanguage() {}, t: (_: string, en: string) => en } },
+      { value: i18nValue("en") },
       createElement(RelayContext.Provider, { value: relayFor(undefined, [], {}) }, createElement(Panel, { now: NOW })),
     ),
   );
@@ -284,6 +285,7 @@ test("with no account yet, the panel offers adding one in the main window", asyn
   const opened: unknown[][] = [];
   const relay = relayFor(undefined, [], {}, {
     api: { openPage: async (...args: unknown[]) => void opened.push(args) } as unknown as Relay["api"],
+    report: async (fn: () => Promise<unknown>) => void (await fn()),
   });
   const { openAddAccount } = await import("../src/panel/PanelAccounts");
   openAddAccount(relay);
@@ -320,7 +322,7 @@ test("the active card keeps the last rings while the service cannot be reached, 
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
+      { value: i18nValue("en") },
       createElement(
         RelayContext.Provider,
         { value: relayFor(active, [active], { active: { ...use("active", 40, 20, NOW + 3_600_000), stale: true } }) },
@@ -418,6 +420,7 @@ test("a pending Desktop connection explains itself and links to accounts", () =>
   const relay = relayFor(active, [active, vertex], baseUsage, {
     pendingDesktop: vertex,
     api: { openPage: async (page: string) => void opened.push(page) } as unknown as Relay["api"],
+    report: async (fn: () => Promise<unknown>) => void (await fn()),
   });
   // The link target is checked through the exported handler.
   return import("../src/panel/PanelActiveCard").then(({ openPendingDesktop }) => {
@@ -440,16 +443,59 @@ test("a rejected switch clears the confirmation and shows the error", async () =
   });
   const relay = relayFor(active, [active, vertex], baseUsage, {
     action,
-    api: { switchDesktop: async () => { throw new Error("Claude did not quit."); } } as unknown as Relay["api"],
+    api: {
+      desktopSnapshot: async () => desktopState("active"),
+      panelSnapshot: async () => ({}),
+      switchDesktop: async () => { throw new Error("Claude did not quit."); },
+    } as unknown as Relay["api"],
   });
   let cleared = false;
-  await new Promise<void>((resolve) => confirmSwitch(relay, "vertex", () => { cleared = true; resolve(); }));
+  await new Promise<void>((resolve) => confirmSwitch(relay, "vertex", testT("tr"), () => { cleared = true; resolve(); }));
   assert.equal(cleared, true);
   assert.equal(errors.length, 1);
   assert.match(String(errors[0]), /Claude did not quit/);
   assert.equal(refreshed, false);
   assert.equal(busy, "");
   assert.equal(lock.current, false);
+});
+
+test("a panel switch that automation made stale does not start and says why", async () => {
+  const notices: string[] = [];
+  const switched: string[] = [];
+  const action = relayAction({ current: false }, {
+    setBusy() {},
+    setError() {},
+    setNotice() {},
+    refresh: async () => {},
+    showError: (e) => assert.fail(String(e)),
+  });
+  const run = (desktop: DesktopState, fleet?: { status: string }) => {
+    const relay = relayFor(active, [active, vertex], baseUsage, {
+      action,
+      setNotice: (text: string) => void notices.push(text),
+      api: {
+        desktopSnapshot: async () => desktop,
+        panelSnapshot: async () => ({ fleet }),
+        switchDesktop: async (id: string) => void switched.push(id),
+      } as unknown as Relay["api"],
+    });
+    return new Promise<void>((resolve) => confirmSwitch(relay, "vertex", testT("en"), resolve));
+  };
+  await run(desktopState("vertex"));
+  await run(desktopState("active"), { status: "switching" });
+  assert.deepEqual(notices, [
+    "Vertex is already open in the Claude app.",
+    "An automatic switch is in progress; your switch did not start.",
+  ]);
+  assert.deepEqual(switched, []);
+  await run(desktopState("active"));
+  assert.deepEqual(switched, ["vertex"]);
+});
+
+test("the panel says it is loading before the first snapshot, not that there are no accounts", () => {
+  const html = render({ ...relayFor(undefined, [], {}), data: undefined });
+  assert.match(html, /<p aria-busy="true"[^>]*>Yükleniyor…<\/p>/);
+  assert.doesNotMatch(html, /Henüz hesap yok/);
 });
 
 test("the early start row names the adopted start while the plan is adapted", () => {
@@ -620,7 +666,7 @@ test("the rescued drafts heading is tagged experimental only while re-typing is 
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "en", setLanguage() {}, t: (_: string, en: string) => en } },
+      { value: i18nValue("en") },
       createElement(RelayContext.Provider, { value: withDrafts([draft()], retyping) }, createElement(PanelDrafts)),
     ),
   );
@@ -691,8 +737,8 @@ test("the attachment note shows only when attachments could not be restored", ()
 });
 
 test("draftReason words every reason in both languages, with a fallback", () => {
-  const tr = (a: string) => a;
-  const en = (_a: string, b: string) => b;
+  const tr = testT("tr");
+  const en = testT("en");
   const maybeTyped: [string, string] = [
     "Konuşmaya yazılmış olabilir, yapıştırmadan önce bak",
     "Possibly in the conversation already; check before you paste",
@@ -810,7 +856,7 @@ test("copy, dismiss and permission go through relay.action by record id", async 
   const calls: string[] = [];
   const keys: string[] = [];
   const relay = relayFor(active, [active, vertex], baseUsage, {
-    action: async (key: string, fn: () => Promise<unknown>) => { keys.push(key); await fn(); },
+    action: async (key: string, fn: () => Promise<unknown>) => { keys.push(key); await fn(); return true; },
     api: {
       copyDraft: async (id: string) => void calls.push(`copy:${id}`),
       dismissDraft: async (id: string) => void calls.push(`dismiss:${id}`),
@@ -853,8 +899,8 @@ test("a sidebar offer that only restores the account's own filing names no sourc
 });
 
 test("the sidebar line names only what is missing, in both languages", () => {
-  const tr = (a: string) => a;
-  const en = (_: string, b: string) => b;
+  const tr = testT("tr");
+  const en = testT("en");
   assert.equal(sidebarGapLine(gap({ sessions: 0 }), tr), "Alto hesabında 9 bölüm eksik");
   assert.equal(sidebarGapLine(gap({ missingSections: 0, sessions: 3 }), tr), "Alto hesabında 3 oturum bir bölümde değil");
   assert.equal(sidebarGapLine(gap(), en), "On Alto: 9 sections missing, 157 sessions unfiled");
@@ -889,6 +935,7 @@ test("Copy recipe and Dismiss go through relay.action by offer id, and only a co
     action: async (key: string, fn: () => Promise<unknown>) => {
       keys.push(key);
       await fn().catch(() => {});
+      return true;
     },
     api: {
       copySidebarRecipe: async (id: string) => {
@@ -940,8 +987,8 @@ test("the extension row says where the extension was left and offers Switch; wit
 });
 
 test("the extension line names a signed-out extension, or an account Relay cannot name", () => {
-  const tr = (a: string) => a;
-  const en = (_: string, b: string) => b;
+  const tr = testT("tr");
+  const en = testT("en");
   assert.equal(extensionOfferLine(offer({ on: undefined, signedOut: true }), tr), "Eklentide giriş yok");
   assert.equal(extensionOfferLine(offer({ on: undefined }), tr), "Eklenti Vertex hesabına geçmedi");
   assert.equal(extensionOfferLine(offer(), en), "The extension is still on Alto");
@@ -960,7 +1007,7 @@ test("the panel places the extension row after rescued drafts and before the sid
 test("Switch runs the extension sync through relay.action and says nothing more when it switched", async () => {
   const keys: string[] = [];
   const said: (string | undefined)[] = [];
-  const tr = (a: string) => a;
+  const tr = testT("tr");
   const relay = (result: "switched" | "skipped") =>
     withOffer(offer(), {
       api: {
@@ -969,6 +1016,7 @@ test("Switch runs the extension sync through relay.action and says nothing more 
       action: async (key: string, fn: () => Promise<unknown>) => {
         keys.push(key);
         await fn();
+        return true;
       },
     });
   await syncExtensionAction(relay("switched"), tr, (line) => said.push(line));

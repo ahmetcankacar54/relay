@@ -137,8 +137,8 @@ test("decideOffer records nothing when the draw or the budget says no", () => {
   assert.equal(recent.calls.set, 0);
 });
 
-test("decideOffer draws for the clicks and the hover, and not for the doze", () => {
-  for (const kind of ["nibble-cursor", "wheel", "nibble-bar"] as const satisfies readonly PrankKind[]) {
+test("decideOffer draws for the clicks, and not for the doze", () => {
+  for (const kind of ["nibble-cursor", "wheel"] as const satisfies readonly PrankKind[]) {
     const storage = memoryStorage();
     let draws = 0;
     const random = () => (draws++, 0);
@@ -283,8 +283,9 @@ test("a stage without a storage prop reads window.localStorage only when a prank
   );
 });
 
+/** A relay whose user turned pranks on ("sometimes"); a missing setting means off. */
 function relayFor(extra: Partial<Relay> = {}): Relay {
-  return { settings: DEFAULT_SETTINGS, error: "", desktopBusy: false, desktop: undefined, desktopRequest: undefined, ...extra } as unknown as Relay;
+  return { settings: { ...DEFAULT_SETTINGS, pranks: "sometimes" }, error: "", desktopBusy: false, desktop: undefined, desktopRequest: undefined, ...extra } as unknown as Relay;
 }
 function trickAllowedFor(relay: Relay): boolean {
   let api: PrankApi | undefined;
@@ -331,11 +332,11 @@ test("RelayPrankStage's levels differ: with a prank 1 h ago, sometimes plays and
   assert.equal(offerFor(relayFor({ settings: { ...DEFAULT_SETTINGS, pranks: "sometimes" } })), true);
   assert.equal(offerFor(relayFor({ settings: { ...DEFAULT_SETTINGS, pranks: "rarely" } })), false);
   assert.equal(offerFor(relayFor({ settings: { ...DEFAULT_SETTINGS, pranks: "off" } })), false);
-  // A missing setting is "sometimes", and is read, never written.
+  // A missing setting is "off", and is read, never written.
   const missing = { ...DEFAULT_SETTINGS };
   delete missing.pranks;
-  assert.equal(stagePropsFrom(relayFor({ settings: missing })).level, "sometimes");
-  assert.equal(offerFor(relayFor({ settings: missing })), true);
+  assert.equal(stagePropsFrom(relayFor({ settings: missing })).level, "off");
+  assert.equal(offerFor(relayFor({ settings: missing })), false);
   assert.equal("pranks" in missing, false);
 });
 
@@ -428,7 +429,7 @@ test("the real cursor comes back when a play ends or the stage unmounts, whateve
   }
 });
 
-test("the cursor-hiding class is named once, in the context module, and LimitMeter reads the context without the stage", () => {
+test("the cursor-hiding class is named once, in the context module", () => {
   assert.equal(CURSOR_HIDDEN_CLASS, "prank-cursor-hidden");
   const code = (file: string) =>
     readFileSync(file, "utf8")
@@ -441,9 +442,6 @@ test("the cursor-hiding class is named once, in the context module, and LimitMet
   // The two that used to keep a copy each take it from there.
   for (const file of ["src/pranks/PrankStage.tsx", "src/pranks/NibbleCursor.tsx"])
     assert.match(code(file), /import \{[^}]*\bCURSOR_HIDDEN_CLASS\b[^}]*\} from "\.\/context"/, file);
-  const meter = code("src/components/LimitMeter.tsx");
-  assert.match(meter, /import \{ usePrank \} from "@\/pranks\/context";/);
-  assert.doesNotMatch(meter, /@\/pranks\/PrankStage/);
 });
 
 test("a layer that throws is contained: the app stays up, the real cursor comes back, and the next offer plays", async () => {

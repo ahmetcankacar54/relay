@@ -21,6 +21,7 @@ import {
 } from "../shared/tray";
 import { mascotPose, mascotRest } from "../shared/mascot";
 import type { Account, AccountUsage, DesktopState, MenuBarItem } from "../shared/types";
+import "./i18n";
 
 const now = Date.parse("2026-10-13T10:00:00Z");
 const account = (id: string, name = id): Account => ({
@@ -258,6 +259,17 @@ test("every menu row gives the percent used of both windows with its word once, 
     );
   assert.deepEqual(header("tr"), ["Geçmek için hesap seç"]);
   assert.deepEqual(header("en"), ["Select an account to switch"]);
+});
+
+test("other languages place the word used where their grammar puts it, never glued after the figures", () => {
+  assert.equal(trayUsageLabel("target", usage("target"), "pl", now), "wykorzystano: 5 h 22% · tydzień 92%");
+  assert.equal(trayUsageLabel("target", usage("target"), "zh-Hans", now), "5 小时已用 22% · 每周已用 92%");
+  const s = { ...snapshot(), titleItems: ["five-hour", "week"] as MenuBarItem[] };
+  s.desktop!.activeProfileId = "target";
+  s.usage = { target: { ...usage("target"), fiveHour: { usedPercent: 22.5 } } };
+  assert.equal(trayTooltip(s, "en", now), "Relay — Max · 22% used · week 92% used");
+  assert.equal(trayTooltip(s, "pl", now), "Relay — Max · wykorzystano 22% · tydzień: wykorzystano 92%");
+  assert.equal(trayTooltip(s, "zh-Hans", now), "Relay — Max · 已用 22% · 每周已用 92%");
 });
 
 test("the tooltip names the account and carries the five-hour percent used with its word", () => {

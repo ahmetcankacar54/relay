@@ -126,11 +126,18 @@ export function macBrowserSystem(home = os.homedir()): BrowserSystem {
       // `open` hands arguments only to a browser it starts. A running one is reached through its
       // own executable: Chromium passes a second start's command line to the running browser,
       // which opens the page in that profile. Only HOME and PATH travel, never Relay's environment.
+      // Only a browser installed in an Applications folder is run; any other goes through `open`.
       const main = `.app/Contents/MacOS/${BROWSERS[app].executable}`;
+      const installed = ["/Applications/", `${path.join(home, "Applications")}/`];
       const running = (await processes())
         .split("\n")
         .map((line) => line.trim())
-        .find((line) => line.startsWith("/") && line.endsWith(main));
+        .find(
+          (line) =>
+            installed.some((dir) => line.startsWith(dir)) &&
+            path.normalize(line) === line &&
+            line.endsWith(main),
+        );
       if (running)
         await runDetached(running, args, {
           timeout: 15_000,

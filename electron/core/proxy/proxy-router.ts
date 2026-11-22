@@ -1,4 +1,11 @@
 import type { Account, AccountUsage, UsageWindow } from "../../../shared/types";
+import {
+  EMPTY_ROOM_UNITS,
+  LOW_ROOM_UNITS,
+  roomUnits,
+  weekBand,
+} from "../../../shared/account-order";
+import { planCapacity } from "../../../shared/planning";
 import type { ProxyMoveReason, ProxyPickReason, RoutingStrategy } from "../../../shared/proxy-types";
 import {
   rankContinuationTargets,
@@ -162,16 +169,11 @@ export function nearlyFull(usage: AccountUsage | undefined, family?: string, now
   return (five ?? 0) >= SOFT_STOP_FIVE_HOUR || (week ?? 0) >= SOFT_STOP_WEEK || (model ?? 0) >= SOFT_STOP_WEEK;
 }
 
-/**
- * Accounts whose weeks end within this of each other count as ending together: between them
- * the 5-hour window decides. Weeks that end days apart are what the order is about.
- */
-export const DEADLINE_BAND_MS = 6 * HOUR_MS;
 /** A busy session moves to an account whose week ends at least this much sooner than its own. */
 export const REBALANCE_GAP_MS = 24 * HOUR_MS;
 /** A session that moved stays at least this long before it moves again for a better order. */
 export const MIN_STAY_MS = 20 * 60_000;
-/** Only an account with at least this much of its week left is worth moving a session to. */
+/** Only an account with at least this many Pro units of its week left is worth moving a session to. */
 export const REBALANCE_MIN_ROOM = 5;
 /**
  * A running session leaves its account only past these, higher than the soft stops for new
@@ -180,8 +182,6 @@ export const REBALANCE_MIN_ROOM = 5;
  */
 export const EJECT_FIVE_HOUR = 95;
 export const EJECT_WEEK = 99;
-/** An account with this much of its 5-hour window used ranks after accounts with more room. */
-export const FIVE_HOUR_LOW_ROOM = 80;
 /** Across the pool, at most one session moves for a better order in this long. */
 export const REBALANCE_SPACING_MS = 5 * 60_000;
 
@@ -193,15 +193,18 @@ interface Standing {
   weekEnds: number;
   /** When its running 5-hour window ends; Infinity when none runs. */
   fiveEnds: number;
-  /** Left of its fullest window, this request's model's included; undefined when never read. */
-  room: number | undefined;
+  /**
+   * Left of its fullest window (this request's model's included) in Pro units, so a Max
+   * account's window holds more; undefined when never read.
+   */
+  roomUnits: number | undefined;
   /** Past a soft stop: takes no new session while another account has room. */
   draining: boolean;
   /** Past the eject threshold: a running session leaves it at the start of its next prompt. */
   ejecting: boolean;
   /** A window that binds this request is at 100 % (a reading without a reset time still says so). */
   spent: boolean;
-  /** Most of its 5-hour window is used: a new session would soon have to move. */
+  /** Little of its 5-hour window is left in Pro units: a new session would soon have to move. */
   fiveLow: boolean;
   /**
    * Another model's own limit is spent here: the account cannot serve that model, so it is the
@@ -312,16 +315,18 @@ export class ProxyRouter {
     const ready = usage?.status === "ready";
     const { five = 0, week = 0, model = 0 } = usedFor(usage, family, now);
     const spent = five >= 100 || week >= 100 || model >= 100;
+    const capacity = planCapacity(account);
+    const room = ready ? remainingPercent(usage, family, now) : undefined;
     return {
       account,
       usage,
       weekEnds: (ready ? at(usage?.sevenDay) : undefined) ?? now + WEEK_MS,
       fiveEnds: (ready ? at(usage?.fiveHour) : undefined) ?? Infinity,
-      room: ready ? remainingPercent(usage, family, now) : undefined,
+      roomUnits: room === undefined ? undefined : roomUnits(room, capacity),
       draining: nearlyFull(usage, family, now) || (ready && spent),
       ejecting: ready && (spent || five >= EJECT_FIVE_HOUR || week >= EJECT_WEEK || model >= EJECT_WEEK),
       spent: ready && spent,
-      fiveLow: ready && five >= FIVE_HOUR_LOW_ROOM,
+      fiveLow: ready && roomUnits(100 - five, capacity) <= LOW_ROOM_UNITS,
       specialised:
         ready &&
         (usage?.modelWindows ?? []).some(
@@ -335,29 +340,29 @@ export class ProxyRouter {
    * what is left of its week is lost at the reset while a later week can wait. Weeks ending
    * within a few hours of each other tie, and then the running 5-hour window that ends first
    * goes first, for the same reason. Accounts never read rank after those with known room, and
-   * accounts with almost nothing left after both.
+   * accounts with almost nothing left after both. Room counts in Pro units, so a Max account's
+   * last 15 % ranks with a fresh Pro window rather than after it.
    */
   private bySoonestReset(earliest: number) {
     // Known room first; an account whose 5-hour window is mostly used after those (a session
     // started there soon has to move and write its cache again); then never read; then nearly
     // empty ones.
-    const tier = (s: Standing) => (s.room === undefined ? 2 : s.room <= 5 ? 3 : s.fiveLow ? 1 : 0);
-    // Weeks ending within the band of the pool's earliest week tie (measured from that week, so
-    // two weeks minutes apart never fall on either side of a fixed edge).
-    const band = (s: Standing) => Math.floor((s.weekEnds - earliest) / DEADLINE_BAND_MS);
+    const tier = (s: Standing) =>
+      s.roomUnits === undefined ? 2 : s.roomUnits <= EMPTY_ROOM_UNITS ? 3 : s.fiveLow ? 1 : 0;
+    // Weeks ending within the band of the pool's earliest week tie.
     return (a: Standing, b: Standing) =>
       tier(a) - tier(b) ||
-      band(a) - band(b) ||
+      weekBand(a.weekEnds, earliest) - weekBand(b.weekEnds, earliest) ||
       Number(b.specialised) - Number(a.specialised) ||
       (a.fiveEnds === b.fiveEnds ? 0 : a.fiveEnds < b.fiveEnds ? -1 : 1) ||
-      (b.room ?? 0) - (a.room ?? 0);
+      (b.roomUnits ?? 0) - (a.roomUnits ?? 0);
   }
 
   /** The strategy's pick among `pool` (never empty). */
   private pick(pool: Standing[], now: number): Standing {
     if (this.strategy === "strict-priority")
       // An account whose limits were never read counts as usable: it is tried, not skipped.
-      return pool.find((s) => (s.room ?? 100) > 5) ?? pool[0];
+      return pool.find((s) => s.roomUnits === undefined || s.roomUnits > EMPTY_ROOM_UNITS) ?? pool[0];
     if (this.strategy === "balanced") {
       const candidates: ContinuationTargetCandidate[] = pool.map((s) => ({ account: s.account, usage: s.usage }));
       const ranked = rankContinuationTargets(candidates, { now });
@@ -411,7 +416,7 @@ export class ProxyRouter {
       this.strategy === "soonest-reset" &&
       !best.draining &&
       !best.fiveLow &&
-      (best.room ?? 0) >= REBALANCE_MIN_ROOM &&
+      (best.roomUnits ?? 0) >= REBALANCE_MIN_ROOM &&
       best.weekEnds + REBALANCE_GAP_MS <= bound.weekEnds &&
       (movedAt === undefined || now - movedAt >= MIN_STAY_MS) &&
       // One at a time across the pool: a herd of sessions moving together would fill the

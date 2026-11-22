@@ -222,8 +222,8 @@ test("adaptation off, auto start off or no work interval: no schedule at the pla
       schedule: {},
       factor: 1,
     });
-  // Before the plan's first warm-up (Max at 08:00) and once work ends.
-  for (const time of [at("07:30"), at("18:00")])
+  // Before the plan's first warm-up (Vertex at 05:30) and once work ends.
+  for (const time of [at("05:00"), at("18:00")])
     assert.deepEqual(adaptive.update(wakeUp(time)), {
       schedule: {},
       factor: 1,
@@ -363,16 +363,27 @@ test("today's pace scales the forecast: 1.6 times the plan adopts a hold", () =>
 });
 
 test("a gain that rests on two resets at the plan's same instant is not adopted", () => {
-  // Planned at 50 an hour, both accounts warmed up at 08:45. At 09:56 a has
+  // Planned at 50 an hour, both accounts warmed up at 08:45 (set by hand: the
+  // plan alone spreads the two resets apart). At 09:56 a has
   // been used at 93 an hour (1.9 times the plan) and runs out at 12:07; b
   // runs out at 13:10, and both windows reset at about 13:45 (a at 13:45:08,
   // b at 13:46:20), both within the plan's own 13:45.
   const now = at("09:56") + 5_000;
   const aReset = at("13:45") + 8_000;
-  const value = input([A, B], 50, now, {
+  const read = input([A, B], 50, now, {
     a: fresh("a", now, 31, aReset),
     b: fresh("b", now, 0, at("13:46") + 20_000),
   });
+  const value = {
+    ...read,
+    settings: {
+      ...read.settings,
+      accounts: [
+        { id: "a", firstStart: "08:45" },
+        { id: "b", firstStart: "08:45" },
+      ],
+    },
+  };
   const samples: UsageSample[] = [];
   for (let time = now - HOUR; time <= now; time += 5 * MINUTE)
     samples.push({
@@ -515,13 +526,16 @@ test("the Mac waking at 08:50 with every warm-up missed is re-planned before wor
   // No samples: the planned pace.
   assert.equal(result.factor, 1);
   assert.equal(result.observedRate, undefined);
-  // Started now, all three would switch twice against the plan's once.
+  // Max's window is planned to open with work at 09:00. Started now, vertex
+  // and pro would switch twice against the plan's once; pro held to 09:00 too
+  // switches once.
   assert.equal(forecastWith(wakeUp(now), {}).switches, 2);
-  assert.deepEqual(result.schedule, { max: at("09:00"), pro: at("09:00") });
+  assert.deepEqual(result.schedule, { pro: at("09:00") });
   assert.equal(forecastWith(wakeUp(now), result.schedule).switches, 1);
   assert.equal(result.notice?.kind, "updated");
   assert.deepEqual(calls, [now]);
-  // Four Pros planned at 100 an hour warm up from 04:00. Started at 08:50
+  // Four Pros planned at 100 an hour warm up at 05:00, 06:00 and 07:00, the
+  // fourth opening with work at 09:00. Started at 08:50 (the fourth at 09:00)
   // they leave 60 minutes without quota and 7 switches against the plan's
   // none and 4, so the search runs; but no later start does better (two
   // windows a Pro after 08:50 hold 800 of the 900 Pro units of demand).

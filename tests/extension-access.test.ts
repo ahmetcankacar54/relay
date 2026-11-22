@@ -7,8 +7,9 @@ import { deniedBrowsers, macBrowserSystem, type BrowserSystem } from "../electro
 import { extensionGuide, instanceLine } from "../src/lib/extension-ui";
 import { isExternalLink, EXTERNAL_LINKS } from "../shared/external-links";
 import { DEFAULT_EXTENSION, type ExtensionStatus } from "../shared/browser-extension";
+import { testT } from "./i18n";
 
-const t = (tr: string, en: string) => en;
+const t = testT("en");
 const fake = (present: string[], denied: string[]): BrowserSystem =>
   ({
     support: "/support",

@@ -4,6 +4,8 @@ import { UsageRing } from "@/components/UsageRing";
 import { cn } from "@/lib/utils";
 import type { PandaExpression, PandaProp } from "../../shared/panda-poses";
 import { DISGUISES, type SceneAccount, type SwitchSceneView } from "../../shared/switch-scene";
+import { formatPercent } from "../../shared/percent";
+import type { Locale } from "../../shared/i18n/locales";
 
 /** Both rigs share one canvas scale, so the panda stands as tall as the door. */
 const RIG_SIZE = 100;
@@ -11,16 +13,15 @@ const RIG_SIZE = 100;
 const RIG_SIZE_WITH_ACCOUNTS = 80;
 
 /** One side of the switch: a small five-hour ring, the name and its percent. */
-function Side({ account, target }: { account: SceneAccount; target?: boolean }) {
+function Side({ account, target, locale }: { account: SceneAccount; target?: boolean; locale: Locale }) {
+  const percent = account.percent === undefined ? undefined : formatPercent(account.percent, locale);
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       {account.percent !== undefined && (
-        <UsageRing outer={account.percent} size={16} label={`${account.name} %${Math.round(account.percent)}`} />
+        <UsageRing outer={account.percent} size={16} label={`${account.name} ${percent}`} />
       )}
       <span className={cn("truncate", target && "font-semibold")}>{account.name}</span>
-      {account.percent !== undefined && (
-        <span className="shrink-0 text-muted-foreground tabular-nums">%{Math.round(account.percent)}</span>
-      )}
+      {percent !== undefined && <span className="shrink-0 text-muted-foreground tabular-nums">{percent}</span>}
     </span>
   );
 }
@@ -84,9 +85,9 @@ export function SwitchStage({ view }: { view: SwitchSceneView }) {
           data-slot="switch-accounts"
           className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 text-2xs"
         >
-          {pair.from ? <Side account={pair.from} /> : <span />}
+          {pair.from ? <Side account={pair.from} locale={view.locale} /> : <span />}
           <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground" />
-          <Side account={pair.to} target />
+          <Side account={pair.to} target locale={view.locale} />
         </div>
       )}
     </div>

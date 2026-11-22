@@ -8,18 +8,25 @@ permissions:
 jobs:
   verify:
     strategy:
+      # One platform's failure must not hide what the others report.
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run typecheck
+      - name: Widget strings match the catalogs
+        run: node --import tsx scripts/i18n/widget-strings.ts --check
       - run: npm test
       - run: npm run build
+      - run: npm run build:cli
       - name: Desktop IPC and PTY integration
         if: runner.os == 'macOS'
         run: npm run test:desktop

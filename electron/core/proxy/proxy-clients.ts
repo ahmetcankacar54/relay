@@ -81,18 +81,17 @@ const readText = (file: string): string | undefined => {
   }
 };
 
-/** Writes through a temporary file, so a crash never leaves half a settings file. */
+/**
+ * Writes through a temporary file, so a crash never leaves half a settings file. Every file
+ * written here holds the gateway key, or held it and may hold the user's own token put back:
+ * owner-only (0600) whatever mode it had, set again after the write since the umask may narrow it.
+ */
 async function writeAtomic(file: string, text: string): Promise<void> {
   await fs.promises.mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.relay-${process.pid}-${Date.now()}.tmp`;
-  let mode: number | undefined;
-  try {
-    mode = (await fs.promises.stat(file)).mode & 0o777;
-  } catch {
-    // A new file gets the default mode.
-  }
-  await fs.promises.writeFile(temp, text, { mode: mode ?? 0o600 });
+  await fs.promises.writeFile(temp, text, { mode: 0o600 });
   await fs.promises.rename(temp, file);
+  await fs.promises.chmod(file, 0o600);
 }
 
 type Json = Record<string, unknown>;
@@ -371,13 +370,10 @@ export function releaseClientSync(
 }
 
 function writeAtomicSync(file: string, text: string): void {
-  let mode: number | undefined;
-  try {
-    mode = fs.statSync(file).mode & 0o777;
-  } catch {}
   const temp = `${file}.relay-${process.pid}-${Date.now()}.tmp`;
-  fs.writeFileSync(temp, text, { mode: mode ?? 0o600 });
+  fs.writeFileSync(temp, text, { mode: 0o600 });
   fs.renameSync(temp, file);
+  fs.chmodSync(file, 0o600);
 }
 
 /** This Mac's Tailscale IPv4 address, when one of its interfaces is on a tailnet. */

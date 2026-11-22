@@ -1,12 +1,14 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+/** `padded`: the app's compact card, its content directly inside (no header/content slots). */
+function Card({ className, padded, ...props }: React.ComponentProps<"div"> & { padded?: boolean }) {
   return (
     <div
       data-slot="card"
       className={cn(
         "flex flex-col gap-3 rounded-lg border bg-card py-4 text-card-foreground",
+        padded && "gap-0 px-4 py-3.5",
         className
       )}
       {...props}

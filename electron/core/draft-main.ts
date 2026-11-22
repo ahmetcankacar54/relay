@@ -8,6 +8,8 @@ import {
 } from "./draft-restorer";
 import { logDraft, shortId, type DraftLog } from "./draft-diagnostics";
 import type { DraftSummary } from "./draft-vault";
+import type { Locale } from "../../shared/i18n/locales";
+import { tFor } from "../../shared/i18n/translate";
 import type {
   DesktopWatch,
   DesktopWatchState,
@@ -69,24 +71,17 @@ export function draftRetypeEnabled(
  */
 export function draftNotice(
   summary: { restored: number; left: number },
-  language: "tr" | "en",
+  language: Locale,
   platform: NodeJS.Platform = process.platform,
 ): string | undefined {
-  const en = language === "en";
-  const drafts = (n: number) => `${n} ${n === 1 ? "draft" : "drafts"}`;
-  const panel = platform === "darwin";
+  const t = tFor(language);
   const parts: string[] = [];
-  if (summary.restored > 0)
-    parts.push(
-      en
-        ? `${drafts(summary.restored)} restored`
-        : `${summary.restored} taslak yeniden yazıldı`,
-    );
+  if (summary.restored > 0) parts.push(t("draftMain.draftsRestored", { restored: summary.restored }));
   if (summary.left > 0)
     parts.push(
-      en
-        ? `${drafts(summary.left)} waiting ${panel ? "in the panel" : "to copy in Settings → Advanced → Experimental"}`
-        : `${summary.left} taslak ${panel ? "panelde bekliyor" : "Ayarlar → Gelişmiş → Deneysel’de kopyalanmayı bekliyor"}`,
+      t(platform === "darwin" ? "draftMain.draftsWaitingInThePanel" : "draftMain.draftsWaitingToCopyInSettings", {
+        left: summary.left,
+      }),
     );
   return parts.length ? parts.join(" · ") : undefined;
 }

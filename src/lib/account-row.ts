@@ -1,11 +1,12 @@
 import type { AccountUsage } from "../../shared/types";
 import type { RingState } from "@/components/UsageRing";
-import type { Language, T } from "@/data/i18n";
+import type { Locale } from "../../shared/i18n/locales";
+import type { T } from "../../shared/i18n/translate";
 import type { Relay } from "@/data/relay-context";
 import { windowAccounts, type OverviewRow } from "@/data/selectors";
 import { accountHealth } from "@/lib/account-health";
 import { formatPercent, percentUsed } from "@/lib/meter";
-import { formatClock, formatRelative, formatReset } from "@/lib/time";
+import { formatClock, formatRelative, formatReset, hoursMinutes } from "@/lib/time";
 import { limitHeadline, modelOnlyUsage, quotaWindows } from "../../shared/quota-windows";
 import { clockLocative } from "../../shared/tr-dative";
 import { freshUsage } from "../../shared/usage";
@@ -15,12 +16,13 @@ import { accountPlan } from "../pages/accounts/accountLabels";
 export function rowProblem(
   row: OverviewRow,
   t: T,
+  language: Locale,
   zone: string,
   now: number,
   waiting = false,
   platform?: string,
 ): string | undefined {
-  const health = accountHealth(row.account, row.usage, { active: false, desktopRunning: false, waiting, platform, now, zone }, t);
+  const health = accountHealth(row.account, row.usage, { active: false, desktopRunning: false, waiting, language, platform, now, zone }, t);
   return health.tone !== "ok" ? health.label : undefined;
 }
 
@@ -31,7 +33,7 @@ export function rowProblem(
 export function accountRowSubtitle(
   row: OverviewRow,
   t: T,
-  language: Language,
+  language: Locale,
   zone: string,
   now: number,
   waiting = false,
@@ -40,7 +42,7 @@ export function accountRowSubtitle(
   const health = accountHealth(
     row.account,
     row.usage,
-    { active: false, desktopRunning: false, waiting, platform, now, zone },
+    { active: false, desktopRunning: false, waiting, language, platform, now, zone },
     t,
   );
   if (health.tone !== "ok") return health.label;
@@ -48,25 +50,22 @@ export function accountRowSubtitle(
     case "window-open": {
       const reset = row.usage?.fiveHour?.resetsAt;
       const left = reset ? formatReset(reset, now, language, zone) : "";
-      return t(
-        `Dönem açık${left ? ` · ${left}` : ""}`,
-        `Period open${left ? ` · ${left}` : ""}`,
-      );
+      return left ? t("accountRow.periodOpen", { left }) : t("accountRow.periodOpen2");
     }
     case "ready":
-      return t("Hazır · dönem başlamadı", "Ready · no period started");
+      return t("accountRow.readyNoPeriodStarted");
     case "exhausted": {
       const at = row.availableAt
         ? formatClock(row.availableAt, language, zone)
         : "";
       return at
-        ? t(`${clockLocative(at)} açılır`, `Opens ${at}`)
-        : t("Limit dolu", "Limit is full");
+        ? t("accountRow.opens", { at, atLocative: clockLocative(at) })
+        : t("accountRow.limitIsFull");
     }
     case "not-linked":
-      return t("Claude uygulaması girişi yok", "No Claude app sign-in");
+      return t("accountRow.noClaudeAppSignIn");
     default:
-      return t("Limit verisi eski", "Usage data is out of date");
+      return t("accountRow.usageDataIsOutOfDate");
   }
 }
 
@@ -97,7 +96,7 @@ export function panelRowState(
 function leftUntil(ms: number, now: number, t: T): string | undefined {
   if (ms - now < 86_400_000) return timeLeft(new Date(ms).toISOString(), now, t);
   const days = Math.round((ms - now) / 86_400_000);
-  return t(`${days} gün`, `${days} ${days === 1 ? "day" : "days"}`);
+  return t("format.days", { days });
 }
 
 /**
@@ -107,25 +106,22 @@ function leftUntil(ms: number, now: number, t: T): string | undefined {
 export function fullLimitNote(
   availableAt: string | undefined,
   t: T,
-  language: Language,
+  language: Locale,
   zone: string,
   now: number,
 ): string {
   const ms = availableAt ? Date.parse(availableAt) : NaN;
   const left = Number.isFinite(ms) ? leftUntil(ms, now, t) : undefined;
-  if (!left) return t("Limit dolu", "Limit is full");
+  if (!left) return t("accountRow.limitIsFull");
   const at = formatClock(ms, language, zone);
-  return t(
-    `Limit dolu · ${clockLocative(at)} açılır (${left})`,
-    `Limit is full · opens ${at} (${left})`,
-  );
+  return t("accountRow.limitIsFullOpens", { at, left, atLocative: clockLocative(at) });
 }
 
 /** What switching to a full account means, for the confirmations before it. */
 export function fullLimitWarning(
   availableAt: string | undefined,
   t: T,
-  language: Language,
+  language: Locale,
   zone: string,
   now: number,
 ): string {
@@ -133,14 +129,8 @@ export function fullLimitWarning(
   const left = Number.isFinite(ms) ? leftUntil(ms, now, t) : undefined;
   const at = left ? formatClock(ms, language, zone) : "";
   return left
-    ? t(
-        `Bu hesabın limiti dolu; ${clockLocative(at)} açılır (${left} sonra). O zamana kadar bu hesapla yeni mesaj gönderemezsin.`,
-        `This account’s limit is full. It opens at ${at} (in ${left}). Until then, you cannot send new messages with it.`,
-      )
-    : t(
-        "Bu hesabın limiti dolu ve ne zaman açılacağı bilinmiyor. Açılana kadar bu hesapla yeni mesaj gönderemezsin.",
-        "This account’s limit is full. The time it opens is unknown. Until then, you cannot send new messages with it.",
-      );
+    ? t("accountRow.thisAccountSLimitIsFull", { at, left, atLocative: clockLocative(at) })
+    : t("accountRow.thisAccountSLimitIsFull2");
 }
 
 /** Time left until `at` as "1 sa 50 dk" / "1 h 50 min" (minutes only under an hour); undefined once past. */
@@ -148,11 +138,7 @@ export function timeLeft(at: string | undefined, now: number, t: T): string | un
   const ms = at ? Date.parse(at) - now : NaN;
   if (!Number.isFinite(ms) || ms <= 0) return undefined;
   const minutes = Math.ceil(ms / 60_000);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h
-    ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} min` : ""}`)
-    : t(`${m} dk`, `${m} min`);
+  return hoursMinutes(Math.floor(minutes / 60), minutes % 60, t);
 }
 
 
@@ -168,26 +154,25 @@ export function ringState(usage: AccountUsage | undefined, now: number): RingSta
   return (quotaWindows(usage) ?? []).some((w) => w.usedPercent >= 100) ? "full" : "fresh";
 }
 
-/** A status after a lead (the plan, the percents) reads on in lower case; Claude and Keychain keep their capitals. */
-const onward = (text: string, language: Language) =>
-  // Names keep their capital: Claude, Keychain, and a model whose own limit is spent (Fable).
-  /^(Claude|Keychain|Fable|Opus|Sonnet|Haiku)\b/.test(text)
-    ? text
-    : text.charAt(0).toLocaleLowerCase(language) + text.slice(1);
-
 /**
  * How long until the account's five-hour period changes on its own, as the reading has it: "3 sa
  * 10 dk sonra yenilenir", or "… açılır" for a full one. Undefined without a reset still ahead. A
  * reset time stays true however old the reading is.
  */
-function nextReset(row: OverviewRow, t: T, now: number): string | undefined {
+function resetAhead(row: OverviewRow, t: T, now: number): { full: boolean; left: string } | undefined {
   // An Antigravity account has no five-hour period: its fullest model is the one that changes.
   const five = modelOnlyUsage(row.usage) ? limitHeadline(row.usage, now) : row.usage?.fiveHour;
   const full = row.state === "exhausted" || (five?.usedPercent ?? 0) >= 100;
   const at = Date.parse((row.state === "exhausted" ? row.availableAt : five?.resetsAt) ?? "");
   const left = Number.isFinite(at) ? leftUntil(at, now, t) : undefined;
-  if (!left) return undefined;
-  return full ? t(`${left} sonra açılır`, `Opens in ${left}`) : t(`${left} sonra yenilenir`, `Resets in ${left}`);
+  return left ? { full, left } : undefined;
+}
+
+/** `resetAhead` in words: "3 sa 10 dk sonra yenilenir" / "Resets in 3 h 10 min". */
+function nextReset(row: OverviewRow, t: T, now: number): string | undefined {
+  const ahead = resetAhead(row, t, now);
+  if (!ahead) return undefined;
+  return ahead.full ? t("accountRow.opensIn", { left: ahead.left }) : t("accountRow.resetsIn", { left: ahead.left });
 }
 
 /**
@@ -198,18 +183,18 @@ function nextReset(row: OverviewRow, t: T, now: number): string | undefined {
 function rowStatus(
   row: OverviewRow,
   t: T,
-  language: Language,
+  language: Locale,
   zone: string,
   now: number,
   waiting: boolean,
   short: boolean,
   platform?: string,
 ): string {
-  if (row.state === "not-linked") return t("Giriş kaydedilmedi", "Sign-in not saved");
+  if (row.state === "not-linked") return t("accountRow.signInNotSaved");
   const health = accountHealth(
     row.account,
     row.usage,
-    { active: false, desktopRunning: false, waiting, platform, now, zone },
+    { active: false, desktopRunning: false, waiting, language, platform, now, zone },
     t,
   );
   // Besides a browser approval, the one warning without a fix is a failed or old read; with a
@@ -218,45 +203,50 @@ function rowStatus(
   if (health.tone !== "ok" && !outOfDate) return health.label;
   if (row.usage?.checkedAt && ringState(row.usage, now) === "stale") {
     const age = formatRelative(row.usage.checkedAt, now, language);
-    const next = nextReset(row, t, now);
-    if (short) return next ? t(`${next} · ${age} okundu`, `${next} · read ${age}`) : t(`${age} okundu`, `Read ${age}`);
-    const read = t(`Limit verisi ${age} okundu`, `Usage data read ${age}`);
-    return next ? `${read} · ${onward(next, language)}` : read;
+    if (short) {
+      const next = nextReset(row, t, now);
+      return next ? t("accountRow.read", { next, age }) : t("accountRow.read2", { age });
+    }
+    const ahead = resetAhead(row, t, now);
+    if (!ahead) return t("accountRow.usageDataRead", { age });
+    return ahead.full
+      ? t("accountRow.usageDataReadOpensIn", { age, left: ahead.left })
+      : t("accountRow.usageDataReadResetsIn", { age, left: ahead.left });
   }
   if (outOfDate) return health.label;
   switch (row.state) {
     case "window-open": {
       const left = timeLeft(row.usage?.fiveHour?.resetsAt, now, t);
-      if (!left) return t("Dönem açık", "Period open");
+      if (!left) return t("accountRow.periodOpen2");
       return short
         ? nextReset(row, t, now)!
-        : t(`Dönem açık · ${left} kaldı`, `Period open · ${left} left`);
+        : t("accountRow.periodOpenLeft", { left });
     }
     case "ready":
-      return t("Hazır", "Ready");
+      return t("common.ready");
     case "exhausted": {
       const at = row.availableAt ? formatClock(row.availableAt, language, zone) : "";
-      if (!at) return t("Dolu", "Full");
+      if (!at) return t("common.full");
       const next = nextReset(row, t, now);
       if (short && next) return next;
       const left = next && leftUntil(Date.parse(row.availableAt!), now, t);
       return left
-        ? t(`${clockLocative(at)} açılır (${left})`, `Opens ${at} (${left})`)
-        : t(`${clockLocative(at)} açılır`, `Opens ${at}`);
+        ? t("accountRow.opens2", { at, left, atLocative: clockLocative(at) })
+        : t("accountRow.opens", { at, atLocative: clockLocative(at) });
     }
     default:
-      return t("Limit verisi eski", "Usage data is out of date");
+      return t("accountRow.usageDataIsOutOfDate");
   }
 }
 
 /**
  * The Overview row's line under the name: the plan, as the Accounts table names it, then the status
- * ("Team · dönem açık · 3 sa 10 dk", "ChatGPT Plus · limit verisi 2 sa önce"). The full status is its title.
+ * ("Team · Dönem açık · 3 sa 10 dk", "ChatGPT Plus · Limit verisi 2 sa önce"). The full status is its title.
  */
 export function accountTileLine(
   row: OverviewRow,
   t: T,
-  language: Language,
+  language: Locale,
   zone: string,
   now: number,
   waiting = false,
@@ -264,7 +254,7 @@ export function accountTileLine(
 ): string {
   const status = rowStatus(row, t, language, zone, now, waiting, false, platform);
   const plan = accountPlan(row.account)?.label;
-  return plan ? `${plan} · ${onward(status, language)}` : status;
+  return plan ? `${plan} · ${status}` : status;
 }
 
 /**
@@ -275,7 +265,7 @@ export function accountTileLine(
 export function panelRowLine(
   row: OverviewRow,
   t: T,
-  language: Language,
+  language: Locale,
   zone: string,
   now: number,
   waiting = false,

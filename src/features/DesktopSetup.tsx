@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { Account, DesktopState } from "../../shared/types";
 import { codeTabStep } from "@/lib/onboarding";
 import { workspaceOptions } from "@/lib/workspaces";
+import type { T } from "../../shared/i18n/translate";
 
 export const selectClass =
   "h-9 w-full rounded-md border bg-background px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
@@ -28,7 +29,7 @@ export function DesktopSetup({
   unclaimed: boolean;
   org: string;
   busy: boolean;
-  t: (tr: string, en: string) => string;
+  t: T;
   /** Only used by the picker (no `account`). */
   selectAccount?: (id: string) => void;
   selectOrg: (id: string) => void;
@@ -45,7 +46,7 @@ export function DesktopSetup({
     (busy && reason) ||
     (unclaimed && !org
       ? workspaces
-        ? t("Bir Code çalışma alanı seç.", "Select a Code workspace.")
+        ? t("desktopSetup.selectACodeWorkspace")
         : codeTabStep(t)
       : undefined);
   return (
@@ -54,19 +55,19 @@ export function DesktopSetup({
       className={
         bare ? "grid gap-3" : "grid gap-3 rounded-lg border bg-card p-3"
       }
-      aria-label={t("Claude uygulaması girişi", "Claude app sign-in")}
+      aria-label={t("desktopSetup.claudeAppSignIn")}
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold">
           <Monitor className="size-4 text-brand" />
-          {t("Claude uygulaması girişi", "Claude app sign-in")}
+          {t("desktopSetup.claudeAppSignIn")}
         </h3>
         {!bare && (
           <Button
             variant="ghost"
             size="icon-sm"
             disabled={busy}
-            aria-label={t("Kurulumu kapat", "Close setup")}
+            aria-label={t("desktopSetup.closeSetup")}
             onClick={close}
           >
             <X />
@@ -75,25 +76,19 @@ export function DesktopSetup({
       </div>
       <p className="text-sm text-muted-foreground">
         {unclaimed
-          ? t(
-              "Claude uygulamasında açık hesabı doğru Relay profiliyle eşleştir. E-posta ve çalışma alanı aynı hesaba ait olmalı.",
-              "Link the account open in the Claude app to its Relay profile. The email and workspace must belong to that account.",
-            )
-          : t(
-              "Bu hesaba geçmek için Claude uygulaması girişini bir kez kaydet.",
-              "To switch to this account, save its Claude app sign-in once.",
-            )}
+          ? t("desktopSetup.linkTheAccountOpenInThe")
+          : t("desktopSetup.toSwitchToThisAccountSave")}
       </p>
       {!account && (
         <label className="grid gap-1.5 text-sm font-medium">
-          {t("Claude uygulamasında açık olan hesap", "Account open in the Claude app")}
+          {t("desktopSetup.accountOpenInTheClaudeApp")}
           <select
             className={selectClass}
             value=""
             onChange={(e) => selectAccount?.(e.target.value)}
             disabled={busy}
           >
-            <option value="">{t("Profil seç", "Select a profile")}</option>
+            <option value="">{t("desktopSetup.selectAProfile")}</option>
             {accounts
               .filter((a) => !a.desktop)
               .map((a) => (
@@ -128,11 +123,8 @@ export function DesktopSetup({
             onClick={connect}
           >
             {unclaimed
-              ? t("Bu hesabı eşleştir…", "Link this account…")
-              : t(
-                  "Claude uygulaması girişini başlat…",
-                  "Start Claude app sign-in…",
-                )}
+              ? t("desktopSetup.linkThisAccount")
+              : t("desktopSetup.startClaudeAppSignIn")}
           </Button>
           {hint && <small className="text-xs text-muted-foreground">{hint}</small>}
         </div>
@@ -158,14 +150,14 @@ export function WorkspaceSelect({
   disabled?: boolean;
   /** The workspace the Claude app is in: listed first and marked. */
   suggested?: string;
-  t: (tr: string, en: string) => string;
+  t: T;
 }) {
   const options = workspaceOptions(organizations, accounts, t, suggested);
   const chosen = options.find((o) => o.id === value);
   return (
     <label className="grid gap-1.5 text-sm font-medium">
       <span className="flex items-baseline gap-2">
-        {t("Code çalışma alanı", "Code workspace")}
+        {t("desktopSetup.codeWorkspace")}
         {chosen && (
           <span className="font-mono text-xs font-normal text-muted-foreground">
             {chosen.short}
@@ -178,7 +170,7 @@ export function WorkspaceSelect({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
       >
-        <option value="">{t("Çalışma alanı seç", "Select a workspace")}</option>
+        <option value="">{t("desktopSetup.selectAWorkspace")}</option>
         {options.map((o) => (
           <option key={o.id} value={o.id}>
             {o.label}

@@ -298,7 +298,6 @@ function SwitchDemo() {
 const PRANKS: { label: string; kind: PrankKind }[] = [
   { label: "İmleç kemirme", kind: "nibble-cursor" },
   { label: "Çark", kind: "wheel" },
-  { label: "Çubuğu kemirme", kind: "nibble-bar" },
   { label: "Uyuklama", kind: "doze" },
   { label: "Konfeti", kind: "confetti" },
 ];

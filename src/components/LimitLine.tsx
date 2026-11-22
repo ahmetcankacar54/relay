@@ -1,7 +1,7 @@
 import { cva } from "class-variance-authority";
-import type { T } from "@/data/i18n";
+import { useI18n, type T } from "@/data/i18n";
 import { windowElapsed, type UsageWindowRow } from "@/data/selectors";
-import { meterFill } from "@/lib/meter";
+import { formatPercent, meterFill } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 import { countdown } from "@/lib/time";
 import { usedAt } from "../../shared/quota-windows";
@@ -51,6 +51,7 @@ export function LimitLine({
   /** The meter's name when the label is empty (a list column names it). */
   ariaLabel?: string;
 }) {
+  const { language } = useI18n();
   // A window whose reset has passed is empty again, whatever the reading says.
   const used = Math.min(100, Math.max(0, usedAt({ usedPercent, resetsAt }, now)));
   const full = used >= 100;
@@ -58,14 +59,14 @@ export function LimitLine({
   const elapsed = windowElapsed({ period, resetsAt }, now);
   const ahead = elapsed !== undefined && used / 100 > elapsed + 0.05;
   // "%45" in Turkish, "45%" in English, as every other percentage in the app.
-  const percent = t(`%${Math.round(used)}`, `${Math.round(used)}%`);
+  const percent = formatPercent(used, language);
   return (
     <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title ?? (showReset ? undefined : countdown(resetsAt, now, t))}>
       <div className={head({ size })}>
         <span className="truncate text-muted-foreground">{label}</span>
         <span className="shrink-0 tabular-nums">
           {full ? (
-            <span className="font-semibold text-crit">{left ? t(`Dolu · ${left}`, `Full · ${left}`) : t("Dolu", "Full")}</span>
+            <span className="font-semibold text-crit">{left ? t("limitLine.full", { left }) : t("common.full")}</span>
           ) : (
             <>
               <span className={cn("font-semibold", used >= 90 ? "text-crit" : used >= 75 ? "text-warn-foreground" : "text-foreground")}>

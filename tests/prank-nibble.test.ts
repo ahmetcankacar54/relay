@@ -47,6 +47,7 @@ import {
 } from "../src/pranks/timing";
 import { mediaBlock } from "./css";
 import { fakeDom } from "./fake-dom";
+import { i18nValue } from "./i18n";
 
 const CLASS = "prank-cursor-hidden";
 const VIEWPORT = { width: 1_000, height: 800 };
@@ -1524,7 +1525,7 @@ test("the panel row offers the nibble when it opens the confirmation and not whe
   const relay = panelRelay();
   const tree = createElement(
     I18nContext.Provider,
-    { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+    { value: i18nValue("tr") },
     createElement(
       RelayContext.Provider,
       { value: relay },
@@ -1575,7 +1576,7 @@ test("in the panel, the suggested row offers the nibble when it opens the confir
   };
   const tree = createElement(
     I18nContext.Provider,
-    { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+    { value: i18nValue("tr") },
     createElement(
       RelayContext.Provider,
       { value: relay },

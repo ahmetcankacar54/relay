@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import { staleManualSwitch } from "../../shared/automation-status";
 import { Button } from "@/components/ui/button";
-import { useI18n, type T } from "@/data/i18n";
+import { Trans, useI18n, type T } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
 import { useRelay } from "@/data/relay-context";
 import {
@@ -29,15 +30,15 @@ export const PANEL_MAX_ROWS = 6;
 export function blockWords(reason: PanelRowBlock, t: T): string {
   switch (reason) {
     case "not-linked":
-      return t("Claude uygulaması girişini kaydet", "Save Claude app sign-in");
+      return t("common.saveClaudeAppSignIn");
     case "window":
-      return t("Ayrı pencerede açık", "Open in a separate window");
+      return t("panelAccounts.openInASeparateWindow");
     case "busy":
-      return t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running");
+      return t("panelAccounts.aClaudeAppActionIsRunning");
     case "pending":
-      return t("Bekleyen giriş var", "A sign-in is waiting");
+      return t("panelAccounts.aSignInIsWaiting");
     case "recovery":
-      return t("Önce yedeği geri yükle", "Restore the backup first");
+      return t("panelAccounts.restoreTheBackupFirst");
   }
 }
 
@@ -63,13 +64,29 @@ export const switchingId = (busy: string) =>
   busy.startsWith("switch:") ? busy.slice("switch:".length) : undefined;
 
 /** The first account is added in the main window: Accounts, with the add dialog open. */
-export const openAddAccount = (relay: Pick<Relay, "api">) =>
-  void relay.api.openPage("hesaplar", "ekle");
+export const openAddAccount = (relay: Pick<Relay, "api" | "report">) =>
+  void relay.report(() => relay.api.openPage("hesaplar", "ekle"));
 
-/** Starts the Desktop switch after the inline confirmation. */
-export function confirmSwitch(relay: Relay, id: string, done: () => void) {
+/**
+ * Starts the Desktop switch after the inline confirmation. Automation may have switched while
+ * the confirmation was open, so it checks again first, as the main window's review does.
+ */
+export function confirmSwitch(relay: Relay, id: string, t: T, done: () => void) {
   void relay
-    .action(`switch:${id}`, () => relay.api.switchDesktop(id))
+    .action(`switch:${id}`, async () => {
+      const [status, snapshot] = await Promise.all([
+        relay.api.desktopSnapshot(),
+        relay.api.panelSnapshot(),
+      ]);
+      const stale = staleManualSwitch(id, status, snapshot.fleet);
+      if (!stale) return relay.api.switchDesktop(id);
+      const name = relay.accounts.find((a) => a.id === id)?.name ?? "";
+      relay.setNotice(
+        stale === "already-active"
+          ? t("panelAccounts.isAlreadyOpenInTheClaude", { name })
+          : t("panelAccounts.anAutomaticSwitchIsInProgress"),
+      );
+    })
     .finally(done);
 }
 
@@ -111,26 +128,30 @@ export function PanelAccounts({
       <div className={panelEyebrow}>
         {relay.suggestion && relay.active ? (
           <span className="font-semibold text-warn-foreground">
-            {t("Limit dolmak üzere", "Near the limit")}
+            {t("panelAccounts.nearTheLimit")}
           </span>
         ) : (
-          <span>{t("Diğer hesaplar", "Other accounts")}</span>
+          <span>{t("panelAccounts.otherAccounts")}</span>
         )}
       </div>
-      {rows.length === 0 ? (
+      {relay.data === undefined ? (
+        <p aria-busy="true" className="px-3 py-2 text-xs text-muted-foreground">
+          {t("panelAccounts.loading")}
+        </p>
+      ) : rows.length === 0 ? (
         <div className={`${panelCard} text-muted-foreground`}>
           {relay.accounts.length ? (
-            t("Başka hesap yok", "No other accounts")
+            t("panelAccounts.noOtherAccounts")
           ) : (
             <span className="flex flex-wrap items-center gap-1">
-              {`${t("Henüz hesap yok", "No accounts yet")} ·`}
+              {`${t("panelAccounts.noAccountsYet")} ·`}
               <Button
                 variant="link"
                 size="sm"
                 className="h-auto px-0 text-xs"
                 onClick={() => openAddAccount(relay)}
               >
-                {t("Hesap ekle", "Add account")}
+                {t("common.addAccount")}
               </Button>
             </span>
           )}
@@ -143,7 +164,7 @@ export function PanelAccounts({
           selected={confirmId}
           switching={switching}
           line={(row) => panelRowLine(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
-          problem={(row) => rowProblem(row, t, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
+          problem={(row) => rowProblem(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
           title={(row) => accountRowSubtitle(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
           blocked={(row) => {
             const { reason } = panelRowState(row, relay);
@@ -156,7 +177,8 @@ export function PanelAccounts({
           }
           pick={(row, e) => {
             const { canSwitch, reason } = panelRowState(row, relay);
-            if (reason === "not-linked") return void relay.api.openPage("hesaplar");
+            if (reason === "not-linked")
+              return void relay.report(() => relay.api.openPage("hesaplar"));
             if (reason === "window")
               return void relay.action(`window:${row.account.id}`, () =>
                 relay.api.openWindow(row.account.id),
@@ -174,10 +196,7 @@ export function PanelAccounts({
           className="mt-2 flex items-center gap-2 rounded-lg border bg-muted px-2.5 py-1.5 text-xs"
         >
           <LoaderCircle className="size-3.5 animate-spin" />
-          {t(
-            `${relay.accounts.find((a) => a.id === switching)?.name ?? ""} hesabına geçiliyor…`,
-            `Relay switches to ${relay.accounts.find((a) => a.id === switching)?.name ?? ""}…`,
-          )}
+          {t("panelAccounts.relaySwitchesTo", { name: relay.accounts.find((a) => a.id === switching)?.name ?? "" })}
         </div>
       ) : (
         confirming && (
@@ -192,30 +211,24 @@ export function PanelAccounts({
                   {fullLimitNote(confirming.availableAt, t, language, zone, now)}
                 </b>
               )}
-              {language === "tr" ? (
-                <>
-                  Claude uygulaması kapanır ve <b>{confirming.account.name}</b> hesabıyla
-                  yeniden açılır. Önce çalışan yanıtların bitmesini bekle.
-                </>
-              ) : (
-                <>
-                  The Claude app quits and reopens with <b>{confirming.account.name}</b>.
-                  Wait for running replies to finish first.
-                </>
-              )}
+              <Trans
+                id="panelAccounts.theClaudeAppQuitsAndReopens"
+                params={{ name: confirming.account.name }}
+                components={{ b: (c) => <b>{c}</b> }}
+              />
             </span>
             <span className="flex shrink-0 gap-1.5">
               <Button size="xs" variant="outline" onClick={() => setConfirmId(undefined)}>
-                {t("Vazgeç", "Cancel")}
+                {t("common.cancel")}
               </Button>
               <Button
                 size="xs"
                 disabled={!panelRowState(confirming, relay).canSwitch}
                 onClick={() =>
-                  confirmSwitch(relay, confirming.account.id, () => setConfirmId(undefined))
+                  confirmSwitch(relay, confirming.account.id, t, () => setConfirmId(undefined))
                 }
               >
-                {t("Geç", "Switch")}
+                {t("common.switch")}
               </Button>
             </span>
           </div>
@@ -226,12 +239,9 @@ export function PanelAccounts({
           variant="link"
           size="sm"
           className="mt-1 h-auto px-1 text-xs text-muted-foreground"
-          onClick={() => void relay.api.openPage("hesaplar")}
+          onClick={() => void relay.report(() => relay.api.openPage("hesaplar"))}
         >
-          {t(
-            `+${hidden} hesap · Relay’de gör`,
-            `+${hidden} ${hidden === 1 ? "account" : "accounts"} · Show in Relay`,
-          )}
+          {t("panelAccounts.accountsShowInRelay", { hidden })}
         </Button>
       )}
     </section>

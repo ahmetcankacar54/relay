@@ -1,6 +1,6 @@
 import type { Account, PlanningSettings, TempoChoice } from "./types";
 import type { UsageRollups } from "./usage-rollups";
-import { localDate, localHour, planCapacity } from "./planning";
+import { localDate, localHour, localSlot, planCapacity } from "./planning";
 import { identityOwners } from "./usage-statistics";
 import { isWeekend, shiftDate, workInterval } from "./work-hours";
 
@@ -127,7 +127,17 @@ function daySamples(
     if (!interval || interval.end > now) continue;
     let units = 0,
       covered = 0;
-    const hours = new Map<number, number>();
+    // Units and observed minutes per local clock hour. In a zone whose offset
+    // is not a whole number of hours (Kolkata, +05:30) a UTC hour spans two
+    // local hours and is split between them by the minutes in each.
+    const local = new Map<number, { units: number; covered: number }>();
+    const add = (hour: number, share: number, units: number, covered: number) => {
+      if (share <= 0) return;
+      const sum = local.get(hour) ?? { units: 0, covered: 0 };
+      sum.units += units * share;
+      sum.covered += covered * share;
+      local.set(hour, sum);
+    };
     // UTC hour buckets whose middle falls inside the work interval.
     for (
       let time = Math.floor(interval.start / HOUR_MS) * HOUR_MS;
@@ -140,12 +150,32 @@ function daySamples(
       if (!entry) continue;
       units += entry.units;
       covered += entry.covered;
-      if (entry.covered >= MIN_HOUR_COVERAGE)
-        hours.set(
-          localHour(middle, settings.timeZone),
-          entry.units / (entry.covered / 60),
-        );
+      // The bucket starts `m` minutes into a local hour (offsets are whole
+      // quarter hours): (60 − m)/60 of it is that hour, m/60 the next. Each
+      // hour gets only the part inside the work interval, so a bucket that
+      // straddles the start or end credits no hour outside work.
+      const slot = localSlot(time, settings.timeZone);
+      const first = Math.floor(slot / 4);
+      const split = time + (1 - (slot % 4) / 4) * HOUR_MS;
+      const from = Math.max(time, interval.start),
+        to = Math.min(time + HOUR_MS, interval.end);
+      add(
+        first,
+        (Math.min(split, to) - from) / HOUR_MS,
+        entry.units,
+        entry.covered,
+      );
+      add(
+        (first + 1) % 24,
+        (to - Math.max(split, from)) / HOUR_MS,
+        entry.units,
+        entry.covered,
+      );
     }
+    const hours = new Map<number, number>();
+    for (const [hour, sum] of local)
+      if (sum.covered >= MIN_HOUR_COVERAGE)
+        hours.set(hour, sum.units / (sum.covered / 60));
     if (covered < (interval.end - interval.start) / 60_000 / 2) continue;
     out[interval.weekend ? "weekend" : "weekday"].push({
       rate: units / (covered / 60),

@@ -6,11 +6,11 @@ import {
   trayTooltip,
   unavailableTrayMenu,
   type TrayCommand,
-  type TrayLanguage,
   type TrayMenuItem,
   type TraySnapshot,
 } from "../shared/tray";
-import { pick } from "./language";
+import type { Locale } from "../shared/i18n/locales";
+import { tFor } from "../shared/i18n/translate";
 import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
 import { trayIcons } from "./tray-icons";
 import { trayClickAction } from "../shared/tray-panel";
@@ -28,7 +28,7 @@ export interface RelayTrayOptions {
   /** Confirm natively, then switch Claude Desktop to this saved account. */
   requestSwitch(profileId: string): void;
   quit(): void;
-  language?(): TrayLanguage;
+  language?(): Locale;
   /** macOS menu bar popover; when present, left click toggles it instead of the menu. */
   panel?: {
     toggle(bounds: Rectangle): void;
@@ -193,16 +193,16 @@ export class RelayTray {
   /** Right click in panel mode: open the main window or quit. */
   private popUpShortMenu() {
     if (this.destroyed) return;
-    const t = pick(this.options.language?.() ?? "en");
+    const t = tFor(this.options.language?.() ?? "en");
     this.tray.popUpContextMenu(
       Menu.buildFromTemplate([
         {
-          label: t("Relay’i aç", "Open Relay"),
+          label: t("common.openRelay"),
           click: () => this.options.showWindow(),
         },
         { type: "separator" },
         {
-          label: t("Relay’den çık", "Quit Relay"),
+          label: t("electronTray.quitRelay"),
           click: () => this.options.quit(),
         },
       ]),

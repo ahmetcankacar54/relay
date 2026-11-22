@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MascotGallery, PrankSheet } from "../src/dev/MascotGallery";
 import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 import { PANDA_SCENES } from "../src/mascot/scenes";
-import { NIBBLE_BAR_MS, WHEEL_MS } from "../src/pranks/layers";
+import { WHEEL_MS } from "../src/pranks/layers";
 import { CONFETTI_MS, STARTLE_MS } from "../src/pranks/timing";
 import { fakeDom } from "./fake-dom";
 
@@ -56,7 +56,7 @@ test("the gallery offers a switch window demo for every outcome", () => {
 
 test("the gallery has a button for every prank and a playful panda to click", () => {
   const html = renderToStaticMarkup(createElement(MascotGallery, { frames }));
-  for (const label of ["İmleç kemirme", "Çark", "Çubuğu kemirme", "Uyuklama", "Konfeti"]) assert.match(html, new RegExp(`>${label}<`), label);
+  for (const label of ["İmleç kemirme", "Çark", "Uyuklama", "Konfeti"]) assert.match(html, new RegExp(`>${label}<`), label);
   assert.match(html, />Şakalar</);
   assert.match(html, />Tıkla: numaralar</);
   // The scenes above it are not playful: the only playful panda is the one in the prank section.
@@ -128,7 +128,7 @@ test("a click on a prank button plays that prank in the section's stage at once,
     const all = () => nodes(dom.container as unknown as FakeNode);
     // The fake DOM drops an element's single text child, so a button is found by its place: the labels' order in the markup.
     const labels = [...renderToStaticMarkup(createElement(PrankSheet)).matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
-    assert.deepEqual(labels, ["İmleç kemirme", "Çark", "Çubuğu kemirme", "Uyuklama", "Konfeti"]);
+    assert.deepEqual(labels, ["İmleç kemirme", "Çark", "Uyuklama", "Konfeti"]);
     const button = (label: string) => all().filter((n) => n.tagName === "button")[labels.indexOf(label)];
     const stage = () => all().find((n) => n.attributes.has("data-prank-stage"));
     const rig = () => all().find((n) => n.attributes.has("data-pose"));
@@ -150,11 +150,6 @@ test("a click on a prank button plays that prank in the section's stage at once,
     await click("Çark");
     assert.equal(drawn(), 1, "the wheel is drawn beside the button");
     await wait(WHEEL_MS);
-    assert.equal(drawn(), 0, "and ends by itself");
-
-    await click("Çubuğu kemirme");
-    assert.equal(drawn(), 1, "the panda nibbling at the bar is drawn at the button");
-    await wait(NIBBLE_BAR_MS);
     assert.equal(drawn(), 0, "and ends by itself");
 
     // The doze plays right away, without ten idle minutes, and leaves when the first activity has startled it.

@@ -2,7 +2,9 @@ import { useContext, useState } from "react";
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { I18nContext, type T } from "@/data/i18n";
+import { I18nContext, type Locale, type T } from "@/data/i18n";
+import { formatPercent } from "@/lib/meter";
+import { tFor } from "../../shared/i18n/translate";
 import { RelayContext } from "@/data/relay-context";
 import { UPDATE_INSTALL_KEY, updateHint, updateShown, updateTitle } from "@/lib/update-text";
 
@@ -51,11 +53,20 @@ function ProgressRing({ percent }: { percent?: number }) {
  * it downloads or installs, a ring on the right shows the progress, and its tooltip the percent.
  * The version and what Update does are in the tooltip. The rail shows the download icon alone.
  */
-export function SidebarUpdate({ compact = false, t: given }: { compact?: boolean; t?: T }) {
+export function SidebarUpdate({
+  compact = false,
+  t: given,
+  language: givenLanguage,
+}: {
+  compact?: boolean;
+  t?: T;
+  language?: Locale;
+}) {
   // Read the contexts directly: the sidebar renders without providers in tests.
   const relay = useContext(RelayContext);
   const i18n = useContext(I18nContext);
-  const t: T = given ?? i18n?.t ?? ((tr) => tr);
+  const language = givenLanguage ?? i18n?.language ?? "en";
+  const t: T = given ?? i18n?.t ?? tFor(language);
   const [later, setLater] = useState(readLater);
   const update = relay?.data?.update;
   if (!relay || !updateShown(update)) return null;
@@ -64,13 +75,13 @@ export function SidebarUpdate({ compact = false, t: given }: { compact?: boolean
   if (later === version && status !== "installing") return null;
   const busy = !!relay.busy || !!relay.desktop?.busy;
   const install = () => void relay.action(UPDATE_INSTALL_KEY, () => relay.api.installUpdate());
-  const notes = () => void relay.api.openUpdateNotes();
+  const notes = () => void relay.report(() => relay.api.openUpdateNotes());
   const hint = updateHint(update, t);
   const full = hint ? `${updateTitle(update, t)} ${hint}` : updateTitle(update, t);
   const percent = Math.round((update.progress ?? 0) * 100);
   // A word for what the row does, not the version: the version is in the tooltip.
   const label =
-    status === "manual" ? t("Güncellemeyi indir", "Download update") : t("Güncelle", "Update");
+    status === "manual" ? t("sidebarUpdate.downloadUpdate") : t("sidebarUpdate.update");
   const working = status === "downloading" || status === "installing";
   const run = status === "ready" ? install : status === "manual" ? notes : undefined;
 
@@ -114,7 +125,7 @@ export function SidebarUpdate({ compact = false, t: given }: { compact?: boolean
               <span
                 data-slot="update-progress"
                 role="progressbar"
-                aria-label={t("Güncelleme ilerlemesi", "Update progress")}
+                aria-label={t("sidebarUpdate.updateProgress")}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={status === "installing" ? undefined : percent}
@@ -124,7 +135,7 @@ export function SidebarUpdate({ compact = false, t: given }: { compact?: boolean
               </span>
             </TooltipTrigger>
             <TooltipContent side="top">
-              {status === "installing" ? t("Kuruluyor", "Installing") : t(`%${percent}`, `${percent}%`)}
+              {status === "installing" ? t("sidebarUpdate.installing") : formatPercent(percent, language)}
             </TooltipContent>
           </Tooltip>
         )}
@@ -133,8 +144,8 @@ export function SidebarUpdate({ compact = false, t: given }: { compact?: boolean
         <Button
           size="icon-xs"
           variant="ghost"
-          aria-label={t("Sonra hatırlat", "Remind me later")}
-          title={t("Sonra hatırlat", "Remind me later")}
+          aria-label={t("sidebarUpdate.remindMeLater")}
+          title={t("sidebarUpdate.remindMeLater")}
           className="absolute top-1 right-1 opacity-0 group-hover/update:opacity-100 focus-visible:opacity-100"
           onClick={() => {
             writeLater(version);

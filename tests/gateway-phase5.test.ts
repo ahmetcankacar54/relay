@@ -10,7 +10,7 @@ import type { Account, AccountUsage } from "../shared/types";
 import { cliFixture } from "./cli-fixture";
 
 const HOUR = 3_600_000;
-const macOnly = { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" };
+const macOnly = { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" };
 
 test("requests that arrive together read an account's sign-in once and report it missing once", async () => {
   const now = Date.now();

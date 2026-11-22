@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { forecastSummary } from "../src/lib/forecast-text";
 import type { Forecast } from "../shared/capacity-plan";
+import { testT } from "./i18n";
 
 const H = 3_600_000;
 const M = 60_000;
@@ -9,8 +10,8 @@ const at = (hour: number, minute = 0) => hour * H + minute * M;
 /** "14:18" for a time counted from midnight. */
 const clock = (time: number) =>
   `${String(Math.floor(time / H)).padStart(2, "0")}:${String(Math.floor((time % H) / M)).padStart(2, "0")}`;
-const tr = (text: string) => text;
-const en = (_: string, text: string) => text;
+const tr = testT("tr");
+const en = testT("en");
 
 /** A day from 09:00 to 18:00 with the given outages (no account) in between. */
 function forecast(

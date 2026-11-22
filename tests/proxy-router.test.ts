@@ -313,3 +313,29 @@ test("the move is recorded beside the registry, which stays readable by older ve
   assert.match(main, /const \{ accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, \.\.\.base \} = config;/);
   assert.match(main, /affinityRevision !== undefined \? \{ affinityRevision \} : \{\}/);
 });
+
+test("soonest-reset weighs a 5-hour window's room in Pro units, by the account's plan", () => {
+  const now = Date.parse("2026-10-14T10:00:00Z");
+  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => now });
+  const week = new Date(now + 3 * 24 * 3_600_000).toISOString();
+  const usage = (id: string, used: number): AccountUsage => ({
+    accountId: id,
+    status: "ready",
+    stale: false,
+    fiveHour: { usedPercent: used, resetsAt: new Date(now + 2 * 3_600_000).toISOString() },
+    sevenDay: { usedPercent: 10, resetsAt: week },
+  });
+  const max20: Account = { ...makeAccount("max20", "Max 20×"), planning: { plan: "max20", capacityWeight: 1 } };
+  const busyPro: Account = { ...makeAccount("busy-pro", "Busy Pro"), planning: { plan: "pro", capacityWeight: 1 } };
+  const pro: Account = { ...makeAccount("pro", "Pro"), planning: { plan: "pro", capacityWeight: 1 } };
+  // Max 20× at 85 % still holds 300 Pro units, three fresh Pro windows.
+  assert.equal(
+    router.selectAccount(undefined, [pro, max20], { max20: usage("max20", 85), pro: usage("pro", 0) }).account.id,
+    "max20",
+  );
+  // A Pro account at 85 % has 15 units left and ranks after a fresh one, as before.
+  assert.equal(
+    router.selectAccount(undefined, [busyPro, pro], { "busy-pro": usage("busy-pro", 85), pro: usage("pro", 0) }).account.id,
+    "pro",
+  );
+});

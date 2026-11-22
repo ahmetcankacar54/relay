@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Sidebar } from "../src/app/Sidebar";
 import { switched } from "../src/pranks/RelayPrankStage";
 import { mediaBlock } from "./css";
+import { testT } from "./i18n";
 
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
 
@@ -15,7 +16,7 @@ test("body text is 16 px; the compact panel ramp keeps every text at 11 px or mo
   assert.match(main, /--text-sm: 1rem;/);
   assert.match(main, /--text-xs: 0\.875rem;/);
   assert.match(compact, /--text-sm: 0\.8125rem;/);
-  assert.match(compact, /--text-2xs: 0\.6875rem;/);
+  assert.match(compact, /--text-2xs: 0\.75rem;/);
   assert.match(read("../src/panel/main.tsx"), /dataset\.density = "compact"/);
   for (const file of [
     "../src/panel/Panel.tsx",
@@ -23,7 +24,6 @@ test("body text is 16 px; the compact panel ramp keeps every text at 11 px or mo
     "../src/panel/PanelActiveCard.tsx",
     "../src/panel/PanelDrafts.tsx",
     "../src/panel/PanelAutomation.tsx",
-    "../src/components/LimitMeter.tsx",
     "../src/components/Disclosure.tsx",
     "../src/app/Sidebar.tsx",
   ])
@@ -59,7 +59,8 @@ test("the sidebar's automation dot says what it means to a screen reader", () =>
     createElement(Sidebar, {
       page: "genel",
       go() {},
-      t: (tr: string) => tr,
+      t: testT("tr"),
+      language: "tr",
       compact: false,
       status: { accounts: 2, planning: true, switching: true },
     }),
@@ -70,7 +71,7 @@ test("the sidebar's automation dot says what it means to a screen reader", () =>
 
 test("the panel's gear opens Settings", () => {
   const panel = read("../src/panel/Panel.tsx");
-  assert.match(panel, /aria-label=\{t\("Ayarlar", "Settings"\)\}[\s\S]{0,120}openPage\("ayarlar"\)/);
+  assert.match(panel, /aria-label=\{t\("common\.settings"\)\}[\s\S]{0,120}openPage\("ayarlar"\)/);
 });
 
 test("a switch is the Claude app moving from one saved account to another", () => {

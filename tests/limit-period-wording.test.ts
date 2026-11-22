@@ -9,16 +9,18 @@ const APP_WINDOW_PHRASES = [
   "Relay penceresini",
   "panda penceresini",
   "Pencere kapanınca Relay",
+  // Main's dialog when Relay's own window keeps crashing, in electron/main.ts.
+  "Relay penceresi durdu",
   // The usage sign-in's own Relay window, in src/app/ConnectionPanels.tsx.
   "Açılan Relay penceresinde",
   "Relay’in kendi penceresinde",
   // The same sign-in opened in that window instead of the system browser.
   "Relay penceresinde aç",
-  't("Pencerede onayla", "Approve in the window")',
-  't("Pencereyi göster", "Show the window")',
+  '"connectionPanels.approveInTheWindow": "Pencerede onayla"',
+  '"connectionPanels.showTheWindow": "Pencereyi göster"',
   // The macOS Window menu and its Close Window item, in electron/app-menu.ts.
-  't("Pencere", "Window")',
-  't("Pencereyi kapat", "Close Window")',
+  '"appMenu.window": "Pencere"',
+  '"appMenu.closeWindow": "Pencereyi kapat"',
   // A separate Claude window: an account opened in its own Claude app, beside the main one.
   "Claude pencere",
   "Claude penceresi",

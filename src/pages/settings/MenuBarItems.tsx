@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Panda } from "@/components/Panda";
 import { cn } from "@/lib/utils";
-import type { useI18n, Language } from "@/data/i18n";
+import type { useI18n, Language, MessageId } from "@/data/i18n";
 import type { useRelay } from "@/data/relay-context";
 import type { MenuBarItem, MenuBarNow } from "../../../shared/types";
 import { Disclosure } from "@/components/Disclosure";
@@ -23,23 +23,23 @@ import {
 } from "../../../shared/tray";
 
 /** Each menu bar item's name in Settings. */
-export const MENU_BAR_ITEM_LABELS: Record<MenuBarItem, readonly [tr: string, en: string]> = {
-  "five-hour": ["5 saatlik kullanım", "5-hour usage"],
-  week: ["Haftalık kullanım", "Weekly usage"],
-  reset: ["5 saatlik dönemin kalan süresi", "Time left in the 5-hour period"],
-  tokens: ["Bugünkü token", "Tokens today"],
-  cost: ["Bugünkü API karşılığı", "API value today"],
-  account: ["Hesap adı", "Account name"],
+export const MENU_BAR_ITEM_LABELS: Record<MenuBarItem, MessageId> = {
+  "five-hour": "menuBarItems.fiveHourUsage",
+  week: "menuBarItems.weeklyUsage",
+  reset: "menuBarItems.timeLeftInTheFiveHourPeriod",
+  tokens: "menuBarItems.tokensToday",
+  cost: "menuBarItems.apiValueToday",
+  account: "addAccountProviders.accountName",
 };
 
 /** Why an item shows nothing for the account open in the Claude app now. */
-const MENU_BAR_ITEM_MISSING: Record<MenuBarItem, readonly [tr: string, en: string]> = {
-  "five-hour": ["limit verisi yok", "no usage data"],
-  week: ["bu hesap haftalık limit bildirmiyor", "this account reports no weekly limit"],
-  reset: ["5 saatlik dönem henüz başlamadı", "the 5-hour period has not started"],
-  tokens: ["bugünün toplamı hazır değil", "today’s total is not ready"],
-  cost: ["bugünün toplamı hazır değil", "today’s total is not ready"],
-  account: ["Claude uygulamasında açık hesap yok", "no account open in the Claude app"],
+const MENU_BAR_ITEM_MISSING: Record<MenuBarItem, MessageId> = {
+  "five-hour": "menuBarItems.noUsageData",
+  week: "menuBarItems.thisAccountReportsNoWeeklyLimit",
+  reset: "menuBarItems.theFiveHourPeriodHasNotStarted",
+  tokens: "menuBarItems.todaysTotalIsNotReady",
+  cost: "menuBarItems.todaysTotalIsNotReady",
+  account: "menuBarItems.noAccountOpenInTheClaudeApp",
 };
 
 /** `items` with the one at `from` moved to `to`; unchanged when either is out of range. */
@@ -117,7 +117,7 @@ export function MenuBarTitleRows({
       live = false;
     };
   }, [api]);
-  const label = (item: MenuBarItem) => t(...MENU_BAR_ITEM_LABELS[item]);
+  const label = (item: MenuBarItem) => t(MENU_BAR_ITEM_LABELS[item]);
   const save = (next: MenuBarItem[], said: string, focus?: MenuBarItem) => {
     setItems(next);
     setAnnouncement(said);
@@ -135,19 +135,19 @@ export function MenuBarTitleRows({
     if (!item || to < 0 || to >= chosen.length || to === from) return;
     save(
       moveItem(chosen, from, to),
-      t(`${label(item)}, ${to + 1}. sırada`, `${label(item)}, position ${to + 1}`),
+      t("menuBarItems.position", { label: label(item), position: to + 1 }),
       item,
     );
   };
   const remove = (item: MenuBarItem) =>
     save(
       chosen.filter((i) => i !== item),
-      t(`${label(item)} menü çubuğundan kaldırıldı`, `${label(item)} removed from the menu bar`),
+      t("menuBarItems.removedFromTheMenuBar", { label: label(item) }),
     );
   const add = (item: MenuBarItem) =>
     save(
       [...chosen, item],
-      t(`${label(item)} ${chosen.length + 1}. sıraya eklendi`, `${label(item)} added at position ${chosen.length + 1}`),
+      t("menuBarItems.addedAtPosition", { label: label(item), position: chosen.length + 1 }),
     );
   const sample = name ?? "Max";
   const value = (item: MenuBarItem) =>
@@ -198,22 +198,19 @@ export function MenuBarTitleRows({
   return (
     <div className="border-t border-border py-3 first:border-t-0">
       <span id="menu-bar-title-label" className="text-sm font-medium">
-        {t("Menü çubuğunda göster", "Show in the menu bar")}
+        {t("menuBarItems.showInTheMenuBar")}
       </span>
       <div className="mt-1">
-        <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
+        <Disclosure title={t("menuBarItems.howDoesItWork")}>
           <p className="text-sm text-muted-foreground">
-            {t(
-              "Yüzdeler ve süre Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesapların bugünkü toplamı. ~ son bilinen değeri gösterir. Simgeyi taşımak için ⌘ ile sürükle.",
-              "Percentages and time are for the account open in the Claude app. Tokens and API value are today’s total for all accounts. ~ marks the last known value. To move the icon, drag it with ⌘.",
-            )}
+            {t("menuBarItems.percentagesAndTimeAreForThe")}
           </p>
         </Disclosure>
       </div>
       {/* The menu bar as it reads now, or as these items would read on sample figures. */}
       <div className="mt-3 flex h-9 items-center gap-3 rounded-lg border bg-muted/40 px-3">
         <span className="text-xs text-muted-foreground">
-          {now ? t("Şu an", "Now") : t("Önizleme", "Preview")}
+          {now ? t("menuBarItems.now") : t("menuBarItems.preview")}
         </span>
         <span className="ml-auto flex min-w-0 items-center gap-1.5 rounded-md bg-background/70 px-2 py-0.5 shadow-xs">
           <Panda scene="lookout" size={16} />
@@ -225,19 +222,19 @@ export function MenuBarTitleRows({
                 !title && "text-muted-foreground",
               )}
             >
-              {title || t("Yalnızca panda", "Panda only")}
+              {title || t("menuBarItems.pandaOnly")}
             </span>
           )}
         </span>
       </div>
       <div className="mt-3 flex items-baseline justify-between text-xs text-muted-foreground">
         <span id="menu-bar-shown-label">
-          {t("Menü çubuğunda", "In the menu bar")} · {chosen.length}/{MENU_BAR_MAX_ITEMS}
+          {t("menuBarItems.inTheMenuBar")} · {chosen.length}/{MENU_BAR_MAX_ITEMS}
         </span>
       </div>
       {items && chosen.length === 0 ? (
         <p className="mt-1 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
-          {t("Değer seçili değil.", "No values selected.")}
+          {t("menuBarItems.noValuesSelected")}
         </p>
       ) : (
         <ol
@@ -272,11 +269,8 @@ export function MenuBarTitleRows({
                     "touch-none text-muted-foreground",
                     dragged ? "cursor-grabbing" : "cursor-grab",
                   )}
-                  aria-label={t(
-                    `${label(item)}, ${index + 1}. sıra. Taşımak için sürükle ya da ⌥↑ ⌥↓`,
-                    `${label(item)}, position ${index + 1}. Drag or press ⌥↑ ⌥↓ to move`,
-                  )}
-                  title={t("Sürükleyerek sırala", "Drag to reorder")}
+                  aria-label={t("menuBarItems.positionDragOrPressToMove", { label: label(item), position: index + 1 })}
+                  title={t("menuBarItems.dragToReorder")}
                   onKeyDown={(event) => keys(event, index)}
                   onPointerDown={(event) => grab(event, index)}
                   onPointerMove={follow}
@@ -295,9 +289,9 @@ export function MenuBarTitleRows({
                     "max-w-[45%] truncate text-sm text-muted-foreground",
                     missing(item) ? "text-xs italic" : "tabular-nums",
                   )}
-                  title={missing(item) ? t(...MENU_BAR_ITEM_MISSING[item]) : undefined}
+                  title={missing(item) ? t(MENU_BAR_ITEM_MISSING[item]) : undefined}
                 >
-                  {missing(item) ? t(...MENU_BAR_ITEM_MISSING[item]) : value(item)}
+                  {missing(item) ? t(MENU_BAR_ITEM_MISSING[item]) : value(item)}
                 </span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -305,8 +299,8 @@ export function MenuBarTitleRows({
                       variant="ghost"
                       size="icon-xs"
                       className="text-muted-foreground"
-                      aria-label={t(`${label(item)}: seçenekler`, `${label(item)}: options`)}
-                      title={t("Taşı ya da kaldır", "Move or remove")}
+                      aria-label={t("menuBarItems.options", { label: label(item) })}
+                      title={t("menuBarItems.moveOrRemove")}
                     >
                       <Ellipsis />
                     </Button>
@@ -314,19 +308,19 @@ export function MenuBarTitleRows({
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem disabled={index === 0} onSelect={() => move(index, index - 1)}>
                       <ArrowUp />
-                      {t("Yukarı taşı", "Move up")}
+                      {t("menuBarItems.moveUp")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={index === chosen.length - 1}
                       onSelect={() => move(index, index + 1)}
                     >
                       <ArrowDown />
-                      {t("Aşağı taşı", "Move down")}
+                      {t("menuBarItems.moveDown")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onSelect={() => remove(item)}>
                       <Trash2 />
-                      {t("Menü çubuğundan kaldır", "Remove from the menu bar")}
+                      {t("menuBarItems.removeFromTheMenuBar")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -339,11 +333,8 @@ export function MenuBarTitleRows({
         <div className="mt-3">
           <div id="menu-bar-more-label" className="text-xs text-muted-foreground">
             {full
-              ? t(
-                  `En çok ${MENU_BAR_MAX_ITEMS} değer. Eklemek için birini kaldır`,
-                  `Maximum ${MENU_BAR_MAX_ITEMS} values. Remove one to add another`,
-                )
-              : t("Eklenebilecekler", "More to add")}
+              ? t("menuBarItems.maximumValuesRemoveOneToAdd", { MENU_BAR_MAX_ITEMS })
+              : t("menuBarItems.moreToAdd")}
           </div>
           <ul aria-labelledby="menu-bar-more-label" className="mt-1 flex flex-wrap gap-1.5">
             {others.map((item) => (
@@ -354,7 +345,7 @@ export function MenuBarTitleRows({
                   size="sm"
                   disabled={!items || full}
                   onClick={() => add(item)}
-                  title={missing(item) ? t(...MENU_BAR_ITEM_MISSING[item]) : undefined}
+                  title={missing(item) ? t(MENU_BAR_ITEM_MISSING[item]) : undefined}
                 >
                   <PlusIcon />
                   {label(item)}
@@ -365,7 +356,7 @@ export function MenuBarTitleRows({
                       missing(item) ? "text-xs italic" : "tabular-nums",
                     )}
                   >
-                    {missing(item) ? t(...MENU_BAR_ITEM_MISSING[item]) : value(item)}
+                    {missing(item) ? t(MENU_BAR_ITEM_MISSING[item]) : value(item)}
                   </span>
                 </Button>
               </li>

@@ -88,9 +88,9 @@ export function AccountList({
         const said = [
           account.name,
           head ? `${head.label} ${formatUsed(head.usedPercent, language)}` : undefined,
-          head || five === undefined ? undefined : t(`5 saat ${formatUsed(five, language)}`, `5 hours ${formatUsed(five, language)}`),
-          week === undefined ? undefined : t(`hafta ${formatUsed(week, language)}`, `week ${formatUsed(week, language)}`),
-          ring === "stale" ? t("limit verisi eski", "usage data is out of date") : undefined,
+          head || five === undefined ? undefined : t("accountList.n5Hours", { formatUsed: formatUsed(five, language) }),
+          week === undefined ? undefined : t("accountList.week", { formatUsed: formatUsed(week, language) }),
+          ring === "stale" ? t("accountList.usageDataIsOutOfDate") : undefined,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -101,8 +101,8 @@ export function AccountList({
         // Amber, never the suggested blue: switching there works, but the limit is used up.
         const tinted = "border border-warn/40 bg-warn/10 text-warn-foreground";
         // One bar and one figure per account (variant A): the limit that stops it first.
-        const figure = headlineFigure(usage, now, t);
-        const note = busy ? t("Geçiliyor…", "Switch in progress…") : panel ? (problem?.(row) ?? why) : line(row);
+        const figure = headlineFigure(usage, now, t, language);
+        const note = busy ? t("accountList.switchInProgress") : panel ? (problem?.(row) ?? why) : line(row);
         const body = (
           <span className="grid min-w-0 flex-1 gap-1">
             <span className="flex min-w-0 items-center gap-1.5">
@@ -110,7 +110,7 @@ export function AccountList({
               <span className="truncate text-sm font-semibold">{account.name}</span>
               {row.recommended && (
                 <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
-                  {t("önerilen", "suggested")}
+                  {t("accountList.suggested")}
                 </span>
               )}
               <span
@@ -165,8 +165,8 @@ export function AccountList({
                     disabled={!!switching}
                     aria-label={
                       caution
-                        ? t(`${account.name} hesabına geç · ${caution}`, `Switch to ${account.name} · ${caution}`)
-                        : t(`${account.name} hesabına geç`, `Switch to ${account.name}`)
+                        ? t("accountList.switchTo", { accountName: account.name, caution })
+                        : t("accountList.switchTo2", { accountName: account.name })
                     }
                     title={caution}
                     onClick={(e) => pick(row, e)}
@@ -179,7 +179,7 @@ export function AccountList({
                           : "border bg-card text-foreground hover:bg-muted",
                     )}
                   >
-                    {t("Geç", "Switch")}
+                    {t("common.switch")}
                   </button>
                 ) : (
                   trailing
@@ -192,7 +192,7 @@ export function AccountList({
                 aria-label={
                   why
                     ? `${said} · ${why}`
-                    : t(`${account.name} hesabına geç · ${said}`, `Switch to ${account.name} · ${said}`) +
+                    : t("accountList.switchTo3", { accountName: account.name, said }) +
                       (caution ? ` · ${caution}` : "")
                 }
                 title={tooltip}
@@ -208,7 +208,7 @@ export function AccountList({
                       caution ? tinted : "bg-primary text-primary-foreground",
                     )}
                   >
-                    {t("Geç", "Switch")}
+                    {t("common.switch")}
                   </span>
                 ) : (
                   trailing

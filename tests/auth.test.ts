@@ -118,7 +118,7 @@ test(
     assert.equal(f.auth.list().find((x) => x.id === b.id)!.status, "waiting");
     const retry = f.start(a.accountId);
     assert.notEqual(a.id, retry.id);
-    await assert.rejects(f.auth.reopen(a.accountId, a.id), /artık geçerli/);
+    await assert.rejects(f.auth.reopen(a.accountId, a.id), /no longer valid/);
     assert.equal(f.auth.list().length, 2);
   },
 );

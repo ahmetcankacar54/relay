@@ -1,11 +1,12 @@
 import { useState } from "react";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
+import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageSection } from "@/components/PageSection";
 import { useI18n } from "@/data/i18n";
 import { formatClock } from "@/lib/time";
-import { formatDuration, locale, rowName } from "./format";
+import { formatDuration, rowName } from "./format";
 
 /** Hits shown before "Show all". */
 const VISIBLE = 5;
@@ -23,25 +24,25 @@ export function LimitHits({
     (a, b) => Date.parse(b.at) - Date.parse(a.at),
   );
   const shown = all ? hits : hits.slice(0, VISIBLE);
-  const day = new Intl.DateTimeFormat(locale(language), {
+  const day = new Intl.DateTimeFormat(FORMAT_LOCALE[language], {
     day: "numeric",
     month: "short",
     timeZone: zone,
   });
   return (
-    <PageSection title={t("Limite takılmalar", "Limit hits")} slot="limit-hits">
-    <Card className="gap-0 px-4 py-3.5">
+    <PageSection title={t("limitHits.limitHits")} slot="limit-hits">
+    <Card padded>
       {hits.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {t("Bu aralıkta limite takılma yok.", "No limit hits in this range.")}
+          {t("limitHits.noLimitHitsInThisRange")}
         </p>
       ) : (
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-x-4 text-sm">
           <div className="col-span-full grid grid-cols-subgrid pb-1.5 text-xs text-muted-foreground">
-            <span>{t("Zaman", "When")}</span>
-            <span>{t("Hesap", "Account")}</span>
-            <span>{t("Limit", "Limit")}</span>
-            <span className="text-right">{t("Dolu kaldı", "Full for")}</span>
+            <span>{t("limitHits.when")}</span>
+            <span>{t("common.account")}</span>
+            <span>{t("limitHits.limit")}</span>
+            <span className="text-right">{t("limitHits.fullFor")}</span>
           </div>
           {shown.map((hit) => {
             const at = Date.parse(hit.at);
@@ -55,12 +56,12 @@ export function LimitHits({
                   {`${day.format(at)} ${formatClock(at, language, zone)}`}
                 </time>
                 <b className="truncate">{rowName(hit, t)}</b>
-                <span>{hit.kind === "five-hour" ? t("5 saatlik", "5-hour") : t("haftalık", "weekly")}</span>
+                <span>{hit.kind === "five-hour" ? t("limitHits.n5Hour") : t("limitHits.weekly")}</span>
                 <span className="text-right tabular-nums">
                   {until === undefined ? (
-                    <span className="text-crit">{t("sürüyor", "ongoing")}</span>
+                    <span className="text-crit">{t("limitHits.ongoing")}</span>
                   ) : (
-                    formatDuration(until - at, language)
+                    formatDuration(until - at, t)
                   )}
                 </span>
               </div>
@@ -76,8 +77,8 @@ export function LimitHits({
           onClick={() => setAll(!all)}
         >
           {all
-            ? t("Daha az göster", "Show fewer")
-            : t(`Tümünü göster (${hits.length})`, `Show all (${hits.length})`)}
+            ? t("limitHits.showFewer")
+            : t("limitHits.showAll", { hitsLength: hits.length })}
         </Button>
       )}
     </Card>

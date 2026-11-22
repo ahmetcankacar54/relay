@@ -17,41 +17,38 @@ import { printJson, table } from "../output";
 import { untilText } from "../time";
 
 /** Where a Codex or Antigravity account is signed in again: the app; `relay connect` is Claude's. */
-const inApp = (t: CliContext["t"]) => t("Relay uygulamasından yeniden giriş yap", "sign in again in the Relay app");
+const inApp = (t: CliContext["t"]) => t("commandsUsage.signInAgainInTheRelay");
 
 function issueText(ctx: CliContext, account: Account, issue: UsageIssue | undefined): string {
   const { t } = ctx;
   const provider = account.provider ?? "claude";
   if (provider === "antigravity" && (issue === "unsupported" || issue === undefined))
-    return t(
-      "Antigravity limitleri yalnızca Relay uygulamasında okunur",
-      "Antigravity limits are read in the Relay app only",
-    );
+    return t("commandsUsage.antigravityLimitsAreReadInThe");
   if (provider === "codex" && issue === "unsupported")
-    return t("Codex bu giriş için plan limiti bildirmiyor (API anahtarı)", "Codex reports no plan limits for this sign-in (an API key)");
+    return t("commandsUsage.codexReportsNoPlanLimitsFor");
   if (provider !== "claude" && ["credentials-missing", "connect-cli", "expired", "renewal-required", "scope", "identity-mismatch"].includes(issue ?? ""))
-    return t(`giriş kullanılamıyor: ${inApp(t)}`, `the sign-in cannot be used: ${inApp(t)}`);
+    return t("commandsUsage.theSignInCannotBeUsed", { inApp: inApp(t) });
   const reconnect = `relay connect "${account.name}"`;
   switch (issue) {
     case "unavailable":
       return profileLockHolders(ctx.paths.locks, account.id, ctx.io.pid).length
-        ? t("başka bir süreç yeniliyor", "another process is renewing it")
-        : t("Claude Code CLI 2.1.296 veya üstü gerekiyor", "needs the Claude Code CLI 2.1.296 or newer");
+        ? t("commandsUsage.anotherProcessIsRenewingIt")
+        : t("commandsUsage.needsTheClaudeCodeCli2");
     case "credentials-missing":
     case "connect-cli":
-      return t(`limit okuma girişi yok: ${reconnect}`, `no usage sign-in: ${reconnect}`);
+      return t("commandsUsage.noUsageSignIn", { reconnect });
     case "expired":
     case "renewal-required":
     case "scope":
-      return t(`bağlantı yenilenmeli: ${reconnect}`, `the connection needs renewing: ${reconnect}`);
+      return t("commandsUsage.theConnectionNeedsRenewing", { reconnect });
     case "identity-mismatch":
-      return t(`başka bir hesapla bağlı: ${reconnect}`, `connected to another account: ${reconnect}`);
+      return t("commandsUsage.connectedToAnotherAccount", { reconnect });
     case "keychain-locked":
-      return t("Anahtarlık kilitli; Mac’in kilidini açıp yeniden dene", "the Keychain is locked; unlock the Mac and try again");
+      return t("commandsUsage.theKeychainIsLockedUnlockThe");
     case "rate-limited":
-      return t("çok sık istek gönderildi; biraz sonra yeniden dene", "too many requests; try again shortly");
+      return t("commandsUsage.tooManyRequestsTryAgainShortly");
     default:
-      return t("okunamadı", "could not be read");
+      return t("commandsUsage.couldNotBeRead");
   }
 }
 
@@ -125,33 +122,33 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
     return EXIT.ok;
   }
   if (!accounts.length) {
-    io.stdout(t("Henüz kayıtlı hesap yok.", "No accounts are saved yet."));
+    io.stdout(t("commandsUsage.noAccountsAreSavedYet"));
     return EXIT.ok;
   }
   const cell = (w: UsageWindow | undefined, none: string) =>
     !w
       ? none
       : `${formatUsed(w.usedPercent, lang)}${
-          w.resetsAt ? ` · ${t(`${untilText(w.resetsAt, io.now(), t)} sonra yenilenir`, `resets in ${untilText(w.resetsAt, io.now(), t)}`)}` : ""
+          w.resetsAt ? ` · ${t("commandsUsage.resetsIn", { untilText: untilText(w.resetsAt, io.now(), t) })}` : ""
         }`;
   const rows = results.map(({ account, usage }) => {
     if (!usage)
       return [
         account.name,
         (account.provider ?? "claude") === "claude"
-          ? t(`limit okuma girişi yok: relay connect "${account.name}"`, `no usage sign-in: relay connect "${account.name}"`)
-          : t(`giriş yok: ${inApp(t)}`, `not signed in: ${inApp(t)}`),
+          ? t("commandsUsage.noUsageSignInRelayConnect", { accountName: account.name })
+          : t("commandsUsage.notSignedIn", { inApp: inApp(t) }),
         "",
       ];
     if (usage.status !== "ready") return [account.name, issueText(ctx, account, usage.issue), "", ""];
     return [
       account.name,
       cell(usage.fiveHour, "—"),
-      cell(usage.sevenDay, t("limit bildirilmedi", "no limit reported")),
+      cell(usage.sevenDay, t("commandsUsage.noLimitReported")),
       // A model's own weekly limit (Fable, Opus): spent, it stops that model on the account.
       (usage.modelWindows ?? []).map((w) => `${w.label} ${formatUsed(w.usedPercent, lang)}`).join(", ") || "—",
     ];
   });
-  io.stdout(table([t("Hesap", "Account"), t("5 saat", "5 hours"), t("Haftalık", "Weekly"), t("Model limitleri", "Model limits")], rows));
+  io.stdout(table([t("common.account"), t("common.n5Hours"), t("commandsUsage.weekly"), t("commandsUsage.modelLimits")], rows));
   return EXIT.ok;
 };

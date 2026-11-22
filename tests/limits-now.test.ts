@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { boardOrder, limitStanding } from "../src/lib/limit-standing";
 import { AccountsBoard } from "../src/pages/overview/AccountsBoard";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { I18nContext, type T } from "../src/data/i18n";
+import { I18nContext } from "../src/data/i18n";
+import { i18nValue } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
 
 const HOUR = 3_600_000;
@@ -63,11 +64,10 @@ test("the Overview's board groups accounts by provider, lists an expiring week f
     settings: DEFAULT_SETTINGS,
     data: { usage } as unknown as Snapshot,
   } as unknown as Relay;
-  const tr: T = (a: string) => a;
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { t: tr, language: "tr", setLanguage: () => {} } as never },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, createElement(AccountsBoard, { now: NOW })),
     ),
   );

@@ -4,13 +4,15 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
-import { AccountDetail, AccountDetailBody, accountFromHash, accountHash, historyLine } from "../src/pages/accounts/AccountDetail";
+import { AccountDetail, accountFromHash, accountHash } from "../src/pages/accounts/AccountDetail";
+import { AccountDetailBody, historyLine } from "../src/pages/accounts/account-detail/Body";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
 import { RemoveAccountBody, removedNotice } from "../src/pages/accounts/RemoveAccountDialog";
 import { accountPlan, filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { i18nValue, testT } from "./i18n";
 import { fakeDom } from "./fake-dom";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type ExtensionStatus, type Snapshot, type UsageIssue } from "../shared/types";
 
@@ -59,7 +61,7 @@ const wrap = (relay: Relay, child: ReturnType<typeof createElement>) =>
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      { value: i18nValue("tr") },
       createElement(RelayContext.Provider, { value: relay }, child),
     ),
   );
@@ -76,7 +78,7 @@ test("filterAccounts matches name, email, organization and group and applies the
 test("planLabel and groupName describe an account", () => {
   assert.equal(planLabel({ ...a, planning: { plan: "max5", capacityWeight: 5 } }), "Max 5×");
   assert.equal(planLabel({ ...a, planning: undefined }), undefined);
-  const t = (tr: string) => tr;
+  const t = testT("tr");
   assert.equal(groupName(a, t), "Kişisel");
   assert.equal(groupName(w, t), "Ekip");
   assert.equal(groupName({ ...w, group: "work:w" }, t), "Ayrı çalışma alanı");
@@ -125,7 +127,7 @@ test("the accounts list has one Durum column with a fix button only where someth
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(
           RelayContext.Provider,
           {
@@ -180,20 +182,20 @@ const relayWithUsage = (id: string, value: AccountUsage | undefined, extra: Part
   });
 
 test("the menu offers a prompting renewal only while the Keychain or the connection needs it", () => {
-  const en = (_: string, english: string) => english;
-  const keys = (relay: Relay) => rowActions(a, relay, en).map((x) => x.key);
-  const renew = (relay: Relay, t: (tr: string, en: string) => string = (tr) => tr) =>
-    rowActions(a, relay, t).find((x) => x.key === "renew");
+  const en = testT("en");
+  const keys = (relay: Relay) => rowActions(a, relay, en, "en").map((x) => x.key);
+  const renew = (relay: Relay, language: "tr" | "en" = "tr") =>
+    rowActions(a, relay, testT(language), language).find((x) => x.key === "renew");
   for (const value of [undefined, usageOf("a"), usageOf("a", "expired"), usageOf("a", "scope"), usageOf("a", "rate-limited"), usageOf("a", "unavailable")])
     assert.ok(!keys(relayWithUsage("a", value)).includes("renew"), String(value?.issue));
   // Offered for a locked Keychain, with its own wording.
   const keychain = renew(relayWithUsage("a", usageOf("a", "keychain-locked")));
   assert.equal(keychain?.label, "Anahtarlık erişimine izin ver");
-  assert.equal(renew(relayWithUsage("a", usageOf("a", "keychain-locked")), en)?.label, "Allow Keychain access");
+  assert.equal(renew(relayWithUsage("a", usageOf("a", "keychain-locked")), "en")?.label, "Allow Keychain access");
   // Offered for a connection to renew, however it is reported.
   for (const value of [usageOf("a", "renewal-required"), usageOf("a", undefined, { connectionRenewalRequired: true })]) {
     assert.equal(renew(relayWithUsage("a", value))?.label, "Yenilemeye izin ver");
-    assert.equal(renew(relayWithUsage("a", value), en)?.label, "Allow renewal");
+    assert.equal(renew(relayWithUsage("a", value), "en")?.label, "Allow renewal");
   }
   // It sits with the sign-in items, before Refresh limits.
   assert.deepEqual(keys(relayWithUsage("a", usageOf("a", "renewal-required"))), [
@@ -204,13 +206,13 @@ test("the menu offers a prompting renewal only while the Keychain or the connect
   const relay = relayWithUsage("a", usageOf("a", "keychain-locked"), {
     refreshUsage: async (...args: unknown[]) => void calls.push(args),
   } as Partial<Relay>);
-  const items = rowActions(a, relay, (tr) => tr);
+  const items = rowActions(a, relay, testT("tr"), "tr");
   items.find((x) => x.key === "renew")!.run();
   items.find((x) => x.key === "refresh")!.run();
   assert.deepEqual(calls, [[a, true], [a]]);
   // It is disabled exactly when Refresh limits is.
   for (const usageBusy of [new Set<string>(), new Set(["a"])]) {
-    const busy = rowActions(a, relayWithUsage("a", usageOf("a", "keychain-locked"), { usageBusy }), (tr) => tr);
+    const busy = rowActions(a, relayWithUsage("a", usageOf("a", "keychain-locked"), { usageBusy }), testT("tr"), "tr");
     assert.equal(busy.find((x) => x.key === "renew")?.disabled, usageBusy.has("a"));
     assert.equal(busy.find((x) => x.key === "renew")?.disabled, busy.find((x) => x.key === "refresh")?.disabled);
   }
@@ -221,7 +223,7 @@ test("a row with a locked Keychain or a connection to renew offers that renewal 
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(
           RelayContext.Provider,
           { value: relayWithUsage("a", value) },
@@ -260,7 +262,7 @@ test("the inline fix button runs its action and does not also open the sheet", a
   const opened: string[] = [];
   const relay = relayWithUsage("k", usageOf("k", "expired"), {
     accounts: [critical],
-    startCli: async (account: Account) => void started.push(account.id),
+    startCli: async (account: Account) => (started.push(account.id), "ran" as const),
   } as Partial<Relay>);
   const dom = fakeDom();
   dom.install();
@@ -271,7 +273,7 @@ test("the inline fix button runs its action and does not also open the sheet", a
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(
             RelayContext.Provider,
             { value: relay },
@@ -293,6 +295,51 @@ test("the inline fix button runs its action and does not also open the sheet", a
     await act(async () => dom.dispatch(row, "click", { detail: 1 }));
     assert.deepEqual(opened, ["k"]);
     assert.deepEqual(started, ["k"]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("while a search shows every match, the section headers are labels and leave the saved closed set alone", async () => {
+  const stored: Record<string, string> = { "relay.accounts.collapsed": JSON.stringify(["provider:claude"]) };
+  const writes: string[] = [];
+  const dom = fakeDom({
+    localStorage: () => ({ getItem: (key: string) => stored[key] ?? null, setItem: (key: string) => void writes.push(key) }),
+  });
+  dom.install();
+  Object.assign(globalThis.window, { location: { hash: "" } });
+  Object.assign(globalThis.document, { querySelector: () => null });
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: i18nValue("tr") },
+          createElement(RelayContext.Provider, { value: relayFor() }, createElement(Accounts)),
+        ),
+      ),
+    );
+    const headers = () => drawn(dom.container as unknown as FakeNode).filter((n) => n.attributes?.get("data-slot") === "list-group");
+    const rows = () => drawn(dom.container as unknown as FakeNode).filter((n) => n.attributes?.get("data-slot") === "list-row");
+    // Closed and not searching: the provider's header is a button and its rows are not drawn.
+    assert.equal(headers()[0]?.tagName, "button");
+    assert.equal(rows().length, 0);
+    const input = drawn(dom.container as unknown as FakeNode).find((n) => n.tagName === "input" && n.attributes.get("placeholder") === "Ara…");
+    assert.ok(input, "the search field is drawn");
+    await act(async () => {
+      // React reads a text field's `type` property, which the fake keeps only as an attribute.
+      Object.assign(input, { type: input.attributes.get("type") ?? "text", value: "Stu" });
+      dom.dispatch(input, "input");
+    });
+    // The match shows, its closed section opened for it, and no header is a button that could close it.
+    assert.equal(rows().length, 1);
+    assert.ok(headers().length > 0);
+    for (const header of headers()) assert.equal(header.tagName, "div");
+    for (const header of headers()) await act(async () => dom.dispatch(header, "click", { detail: 1 }));
+    assert.deepEqual(writes, []);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
@@ -330,7 +377,7 @@ test("an account without a plan shows its subscription beside its name, saying s
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        { value: i18nValue(language) },
         createElement(
           RelayContext.Provider,
           { value: relayFor() },
@@ -341,9 +388,10 @@ test("an account without a plan shows its subscription beside its name, saying s
   const tr = html("tr");
   assert.doesNotMatch(tr, /Plan yok|No plan/);
   // The short plan sits beside the name, its source in the title; an account with neither shows none.
-  const [none, team, chosen] = listRows(tr);
-  assert.match(none, /title="Studio">Studio<\/span><\/div>/);
-  assert.match(team, /title="Şirket">Şirket<\/span><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
+  // Claude's accounts span two work groups, so the personal ones come first, then the team's.
+  const [none, chosen, team] = listRows(tr);
+  assert.match(none, /title="Studio">Studio<\/button><\/div>/);
+  assert.match(team, /title="Şirket">Şirket<\/button><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
   assert.doesNotMatch(tr, /Plan seç/);
   assert.match(html("en"), /title="Subscription · no plan selected for planning">Team<\/span>/);
   // A chosen plan says so.
@@ -363,6 +411,9 @@ test("an account page lives at #/hesaplar/<id>", () => {
   assert.equal(accountFromHash("#/hesaplar"), undefined);
   assert.equal(accountFromHash("#/hesaplar?ekle"), undefined);
   assert.equal(accountFromHash("#/genel"), undefined);
+  // A malformed escape is no account, not a thrown URIError.
+  assert.equal(accountFromHash("#/hesaplar/%E0%A4%A"), undefined);
+  assert.equal(accountFromHash("#/hesaplar/%"), undefined);
 });
 
 test("each connection keeps its refresh button left of its action, in shared columns, with a plain check", () => {
@@ -547,8 +598,8 @@ test("a table row whose sign-ins belong to different accounts needs the usage si
 });
 
 test("row actions follow the Desktop link state and the switch lock", () => {
-  const t = (tr: string) => tr;
-  const labels = (acct: Account, relay: Relay) => rowActions(acct, relay, t).map((x) => x.label);
+  const t = testT("tr");
+  const labels = (acct: Account, relay: Relay) => rowActions(acct, relay, t, "tr").map((x) => x.label);
   const relay = relayFor();
   assert.deepEqual(labels(a, relay), [
     "Claude uygulamasını aç",
@@ -575,12 +626,12 @@ test("row actions follow the Desktop link state and the switch lock", () => {
     { desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0, activeProfileId: "a" } },
   ] as Partial<Relay>[]) {
     const r = relayFor(extra);
-    const open = rowActions(a, r, t).find((x) => x.label === "Claude uygulamasını aç");
-    const sw = rowActions(linked, r, t).find((x) => x.label === "Geç");
+    const open = rowActions(a, r, t, "tr").find((x) => x.label === "Claude uygulamasını aç");
+    const sw = rowActions(linked, r, t, "tr").find((x) => x.label === "Geç");
     assert.equal(open?.disabled, true, JSON.stringify(Object.keys(extra)));
     assert.equal(sw?.disabled, true);
   }
-  assert.equal(rowActions(a, relay, t).find((x) => x.label === "Claude uygulamasını aç")?.disabled, false);
+  assert.equal(rowActions(a, relay, t, "tr").find((x) => x.label === "Claude uygulamasını aç")?.disabled, false);
 });
 
 test("the accounts empty state looks out when a filter hides every account", () => {
@@ -624,13 +675,7 @@ test("no view mixes the old Desktop and connection wording with the two sign-in 
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
-        {
-          value: {
-            language,
-            setLanguage() {},
-            t: (tr: string, en: string) => (language === "tr" ? tr : en),
-          },
-        },
+        { value: i18nValue(language) },
         createElement(RelayContext.Provider, { value: relay }, child),
       ),
     );
@@ -773,8 +818,8 @@ test("the connections count only what a switch needs; the extension and the term
 });
 
 test("the closed Code history row says whether, and with how many accounts, it is shared", () => {
-  const t = (tr: string) => tr;
-  const en = (_: string, english: string) => english;
+  const t = testT("tr");
+  const en = testT("en");
   assert.equal(historyLine(0, "same-group", t), "paylaşılmıyor");
   assert.equal(historyLine(2, "same-group", t), "aynı gruptaki 2 hesapla paylaşılıyor");
   assert.equal(historyLine(2, "all", t), "2 hesapla paylaşılıyor");
@@ -791,7 +836,7 @@ const suggestedTable = (extra: Partial<Relay> = {}, usageFor: Record<string, Acc
   renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+      { value: i18nValue(language) },
       createElement(
         RelayContext.Provider,
         { value: relayOf({ suggestion: c, ...extra }, { a: readNow(usage.a), c: readNow({ ...usage.a, accountId: "c" }), ...usageFor }) },
@@ -856,7 +901,7 @@ test("the inline switch and refresh run the ⋯ menu's own actions, without open
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(
             RelayContext.Provider,
             { value: relay },
@@ -911,7 +956,7 @@ test("a search that matches nothing is named and can be cleared", () => {
   const en = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
-      { value: { language: "en", setLanguage() {}, t: (_: string, english: string) => english } },
+      { value: i18nValue("en") },
       createElement(RelayContext.Provider, { value: relayFor() }, createElement(AccountsEmpty, { hasAccounts: true, query: "stu", clearQuery() {} })),
     ),
   );
@@ -924,10 +969,10 @@ test("a search that matches nothing is named and can be cleared", () => {
 });
 
 test("the menu offers to remove an account, except the one open in the Claude app, and says why", () => {
-  const t = (tr: string) => tr;
+  const t = testT("tr");
   const asked: string[] = [];
   const removeOf = (acct: Account, relay: Relay) =>
-    rowActions(acct, relay, t, undefined, { remove: (id) => asked.push(id) }).find((x) => x.key === "remove")!;
+    rowActions(acct, relay, t, "tr", undefined, { remove: (id) => asked.push(id) }).find((x) => x.key === "remove")!;
   const relay = relayOf();
   // The active account cannot go: switch first.
   const active = removeOf(a, relay);
@@ -956,7 +1001,7 @@ test("the menu offers to remove an account, except the one open in the Claude ap
   (running.data as { runs?: unknown[] }).runs = [{ accountId: "c", status: "running" }];
   assert.equal(removeOf(c, running).note, "Önce çalışan oturumu durdur");
   // In English too.
-  const en = rowActions(a, relay, (_: string, english: string) => english).find((x) => x.key === "remove")!;
+  const en = rowActions(a, relay, testT("en"), "en").find((x) => x.key === "remove")!;
   assert.equal(en.label, "Remove account");
   assert.equal(en.note, "Switch to another account first");
 });
@@ -967,7 +1012,7 @@ test("the remove dialog says what goes and what stays, and removes only on confi
   const calls: string[] = [];
   const relay = relayOf({
     api: { removeAccount: async (id: string) => (calls.push(id), { signedOut: true }) } as unknown as Relay["api"],
-    action: async (_key: string, fn: () => Promise<unknown>) => void (await fn()),
+    action: async (_key: string, fn: () => Promise<unknown>) => (await fn(), true),
     setNotice: (text: string) => void notices.push(text),
   });
   const body = () => createElement(RemoveAccountBody, { account: c, close() {}, removed: (id: string) => void removed.push(id) });
@@ -988,7 +1033,7 @@ test("the remove dialog says what goes and what stays, and removes only on confi
       root.render(
         createElement(
           I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          { value: i18nValue("tr") },
           createElement(RelayContext.Provider, { value: relay }, body()),
         ),
       ),
@@ -1014,14 +1059,14 @@ test("the remove dialog says what goes and what stays, and removes only on confi
   }
   // A usage sign-in left signed in is said.
   assert.equal(
-    removedNotice("Üçüncü", { signedOut: false }, (tr) => tr),
+    removedNotice("Üçüncü", { signedOut: false }, testT("tr")),
     "Üçüncü kaldırıldı. Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.",
   );
-  assert.equal(removedNotice("C", {}, (_, en) => en), "Removed C.");
+  assert.equal(removedNotice("C", {}, testT("en")), "Removed C.");
 });
 
 test("a full account keeps its switch, quieter, saying when its limit opens", () => {
-  const t = (tr: string) => tr;
+  const t = testT("tr");
   const full = (now: number): Record<string, AccountUsage> => ({
     c: {
       accountId: "c", status: "ready", stale: false, checkedAt: iso(now - 60_000),
@@ -1031,12 +1076,12 @@ test("a full account keeps its switch, quieter, saying when its limit opens", ()
   });
   const zone = DEFAULT_SETTINGS.planning.timeZone;
   const opens = new Intl.DateTimeFormat("tr-TR", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(NOW + 90 * 60_000);
-  const sw = rowActions(c, relayOf({}, full(NOW)), t, undefined, { now: NOW }).find((x) => x.key === "switch")!;
+  const sw = rowActions(c, relayOf({}, full(NOW)), t, "tr", undefined, { now: NOW }).find((x) => x.key === "switch")!;
   assert.equal(sw.disabled, false);
   assert.equal(sw.tone, "warn");
   assert.match(sw.note ?? "", new RegExp(`^Limit dolu · ${opens}’[a-z]+ açılır \\(1 sa 30 dk\\)$`));
   // An account with room has a plain switch.
-  const plain = rowActions(c, relayOf(), t, undefined, { now: NOW }).find((x) => x.key === "switch")!;
+  const plain = rowActions(c, relayOf(), t, "tr", undefined, { now: NOW }).find((x) => x.key === "switch")!;
   assert.equal(plain.tone, undefined);
   assert.equal(plain.note, undefined);
   // The account's page: the switch is still its primary action, quieter (outline), the note in its title.
@@ -1056,7 +1101,7 @@ test("a full account keeps its switch, quieter, saying when its limit opens", ()
 });
 
 test("separate windows: the menu opens one, then offers it forward or closed, and holds the switch", () => {
-  const en = (_: string, english: string) => english;
+  const en = testT("en");
   const windows = (open: string[], enabled = true) =>
     relayFor({
       data: {
@@ -1065,12 +1110,12 @@ test("separate windows: the menu opens one, then offers it forward or closed, an
       } as unknown as Snapshot,
       active: w,
     } as Partial<Relay>);
-  const keys = (relay: Relay) => rowActions(a, relay, en).map((x) => x.key);
+  const keys = (relay: Relay) => rowActions(a, relay, en, "en").map((x) => x.key);
   assert.ok(!keys(windows([], false)).some((key) => key.startsWith("window")));
   // Turned off with a window open: it can still be brought forward and closed.
   assert.deepEqual(keys(windows(["a"], false)).slice(0, 3), ["switch", "window-show", "window-close"]);
   assert.deepEqual(keys(windows([])).slice(0, 2), ["switch", "window"]);
-  const open = rowActions(a, windows(["a"]), en);
+  const open = rowActions(a, windows(["a"]), en, "en");
   assert.deepEqual(open.map((x) => x.key).slice(0, 3), ["switch", "window-show", "window-close"]);
   const sw = open.find((x) => x.key === "switch")!;
   assert.equal(sw.disabled, true);
@@ -1078,12 +1123,12 @@ test("separate windows: the menu opens one, then offers it forward or closed, an
   assert.equal(open.find((x) => x.key === "remove")!.disabled, true);
   assert.equal(open.find((x) => x.key === "desktop-reconnect")!.disabled, true);
   // The main Claude's own account is never offered a window.
-  assert.ok(!rowActions(w, windows([]), en).some((x) => x.key.startsWith("window")));
+  assert.ok(!rowActions(w, windows([]), en, "en").some((x) => x.key.startsWith("window")));
   // Its calls go to the window API.
   const calls: string[] = [];
   const relay = windows(["a"]);
   (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
   (relay as any).api = { ...relay.api, openWindow: async (id: string) => void calls.push(`open:${id}`), closeWindow: async (id: string) => void calls.push(`close:${id}`) };
-  for (const item of rowActions(a, relay, en)) if (item.key.startsWith("window")) item.run();
+  for (const item of rowActions(a, relay, en, "en")) if (item.key.startsWith("window")) item.run();
   assert.deepEqual(calls, ["open:a", "close:a"]);
 });

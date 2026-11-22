@@ -9,6 +9,8 @@ import { clockLocative } from "../../shared/tr-dative";
 import { modelLimitFull } from "@/data/selectors";
 import { formatClock } from "@/lib/time";
 import { macWording } from "@/data/platform";
+import { FORMAT_LOCALE, type Locale } from "../../shared/i18n/locales";
+import type { MessageId, T } from "../../shared/i18n/translate";
 
 // The helper lives in shared/ so the tray and the keeper read it too; the app keeps importing it from here.
 export { displayedIssue };
@@ -28,35 +30,29 @@ export interface AccountHealth {
   fix?: AccountFix;
 }
 
-type T = (tr: string, en: string) => string;
 /** Codex, Antigravity and Gemini accounts sign in with their own key or OAuth, never through the Claude app. */
 export const isClaudeAccount = (account: Account) => (account.provider ?? "claude") === "claude";
-type Words = readonly [tr: string, en: string];
 
-/** An account with no usage reading yet, in the Accounts page, the Overview and the panel. */
-const NO_USAGE_DATA: Words = ["Limit verisi yok", "No usage data yet"];
-/** A browser approval in progress for the usage sign-in. */
-const APPROVE: Words = ["Tarayıcıda onayla", "Approve in the browser"];
-
-/** Each status's short form, keyed by its full Turkish words; a status not listed is short already. */
-const SHORT: Record<string, Words> = {
-  "Limit verisi yok": ["Okunmadı", "Not read yet"],
-  "Claude uygulaması girişi yok": ["Uygulama girişi yok", "No app sign-in"],
-  "Limit okuma girişi gerekli": ["Giriş gerekli", "Sign-in needed"],
-  "Anahtarlık izni gerekli": ["Anahtarlık izni", "Keychain access"],
-  "Anahtar deposu izni gerekli": ["Anahtar deposu izni", "Keyring access"],
-  "Bağlantı yenilenmeli": ["Yenilenmeli", "Needs renewing"],
-  "Limit okuma girişi yok": ["Limit girişi yok", "No usage sign-in"],
-  "Limit verisi eski": ["Eski okuma", "Old reading"],
-  "Bekleme süresinde": ["Beklemede", "Cooling down"],
+/** Each status's short form, for a list's status column; a status not listed is short already. */
+const SHORT: Partial<Record<MessageId, MessageId>> = {
+  "accountHealth.noUsageDataYet": "accountHealth.notReadYet",
+  "accountRow.noClaudeAppSignIn": "accountHealth.noAppSignIn",
+  "accountHealth.usageSignInNeeded": "planningPanel.signInNeeded",
+  "accountHealth.keychainAccessNeeded": "accountHealth.keychainAccess",
+  "accountHealth.keyringAccessNeeded": "accountHealth.keyringAccess",
+  "accountHealth.connectionNeedsRenewing": "accountHealth.needsRenewing",
+  "accountHealth.noUsageSignIn": "accountHealth.noUsageSignInShort",
+  "accountRow.usageDataIsOutOfDate": "accountStatus.oldReading",
+  "accountHealth.coolingDown": "accountHealth.coolingDownShort",
 };
-const shortOf = ([tr, en]: Words): Words => SHORT[tr] ?? [tr, en];
 
 /** Where the status is read: `now` and the planning time zone default to the clock and the system zone. */
 type HealthContext = {
   active: boolean;
   desktopRunning: boolean;
   waiting: boolean;
+  /** The language the status is read in: the weekday of a model limit's reopening (`modelLimitWords`). */
+  language: Locale;
   now?: number;
   zone?: string;
   /** Relay's platform (`diagnostics.platform`): the Keychain on macOS, the keyring elsewhere. */
@@ -64,41 +60,27 @@ type HealthContext = {
 };
 
 /** A locked Keychain (Linux: keyring) as a status. */
-const keychainNeeded = (platform?: string): Words =>
-  macWording(platform)
-    ? ["Anahtarlık izni gerekli", "Keychain access needed"]
-    : ["Anahtar deposu izni gerekli", "Keyring access needed"];
-
-/** "Pzt 05:00" / "Mon 05:00" beyond a day, the clock alone within one. */
-function opensAt(at: number, now: number, language: "tr" | "en", zone?: string) {
-  const clock = formatClock(at, language, zone);
-  if (at - now < 86_400_000) return { day: "", clock };
-  const day = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", { weekday: "short", timeZone: zone }).format(at);
-  return { day: `${day} `, clock };
-}
+const keychainNeeded = (platform?: string): MessageId =>
+  macWording(platform) ? "accountHealth.keychainAccessNeeded" : "accountHealth.keyringAccessNeeded";
 
 /**
  * A model's own limit used up on an account that still works (Fable's week, an Antigravity model):
  * "Fable limiti dolu · Pzt 05:00’te açılır". The other models still answer, so it is a warning,
- * never "full"; with several spent the first to open sets the time.
+ * never "full"; with several spent the first to open sets the time. Beyond a day the reopening
+ * names its weekday ("Pzt 05:00" / "Mon 05:00"), within one the clock alone.
  */
-export function modelLimitWords(spent: ModelWindow[], now: number, zone?: string): Words | undefined {
+export function modelLimitWords(spent: ModelWindow[], now: number, language: Locale, t: T, zone?: string): string | undefined {
   if (!spent.length) return undefined;
-  const names = spent.map((w) => w.label);
-  const [tr, en] =
-    names.length === 1
-      ? [`${names[0]} limiti dolu`, `${names[0]} limit is full`]
-      : names.length === 2
-        ? [`${names.join(", ")} limitleri dolu`, `${names.join(", ")} limits are full`]
-        : [`${names.length} model limiti dolu`, `${names.length} model limits are full`];
+  const count = spent.length;
+  const names = spent.map((w) => w.label).join(", ");
   const first = Math.min(...spent.map((w) => Date.parse(w.resetsAt ?? "")).filter(Number.isFinite));
-  if (!Number.isFinite(first)) return [tr, en];
-  const trAt = opensAt(first, now, "tr", zone);
-  const enAt = opensAt(first, now, "en", zone);
-  return [
-    `${tr} · ${trAt.day}${clockLocative(trAt.clock)} açılır`,
-    `${en} · opens ${enAt.day}${enAt.clock}`,
-  ];
+  if (!Number.isFinite(first)) return t("accountHealth.modelLimitFull", { count, names });
+  const clock = formatClock(first, language, zone);
+  const day =
+    first - now < 86_400_000
+      ? ""
+      : `${new Intl.DateTimeFormat(FORMAT_LOCALE[language], { weekday: "short", timeZone: zone }).format(first)} `;
+  return t("accountHealth.modelLimitFullOpens", { count, names, at: `${day}${clock}`, atLocative: `${day}${clockLocative(clock)}` });
 }
 
 /**
@@ -134,15 +116,15 @@ function signInState(account: Account, usage: AccountUsage | undefined) {
 }
 
 const SIGN_IN_WORDS = {
-  none: ["Yok", "None"],
-  needed: ["Gerekli", "Needed"],
-  renewing: ["Yenilenmeli", "Needs renewing"],
+  none: "accountHealth.none",
+  needed: "accountHealth.needed",
+  renewing: "accountHealth.needsRenewing",
   // The sign-in itself is fine; the Keychain has to be allowed to read it.
-  keychain: ["Bağlı", "Connected"],
-  connected: ["Bağlı", "Connected"],
+  keychain: "addAccountDialog.connected",
+  connected: "addAccountDialog.connected",
   // No usage sign-in of its own: the Claude app's sign-in reads the limits.
-  app: ["Claude uygulamasından", "Through the Claude app"],
-} as const satisfies Record<ReturnType<typeof signInState>, Words>;
+  app: "accountHealth.throughTheClaudeApp",
+} as const satisfies Record<ReturnType<typeof signInState>, MessageId>;
 
 /**
  * The tone and short status of the usage sign-in, for its row in the details sheet. It follows the same
@@ -155,25 +137,25 @@ export function usageSignInStatus(
   t: T,
   platform?: string,
 ): { tone: AccountHealth["tone"]; label: string } {
-  if (waiting) return { tone: "warn", label: t(...APPROVE) };
+  if (waiting) return { tone: "warn", label: t("connectionPanels.approveInTheBrowser") };
   if (!isClaudeAccount(account))
     return account.auth?.loggedIn
-      ? { tone: "ok", label: t("Giriş kayıtlı", "Sign-in saved") }
-      : { tone: "warn", label: t("Yok", "None") };
+      ? { tone: "ok", label: t("accountHealth.signInSaved") }
+      : { tone: "warn", label: t("accountHealth.none") };
   const state = signInState(account, usage);
-  const [tr, en] = SIGN_IN_WORDS[state];
   switch (state) {
     case "connected":
     case "app":
-      return { tone: "ok", label: t(tr, en) };
+      return { tone: "ok", label: t(SIGN_IN_WORDS[state]) };
     case "needed":
-      return { tone: "crit", label: t(tr, en) };
-    case "keychain": {
-      const [needTr, needEn] = keychainNeeded(platform);
-      return { tone: "warn", label: t(`${tr} · ${needTr}`, `${en} · ${needEn}`) };
-    }
+      return { tone: "crit", label: t(SIGN_IN_WORDS[state]) };
+    case "keychain":
+      return {
+        tone: "warn",
+        label: t(macWording(platform) ? "accountHealth.connectedKeychainAccessNeeded" : "accountHealth.connectedKeyringAccessNeeded"),
+      };
     default:
-      return { tone: "warn", label: t(tr, en) };
+      return { tone: "warn", label: t(SIGN_IN_WORDS[state]) };
   }
 }
 
@@ -190,25 +172,25 @@ function otherProviderHealth(
   const signedIn = account.auth?.loggedIn === true;
   // The detail stays short: what the gateway can do with this account.
   const detail = signedIn
-    ? t("Ağ geçidi bu hesabı kullanabilir", "The gateway can use this account")
-    : t("Ağ geçidi bu hesabı kullanamaz: giriş yok", "The gateway cannot use this account: no sign-in");
-  const result = (tone: AccountHealth["tone"], words: Words): AccountHealth => ({
+    ? t("accountHealth.theGatewayCanUseThisAccount")
+    : t("accountHealth.theGatewayCannotUseThisAccount");
+  const result = (tone: AccountHealth["tone"], id: MessageId): AccountHealth => ({
     tone,
-    label: t(...words),
-    short: t(...shortOf(words)),
+    label: t(id),
+    short: t(SHORT[id] ?? id),
     detail,
   });
-  if (context.waiting) return result("warn", APPROVE);
-  if (!signedIn) return result("off", ["Giriş yok", "Not signed in"]);
+  if (context.waiting) return result("warn", "connectionPanels.approveInTheBrowser");
+  if (!signedIn) return result("off", "poolCard.notSignedIn");
   const now = context.now ?? Date.now();
   const cooldown = account.cooldownUntil ? Date.parse(account.cooldownUntil) : NaN;
   if (Number.isFinite(cooldown) && cooldown > now)
-    return result("warn", ["Bekleme süresinde", "Cooling down"]);
+    return result("warn", "accountHealth.coolingDown");
   if (usage && usage.issue !== "unsupported" && (usage.stale || usage.status === "error"))
-    return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
-  const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
-  if (spent) return { ...result("warn", spent), limit: true };
-  return result("ok", ["Hazır", "Ready"]);
+    return result("warn", "accountRow.usageDataIsOutOfDate");
+  const spent = modelLimitWords(modelLimitFull(usage, now), now, context.language, t, context.zone);
+  if (spent) return { tone: "warn", label: spent, short: spent, detail, limit: true };
+  return result("ok", "common.ready");
 }
 
 /**
@@ -230,64 +212,35 @@ export function accountHealth(
   const renewal = renewalIssue(usage);
   const running = context.active && context.desktopRunning;
 
-  const app: Words = !account.desktop
-    ? ["Yok", "None"]
+  const app: MessageId = !account.desktop
+    ? "accountHealth.none"
     : running
-      ? ["Çalışıyor", "Running"]
-      : ["Kayıtlı", "Saved"];
-  const signIn = SIGN_IN_WORDS[state];
-  const detail = t(
-    `Claude uygulaması girişi: ${app[0]} · Limit okuma girişi: ${signIn[0]}`,
-    `Claude app sign-in: ${app[1]} · Usage sign-in: ${signIn[1]}`,
-  );
+      ? "accountHealth.running"
+      : "body.saved";
+  const detail = t("accountHealth.claudeAppSignInUsageSign", { app: t(app), signIn: t(SIGN_IN_WORDS[state]) });
   const result = (
     tone: AccountHealth["tone"],
-    words: Words,
+    id: MessageId,
     fix?: AccountFix,
-  ): AccountHealth => ({ tone, label: t(...words), short: t(...shortOf(words)), detail, fix });
+  ): AccountHealth => ({ tone, label: t(id), short: t(SHORT[id] ?? id), detail, fix });
 
-  if (context.waiting) return result("warn", APPROVE);
+  if (context.waiting) return result("warn", "connectionPanels.approveInTheBrowser");
   // Without a saved Claude app sign-in the row action is "save", never "reconnect".
-  if (!account.desktop)
-    return result(
-      "off",
-      ["Claude uygulaması girişi yok", "No Claude app sign-in"],
-      "desktop-link",
-    );
-  if (state === "needed")
-    return result(
-      "crit",
-      ["Limit okuma girişi gerekli", "Usage sign-in needed"],
-      "cli",
-    );
+  if (!account.desktop) return result("off", "accountRow.noClaudeAppSignIn", "desktop-link");
+  if (state === "needed") return result("crit", "accountHealth.usageSignInNeeded", "cli");
   // A plain refresh cannot clear these: the renewal has to be allowed to prompt.
-  if (renewal === "keychain-locked")
-    return result(
-      "warn",
-      keychainNeeded(context.platform),
-      "renew",
-    );
-  if (renewal === "renewal-required")
-    return result(
-      "warn",
-      ["Bağlantı yenilenmeli", "Connection needs renewing"],
-      "renew",
-    );
-  if (state === "none")
-    return result(
-      "warn",
-      ["Limit okuma girişi yok", "No usage sign-in"],
-      "cli",
-    );
+  if (renewal === "keychain-locked") return result("warn", keychainNeeded(context.platform), "renew");
+  if (renewal === "renewal-required") return result("warn", "accountHealth.connectionNeedsRenewing", "renew");
+  if (state === "none") return result("warn", "accountHealth.noUsageSignIn", "cli");
   // A failed or old read is not "Ready": the limits shown are not current (a transient error
   // keeps the previous limits, marked stale). The Overview names it the same way.
   if (usage && (usage.stale || usage.status === "error"))
-    return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
+    return result("warn", "accountRow.usageDataIsOutOfDate");
   // Never read (idle, or the first read still loading): neither "Ready" nor "out of date".
-  if (!usage?.checkedAt) return result("off", NO_USAGE_DATA);
+  if (!usage?.checkedAt) return result("off", "accountHealth.noUsageDataYet");
   // Fable's week spent is not "Ready": the account answers other models only, so the status says so.
   const now = context.now ?? Date.now();
-  const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
-  if (spent) return { ...result("warn", spent), limit: true };
-  return result("ok", running ? ["Çalışıyor", "Running"] : ["Hazır", "Ready"]);
+  const spent = modelLimitWords(modelLimitFull(usage, now), now, context.language, t, context.zone);
+  if (spent) return { tone: "warn", label: spent, short: spent, detail, limit: true };
+  return result("ok", running ? "accountHealth.running" : "common.ready");
 }

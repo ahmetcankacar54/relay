@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { errorAfterRefresh, shouldPoll } from "../src/data/relay-action";
-import { languageFromStorage } from "../src/data/language";
+import { prefFromStorage } from "../src/data/language";
 
 test("the never-sent tray switch request is gone end to end", () => {
   // The menu bar switches through its own confirmation (traySwitch in main); nothing queues a
@@ -35,10 +35,11 @@ test("a window skips its poll while hidden only when it opts out", () => {
 });
 
 test("a language change in another Relay window is picked up", () => {
-  assert.equal(languageFromStorage({ key: "relay-language", newValue: "en" }), "en");
-  assert.equal(languageFromStorage({ key: "relay-language", newValue: "tr" }), "tr");
-  assert.equal(languageFromStorage({ key: "relay-language", newValue: null }), "tr");
-  assert.equal(languageFromStorage({ key: "other", newValue: "en" }), undefined);
+  assert.equal(prefFromStorage({ key: "relay-language", newValue: "en" }), "en");
+  assert.equal(prefFromStorage({ key: "relay-language", newValue: "de" }), "de");
+  assert.equal(prefFromStorage({ key: "relay-language", newValue: "system" }), "system");
+  assert.equal(prefFromStorage({ key: "relay-language", newValue: null }), undefined);
+  assert.equal(prefFromStorage({ key: "other", newValue: "en" }), undefined);
 });
 
 test("both windows refresh when main broadcasts relay:changed", () => {
