@@ -30,7 +30,10 @@ export interface SimAccount {
   blocked?: boolean;
   /** When a `blocked` account is back (its week resets); absent means out all day. */
   blockedUntil?: number;
-  /** When its week ends: a week that ends sooner is used first, since what is left of it is lost. */
+  /**
+   * When its week ends: a week that ends sooner is used first, since what is
+   * left of it is lost. Absent counts as a whole week away, as in the gateway.
+   */
   weekEnds?: number;
 }
 export interface SimInput {
@@ -77,7 +80,7 @@ interface SimState {
   left: number;
   blocked: boolean;
   blockedUntil?: number;
-  weekEnds?: number;
+  weekEnds: number;
 }
 
 const minute = (time: number) => Math.round(time / MINUTE_MS) * MINUTE_MS;
@@ -89,6 +92,7 @@ const minute = (time: number) => Math.round(time / MINUTE_MS) * MINUTE_MS;
  * resets soonest (closed windows last), then larger capacity, then order.
  */
 export function simulateDay(input: SimInput): Forecast {
+  const unknownWeek = input.from + WEEK_MS;
   const states: SimState[] = input.accounts.map((a, order) => ({
     id: a.id,
     capacity: a.capacity,
@@ -100,20 +104,19 @@ export function simulateDay(input: SimInput): Forecast {
     left: a.remaining,
     blocked: !!a.blocked,
     blockedUntil: a.blockedUntil,
-    weekEnds: a.weekEnds,
+    // An unknown week counts as a whole week away, so weeks always compare.
+    weekEnds: a.weekEnds ?? unknownWeek,
   }));
   let earliestWeek = Infinity;
   for (const s of states)
-    if (s.weekEnds !== undefined && s.weekEnds < earliestWeek)
-      earliestWeek = s.weekEnds;
+    if (s.weekEnds < earliestWeek) earliestWeek = s.weekEnds;
   const full = (s: SimState) => 100 * s.capacity;
   const advance = (time: number) => {
     for (const s of states) {
       if (s.blocked && s.blockedUntil !== undefined && time >= s.blockedUntil)
         s.blocked = false;
       // A week that ended starts again: what it has left is no longer at risk.
-      while (s.weekEnds !== undefined && s.weekEnds <= time)
-        s.weekEnds += WEEK_MS;
+      while (s.weekEnds <= time) s.weekEnds += WEEK_MS;
       for (;;) {
         if (
           s.reset === undefined &&
@@ -139,12 +142,9 @@ export function simulateDay(input: SimInput): Forecast {
       }
     }
   };
-  // Weeks count only when both are known. Two closed windows give
-  // Infinity − Infinity = NaN, which falls through.
+  // Two closed windows give Infinity − Infinity = NaN, which falls through.
   const precedes = (a: SimState, b: SimState) =>
-    ((a.weekEnds !== undefined && b.weekEnds !== undefined
-      ? weekBand(a.weekEnds, earliestWeek) - weekBand(b.weekEnds, earliestWeek)
-      : 0) ||
+    (weekBand(a.weekEnds, earliestWeek) - weekBand(b.weekEnds, earliestWeek) ||
       (a.reset ?? Infinity) - (b.reset ?? Infinity) ||
       b.capacity - a.capacity ||
       a.order - b.order) < 0;
@@ -393,11 +393,13 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
       forecast: evenScored.forecast,
       evenForecast: evenScored.forecast,
     };
+  // Phase 0 is the work start itself: a window opened then costs no warm-up,
+  // so no candidate warms up five hours early for nothing.
   const fine = Array.from(
     { length: CANDIDATES },
-    (_, k) => start - WINDOW_MS + k * GRID_MS,
+    (_, k) => start - WINDOW_MS + (k + 1) * GRID_MS,
   );
-  const coarse = fine.filter((_, k) => k % 2 === 0);
+  const coarse = fine.filter((_, k) => k % 2 === 1);
   const fixed = input.accounts.map((a, i) => a.manual ?? input.even[i]);
   let best = evenScored;
   /** The best by the search's order: where the last descent starts. */

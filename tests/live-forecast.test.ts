@@ -125,17 +125,31 @@ test("live usage goes on from now with the active account; stale accounts follow
     to: at("18:00"),
   });
   assert.equal(medium.unmet, 0);
-  // At 120 Pro units/h max's 100 units last until 10:50. Pro's planned window
-  // (06:30–11:30) resets before vertex's (12:00), so pro goes next with a full
-  // quota: 80 units until 11:30, then a fresh window until 12:20.
+  // Stale data is replaced by the plan's chain: pro's planned window
+  // (06:30–11:30) with a full quota, and no known week.
+  const setup = liveSetup({ ...input, context: context(presetTempo("heavy")) })!;
+  assert.deepEqual(
+    setup.accounts.find((a) => a.id === "pro"),
+    {
+      id: "pro",
+      capacity: 1,
+      keepAlive: true,
+      remaining: 100,
+      firstReset: at("11:30"),
+    },
+  );
+  // An unknown week counts as a whole week away (as in the gateway), so pro
+  // comes after vertex, whose week ends in three days. At 120 Pro units/h
+  // max's 100 units last until 10:50; vertex serves until its 12:00 reset
+  // and on a fresh window until 13:40; max is fresh again since 11:15.
   const heavy = liveForecast({
     ...input,
     context: context(presetTempo("heavy")),
   })!;
   assert.deepEqual(lane(heavy), [
     "max 10:00-10:50",
-    "pro 10:50-12:20",
-    "max 12:20-18:00",
+    "vertex 10:50-13:40",
+    "max 13:40-18:00",
   ]);
   assert.equal(heavy.switches, 2);
   assert.equal(heavy.unmet, 0);
@@ -143,14 +157,15 @@ test("live usage goes on from now with the active account; stale accounts follow
 
 test("an active account outside the plan, or none, starts with the soonest reset", () => {
   const now = at("10:00");
-  // Pro has no usage at all: its planned window resets at 11:30.
+  // Pro has no usage at all: its week is unknown and counts as a whole week
+  // away, after max's and vertex's (three days); of those vertex resets first.
   const usage = {
     max: fresh("max", now, 80, "13:00"),
     vertex: fresh("vertex", now, 0, "12:00"),
   };
   const input = { plan, settings: settings(), context: context(), usage, now };
   const outside = liveForecast({ ...input, activeId: "not-planned" })!;
-  assert.deepEqual(lane(outside), ["pro 10:00-13:30", "vertex 13:30-18:00"]);
+  assert.deepEqual(lane(outside), ["vertex 10:00-16:00", "max 16:00-18:00"]);
   assert.deepEqual(liveForecast(input), outside);
   assert.equal(
     liveForecast({ ...input, activeId: "max" })!.segments[0].accountId,
@@ -387,8 +402,8 @@ test("a schedule restarts an open window later and starts a closed one at its ti
     liveForecast({ ...input, usage: open }),
   );
 
-  // The plan's window chain (pro's planned window resets at 13:45) is held
-  // the same way for an account with stale usage.
+  // The plan's window chain (pro's planned window opens with work at 09:00
+  // and resets at 14:00) is held the same way for an account with stale usage.
   assert.deepEqual(
     liveSetup({
       ...input,
@@ -400,7 +415,7 @@ test("a schedule restarts an open window later and starts a closed one at its ti
       capacity: 1,
       keepAlive: true,
       remaining: 100,
-      firstReset: at("13:45"),
+      firstReset: at("14:00"),
       restartAt: at("14:45"),
     },
   );
@@ -517,9 +532,10 @@ const read = (now: number, resets: Record<string, number> = {}) =>
 test("live times within a tick of the plan's own windows count as planned", () => {
   const context = quadContext(100);
   const four = dayPlan(WEDNESDAY, quad, context);
+  // p4's window opens with work at 09:00: no warm-up five hours early.
   assert.deepEqual(
     four.accounts.map((a) => clockOf.format(a.activeFrom)),
-    ["04:00", "05:00", "06:00", "07:00"],
+    ["05:00", "06:00", "07:00", "09:00"],
   );
   const live = (now: number, resets: Record<string, number> = {}) => ({
     plan: four,
@@ -529,31 +545,31 @@ test("live times within a tick of the plan's own windows count as planned", () =
     now,
   });
   const second = 1000;
-  // The keeper's tick at 04:00:05 has not started p1 yet: it warms at 04:00.
+  // The keeper's tick at 05:00:05 has not started p1 yet: it warms at 05:00.
   assert.equal(
-    liveSetup(live(at("04:00") + 5 * second))!.accounts[0].warmUp,
-    at("04:00"),
+    liveSetup(live(at("05:00") + 5 * second))!.accounts[0].warmUp,
+    at("05:00"),
   );
-  // Started at 04:00:05, p1 resets at 09:00:05: its planned 09:00. p2 has
-  // been due since 05:00.
-  const tick = live(at("05:00") + 30 * second, {
-    p1: at("09:00") + 5 * second,
+  // Started at 05:00:05, p1 resets at 10:00:05: its planned 10:00. p2 has
+  // been due since 06:00.
+  const tick = live(at("06:00") + 30 * second, {
+    p1: at("10:00") + 5 * second,
   });
-  assert.equal(liveSetup(tick)!.accounts[0].firstReset, at("09:00"));
-  assert.equal(liveSetup(tick)!.accounts[1].warmUp, at("05:00"));
+  assert.equal(liveSetup(tick)!.accounts[0].firstReset, at("10:00"));
+  assert.equal(liveSetup(tick)!.accounts[1].warmUp, at("06:00"));
   assert.deepEqual(liveForecast(tick), four.forecast);
   // Three minutes off is not a tick: p2 warms now, p1 keeps its reset.
-  const late = liveSetup(live(at("05:03"), { p1: at("09:03") }))!;
-  assert.equal(late.accounts[0].firstReset, at("09:03"));
-  assert.equal(late.accounts[1].warmUp, at("05:03"));
+  const late = liveSetup(live(at("06:03"), { p1: at("10:03") }))!;
+  assert.equal(late.accounts[0].firstReset, at("10:03"));
+  assert.equal(late.accounts[1].warmUp, at("06:03"));
   // Asked for the times exactly as read, none counts as planned.
   const exact = liveSetup({ ...tick, exact: true })!;
-  assert.equal(exact.accounts[0].firstReset, at("09:00") + 5 * second);
-  assert.equal(exact.accounts[1].warmUp, at("05:00") + 30 * second);
+  assert.equal(exact.accounts[0].firstReset, at("10:00") + 5 * second);
+  assert.equal(exact.accounts[1].warmUp, at("06:00") + 30 * second);
   assert.equal(
-    liveSetup({ ...live(at("04:00") + 5 * second), exact: true })!.accounts[0]
+    liveSetup({ ...live(at("05:00") + 5 * second), exact: true })!.accounts[0]
       .warmUp,
-    at("04:00") + 5 * second,
+    at("05:00") + 5 * second,
   );
 });
 

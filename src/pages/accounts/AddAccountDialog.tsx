@@ -407,15 +407,17 @@ export function AddAccountSteps({
     if (connected) setStep((s) => (s === 2 ? 3 : s));
   }, [connected]);
 
-  // The usage sign-in starts on its own, once per profile. A call the action lock refused, or
-  // one that failed, leaves it unstarted, so the next render tries again.
+  // The usage sign-in starts on its own, once per profile. Only a call the action lock refused
+  // (another action was running) is tried again, on the render after that action ends; a failed
+  // one shows its error and stays tried, so the button starts it again.
   const startedFor = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (step !== 2 || !account || connected || flow || cliBlocked(cli)) return;
     if (startedFor.current === account.id) return;
     const id = account.id;
-    void relay.startCli(account).then((started) => {
-      if (started) startedFor.current = id;
+    startedFor.current = id;
+    void relay.startCli(account).then((outcome) => {
+      if (outcome === "refused" && startedFor.current === id) startedFor.current = undefined;
     });
   }, [step, account, connected, flow, cli, relay]);
 

@@ -243,6 +243,7 @@ import {
 } from "../shared/tray";
 import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
+import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
 
 let window: BrowserWindow | null = null;
 /**
@@ -743,8 +744,8 @@ function startTokenScan() {
 }
 const keeperAbort = new AbortController();
 let quitting = false;
-/** The system is shutting down or restarting: quitting is not vetoed then. */
-let systemShutdown = false;
+/** When the system said it is shutting down or restarting: quitting is not vetoed shortly after. */
+let systemShutdownAt: number | undefined;
 /** The error log is started over once it passes this size. */
 const MAIN_ERROR_LOG_BYTES = 1024 * 1024;
 /**
@@ -853,7 +854,7 @@ else {
       watchRegistry();
       // A shutdown or restart quits Relay without asking: a veto there would stall the system.
       powerMonitor.on("shutdown", () => {
-        systemShutdown = true;
+        systemShutdownAt = Date.now();
       });
       nativeTheme.themeSource = themeSource(service.store.state.settings);
       const vaultDir = path.join(app.getPath("userData"), "desktop-vault");
@@ -2730,10 +2731,32 @@ function createWindow(hash?: string) {
   applyAppMenu();
   loadPage(window, "index.html", hash);
   const own = window;
-  // A crashed or killed page loads again; a page that stays hung is ended, and then loads again.
+  // A crashed or killed page loads again after a growing delay, a few times a minute at most; a
+  // page that stays hung is ended, and then loads again.
+  let pageReloadsAt: number[] = [];
+  let pageReload: ReturnType<typeof setTimeout> | undefined;
   own.webContents.on("render-process-gone", (_event, details) => {
-    if (details.reason !== "clean-exit" && !own.isDestroyed()) own.webContents.reload();
+    if (own.isDestroyed()) return;
+    const next = pageCrashAction(details.reason, pageReloadsAt, Date.now());
+    if (next.action === "ignore") return;
+    clearTimeout(pageReload);
+    if (next.action === "give-up") {
+      recordMainError(
+        "render-process-gone",
+        `${details.reason} (exit code ${details.exitCode}); the window is no longer reloaded`,
+      );
+      dialog.showErrorBox(
+        say("electronMain.relayWindowStopped"),
+        say("electronMain.relayWindowKeptStopping"),
+      );
+      return;
+    }
+    pageReloadsAt = next.reloadsAt;
+    pageReload = setTimeout(() => {
+      if (!own.isDestroyed()) own.webContents.reload();
+    }, next.delayMs);
   });
+  own.on("closed", () => clearTimeout(pageReload));
   let hung: ReturnType<typeof setTimeout> | undefined;
   own.on("unresponsive", () => {
     clearTimeout(hung);
@@ -3728,7 +3751,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   if (!service) return;
   // The system is going down: nothing may hold it up; running work ends with Relay.
-  if (systemShutdown) {
+  if (systemShuttingDown(systemShutdownAt, Date.now())) {
     quitting = true;
     return;
   }

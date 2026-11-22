@@ -110,6 +110,11 @@ struct Snapshot: Decodable {
       let parts: [Double]
       var id: String { date }
     }
+    /** A label and its figure, set side by side; without a figure the label reads alone. */
+    struct Row: Decodable {
+      let label: String
+      let figure: String?
+    }
     struct Texts: Decodable {
       let title: String
       let cost: String
@@ -118,6 +123,13 @@ struct Snapshot: Decodable {
       let busiest: String
       let hits: String
       let activeWeek: String
+      /** Missing from a snapshot written before Relay sent label and figure apart. */
+      let pairs: [Row]?
+
+      /** The rows to list: the pairs, or for an older snapshot its whole lines. */
+      var rows: [Row] {
+        pairs ?? [average, busiest, hits].filter { !$0.isEmpty }.map { Row(label: $0, figure: nil) }
+      }
     }
     let days: [Day]
     let cost: Double
@@ -1456,25 +1468,11 @@ struct WeekContent: View {
     }
   }
 
-  /**
-   * "En yoğun Sal · $142,10" as "En yoğun" and "Sal · $142,10" on either side, like the design's
-   * pairs; a line whose figure does not end it ("$58.90 a day") reads as one, the figure bold.
-   */
-  @ViewBuilder private func pair(_ line: String) -> some View {
-    if let end = line.range(of: #"(\S+ · )?[≈$€£]?\d[\d.,]*[×%]?$"#, options: .regularExpression),
-      end.lowerBound > line.startIndex
-    {
-      Pair(
-        label: String(line[..<end.lowerBound]).trimmingCharacters(in: .whitespaces),
-        value: String(line[end]))
-    } else if let figure = line.range(of: #"[≈$€£]\d[\d.,]*"#, options: .regularExpression) {
-      (Text(line[..<figure.lowerBound]).foregroundStyle(look.secondary)
-        + Text(line[figure]).fontWeight(.medium).foregroundStyle(look.primary)
-        + Text(line[figure.upperBound...]).foregroundStyle(look.secondary))
-        .font(.system(size: 11)).monospacedDigit().lineLimit(1)
-        .frame(maxWidth: .infinity, alignment: .leading)
+  @ViewBuilder private func row(_ row: Snapshot.Week.Row) -> some View {
+    if let figure = row.figure, !figure.isEmpty {
+      Pair(label: row.label, value: figure)
     } else {
-      Text(line).font(.system(size: 11)).foregroundStyle(look.secondary).lineLimit(1)
+      Text(row.label).font(.system(size: 11)).foregroundStyle(look.secondary).lineLimit(1)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
   }
@@ -1507,9 +1505,7 @@ struct WeekContent: View {
         }
         Spacer(minLength: 4)
         VStack(spacing: 2) {
-          pair(week.text.average)
-          if !week.text.busiest.isEmpty { pair(week.text.busiest) }
-          if !week.text.hits.isEmpty { pair(week.text.hits) }
+          ForEach(Array(week.text.rows.enumerated()), id: \.offset) { _, line in row(line) }
         }
         .minimumScaleFactor(0.8)
       }

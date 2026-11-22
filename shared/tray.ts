@@ -6,7 +6,7 @@ import type {
   WindowAttempt,
 } from "./types";
 import { desktopCliMismatch } from "./account-state";
-import { formatPercent, formatUsed, percentUsed, usedWord } from "./percent";
+import { formatPercent, percentUsed } from "./percent";
 import { freshUsage, lastKnownUsage, windowHolds } from "./usage";
 import { activeReading, HUNGRY_PERCENT, mascotRest } from "./mascot";
 import { clockLocative } from "./tr-dative";
@@ -117,9 +117,13 @@ export function trayUsageLabel(
   };
   const five = figure(usage!.fiveHour);
   const week = figure(usage!.sevenDay);
-  // One word at the end covers both figures; with nothing to describe it is left out.
-  const word = five === "?" && week === "?" ? "" : ` ${usedWord(language)}`;
-  return `${t(LABELS.fiveHour)} ${five} · ${t(LABELS.week)} ${week}${word}${fresh ? "" : ` · ${t(LABELS.outdated)}`}`;
+  const labels = { fiveLabel: t(LABELS.fiveHour), weekLabel: t(LABELS.week) };
+  // One word covers both figures; with nothing to describe it is left out.
+  const line =
+    five === "?" && week === "?"
+      ? `${labels.fiveLabel} ? · ${labels.weekLabel} ?`
+      : t("tray.usageLine", { ...labels, five, week });
+  return `${line}${fresh ? "" : ` · ${t(LABELS.outdated)}`}`;
 }
 
 function blockedLabel(snapshot: TraySnapshot, language: Locale) {
@@ -454,7 +458,8 @@ export function trayTooltip(
     const mark = reading.stale ? LAST_KNOWN_MARK : "";
     const window = heldWindow(reading, "fiveHour", now);
     const used = window?.usedPercent;
-    if (used !== undefined) parts.push(mark + formatUsed(used, language));
+    if (used !== undefined)
+      parts.push(t("tray.fiveHourUsed", { percent: mark + formatPercent(percentUsed(used), language) }));
     const clock =
       percentUsed(used) === 100
         ? trayResetClock(window?.resetsAt, now, language, snapshot.timeZone)
@@ -470,7 +475,12 @@ export function trayTooltip(
       );
     const week = heldWindow(reading, "sevenDay", now);
     if (week && items.includes("week"))
-      parts.push(`${t(LABELS.week)} ${mark}${formatUsed(week.usedPercent, language)}`);
+      parts.push(
+        t("tray.weekUsed", {
+          weekLabel: t(LABELS.week),
+          percent: mark + formatPercent(percentUsed(week.usedPercent), language),
+        }),
+      );
     if (reading.stale)
       parts.push(t("tray.usageDataIsOutOfDateRead", { ago: readAgo(reading.usage.checkedAt!, now, language) }));
   } else if (rest === "unknown") parts.push(t(LABELS.outdated));

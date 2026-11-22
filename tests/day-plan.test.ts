@@ -440,11 +440,12 @@ test("the default tempo plans a lone Pro and two Pro accounts at fixed times", (
     context(),
   );
   // 450 Pro units of demand, 100 per window: no gap with two switches. Of
-  // those plans, 04:00 and 06:00 put the resets furthest apart (09:00/14:00
-  // and 11:00/16:00: two and three hours).
+  // those plans, 06:00 and 09:00 put the resets furthest apart (11:00/16:00
+  // and 14:00: two and three hours); the 09:00 window opens with the work,
+  // so nothing warms up five hours early.
   assert.deepEqual(clocks(two.accounts.map((a) => a.firstStart)), [
-    "04:00",
     "06:00",
+    "09:00",
   ]);
   assert.equal(two.forecast?.unmet, 0);
   assert.equal(two.forecast?.switches, 2);

@@ -462,7 +462,8 @@ export function PlanSettings({
   now?: number;
 }) {
   const mac = macWording(platform);
-  // The keeper's routine runner refuses Windows: there is nothing to switch on.
+  // The keeper's routine runner refuses Windows: there is nothing to switch
+  // on, but a switch left on (from settings made elsewhere) can be turned off.
   const unsupported = platform === "win32";
   const { included, plannedToday, nextStart, tempo, choice, rate, weekend } = model;
   const summary = unsupported
@@ -486,7 +487,7 @@ export function PlanSettings({
         <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-3 py-2.5">
           <Switch
             checked={settings.autoStart}
-            disabled={disabled || unsupported}
+            disabled={disabled || (unsupported && !settings.autoStart)}
             aria-label={t("planningPanel.keepLimitPeriodsRunningDuringWork")}
             onCheckedChange={(autoStart) => update({ autoStart })}
           />

@@ -9,7 +9,7 @@ import { useI18n, type T } from "@/data/i18n";
 import { agoLabel, gatewayUrl, maskKey } from "@/lib/proxy-ui";
 import type { ProxyAccountStatus, ProxyStatus } from "../../../shared/types";
 import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
-import { CopyChip } from "../Proxy";
+import { CopyChip } from "./CopyChip";
 import type { Copy } from "./hooks";
 import { CLIENT_NAMES } from "./shared";
 

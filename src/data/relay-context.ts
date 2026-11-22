@@ -15,6 +15,7 @@ import type {
   Snapshot,
 } from "../../shared/types";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
+import type { ActionOutcome } from "./relay-action";
 
 export interface Relay {
   api: RelayAPI;
@@ -53,8 +54,8 @@ export interface Relay {
   setSetupId(id: string | undefined): void;
   flow?: AuthFlow;
   flowAccount?: Account;
-  /** The usage sign-in through `action`: true once it started. */
-  startCli(account: Account): Promise<boolean>;
+  /** The usage sign-in through `action`: whether it ran, the lock refused it, or it failed. */
+  startCli(account: Account): Promise<ActionOutcome>;
   dismissFlow(): void;
   submitCode(code: string): void;
   historyRevision: number;

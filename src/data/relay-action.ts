@@ -36,6 +36,70 @@ export function relayAction(
 }
 
 /**
+ * How a call through `relayAction` went: it ran, the lock refused it while another action ran
+ * (nothing ran), or it failed (its error is shown).
+ */
+export type ActionOutcome = "ran" | "refused" | "failed";
+
+/**
+ * `action` with its outcome told apart, for a caller that tries again: only a refused call may be
+ * tried again; a failed one was tried and its error shown.
+ */
+export function attemptAction(
+  action: (key: string, fn: () => Promise<unknown>) => Promise<boolean>,
+) {
+  return async (key: string, fn: () => Promise<unknown>): Promise<ActionOutcome> => {
+    let started = false;
+    const done = await action(key, () => {
+      started = true;
+      return fn();
+    });
+    return done ? "ran" : started ? "failed" : "refused";
+  };
+}
+
+/**
+ * One read at a time; calls while one runs share exactly one follow-up, since a change seen
+ * meanwhile may be newer than what the running read sees. A read applies its result only when
+ * nothing made it stale: no local change bumped `epoch` since it started, and no follow-up is
+ * queued (an action's change after it started; the follow-up applies the newer state).
+ */
+export function serialRead<T>(
+  epoch: { current: number },
+  read: () => Promise<T>,
+  apply: (value: T) => void,
+): () => Promise<T> {
+  let inFlight: Promise<T> | undefined;
+  let followUp: Promise<T> | undefined;
+  const run = () => {
+    const started = epoch.current;
+    const request = read().then((value) => {
+      if (started === epoch.current && !followUp) apply(value);
+      return value;
+    });
+    inFlight = request;
+    const settle = () => {
+      if (inFlight === request) inFlight = undefined;
+    };
+    request.then(settle, settle);
+    return request;
+  };
+  return () => {
+    if (followUp) return followUp;
+    const running = inFlight;
+    if (!running) return run();
+    const next = running
+      .catch(() => undefined)
+      .then(() => {
+        followUp = undefined;
+        return run();
+      });
+    followUp = next;
+    return next;
+  };
+}
+
+/**
  * Runs a call that changes no Relay state (opening a page or a link, quitting) outside the
  * action lock, so a running action never swallows it: no busy key, no refresh. A failure is
  * shown like an action's.

@@ -380,10 +380,10 @@ test("inside yesterday's overnight interval a deferral moves yesterday's chain, 
   const schedule = { b: at("2026-10-14", "03:30") };
   const view = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a", adaptation: { factor: 1, schedule } });
   const unadapted = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a" });
-  // Yesterday's 21:45 window is closed by 02:00; b starts again at 03:30,
-  // and tonight's warm-up stays as planned.
-  assert.deepEqual(windowsOf(unadapted, "b"), ["21:45–02:45", "02:45–07:45", "21:45–02:45"]);
-  assert.deepEqual(windowsOf(view, "b"), ["21:45–02:00", "03:30–08:30", "21:45–02:45"]);
+  // Yesterday's window, opened with work at 22:00, is closed by 02:00; b
+  // starts again at 03:30, and tonight's start stays as planned.
+  assert.deepEqual(windowsOf(unadapted, "b"), ["22:00–03:00", "03:00–08:00", "22:00–03:00"]);
+  assert.deepEqual(windowsOf(view, "b"), ["22:00–02:00", "03:30–08:30", "22:00–03:00"]);
   assert.deepEqual(windowsOf(view, "a"), windowsOf(unadapted, "a"));
   // The live part is yesterday's plan forecast with the adopted start.
   const context = planContext(accounts, tempo);

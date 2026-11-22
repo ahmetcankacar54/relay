@@ -134,6 +134,10 @@ test("the percent prefix says what is used, rounded down, and needs an active ac
     rounded.text[1],
     "Kişisel · Max 42% used · Off. When the limit is reached, you switch accounts yourself.",
   );
+  // Other languages place the word where their grammar puts it.
+  const usage42 = input({ usage: { [a.id]: usage(a.id, 42.6, { sevenDay: undefined }) } });
+  assert.equal(statusIn(usage42, "pl").prefix, "Kişisel · Max: wykorzystano 42% · ");
+  assert.equal(statusIn(usage42, "zh-Hans").prefix, "Kişisel · Max 已用 42% · ");
   const noUsage = automationStatus(input({ usage: {} }));
   assert.equal(
     noUsage.text[0],

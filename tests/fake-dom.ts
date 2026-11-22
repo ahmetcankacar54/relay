@@ -45,6 +45,8 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     addEventListener: documentEvents.addEventListener,
     removeEventListener: documentEvents.removeEventListener,
     dispatchEvent: documentEvents.dispatchEvent,
+    // React checks `oninput` when it loads to choose native `input` events for a field's onChange.
+    oninput: null,
   };
 
   class FakeElement {

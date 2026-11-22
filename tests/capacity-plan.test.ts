@@ -572,18 +572,29 @@ test("when every start is manual the even spread is returned as is", () => {
   assert.deepEqual(plan.forecast, plan.evenForecast);
 });
 
-test("without demand the resets spread widest: the even spread", () => {
-  const plan = optimizeStarts({
-    interval: { start: S, end: E },
-    accounts,
-    rate: () => 0,
-    even,
-  });
-  // Every plan ties on unmet demand and switches; no 15-minute combination
-  // spreads three resets as wide as the even 100 minutes apart.
-  assert.deepEqual(plan.starts.map(hhmm), ["04:50", "06:30", "08:10"]);
-  assert.equal(plan.forecast.switches, 0);
-  assert.equal(plan.forecast.unmet, 0);
+test("without demand the resets spread widest and nothing warms up earlier than that needs", () => {
+  const plan = (count: number) =>
+    optimizeStarts({
+      interval: { start: S, end: E },
+      accounts: accounts.slice(0, count),
+      rate: () => 0,
+      even: evenFor(count),
+    });
+  // Every plan ties on unmet demand and switches. A lone account has the
+  // whole cycle: it opens at the work start, with no warm-up at all.
+  assert.deepEqual(plan(1).starts.map(hhmm), ["09:00"]);
+  // Two resets 2½ hours apart: one opens at the work start, the other warms
+  // up only as early as the spread needs (not a whole window early).
+  assert.deepEqual(plan(2).starts.map(hhmm).sort(), ["06:30", "09:00"]);
+  // No 15-minute combination spreads three resets as wide as the even 100
+  // minutes apart.
+  const three = plan(3);
+  assert.deepEqual(three.starts.map(hhmm), ["04:50", "06:30", "08:10"]);
+  assert.equal(three.forecast.switches, 0);
+  assert.equal(three.forecast.unmet, 0);
+  for (const count of [1, 2, 3])
+    for (const start of plan(count).starts)
+      assert.ok(start > S - WINDOW_MS && start <= S, hhmm(start));
 });
 
 test("the result is never worse than the even spread on random days", () => {
@@ -956,4 +967,29 @@ test("the account whose week ends first takes over, before a sooner 5-hour reset
     sim(list(5 * 24 * H - 2 * H), flat(10)).segments[0].accountId,
     "soon-reset",
   );
+});
+
+test("the next account does not depend on the order of the list", () => {
+  const accounts: SimAccount[] = [
+    { id: "A", weekEnds: S + 24 * H, firstReset: S + 4 * H },
+    { id: "B", firstReset: S + 2 * H },
+    { id: "C", weekEnds: S + 6 * 24 * H, firstReset: S + H },
+  ].map((a) => ({ ...a, capacity: 1, keepAlive: true, remaining: 100 }));
+  const orders = [
+    [0, 1, 2],
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+  ];
+  // An unknown week counts as a whole week away: A's week ends first, then
+  // C's, then B's, whatever the order.
+  for (const order of orders) {
+    const forecast = sim(
+      order.map((i) => accounts[i]),
+      flat(10),
+    );
+    assert.equal(forecast.segments[0].accountId, "A", `${order}`);
+  }
 });

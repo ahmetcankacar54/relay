@@ -6,8 +6,9 @@ import { IntlMessageFormat } from "intl-messageformat";
 import { CATALOGS } from "../shared/i18n/catalogs/all";
 import { en } from "../shared/i18n/catalogs/en";
 import { LOCALES, matchLocale, resolveLocale } from "../shared/i18n/locales";
+import { formatRich, registerCatalog } from "../shared/i18n/translate";
 
-type Element = { type: number; value?: string; options?: Record<string, { value: Element[] }> };
+type Element = { type: number; value?: string; options?: Record<string, { value: Element[] }>; children?: Element[] };
 /**
  * The argument names a message uses, plural and select branches included, and which of them only
  * choose a plural form (a count that never appears as `{n}` or `#`).
@@ -30,6 +31,21 @@ function argumentsOf(message: string, locale: string) {
   return { names, agreementOnly: new Set([...names].filter((n) => !shown.has(n))) };
 }
 const variants = (name: string) => [name, `${name}Dative`, `${name}Locative`];
+/** The `<tag>` names a rich message uses, branches and nested tags included, sorted. */
+function tagsOf(message: string, locale: string) {
+  const names = new Set<string>();
+  const walk = (elements: Element[]) => {
+    for (const element of elements) {
+      if (element.type === 8 && element.value) names.add(element.value);
+      walk(element.children ?? []);
+      for (const option of Object.values(element.options ?? {})) walk(option.value);
+    }
+  };
+  walk(new IntlMessageFormat(message, locale).getAst() as Element[]);
+  return [...names].sort();
+}
+/** English messages the renderer formats with `<tag>…</tag>` parts. */
+const RICH = (Object.keys(en) as (keyof typeof en)[]).filter((id) => /<(\w+)>[\s\S]*<\/\1>/.test(en[id]));
 
 for (const locale of LOCALES) {
   test(`${locale}: exactly the English ids and no empty message`, () => {
@@ -58,7 +74,34 @@ for (const locale of LOCALES) {
     }
     assert.deepEqual(problems, []);
   });
+
+  test(`${locale}: rich messages keep exactly the English tags`, () => {
+    const problems: string[] = [];
+    for (const id of RICH) {
+      const source = tagsOf(en[id], "en").join(" ");
+      let own: string;
+      try {
+        own = tagsOf(CATALOGS[locale][id], locale).join(" ");
+      } catch (error) {
+        problems.push(`${id} does not parse with tags: ${String(error)}`);
+        continue;
+      }
+      if (own !== source) problems.push(`${id} has tags [${own}] instead of [${source}]`);
+    }
+    assert.deepEqual(problems, []);
+  });
 }
+
+test("a rich message that fails in its language reads in English", () => {
+  const id = "antigravityAccount.quitsAndOpensOnName";
+  const values = { name: "Max", b: (parts: unknown[]) => `[${parts.join("")}]` };
+  try {
+    registerCatalog("de", { ...CATALOGS.de, [id]: "<x>{name}</x> beendet" });
+    assert.equal(formatRich("de", id, values).join(""), "Antigravity quits and opens on [Max]. Running work stops.");
+  } finally {
+    registerCatalog("de", CATALOGS.de);
+  }
+});
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 function sources(dir: string, out: string[] = []) {

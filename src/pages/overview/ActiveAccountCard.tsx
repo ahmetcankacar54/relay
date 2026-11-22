@@ -1,4 +1,5 @@
 import { Private } from "@/components/Private";
+import { ListSkeleton } from "@/components/ListCard";
 import { PlusIcon } from "@/components/icons";
 import { freshUsage } from "../../../shared/usage";
 import { formatUsed } from "@/lib/meter";
@@ -33,6 +34,13 @@ export function ActiveAccountCard({
   const prank = usePrank();
   const { t, language } = useI18n();
   const { active, desktop, desktopBusy } = relay;
+  // Until the first snapshot the card holds placeholders, not the onboarding for an empty app.
+  if (relay.data === undefined)
+    return (
+      <div data-slot="active-account-skeleton" className="overflow-hidden rounded-lg border bg-card">
+        <ListSkeleton rows={2} />
+      </div>
+    );
   if (!active) return <Onboarding go={go} />;
   const usage = relay.data?.usage[active.id];
   const running = !!desktop?.running;

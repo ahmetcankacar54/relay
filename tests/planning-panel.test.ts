@@ -174,13 +174,19 @@ test("without a work day ahead an automatic first start shows a dash, not a made
   assert.doesNotMatch(html, /value="09:00"/);
 });
 
-test("on Windows the keep-running switch is off and says why", () => {
-  const props = { ...panelProps({ accounts: [{ id: a.id }], autoStart: false }), platform: "win32" };
-  const html = sheet(props);
-  const toggle = html.match(/<button[^>]*aria-label="Çalışma saatlerinde limit dönemlerini açık tut"[^>]*>/)?.[0] ?? "";
-  assert.match(toggle, /role="switch"/);
-  assert.match(toggle, /disabled=""/);
-  assert.match(html, /Windows&#x27;ta kullanılamaz/);
+test("on Windows the keep-running switch cannot be turned on, says why, and can be turned off", () => {
+  const toggleOf = (html: string) =>
+    html.match(/<button[^>]*aria-label="Çalışma saatlerinde limit dönemlerini açık tut"[^>]*>/)?.[0] ?? "";
+  const off = sheet({ ...panelProps({ accounts: [{ id: a.id }], autoStart: false }), platform: "win32" });
+  assert.match(toggleOf(off), /role="switch"/);
+  assert.match(toggleOf(off), /aria-checked="false"/);
+  assert.match(toggleOf(off), /disabled=""/);
+  assert.match(off, /Windows&#x27;ta kullanılamaz/);
+  // Already on (settings from another machine): it stays usable so it can be switched off.
+  const on = sheet({ ...panelProps({ accounts: [{ id: a.id }], autoStart: true }), platform: "win32" });
+  assert.match(toggleOf(on), /aria-checked="true"/);
+  assert.doesNotMatch(toggleOf(on), /disabled=""/);
+  assert.match(on, /Windows&#x27;ta kullanılamaz/);
   assert.doesNotMatch(sheet(panelProps({ accounts: [{ id: a.id }] })), /Windows/);
 });
 

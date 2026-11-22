@@ -1,5 +1,5 @@
 import type { Account, AccountProvider, AccountUsage } from "../../../shared/types";
-import { limitColumns } from "../../../shared/quota-windows";
+import { limitColumns, usedAt } from "../../../shared/quota-windows";
 import { boardOrder } from "@/lib/limit-standing";
 import { accountProvider, groupName, providerShortLabel } from "./accountLabels";
 import type { T } from "../../../shared/i18n/translate";
@@ -71,7 +71,11 @@ function sortLeaf(
   }
   if (sort === "reset") return boardOrder(accounts, usage, now);
   if (sort === "usage") {
-    const used = (a: Account) => limitColumns(usage[a.id], now).five?.usedPercent ?? Infinity;
+    // As the row shows it: a window whose reset has passed is empty, whatever its last reading said.
+    const used = (a: Account) => {
+      const five = limitColumns(usage[a.id], now).five;
+      return five ? usedAt(five, now) : Infinity;
+    };
     return [...accounts].sort((a, b) => used(a) - used(b));
   }
   return accounts;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { relayAction, relayReport } from "../src/data/relay-action";
+import { attemptAction, relayAction, relayReport, serialRead } from "../src/data/relay-action";
 
 test("a second action while one runs is ignored and errors are shown", async () => {
   const lock = { current: false };
@@ -74,4 +74,49 @@ test("report runs while an action holds the lock and shows its failure", async (
   assert.equal(lock.current, true);
   release();
   assert.equal(await held, true);
+});
+
+test("attemptAction tells a refused call from a failed one", async () => {
+  const lock = { current: false };
+  const attempt = attemptAction(relayAction(lock, {
+    setBusy() {}, setError() {}, setNotice() {},
+    refresh: async () => {}, showError() {},
+  }));
+  assert.equal(await attempt("a", async () => {}), "ran");
+  assert.equal(await attempt("b", async () => { throw new Error("boom"); }), "failed");
+  lock.current = true;
+  let ran = false;
+  assert.equal(await attempt("c", async () => { ran = true; }), "refused");
+  assert.equal(ran, false);
+});
+
+test("a read that started before an action's change does not apply once the action queued a follow-up", async () => {
+  const epoch = { current: 0 };
+  const reads: ((value: string) => void)[] = [];
+  const applied: string[] = [];
+  const refresh = serialRead(epoch, () => new Promise<string>((r) => reads.push(r)), (v) => void applied.push(v));
+  // A poll reads the state from before the action's change ...
+  const poll = refresh();
+  // ... and the action's refresh after its change waits for it, as one follow-up.
+  const followUp = refresh();
+  assert.equal(refresh(), followUp);
+  assert.equal(reads.length, 1);
+  reads[0]("before");
+  assert.equal(await poll, "before");
+  await new Promise((r) => setImmediate(r));
+  assert.equal(reads.length, 2);
+  assert.deepEqual(applied, [], "the poll's stale state is never shown");
+  reads[1]("after");
+  assert.equal(await followUp, "after");
+  assert.deepEqual(applied, ["after"]);
+  // A lone read applies; one that started before a local change does not.
+  const lone = refresh();
+  reads[2]("again");
+  await lone;
+  assert.deepEqual(applied, ["after", "again"]);
+  const dropped = refresh();
+  epoch.current++;
+  reads[3]("old");
+  await dropped;
+  assert.deepEqual(applied, ["after", "again"]);
 });

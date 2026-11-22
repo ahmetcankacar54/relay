@@ -15,8 +15,9 @@ const root = createRoot(document.getElementById("root")!);
 const sheet = import.meta.env.DEV
   ? new URLSearchParams(location.search).get("scenario")
   : null;
-// The language is chosen before the first paint, so nothing shows in the wrong one.
-void bootI18n(api).then(() => {
+// The language is chosen before the first paint, so nothing shows in the wrong one. A boot that
+// fails still renders: a blank window is worse than one in the fallback language.
+void bootI18n(api).catch((error: unknown) => console.error(error)).then(() => {
   if (sheet === "mascot")
     void import("./dev/mascot-gallery-entry").then(({ render }) => render(root));
   else if (sheet === "pins")

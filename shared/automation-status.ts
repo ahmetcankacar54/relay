@@ -11,7 +11,7 @@ import type {
 import { automationMode, type AutomationMode } from "./automation-mode";
 import type { Locale } from "./i18n/locales";
 import { tFor, type MessageId, type Params, type T } from "./i18n/translate";
-import { formatUsed } from "./percent";
+import { formatPercent, percentUsed } from "./percent";
 import { withDative } from "./tr-dative";
 import { maxUsedPercent, sourceExhausted } from "./usage";
 
@@ -170,10 +170,10 @@ export function automationStatus(
   const mode = automationMode(settings, fleet);
   const active = accounts.find((a) => a.id === desktop?.activeProfileId);
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
-  const used = active ? maxUsedPercent(usage[active.id]) : undefined;
+  const used = active ? percentUsed(maxUsedPercent(usage[active.id])) : undefined;
   const prefix =
-    active && typeof used === "number"
-      ? `${active.name} ${formatUsed(used, language)} · `
+    active && used !== undefined
+      ? `${t("automationStatus.accountUsed", { name: active.name, percent: formatPercent(used, language) })} · `
       : "";
   const show = (
     row: Row,

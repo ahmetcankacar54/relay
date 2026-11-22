@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, Check, CopyIcon, Plus } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { PageBody, PageFrame } from "@/app/PageFrame";
 import { addAccountHash, intentHash } from "@/app/routes";
 import { Button } from "@/components/ui/button";
@@ -11,50 +11,13 @@ import { cn } from "@/lib/utils";
 import type { ProxyClientId } from "../../shared/types";
 import { FORMAT_LOCALE } from "../../shared/i18n/locales";
 import { GatewayHeader } from "./proxy/GatewayHeader";
-import { useCopy, useProxyStatus, useTab, type Copy, type ProxyTab } from "./proxy/hooks";
+import { useCopy, useProxyStatus, useTab, type ProxyTab } from "./proxy/hooks";
 import { PoolCard } from "./proxy/PoolCard";
 import { RequestFeed } from "./proxy/RequestFeed";
 import { RulesTab } from "./proxy/RulesTab";
 import { SessionsCard } from "./proxy/SessionsCard";
 import { CLIENT_NAMES, CLIENT_PROVIDER, providerName, usableFor, type Patch } from "./proxy/shared";
 import { ToolsTab } from "./proxy/ToolsTab";
-
-/** An address or key as a compact chip; the button copies the real value. */
-export function CopyChip({
-  id,
-  label,
-  shown,
-  value,
-  copy,
-  children,
-}: {
-  id: string;
-  label: string;
-  shown: string;
-  value?: string;
-  copy: Copy;
-  children?: ReactNode;
-}) {
-  const { t } = useI18n();
-  return (
-    <span className="flex min-w-0 items-center gap-0.5 rounded-md border bg-muted/40 py-0.5 pr-0.5 pl-2.5">
-      <span className="sr-only">{label}: </span>
-      <span data-slot={`chip-${id}`} className="truncate font-mono text-xs">
-        {shown}
-      </span>
-      {children}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={!value}
-        aria-label={t("proxy.copy", { label })}
-        onClick={() => value && copy.copy(id, value)}
-      >
-        {copy.copied === id ? <Check className="text-ok" /> : <CopyIcon />}
-      </Button>
-    </span>
-  );
-}
 
 /** One thing that needs the user now, above the tabs. */
 function Attention({ tone, children, action }: { tone: "warn" | "crit"; children: ReactNode; action?: ReactNode }) {

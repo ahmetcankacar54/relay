@@ -124,6 +124,23 @@
     },
     "mac": {
       "identity": "-",
+      "electronLanguages": [
+        "en",
+        "tr",
+        "de",
+        "fr",
+        "es",
+        "pt_BR",
+        "it",
+        "ja",
+        "ko",
+        "zh_CN",
+        "zh_TW",
+        "ru",
+        "uk",
+        "pl",
+        "nl"
+      ],
       "extraFiles": [
         {
           "from": "dist-electron/RelayWidget.appex",

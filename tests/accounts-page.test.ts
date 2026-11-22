@@ -262,7 +262,7 @@ test("the inline fix button runs its action and does not also open the sheet", a
   const opened: string[] = [];
   const relay = relayWithUsage("k", usageOf("k", "expired"), {
     accounts: [critical],
-    startCli: async (account: Account) => (started.push(account.id), true),
+    startCli: async (account: Account) => (started.push(account.id), "ran" as const),
   } as Partial<Relay>);
   const dom = fakeDom();
   dom.install();
@@ -295,6 +295,51 @@ test("the inline fix button runs its action and does not also open the sheet", a
     await act(async () => dom.dispatch(row, "click", { detail: 1 }));
     assert.deepEqual(opened, ["k"]);
     assert.deepEqual(started, ["k"]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("while a search shows every match, the section headers are labels and leave the saved closed set alone", async () => {
+  const stored: Record<string, string> = { "relay.accounts.collapsed": JSON.stringify(["provider:claude"]) };
+  const writes: string[] = [];
+  const dom = fakeDom({
+    localStorage: () => ({ getItem: (key: string) => stored[key] ?? null, setItem: (key: string) => void writes.push(key) }),
+  });
+  dom.install();
+  Object.assign(globalThis.window, { location: { hash: "" } });
+  Object.assign(globalThis.document, { querySelector: () => null });
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: i18nValue("tr") },
+          createElement(RelayContext.Provider, { value: relayFor() }, createElement(Accounts)),
+        ),
+      ),
+    );
+    const headers = () => drawn(dom.container as unknown as FakeNode).filter((n) => n.attributes?.get("data-slot") === "list-group");
+    const rows = () => drawn(dom.container as unknown as FakeNode).filter((n) => n.attributes?.get("data-slot") === "list-row");
+    // Closed and not searching: the provider's header is a button and its rows are not drawn.
+    assert.equal(headers()[0]?.tagName, "button");
+    assert.equal(rows().length, 0);
+    const input = drawn(dom.container as unknown as FakeNode).find((n) => n.tagName === "input" && n.attributes.get("placeholder") === "Ara…");
+    assert.ok(input, "the search field is drawn");
+    await act(async () => {
+      // React reads a text field's `type` property, which the fake keeps only as an attribute.
+      Object.assign(input, { type: input.attributes.get("type") ?? "text", value: "Stu" });
+      dom.dispatch(input, "input");
+    });
+    // The match shows, its closed section opened for it, and no header is a button that could close it.
+    assert.equal(rows().length, 1);
+    assert.ok(headers().length > 0);
+    for (const header of headers()) assert.equal(header.tagName, "div");
+    for (const header of headers()) await act(async () => dom.dispatch(header, "click", { detail: 1 }));
+    assert.deepEqual(writes, []);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();

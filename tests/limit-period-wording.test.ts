@@ -9,6 +9,8 @@ const APP_WINDOW_PHRASES = [
   "Relay penceresini",
   "panda penceresini",
   "Pencere kapanınca Relay",
+  // Main's dialog when Relay's own window keeps crashing, in electron/main.ts.
+  "Relay penceresi durdu",
   // The usage sign-in's own Relay window, in src/app/ConnectionPanels.tsx.
   "Açılan Relay penceresinde",
   "Relay’in kendi penceresinde",

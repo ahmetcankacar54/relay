@@ -151,12 +151,26 @@ function daySamples(
       units += entry.units;
       covered += entry.covered;
       // The bucket starts `m` minutes into a local hour (offsets are whole
-      // quarter hours): (60 − m)/60 of it is that hour, m/60 the next.
+      // quarter hours): (60 − m)/60 of it is that hour, m/60 the next. Each
+      // hour gets only the part inside the work interval, so a bucket that
+      // straddles the start or end credits no hour outside work.
       const slot = localSlot(time, settings.timeZone);
       const first = Math.floor(slot / 4);
-      const share = 1 - (slot % 4) / 4;
-      add(first, share, entry.units, entry.covered);
-      add((first + 1) % 24, 1 - share, entry.units, entry.covered);
+      const split = time + (1 - (slot % 4) / 4) * HOUR_MS;
+      const from = Math.max(time, interval.start),
+        to = Math.min(time + HOUR_MS, interval.end);
+      add(
+        first,
+        (Math.min(split, to) - from) / HOUR_MS,
+        entry.units,
+        entry.covered,
+      );
+      add(
+        (first + 1) % 24,
+        (to - Math.max(split, from)) / HOUR_MS,
+        entry.units,
+        entry.covered,
+      );
     }
     const hours = new Map<number, number>();
     for (const [hour, sum] of local)

@@ -22,11 +22,13 @@ import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
 import { pendingFlow, tempoRateNow, windowAccounts } from "./selectors";
 import {
+  attemptAction,
   errorAfterRefresh,
   hiddenRefresh,
   relayAction,
   relayReport,
   reportedVisibility,
+  serialRead,
   shouldPoll,
 } from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
@@ -104,9 +106,6 @@ function useRelayState(
   const [historyRevision, setHistoryRevision] = useState(0);
   const [dismissed, setDismissed] = useState<string>();
   const lock = useRef(false);
-  // One snapshot request at a time; calls while one runs share exactly one follow-up.
-  const inFlight = useRef<Promise<Fresh> | undefined>(undefined);
-  const followUp = useRef<Promise<Fresh> | undefined>(undefined);
   // Bumped to drop the result of a request that started before a local change.
   const epoch = useRef(0);
   const showError = useCallback((e: unknown) => setError(errorMessage(e)), []);
@@ -118,44 +117,28 @@ function useRelayState(
     refreshError.current = message;
     setError(message);
   }, []);
-  const refresh = useCallback((): Promise<Fresh> => {
-    const run = () => {
-      const started = epoch.current;
-      const request = Promise.all([
-        api.panelSnapshot(),
-        api.desktopSnapshot(),
-      ]).then(([snapshot, status]) => {
-        if (started === epoch.current) {
-          setData(snapshot);
-          setDesktop(status);
-          const stale = refreshError.current;
-          if (stale !== undefined) {
-            refreshError.current = undefined;
-            setError((current) => errorAfterRefresh(current, stale));
-          }
-        }
+  // One snapshot request at a time; calls while one runs share exactly one follow-up.
+  const [refresh] = useState(() =>
+    serialRead<Fresh>(
+      epoch,
+      async () => {
+        const [snapshot, status] = await Promise.all([
+          api.panelSnapshot(),
+          api.desktopSnapshot(),
+        ]);
         return { snapshot, status };
-      });
-      inFlight.current = request;
-      const settle = () => {
-        if (inFlight.current === request) inFlight.current = undefined;
-      };
-      request.then(settle, settle);
-      return request;
-    };
-    if (followUp.current) return followUp.current;
-    const running = inFlight.current;
-    if (!running) return run();
-    // A change seen while a request runs may be newer than what that request reads.
-    const next = running
-      .catch(() => undefined)
-      .then(() => {
-        followUp.current = undefined;
-        return run();
-      });
-    followUp.current = next;
-    return next;
-  }, []);
+      },
+      ({ snapshot, status }) => {
+        setData(snapshot);
+        setDesktop(status);
+        const stale = refreshError.current;
+        if (stale !== undefined) {
+          refreshError.current = undefined;
+          setError((current) => errorAfterRefresh(current, stale));
+        }
+      },
+    ),
+  );
   useEffect(() => {
     void refresh().catch(showRefreshError);
     // The menu bar panel follows main's shown/hidden reports: its document reads "visible"
@@ -327,8 +310,9 @@ function useRelayState(
       });
     }
   };
+  // The add dialog starts it on its own and tries again only when the lock refused it.
   const startCli = (a: Account) =>
-    action(`cli:${a.id}`, async () => {
+    attemptAction(action)(`cli:${a.id}`, async () => {
       // Never a Claude sign-in for a Codex or Antigravity account (main refuses it too).
       if ((a.provider ?? "claude") !== "claude") return;
       setDismissed(undefined);

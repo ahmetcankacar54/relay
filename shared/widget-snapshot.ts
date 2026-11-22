@@ -150,6 +150,11 @@ export interface WidgetWeek {
     hits: string;
     /** "Kişisel · hafta %68"; "" without an active account's week. */
     activeWeek: string;
+    /**
+     * The lines above that apply, in order, as label and figure for the widget to set side by side
+     * ("Günde" and "$58,80"); a row without a figure ("Limit hiç dolmadı") reads as its label alone.
+     */
+    pairs: { label: string; figure?: string }[];
   };
 }
 
@@ -639,6 +644,22 @@ function buildAccounts(
               ? t("widgetSnapshot.noLimitReached")
               : t("widgetSnapshot.limitReached", { inputHits: input.hits }),
         activeWeek,
+        pairs: [
+          { label: t("widgetSnapshot.perDay"), figure: money(average) },
+          ...(busiest
+            ? [{ label: t("widgetSnapshot.busiestDay", { busiestLabel: busiest.label }), figure: money(busiest.cost) }]
+            : []),
+          ...(input.hits === undefined
+            ? []
+            : input.hits === 0
+              ? [{ label: t("widgetSnapshot.noLimitReached") }]
+              : [
+                  {
+                    label: t("widgetSnapshot.limitReachedLabel"),
+                    figure: t("widgetSnapshot.limitReachedTimes", { hits: input.hits }),
+                  },
+                ]),
+        ],
       },
     };
   }

@@ -62,9 +62,14 @@ export function tFor(locale: Locale): T {
   };
 }
 
-/** A message whose `<tag>…</tag>` parts are rendered by `values[tag]` (React's `<Trans>`). */
+/** A message whose `<tag>…</tag>` parts are rendered by `values[tag]` (React's `<Trans>`); English when the translation fails. */
 export function formatRich(locale: Locale, id: MessageId, values: Record<string, unknown>): unknown[] {
-  const out = format(locale, id, true).format(values as never);
+  let out: unknown;
+  try {
+    out = format(locale, id, true).format(values as never);
+  } catch {
+    out = format("en", id, true).format(values as never);
+  }
   return Array.isArray(out) ? out : [out];
 }
 

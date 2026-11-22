@@ -683,6 +683,27 @@ test("the Host check never stands aside: no Host is refused, a tailnet bind answ
   }
 });
 
+test("a tailnet bind also answers its MagicDNS names; a loopback bind does not", async () => {
+  const { server, port } = await startPool({ anthropicUrl: "http://127.0.0.1:9" }, [makeAccount("a", "A")]);
+  const status = async (host: string) => (await request(port, { path: "/api/hello", headers: { host } })).status;
+  try {
+    assert.equal(await status("mymac.tail1234.ts.net"), 403);
+    assert.equal(await status(`mymac:${port}`), 403);
+    server.updateConfig({ host: "100.101.102.103" });
+    assert.equal(await status("mymac.tail1234.ts.net"), 200);
+    assert.equal(await status(`MyMac.Tail1234.TS.NET:${port}`), 200);
+    assert.equal(await status("mymac"), 200);
+    assert.equal(await status(`mymac:${port}`), 200);
+    assert.equal(await status(`127.0.0.1:${port}`), 200);
+    assert.equal(await status("ts.net"), 403);
+    assert.equal(await status("evil.ts.net.example"), 403);
+    assert.equal(await status("127.evil.example"), 403);
+    assert.equal(await status("[fe80::1]"), 403);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("request bodies held at once are capped across requests: past the cap the gateway answers 503", async () => {
   const server = new ProxyServer({
     config: { port: 0, host: "127.0.0.1", enabled: true },

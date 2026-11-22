@@ -73,6 +73,16 @@ test("sort by five-hour use puts the least used first and unknown usage last", (
   assert.deepEqual(only.accounts.map((a) => a.id), ["low", "high", "unread"]);
 });
 
+test("sort by five-hour use reads a window whose reset has passed as empty, as its row shows it", () => {
+  const list = [account("half"), account("reset")];
+  const usage: Record<string, AccountUsage> = {
+    half: { accountId: "half", status: "ready", stale: false, fiveHour: { usedPercent: 40, resetsAt: new Date(NOW + 3_600_000).toISOString() } },
+    reset: { accountId: "reset", status: "ready", stale: false, fiveHour: { usedPercent: 95, resetsAt: new Date(NOW - 60_000).toISOString() } },
+  };
+  const [only] = sections(list, { sort: "usage", usage });
+  assert.deepEqual(only.accounts.map((a) => a.id), ["reset", "half"]);
+});
+
 test("no grouping is one headerless section in input order", () => {
   const list = [of("codex", "x", "work:a"), of("claude", "c", "work:b")];
   assert.deepEqual(sections(list, { by: "none" }).map((s) => [s.key, s.label, s.accounts.map((a) => a.id)]), [["all", "", ["x", "c"]]]);

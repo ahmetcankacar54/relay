@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { ProfileFields, profileInput } from "../src/features/ProfileFields";
@@ -10,7 +10,9 @@ import { ConnectionPanels } from "../src/app/ConnectionPanels";
 import { DesktopActionReview, type DesktopActionKind } from "../src/features/DesktopActionReview";
 import { routeQuery } from "../src/app/routes";
 import { RelayContext, type Relay } from "../src/data/relay-context";
+import { attemptAction, relayAction } from "../src/data/relay-action";
 import { I18nContext } from "../src/data/i18n";
+import { fakeDom } from "./fake-dom";
 import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AuthFlow, type DesktopState, type Diagnostics, type RelaySettings, type Snapshot } from "../shared/types";
 
@@ -299,4 +301,67 @@ test("disabled accounts header buttons say why, next to them", () => {
   assert.match(busy, /Hesap ekle<\/button><span[^>]*>Claude uygulamasında bir işlem sürüyor\.<\/span>/);
   // Enabled buttons explain nothing.
   assert.doesNotMatch(wrap(relayFor(), createElement(Accounts)), /Hesap ekle<\/button><span/);
+});
+
+/** Mounts the usage step for profile "b", drawn again with a new relay each time, as useRelayState does. */
+async function usageStep(run: (draw: (relay: Relay) => Promise<void>) => Promise<void>) {
+  const dom = fakeDom();
+  dom.install();
+  try {
+    // Loaded once the fake browser is installed: react-dom checks for a DOM when it loads.
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await run((relay) =>
+      act(async () =>
+        root.render(
+          createElement(
+            I18nContext.Provider,
+            { value: i18nValue("tr") },
+            createElement(RelayContext.Provider, { value: relay }, createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } })),
+          ),
+        ),
+      ),
+    );
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+}
+
+const signIn = (login: () => Promise<void>) => {
+  const lock = { current: false };
+  const errors: unknown[] = [];
+  const action = relayAction(lock, {
+    setBusy() {}, setError() {}, setNotice() {}, refresh: async () => {},
+    showError: (e) => void errors.push(e),
+  });
+  const attempt = attemptAction(action);
+  return { lock, errors, action, startCli: (account: Account) => attempt(`cli:${account.id}`, login) };
+};
+
+test("a usage sign-in that failed on its own is not started again on every render", async () => {
+  let logins = 0;
+  const { errors, action, startCli } = signIn(async () => {
+    logins++;
+    throw new Error("login failed");
+  });
+  await usageStep(async (draw) => {
+    for (let i = 0; i < 4; i++) await draw(relayFor({ action, startCli }));
+  });
+  assert.equal(logins, 1);
+  assert.equal(errors.length, 1);
+});
+
+test("a usage sign-in the action lock refused starts once the lock is free", async () => {
+  let logins = 0;
+  const { lock, action, startCli } = signIn(async () => void logins++);
+  lock.current = true;
+  await usageStep(async (draw) => {
+    await draw(relayFor({ action, startCli }));
+    assert.equal(logins, 0);
+    lock.current = false;
+    await draw(relayFor({ action, startCli }));
+    await draw(relayFor({ action, startCli }));
+  });
+  assert.equal(logins, 1);
 });

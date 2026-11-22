@@ -119,6 +119,22 @@ test("overview without an active account offers onboarding", () => {
   assert.doesNotMatch(emptyHtml, /CLAUDE UYGULAMASINDA AÇIK/);
 });
 
+test("before the first snapshot the active account card is a placeholder, not the onboarding", () => {
+  const html = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: i18nValue("tr") },
+      createElement(
+        RelayContext.Provider,
+        { value: relayFor(undefined, [], {}, { data: undefined }) },
+        createElement(ActiveAccountCard, { go: () => {}, now: NOW }),
+      ),
+    ),
+  );
+  assert.match(html, /data-slot="active-account-skeleton"[\s\S]*aria-busy="true"/);
+  assert.doesNotMatch(html, /İlk hesabını ekle|Hesap ekle|data-scene=/);
+});
+
 test("unlinked accounts lead to their page instead of offering a switch", async () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const other = acct("other", "Studio", "pro", false);

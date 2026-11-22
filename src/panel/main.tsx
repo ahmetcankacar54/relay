@@ -21,8 +21,9 @@ document.body.style.overflow = "hidden";
 setMotionPaused(true);
 api.onPanelVisibility((shown) => setMotionPaused(!shown));
 
-// The language is chosen before the first paint, so nothing shows in the wrong one.
-void bootI18n(api).then(() =>
+// The language is chosen before the first paint, so nothing shows in the wrong one. A boot that
+// fails still renders: a blank panel is worse than one in the fallback language.
+void bootI18n(api).catch((error: unknown) => console.error(error)).then(() =>
   createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <ErrorBoundary>

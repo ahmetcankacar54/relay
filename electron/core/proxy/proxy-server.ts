@@ -26,7 +26,7 @@ import { ProxySessionCache } from "./proxy-session-cache";
 import { ProxyStats, type RequestLogSink } from "./proxy-stats";
 import { GatewayInsights } from "./proxy-insights";
 import { responseCost } from "../../../shared/model-prices";
-import { LOOPBACK_HOSTS } from "../../../shared/proxy-url";
+import { isTailscaleIPv4, LOOPBACK_HOSTS } from "../../../shared/proxy-url";
 import { AnthropicUpstream } from "./anthropic-upstream";
 import { CodexUpstream } from "./codex-upstream";
 import { WebSocketBridge, rejectUpgrade } from "./websocket-bridge";
@@ -75,6 +75,8 @@ const MAX_BUFFERED_BYTES = 256 * 1024 * 1024;
 const MAX_PARSE_BYTES = 16 * 1024 * 1024;
 /** Requests answered at once; the gateway runs in Relay's main process and buffers each body. */
 const MAX_CONCURRENT_REQUESTS = 64;
+/** A tailnet MagicDNS name: a bare machine name, or `machine.tailnet.ts.net`. */
+const MAGIC_DNS_NAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$|^[a-z0-9-]+$/;
 /** Accounts tried for one request: the first and up to two others after a limit or sign-in failure. */
 const MAX_ATTEMPTS = 3;
 const STOP_GRACE_MS = 3_000;
@@ -577,8 +579,9 @@ export class ProxyServer {
   private readonly lastMainPrompt = new Map<string, string>();
 
   /**
-   * Only Host names the gateway is reached by are answered: loopback names, and the address it
-   * listens on (a Tailscale one). A web page that rebinds its own domain to the gateway's address
+   * Only Host names the gateway is reached by are answered: loopback names, the address it
+   * listens on, and on a Tailscale bind the tailnet's MagicDNS names (`machine` or
+   * `machine.tailnet.ts.net`). A web page that rebinds its own domain to the gateway's address
    * then cannot reach it. A request without a Host header is refused.
    */
   private hostAllowed(hostHeader: string | undefined): boolean {
@@ -589,7 +592,10 @@ export class ProxyServer {
     } catch {
       return false;
     }
-    return LOOPBACK_HOSTS.has(name) || /^127\./.test(name) || name === this.config.host.replace(/^\[|\]$/g, "");
+    const bind = this.config.host.replace(/^\[|\]$/g, "");
+    if (LOOPBACK_HOSTS.has(name) || (net.isIPv4(name) && name.startsWith("127.")) || name === bind)
+      return true;
+    return isTailscaleIPv4(bind) && MAGIC_DNS_NAME.test(name);
   }
 
   /**

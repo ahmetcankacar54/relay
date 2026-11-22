@@ -21,6 +21,30 @@ const resolve = (pref: LanguagePref) => resolveLocale(pref, navigator.languages 
 export const systemLocale = () => resolve("system");
 let booted: { pref: LanguagePref; locale: Locale } | undefined;
 
+/** Loads `locale`'s catalog; English, which is always there, when it cannot be loaded. */
+export const loadOrEnglish = (locale: Locale, load = loadCatalog): Promise<Locale> =>
+  load(locale).then(
+    () => locale,
+    () => "en" as const,
+  );
+
+/**
+ * Language changes in the order they were made: a catalog that finishes loading after a later
+ * change started is dropped, and one that fails to load changes nothing.
+ */
+export function latestChoice(load: (locale: Locale) => Promise<void> = loadCatalog) {
+  let last = 0;
+  return (locale: Locale, apply: (locale: Locale) => void) => {
+    const call = ++last;
+    void load(locale).then(
+      () => {
+        if (call === last) apply(locale);
+      },
+      () => {},
+    );
+  };
+}
+
 /**
  * Picks this window's language before the first render, so nothing paints in the wrong one: the
  * preference this window saved, else main's, resolved against the system languages.
@@ -29,8 +53,8 @@ export async function bootI18n(api: RelayAPI) {
   if (import.meta.env.DEV) setPseudo(new URLSearchParams(location.search).has("pseudo"));
   const stored = parsePref(localStorage.getItem(LANGUAGE_KEY));
   const pref = stored ?? (await api.getLanguage().then((v) => v.pref, () => "system" as const));
-  const locale = resolve(pref);
-  await loadCatalog(locale);
+  // A catalog that cannot load (a broken bundle) must not leave the window blank: English then.
+  const locale = await loadOrEnglish(resolve(pref));
   // Windows from before main kept the language hand it over once.
   if (stored) void api.setLanguage(stored).catch(() => {});
   booted = { pref, locale };
@@ -47,9 +71,9 @@ export async function adoptLocale(locale: Locale) {
 
 export function I18nProvider({ api, children }: { api: RelayAPI; children: ReactNode }) {
   const [state, setState] = useState(() => booted ?? { pref: "system" as LanguagePref, locale: resolve("system") });
+  const [pick] = useState(() => latestChoice());
   const choose = (pref: LanguagePref, persist: boolean) => {
-    const locale = resolve(pref);
-    void loadCatalog(locale).then(() => {
+    pick(resolve(pref), (locale) => {
       setState({ pref, locale });
       if (persist) {
         localStorage.setItem(LANGUAGE_KEY, pref);
@@ -71,7 +95,7 @@ export function I18nProvider({ api, children }: { api: RelayAPI; children: React
   });
   const value = useMemo<I18n>(
     () => ({ language: state.locale, pref: state.pref, setLanguage: (pref) => choose(pref, true), t: tFor(state.locale) }),
-    // `choose` only closes over `api`.
+    // `choose` only closes over `api` and `pick`, which lives as long as the provider.
     [state, api],
   );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

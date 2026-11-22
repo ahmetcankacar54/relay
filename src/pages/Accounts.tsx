@@ -402,9 +402,10 @@ export function Accounts() {
             accounts={visible}
             groupBy={view.groupBy}
             sort={view.sort}
-            // A search shows every match, closed sections included, without forgetting which were closed.
+            // A search shows every match, closed sections included, without forgetting which were closed;
+            // its headers are plain labels meanwhile, so a click cannot change the saved closed set unseen.
             collapsed={query.trim() ? [] : view.collapsed}
-            toggle={toggleSection}
+            toggle={query.trim() ? undefined : toggleSection}
             open={setSelected}
             remove={setRemoving}
             edit={setEditing}

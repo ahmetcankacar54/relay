@@ -554,20 +554,17 @@ function wake({
 test("a Mac waking with every window closed refreshes, re-plans, then starts only what is not deferred", async () => {
   const f = wake();
   await f.keeper.tick();
-  // Started now, all three would switch twice; held to 09:00, max and pro
-  // switch once (the adaptive schedule's own wake-up case).
+  // Max's window is planned to open with work at 09:00, so it is not due and
+  // not read. Started now, vertex and pro would switch twice; pro held to
+  // 09:00 as well switches once (the adaptive schedule's own wake-up case).
   assert.deepEqual(f.order, [
-    "refresh max",
     "refresh vertex",
     "refresh pro",
     "adapted updated",
     "start vertex",
   ]);
   const nine = iso(at("09:00", WEDNESDAY));
-  const schedule = [
-    { accountId: "max", startAt: nine },
-    { accountId: "pro", startAt: nine },
-  ];
+  const schedule = [{ accountId: "pro", startAt: nine }];
   assert.deepEqual(f.calls.adapted, [{ kind: "updated", schedule }]);
   const snapshot = f.keeper.snapshot();
   assert.deepEqual(snapshot.adaptation, {
@@ -578,7 +575,7 @@ test("a Mac waking with every window closed refreshes, re-plans, then starts onl
   assert.deepEqual(
     snapshot.accounts.map((s) => [s.accountId, s.state, s.reason]),
     [
-      ["max", "waiting", "adapted"],
+      ["max", "outside", undefined],
       ["vertex", "active", undefined],
       ["pro", "waiting", "adapted"],
     ],
@@ -604,11 +601,11 @@ test("a Mac waking with every window closed refreshes, re-plans, then starts onl
 test("with adaptation off the waking Mac starts the first planned account", async () => {
   const f = wake({ adaptive: false });
   await f.keeper.tick();
+  // Vertex warms up first (05:30); max's window opens with work at 09:00.
   assert.deepEqual(f.order, [
-    "refresh max",
     "refresh vertex",
     "refresh pro",
-    "start max",
+    "start vertex",
   ]);
   assert.equal("adaptation" in f.keeper.snapshot(), false);
 });
@@ -655,7 +652,6 @@ test("while Relay is busy nothing is searched or adopted; the next free tick ref
   f.clock.now = at("08:51", WEDNESDAY);
   await f.keeper.tick();
   assert.deepEqual(f.order, [
-    "refresh max",
     "refresh vertex",
     "refresh pro",
     "adapted updated",
@@ -759,10 +755,9 @@ test("a failing re-plan or notification never stops the keep-alive", async () =>
   broken.calls.samples = null as unknown as UsageSample[];
   await broken.keeper.tick();
   assert.deepEqual(broken.order, [
-    "refresh max",
     "refresh vertex",
     "refresh pro",
-    "start max",
+    "start vertex",
   ]);
   assert.deepEqual(broken.calls.adapted, []);
   // The notification fails: the adopted schedule still holds.
@@ -772,7 +767,6 @@ test("a failing re-plan or notification never stops the keep-alive", async () =>
   };
   await silent.keeper.tick();
   assert.deepEqual(silent.order, [
-    "refresh max",
     "refresh vertex",
     "refresh pro",
     "adapted updated",
