@@ -26,7 +26,7 @@ const grid = cva("grid items-center gap-x-3 pe-4", {
       board:
         "grid-cols-[0.5rem_minmax(0,16rem)_minmax(0,1fr)_minmax(0,1fr)_7rem_7rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_7rem]",
       /** Switch, name, plan, first start, status. */
-      plan: "grid-cols-[2rem_minmax(0,1fr)_10rem_6.5rem_minmax(0,10rem)] @max-2xl:grid-cols-[2rem_minmax(0,1fr)_10rem_6.5rem]",
+      plan: "grid-cols-[2rem_minmax(0,1fr)_10rem_10rem_minmax(0,10rem)] @max-2xl:grid-cols-[2rem_minmax(0,1fr)_10rem_10rem]",
       /** Order, name, 5 hours, week, in the pool. */
       pool: "grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_2.5rem] @max-2xl:grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem]",
       /** Mark, name, state, action. */
