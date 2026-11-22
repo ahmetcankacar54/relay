@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ahmetcankacar54.github.io/relay/sitemap.xml

@@ -1,0 +1,130 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "Inter", sans-serif;
+      color: var(--ink);
+    }
+    #ec-lockup {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 292px;
+      height: 232px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 22px;
+    }
+    #ec-mark {
+      position: relative;
+      width: 232px;
+      height: 232px;
+    }
+    #ec-icon {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 232px;
+      height: 232px;
+      transform-origin: 50% 100%;
+    }
+    /* Contact shadow under the icon's body. */
+    #ec-contact {
+      position: absolute;
+      left: 36px;
+      top: 196px;
+      width: 160px;
+      height: 26px;
+      border-radius: 50%;
+      background: radial-gradient(closest-side, rgba(28, 25, 23, 0.22), rgba(28, 25, 23, 0));
+    }
+    #ec-word {
+      font-size: 124px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      padding-bottom: 10px;
+    }
+    #ec-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 574px;
+      text-align: center;
+      font-size: 48px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: var(--quiet);
+    }
+    #ec-line span,
+    #ec-url span {
+      display: inline-block;
+    }
+    #ec-cta {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 692px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+    }
+    #ec-button {
+      padding: 22px 40px 23px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    #ec-url {
+      font-size: 34px;
+      font-weight: 400;
+      color: var(--quiet);
+    }
+  </style>
+  <div id="root" data-composition-id="endcard" data-width="1920" data-height="1080">
+    <div id="ec-all" class="clip" data-start="0" data-duration="5.8" data-beat="end-card">
+      <div id="ec-lockup">
+        <div id="ec-mark">
+          <div id="ec-contact"></div>
+          <img id="ec-icon" src="assets/app-icon.png" alt="Relay app icon" />
+        </div>
+        <div id="ec-word">Relay</div>
+      </div>
+      <div id="ec-line">
+        <span>Every</span> <span>Claude</span> <span>account,</span> <span>one</span> <span>menu-bar</span> <span>app.</span>
+      </div>
+      <div id="ec-cta">
+        <div id="ec-button">Download for macOS</div>
+        <div id="ec-url"><span>github.com/ahmetcankacar54/relay</span></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // The real app icon drops in as the window leaves, and lands on a spring.
+    tl.fromTo("#ec-icon", { opacity: 0 }, { opacity: 1, duration: 0.12, ease: "none" }, 0.18);
+    tl.fromTo("#ec-icon", { y: -190, rotation: -8 }, { y: 0, rotation: 0, duration: 0.85, ease: "elastic.out(1, 0.75)" }, 0.18);
+    tl.fromTo("#ec-contact", { scale: 0.35, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: "power2.out" }, 0.33);
+    // The name wipes in beside it.
+    tl.fromTo(
+      "#ec-word",
+      { clipPath: "inset(0px 100% 0px 0px)" },
+      { clipPath: "inset(0px 0% 0px 0px)", duration: 0.45, ease: "power3.out" },
+      1.0,
+    );
+    // The line, word by word from light grey to its colour.
+    tl.fromTo("#ec-line", { opacity: 0 }, { opacity: 1, duration: 0.1, ease: "none" }, 1.4);
+    tl.fromTo("#ec-line span", { color: "#dcd7d1" }, { color: "#645e58", duration: 0.2, ease: "power1.out", stagger: 0.08 }, 1.45);
+    // The download.
+    const hidden = { opacity: 0, filter: "blur(8px)" };
+    tl.fromTo("#ec-button", hidden, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, 2.1);
+    tl.fromTo("#ec-url span", hidden, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, 2.25);
+    window.__timelines["endcard"] = tl;
+  </script>
+</template>

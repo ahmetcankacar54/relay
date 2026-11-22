@@ -1,0 +1,104 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+    }
+    #gw-stage {
+      position: absolute;
+      inset: 0;
+      transform-origin: 960px 540px;
+    }
+    #gw-win {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1280px;
+      height: 800px;
+      border-radius: 12px;
+      transform-origin: 0 0;
+      overflow: hidden;
+      background: #f5f4f2;
+      box-shadow:
+        0 0 0 1px rgba(28, 25, 23, 0.12),
+        0 30px 80px rgba(28, 25, 23, 0.16),
+        0 4px 14px rgba(28, 25, 23, 0.08);
+    }
+    #gw-win img,
+    #gw-on {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1280px;
+      height: 800px;
+    }
+    /* Recent requests' rows, under the stats (proxy-on.png: rows from y 376 to the window's edge). */
+    #gw-rows-cover {
+      position: absolute;
+      left: 852px;
+      top: 376px;
+      width: 383px;
+      height: 424px;
+      background: #ffffff;
+    }
+    #gw-win .lights i {
+      position: absolute;
+      top: 19px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+    }
+  </style>
+  <div id="root" data-composition-id="gateway" data-width="1920" data-height="1080">
+    <div id="gw-stage">
+      <div id="gw-win">
+        <img src="assets/ui/proxy-off.png" alt="Relay's Proxy & Gateway page with the gateway off" />
+        <div id="gw-on">
+          <img src="assets/ui/proxy-on.png" alt="The gateway running: requests go to Personal · Backup, the account with room; Personal · Max answers 429 and the request moves on" />
+          <div id="gw-rows-cover"></div>
+        </div>
+        <div class="lights">
+          <i style="left: 16px; background: #ff5f57"></i>
+          <i style="left: 36px; background: #febc2e"></i>
+          <i style="left: 56px; background: #28c840"></i>
+        </div>
+      </div>
+    </div>
+    <div id="gw-beat" class="clip" data-start="1.1" data-duration="3.6" data-beat="gateway-on"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    const cam = (s, fx, fy) => ({ scale: s, x: 960 - fx * s, y: 540 - fy * s });
+    const home = cam(0.96, 375, 400);
+    // Punch-ins put the frame's left edge at x 224, past the sidebar; the window's right edge shows.
+    const toggle = cam(1.7, 789, 260); // the page's own line and the gateway switch
+    const requests = cam(1.8, 757, 508); // the pool (Full, 22 %) beside Recent requests
+
+    // The window waits at the home stage, then pushes in on the switch.
+    tl.fromTo("#gw-win", home, { ...toggle, duration: 0.6, ease: "power2.inOut" }, 0.1);
+    // 1.1 s here (film 19.8 s): the click turns the gateway on. The page changes at once, as the app
+    // does; a crossfade would ghost the reflowed rows.
+    tl.fromTo("#gw-on", { opacity: 0 }, { opacity: 1, duration: 0.034, ease: "none" }, 1.1);
+    tl.to("#gw-win", { ...requests, duration: 0.6, ease: "power2.inOut" }, 1.5);
+    // The newest requests arrive top down: Personal · Backup answers, Personal · Max's 429 moves on.
+    const rowTops = [51, 119, 189, 239, 291, 342, 393, 424];
+    tl.fromTo(
+      "#gw-rows-cover",
+      { clipPath: "inset(0px 0px 0px 0px)" },
+      { clipPath: `inset(${rowTops[0]}px 0px 0px 0px)`, duration: 0.07, ease: "power2.out" },
+      1.85,
+    );
+    rowTops.slice(1).forEach((top, i) =>
+      tl.to("#gw-rows-cover", { clipPath: `inset(${top}px 0px 0px 0px)`, duration: 0.07, ease: "power2.out" }, 1.93 + i * 0.08),
+    );
+    // The window drops back and blurs out under the end card.
+    tl.fromTo(
+      "#gw-stage",
+      { scale: 1, opacity: 1, filter: "blur(0px)" },
+      { scale: 0.86, opacity: 0, filter: "blur(8px)", duration: 0.45, ease: "power3.in" },
+      3.95,
+    );
+    window.__timelines["gateway"] = tl;
+  </script>
+</template>

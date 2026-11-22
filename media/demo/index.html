@@ -1,0 +1,156 @@
+<!doctype html>
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"ground","type":"color","label":"Ground","default":"#f5f4f2"},
+    {"id":"ink","type":"color","label":"Ink","default":"#1c1917"},
+    {"id":"quiet","type":"color","label":"Quiet text","default":"#645e58"},
+    {"id":"accent","type":"color","label":"Relay orange","default":"#c2410c"}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Relay · The 4:47 PM limit</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --ground: #f5f4f2;
+        --ink: #1c1917;
+        --quiet: #645e58;
+        --accent: #c2410c;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--ground);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        font-family: "Inter", sans-serif;
+      }
+      #ground {
+        position: absolute;
+        inset: 0;
+        background: var(--ground);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="28.6"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="ground"></div>
+
+      <!-- 1 · 4:47 PM: the menu-bar panel, Personal · Max reaches Full, the cursor clicks Switch -->
+      <div
+        id="panel"
+        data-composition-id="panel"
+        data-composition-src="compositions/panel.html"
+        data-start="0"
+        data-duration="3.7"
+        data-track-index="0"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 1"
+      ></div>
+      <!-- 2 · Relay's own switch window plays its story -->
+      <div
+        id="switch"
+        data-composition-id="switch"
+        data-composition-src="compositions/switch.html"
+        data-start="3.3"
+        data-duration="5.1"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 3"
+      ></div>
+      <!-- 3 · Overview: the new account in use, every account's limits -->
+      <div
+        id="overview"
+        data-composition-id="overview"
+        data-composition-src="compositions/overview.html"
+        data-start="7.85"
+        data-duration="5.45"
+        data-track-index="0"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 2"
+      ></div>
+      <!-- 4 · Planning: 5-hour windows drawn across the day -->
+      <div
+        id="planning"
+        data-composition-id="planning"
+        data-composition-src="compositions/planning.html"
+        data-start="13.3"
+        data-duration="5.4"
+        data-track-index="0"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 2"
+      ></div>
+      <!-- 5 · Proxy & Gateway: turned on, requests go to the account with room -->
+      <div
+        id="gateway"
+        data-composition-id="gateway"
+        data-composition-src="compositions/gateway.html"
+        data-start="18.7"
+        data-duration="4.7"
+        data-track-index="0"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 2"
+      ></div>
+      <!-- 6 · End card: the app icon lands, Relay, the line and the download -->
+      <div
+        id="endcard"
+        data-composition-id="endcard"
+        data-composition-src="compositions/endcard.html"
+        data-start="22.8"
+        data-duration="5.8"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 3"
+      ></div>
+      <!-- The pointer across the clicks -->
+      <div
+        id="cursor"
+        data-composition-id="cursor"
+        data-composition-src="compositions/cursor.html"
+        data-start="1.9"
+        data-duration="18.3"
+        data-track-index="2"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 10"
+      ></div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>
