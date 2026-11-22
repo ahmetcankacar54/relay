@@ -376,7 +376,7 @@ test("confirm state warns before switching", () => {
   // The open row is pressed, and the confirmation strip under the list warns and offers Vazgeç / Geç.
   assert.match(panelRows(html)[0], /^<button type="button" aria-pressed="true" aria-label="Vertex hesabına geç/);
   const strip = html.slice(html.indexOf('data-slot="switch-confirm"'));
-  assert.match(strip, /Claude uygulaması kapanır ve <span class="contents"><b>Vertex<\/b><\/span> hesabıyla yeniden açılır/);
+  assert.match(strip, /Claude uygulaması kapanır ve <b>Vertex<\/b> hesabıyla yeniden açılır/);
   assert.match(strip, /<button[^>]*>Vazgeç<\/button><button[^>]*>Geç<\/button>/);
 });
 

@@ -359,7 +359,7 @@ export function Accounts() {
             >
               <SelectTrigger
                 aria-label={t("accounts.filterAccounts")}
-                className="w-28"
+                className="w-fit min-w-28 max-w-56"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -375,7 +375,7 @@ export function Accounts() {
               </SelectContent>
             </Select>
             <Select value={view.groupBy} onValueChange={(v) => setView("groupBy", v as AccountGroupBy)}>
-              <SelectTrigger aria-label={t("accounts.groupBy")} className="w-36">
+              <SelectTrigger aria-label={t("accounts.groupBy")} className="w-fit min-w-28 max-w-56">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -385,7 +385,7 @@ export function Accounts() {
               </SelectContent>
             </Select>
             <Select value={view.sort} onValueChange={(v) => setView("sort", v as AccountSort)}>
-              <SelectTrigger aria-label={t("accounts.sort")} className="w-36">
+              <SelectTrigger aria-label={t("accounts.sort")} className="w-fit min-w-28 max-w-56">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

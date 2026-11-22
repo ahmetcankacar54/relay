@@ -8,50 +8,57 @@ import { en } from "../shared/i18n/catalogs/en";
 import { LOCALES, matchLocale, resolveLocale } from "../shared/i18n/locales";
 
 type Element = { type: number; value?: string; options?: Record<string, { value: Element[] }> };
-/** The argument names a message uses, plural and select branches included. */
+/**
+ * The argument names a message uses, plural and select branches included, and which of them only
+ * choose a plural form (a count that never appears as `{n}` or `#`).
+ */
 function argumentsOf(message: string, locale: string) {
   const names = new Set<string>();
-  const walk = (elements: Element[]) => {
+  const shown = new Set<string>();
+  const walk = (elements: Element[], plural?: string) => {
     for (const element of elements) {
-      if (element.value && element.type !== 0 && element.type !== 7) names.add(element.value);
-      for (const option of Object.values(element.options ?? {})) walk(option.value);
+      if (element.type === 7 && plural) shown.add(plural);
+      if (element.value && element.type !== 0 && element.type !== 7) {
+        names.add(element.value);
+        if (element.type !== 6) shown.add(element.value);
+      }
+      for (const option of Object.values(element.options ?? {}))
+        walk(option.value, element.type === 6 ? element.value : plural);
     }
   };
   walk(new IntlMessageFormat(message, locale, undefined, { ignoreTag: true }).getAst() as Element[]);
-  return names;
+  return { names, agreementOnly: new Set([...names].filter((n) => !shown.has(n))) };
 }
 const variants = (name: string) => [name, `${name}Dative`, `${name}Locative`];
 
-test("every catalog has exactly the English ids and no empty message", () => {
-  const ids = Object.keys(en).sort();
-  for (const locale of LOCALES) {
+for (const locale of LOCALES) {
+  test(`${locale}: exactly the English ids and no empty message`, () => {
     const catalog = CATALOGS[locale];
-    assert.deepEqual(Object.keys(catalog).sort(), ids, locale);
-    for (const [id, message] of Object.entries(catalog)) assert.ok(message.trim(), `${locale} ${id} is empty`);
-  }
-});
+    assert.deepEqual(Object.keys(catalog).sort(), Object.keys(en).sort());
+    for (const [id, message] of Object.entries(catalog)) assert.ok(message.trim(), `${id} is empty`);
+  });
 
-test("every message parses and keeps the English placeholders", () => {
-  for (const locale of LOCALES) {
+  test(`${locale}: every message parses and keeps the English placeholders`, () => {
+    const problems: string[] = [];
     for (const [id, message] of Object.entries(CATALOGS[locale]) as [keyof typeof en, string][]) {
       const source = argumentsOf(en[id], "en");
       let own: Set<string>;
       try {
-        own = argumentsOf(message, locale);
+        own = argumentsOf(message, locale).names;
       } catch (error) {
-        assert.fail(`${locale} ${id} does not parse: ${String(error)}`);
+        problems.push(`${id} does not parse: ${String(error)}`);
+        continue;
       }
-      for (const name of source)
-        assert.ok(variants(name).some((v) => own.has(v)), `${locale} ${id} drops {${name}}`);
+      // A count that only picks English's singular or plural may go where the language has no such form.
+      for (const name of source.names)
+        if (!source.agreementOnly.has(name) && !variants(name).some((v) => own.has(v))) problems.push(`${id} drops {${name}}`);
       for (const name of own)
-        assert.ok(
-          [...source].some((s) => variants(s).includes(name)),
-          `${locale} ${id} adds {${name}}, which the code never passes`,
-        );
-      if (/,\s*plural\s*,/.test(message)) assert.match(message, /other\s*\{/, `${locale} ${id} plural lacks other`);
+        if (![...source.names].some((s) => variants(s).includes(name))) problems.push(`${id} adds {${name}}, which the code never passes`);
+      if (/,\s*plural\s*,/.test(message) && !/other\s*\{/.test(message)) problems.push(`${id} plural lacks other`);
     }
-  }
-});
+    assert.deepEqual(problems, []);
+  });
+}
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 function sources(dir: string, out: string[] = []) {

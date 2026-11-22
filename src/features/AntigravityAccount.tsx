@@ -1,7 +1,8 @@
 import { cva } from "class-variance-authority";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Private } from "@/components/Private";
-import { useI18n, type MessageId, type T } from "@/data/i18n";
+import { Trans, useI18n, type MessageId, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { cn } from "@/lib/utils";
 import type { Account, AntigravityAppResult, AntigravityAppState } from "../../shared/types";
@@ -154,16 +155,11 @@ export function AntigravityPrompt({
     return (
       <div data-slot="antigravity-sign-in" role="status" className={promptBox({ size })}>
         <p className="text-muted-foreground [&_b]:font-medium [&_b]:text-foreground">
-          {t("antigravityAccount.inAntigravitySignInWith")}
-          <b>{target?.name ?? t("antigravityAccount.theAccount")}</b>
-          {target?.auth?.email && (
-            <>
-              {" ("}
-              <Private>{target.auth.email}</Private>
-              {")"}
-            </>
-          )}
-          {t("antigravityAccount.relayIsWaiting")}
+          <Trans
+            id="antigravityAccount.signInWithNameWaiting"
+            params={{ name: target?.name ?? t("antigravityAccount.theAccount") }}
+            components={{ b: bold, email: emailOf(target) }}
+          />
         </p>
         <Button size="xs" variant="outline" className="justify-self-start" onClick={() => void relay.action("antigravity", () => relay.api.cancelAntigravitySignIn())}>
           {t("common.cancel")}
@@ -189,17 +185,9 @@ export function AntigravityPrompt({
       <div data-slot={ask.step === "switch" ? "antigravity-confirm" : "antigravity-save"} className={promptBox({ size, tone: "warn" })}>
         <p className="text-warn-foreground [&_b]:font-semibold">
           {ask.step === "switch" ? (
-            <>
-              {t("antigravityAccount.antigravityQuitsAndOpensOn")}
-              <b>{target.name}</b>
-              {t("antigravityAccount.runningWorkStops")}
-            </>
+            <Trans id="antigravityAccount.quitsAndOpensOnName" params={{ name: target.name }} components={{ b: bold }} />
           ) : (
-            <>
-              {t("antigravityAccount.antigravityOpensOnItsSignIn")}
-              <b>{target.name}</b>
-              {t("antigravityAccount.signInTheCurrentSignIn")}
-            </>
+            <Trans id="antigravityAccount.opensOnSignInScreenName" params={{ name: target.name }} components={{ b: bold }} />
           )}
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -230,6 +218,18 @@ export function AntigravityPrompt({
   ) : null;
 }
 
+/** A bold name inside a translated sentence. */
+const bold = (chunks: ReactNode[]) => <b>{chunks}</b>;
+/** The account's email after its name, " (…)", hidden while private; nothing without one. */
+const emailOf = (account: Account | undefined) => () =>
+  account?.auth?.email ? (
+    <>
+      {" ("}
+      <Private>{account.auth.email}</Private>
+      {")"}
+    </>
+  ) : null;
+
 /**
  * Where Relay cannot move the app (not macOS): how to move it by hand, in three steps. The app
  * talks to Google with the account it signed in with and reads it only at start.
@@ -242,16 +242,7 @@ export function AntigravitySteps({ target, size = "md" }: { target: Account; siz
       <ol className="ml-4 list-decimal space-y-0.5 text-muted-foreground [&_b]:font-medium [&_b]:text-foreground">
         <li>{t("antigravityAccount.inAntigravitySignOutFromThe")}</li>
         <li>
-          {t("antigravityAccount.signInWith")}
-          <b>{target.name}</b>
-          {target.auth?.email && (
-            <>
-              {" ("}
-              <Private>{target.auth.email}</Private>
-              {")"}
-            </>
-          )}
-          .
+          <Trans id="antigravityAccount.signInWithName" params={{ name: target.name }} components={{ b: bold, email: emailOf(target) }} />
         </li>
         <li>{t("antigravityAccount.startANewAgyRunningOnes")}</li>
       </ol>

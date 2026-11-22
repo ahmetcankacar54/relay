@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { RelayAPI } from "../../shared/types";
 import { formatRich, loadCatalog, setPseudo, tFor, type MessageId, type Params, type T } from "../../shared/i18n/translate";
 import { parsePref, resolveLocale, type LanguagePref, type Locale } from "../../shared/i18n/locales";
@@ -98,5 +98,5 @@ export function Trans({
 }) {
   const { language } = useI18n();
   const parts = formatRich(language, id, { ...params, ...components });
-  return <>{parts.map((part, i) => (typeof part === "string" ? part : <span key={i} className="contents">{part as ReactNode}</span>))}</>;
+  return <>{parts.map((part, i) => (typeof part === "string" ? part : <Fragment key={i}>{part as ReactNode}</Fragment>))}</>;
 }

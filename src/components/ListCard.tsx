@@ -21,10 +21,10 @@ const grid = cva("grid items-center gap-x-3 pe-4", {
     columns: {
       /** Dot, name, status, 5 hours, week, action, menu. */
       accounts:
-        "grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,10rem)_4.5rem_4.5rem_4.5rem_1.5rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,8rem)_4.5rem_4.5rem_1.5rem]",
+        "grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,12rem)_4.5rem_4.5rem_7rem_1.5rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,9rem)_4.5rem_7rem_1.5rem]",
       /** Dot, name, 5 hours, week, a model's or pool's own limit, action. */
       board:
-        "grid-cols-[0.5rem_minmax(0,10rem)_minmax(0,1fr)_minmax(0,1fr)_7rem_4.5rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_4.5rem]",
+        "grid-cols-[0.5rem_minmax(0,16rem)_minmax(0,1fr)_minmax(0,1fr)_7rem_7rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_7rem]",
       /** Switch, name, plan, first start, status. */
       plan: "grid-cols-[2rem_minmax(0,1fr)_10rem_6.5rem_minmax(0,10rem)] @max-2xl:grid-cols-[2rem_minmax(0,1fr)_10rem_6.5rem]",
       /** Order, name, 5 hours, week, in the pool. */
