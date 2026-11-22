@@ -18,8 +18,8 @@ INSTALL
    xattr -dr com.apple.quarantine /Applications/Relay.app
 5) Relay lives in the menu bar as a panda icon; the panel opens from there.
    "Open Relay" in the panel opens the main window.
-6) Relay opens in Turkish. For English, go to Ayarlar (Settings) →
-   Genel (General) → Arayüz dili (Interface language) → English.
+6) Relay speaks your system's language (15 languages; English when yours is
+   not among them). To change it: Settings → General → Interface language.
 
 START WITH OVERVIEW
 The "Before you start" list on the Overview page shows what is missing:

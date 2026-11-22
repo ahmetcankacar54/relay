@@ -1,168 +1,234 @@
-# Relay — Claude Desktop account switcher
+<div align="center">
 
-Relay is a small macOS menu-bar app for people with several Claude accounts
-(personal Pro/Max and company Team/Enterprise). Your work stays in the official
-**Claude Desktop** app and its **Code** tab; Relay only switches which account
-Claude is signed in to, keeps your Code conversations available on every account
-you choose, and shows how much of each account's quota is used. Available in 15
-languages: English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano,
-日本語, 한국어, 简体中文, 繁體中文, Русский, Українська, Polski and Nederlands; it follows the
-system language until you pick one in Settings → General.
-Independent tool, not an Anthropic product.
+<img src="assets/icons/app-256.png" width="128" height="128" alt="Relay app icon">
 
-## Download
+# Relay
 
-Get the latest build from [Releases](../../releases): a DMG for Apple silicon Macs
-(M1 and later), a Windows installer and a Linux AppImage. The builds are not
-notarized; `INSTALL.txt` in each release walks through macOS’s
-one-time "Open Anyway" step.
+**Every Claude account, one menu-bar app.**<br>
+Switch Claude Desktop between accounts, keep your Claude Code history on all of them,<br>
+see every 5-hour and weekly limit at a glance, and let a local gateway spread the work.
 
-## Screens
+[![Latest release](https://img.shields.io/github/v/release/ahmetcankacar54/relay?style=flat-square&label=release&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
+[![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#install)
+[![Windows · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20Linux-supported-2f6feb?style=flat-square)](#platforms)
+[![15 languages](https://img.shields.io/badge/languages-15-6b645e?style=flat-square)](#15-languages)
+[![MIT](https://img.shields.io/badge/license-MIT-6b645e?style=flat-square)](LICENSE)
 
-A sidebar (a 56 px icon rail in narrow windows) opens four pages; the keyboard
-shortcuts are ⌘1–⌘3 and ⌘, for Settings.
+**English** · [Türkçe](README.tr.md)
 
-- **Overview** (Genel) — the active account, setup steps, today's plan and automation status.
-- **Accounts** (Hesaplar) — add accounts with a three-step wizard; the list groups them
-  by provider and work group (or not at all), sorts by name, 5-hour use or next reset,
-  and remembers which groups are collapsed. Arrow keys move through the list.
-- **Usage** (Kullanım) — limits (full 5-hour periods, when you work, account balance,
-  limit hits), tokens and API value, and pins.
-- **Settings** (Ayarlar) — every setting in six tabs: Automation, What comes along,
-  Planning, Notifications, Appearance and Advanced.
+[Download](#install) · [Features](#features) · [Privacy](#privacy--security) · [FAQ](#faq) · [CLI](cli/README.md)
 
-## What it does
+<br>
 
-- **Accounts** — connect each Claude account once (normal sign-in inside Claude),
-  see its email, organization and plan, reconnect when needed.
-- **Switch** — from the window or the menu bar. Relay quits Claude, restores the
-  saved sign-in of the target account and reopens Claude. It is a restart, not a
-  hot swap: let running replies finish first.
-- **Shared Code history** — conversations and local projects of the accounts you
-  select (also across companies) are merged on every switch, so the same
-  conversation is there after switching. The same conversation is never shown
-  twice, and its permission mode (Manual/Auto/Plan/Accept edits) travels with it;
-  Bypass never does. Chat, cloud and SSH sessions are not synchronized.
-- **Usage limits** — five-hour and weekly quota used, with reset times for
-  every account, refreshed in the background. Team/Enterprise seats that report no
-  weekly window show "no limit reported" and are judged by their five-hour window.
-- **Statistics and planning** — 7/30-day observed usage; weekday and weekend work
-  hours; Relay staggers each account's first window so resets spread over the
-  day, lets you override any account's start time, and (optional) starts and
-  keeps every planned account's five-hour window running during work hours.
-- **Switch and continue at quota** (experimental, macOS, off by default) — once
-  turned on it stays on for every local Code conversation. When the active
-  account runs out of quota and nothing else is running, Relay picks the eligible
-  account with the most usable quota, restarts Claude on it once and sends one
-  continuation message to each conversation that stopped at the limit, keeping
-  its permission mode. Later limits rotate again (A → B → A) but never back to an
-  account that is still out of quota. Needs Accessibility permission. Never
-  interrupts running work and never sends a message twice.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.webp">
+  <img src="docs/images/overview-light.webp" width="900" alt="Relay's Overview: the account in use with its 5-hour, weekly and model limits, the next account to switch to, and every Claude, Codex and Antigravity account with its limits">
+</picture>
 
-## Install and run
+</div>
 
-Requirements: macOS, Node.js 22.12+, Xcode Command Line Tools and Claude Desktop.
-Usage limits are read with Claude Code: the copy Claude Desktop downloads for its
-Code tab is enough, or a separately installed CLI (2.1.296+).
+## Why Relay
+
+If you have more than one Claude plan (a personal Pro or Max and a company Team or Enterprise seat, say), the Claude app only knows one of them at a time. Signing out and back in costs minutes, loses your Code tab's conversations, and you never know which account still has room.
+
+Relay fixes that, from the menu bar:
+
+- **One-click switch.** Relay quits the Claude app, puts the other account's saved sign-in back and reopens it. Nothing to retype, no browser dance.
+- **Your Code history follows you.** Claude Code conversations and projects are merged across the accounts you choose, so the same conversation is there after every switch, with its permission mode.
+- **Every limit, every account.** 5-hour, weekly and per-model (Opus, Fable) limits with reset times, for Claude, OpenAI Codex and Google Antigravity accounts, refreshed in the background.
+- **A plan for your day.** Relay staggers each account's 5-hour windows across your work hours so the next account is ready before the current one runs out.
+- **A gateway that spends the right account.** Point Claude Code, Codex CLI or omp at one local address; each request goes to the account with room, keeping sessions and caches on their account.
+
+Relay is free, open source (MIT), runs entirely on your Mac, and sends nothing to anyone but the services you already use.
+
+## Install
+
+| Platform | Download | Notes |
+| --- | --- | --- |
+| **macOS 13+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | The main platform: menu-bar panel, widget, automatic switching. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Switching by hand, limits, accounts, gateway. |
+| **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Works with the official Claude Desktop for Linux. |
+| **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … see the [CLI guide](cli/README.md). |
+
+Every release carries a `SHA256SUMS.txt` and updates itself from GitHub Releases.
+
+> [!IMPORTANT]
+> **Relay is signed with the author's own certificate but is not notarized by Apple.** The first time you open it, macOS blocks it once:
+> 1. Drag **Relay** from the DMG into **Applications** and open it from there.
+> 2. When macOS says it cannot verify Relay, click **Done**.
+> 3. Open **System Settings → Privacy & Security**, find "Relay was blocked" and click **Open Anyway**.
+>
+> That is needed once per version. If macOS keeps asking, run `xattr -dr com.apple.quarantine /Applications/Relay.app`. The full walkthrough is in [INSTALL.txt](docs/share/install-notes.md).
+
+## Quick start
+
+| You have | Do this |
+| --- | --- |
+| The Claude app signed in to one account | **Accounts → Add account**. Relay saves that sign-in and finds Codex CLI sign-ins on this Mac too. |
+| Another Claude account | **Add account → Sign in with another Claude account**. The Claude app opens on its sign-in screen; sign in and open Code once, and Relay saves it by itself. |
+| Accounts added | Click **Switch** next to an account in the menu bar or the Overview. |
+| Several accounts and a working day | **Planning** → choose the accounts and your work hours. |
+| Claude Code or Codex CLI in a terminal | **Proxy & Gateway → Tools → Connect** points them at the gateway in one click (and back). |
+
+## Features
+
+### Accounts, grouped the way you think
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/accounts-dark.webp">
+  <img src="docs/images/accounts-light.webp" width="900" alt="The Accounts page grouped by provider and work group, with each account's status, 5-hour and weekly use and its next action">
+</picture>
+
+- Claude, OpenAI Codex and Google Antigravity accounts in one list, grouped by provider and work group, sorted by name, 5-hour use or next reset; collapsed groups are remembered.
+- One status per account (Ready, In use, Nearly full, Usage data is out of date…) and at most one action: switch, refresh or reconnect.
+- Each account's connections in one place: the Claude app sign-in, the usage sign-in, the Claude browser extension and the terminal's `claude`.
+
+### Switching that keeps your work
+
+- **Switch** from the menu bar, the window, the widget or the CLI. It is a clean restart of the Claude app, after an encrypted backup of the files it changes; an interrupted switch can be restored.
+- **Shared Code history**: conversations and local projects of the accounts you pick (also across companies) are merged at every switch. Deleted conversations stay deleted; the Bypass permission mode never travels.
+- **Automatic switching** (optional): when you quit the Claude app, or — experimental, macOS — when the active account hits its limit, Relay picks the account with the most usable room, switches once and sends one continuation message to each conversation that stopped.
+- Drafts you left unsent in the Claude app are saved at a switch, ready to copy back (on macOS Relay can type them back for you — experimental).
+
+### Limits, history and cost
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/limits-dark.webp">
+  <img src="docs/images/limits-light.webp" width="900" alt="Limit history: full periods used, periods started, limit hits and busiest hours, a daily trend per account, account balance and recent limit hits">
+</picture>
+
+- 5-hour and weekly use with reset times, per-model limits, plans (Pro, Max 5×, Max 20×, Team, Enterprise, ChatGPT Plus, Google AI Pro), and a pace mark on every bar.
+- **Limit history**: full periods used, limit hits, when you work and how evenly your accounts share the load.
+- **Tokens and cost**: Claude Code tokens per day, model and account, priced at API list prices.
+
+### A planner for 5-hour windows
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/planning-dark.webp">
+  <img src="docs/images/planning-light.webp" width="900" alt="Planning: today's work hours, the usage forecast and each planned account's 5-hour windows, with early-start times and the plan's status">
+</picture>
+
+- Relay simulates your day from your learned pace and each plan's size (a Max 20× counts 20 times a Pro), then picks start times that leave the fewest gaps with the fewest switches, spread across the day.
+- **Early start** (optional, macOS and Linux) opens each account's window ahead of work so it resets when you need it, and keeps it running through your hours.
+- The plan adapts during the day when you work faster or slower than usual, and knows when an account's week runs out.
+
+### One gateway for every coding tool
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/proxy-dark.webp">
+  <img src="docs/images/proxy-light.webp" width="900" alt="Proxy and Gateway: the gateway address and key, the account pool with each account's room, and recent requests">
+</picture>
+
+- A local, key-protected endpoint for Claude Code, Codex CLI and omp. Requests go to the account whose week ends first and that still has room, compared in real capacity (a Max 20× at 85 % still has more room than a fresh Pro).
+- Sessions stay on their account and its prompt cache; a busy account is drained at the start of a prompt, not in the middle.
+- Listens only on this Mac, or on your Tailscale network if you choose.
+
+### Menu bar, widget and CLI
+
+<img src="docs/images/panel-dark.webp" width="300" align="right" alt="Relay's menu-bar panel: the account in use with its limits, accounts near the limit with a suggested switch, and automation status">
+
+- **Menu-bar panel**: the account in use, its limits, the suggested next account and a one-click switch. Choose what the menu-bar title shows (5-hour use, time left, tokens or API value today).
+- **Desktop widgets** (macOS): your account, all accounts, today and the last 7 days.
+- **`relay` CLI**: `relay status`, `relay switch work`, `relay usage`, `relay run work` (Claude Code as that account), `relay tokens`, `relay proxy start`. `--json` for scripts.
+- Everything is keyboard friendly: ⌘1–⌘8 for pages, ⌘K to search accounts, arrow keys through lists.
+
+<br clear="right">
+
+### 15 languages
+
+<img src="docs/images/languages.webp" width="900" alt="The Overview in German, Japanese, Simplified Chinese and Russian">
+
+English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 日本語, 한국어, 简体中文, 繁體中文, Русский, Українська, Polski and Nederlands — in the app, the menu bar, the widget and the CLI. Relay follows your system language until you pick one in **Settings → General**.
+
+## Platforms
+
+| | macOS | Windows | Linux |
+| --- | :---: | :---: | :---: |
+| Switch the Claude app between accounts | ✅ | ✅ | ✅ |
+| Shared Claude Code history | ✅ | ✅ | ✅ |
+| Limits, history, tokens and cost | ✅ | ✅ | ✅ |
+| Gateway for Claude Code / Codex CLI / omp | ✅ | ✅ | ✅ |
+| Planner | ✅ | ✅ | ✅ |
+| Early start of 5-hour windows | ✅ | — | ✅ |
+| Automatic switch when you quit the Claude app | ✅ | — | ✅ |
+| Switch and continue at the limit (experimental) | ✅ | — | — |
+| Menu-bar panel, widget, `relay` CLI | ✅ | — | — |
+
+macOS is the main platform. The Windows build has not been tested on a real machine yet; reports are welcome.
+
+## Privacy & security
+
+- **Local only.** Relay has no account, no server and **no telemetry or analytics**. Its data lives in `~/Library/Application Support/Relay` (macOS) or `~/.config/Relay` (Linux).
+- **Who it talks to:** the services your accounts already use — `claude.ai`, `api.anthropic.com` (usage and profile), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) — and `api.github.com` for its own updates.
+- **Credentials** never reach the UI. Saved Claude app sign-ins are encrypted with a key kept in the macOS Keychain (Secret Service or KWallet on Linux). Files that hold the gateway key are written readable by you only.
+- **The Claude app's files** are changed only while it is closed, after an encrypted backup and a write journal.
+- **Hardened app:** sandboxed renderer windows, no developer tools in releases, only Relay's own pages can call into the app, and a strict content security policy.
+
+Found a problem? Please report it privately — see [SECURITY.md](SECURITY.md).
+
+## FAQ
+
+<details>
+<summary><b>Does Relay pool or extend my quota?</b></summary>
+
+No. Each account keeps its own limits; Relay only switches which account the Claude app (or a request through the gateway) uses, and helps you use each one's time well. Use only accounts you are allowed to use.
+</details>
+
+<details>
+<summary><b>Is Relay made by Anthropic?</b></summary>
+
+No. Relay is an independent, unofficial tool. It is not affiliated with, endorsed by or sponsored by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic.
+</details>
+
+<details>
+<summary><b>Will switching interrupt a running reply?</b></summary>
+
+A switch restarts the Claude app, so a reply or subagent that is still running stops. Relay asks first, and automatic switching only acts when nothing is running. Conversations themselves are kept and continue after the switch.
+</details>
+
+<details>
+<summary><b>Why does macOS say it cannot verify Relay?</b></summary>
+
+Relay is not notarized by Apple yet. Follow the three steps in [Install](#install) once per version. Updates are checked against Relay's own certificate, so a tampered update is refused.
+</details>
+
+<details>
+<summary><b>Can a Claude app update break Relay?</b></summary>
+
+It can: Relay reads the Claude app's local files and, for automatic continuation, its accessibility tree. Relay checks what it finds before it changes anything, keeps a backup, and an interrupted switch can be restored from the app.
+</details>
+
+<details>
+<summary><b>How do I uninstall it?</b></summary>
+
+Quit Relay from the menu bar, move `Relay.app` to the Trash, and delete `~/Library/Application Support/Relay` if you also want your saved sign-ins gone. The Claude app keeps the account it was last switched to.
+</details>
+
+## Build from source
+
+Requirements: Node.js 22.12+, and on macOS the Xcode Command Line Tools.
 
 ```sh
 npm ci
-npm run install:mac      # build, sign with the local certificate, install to /Applications
+npm run dev        # Electron + Vite
+npm run dev:ui     # browser preview with sample accounts (?demo=50 for fifty)
+npm test           # 3,000+ tests
+npm run dist:mac:local   # signed local build (see docs/macos-local-signing.md)
 ```
 
-Signing every build with the same local certificate keeps macOS permissions
-across updates. One-time setup: [docs/macos-local-signing.md](docs/macos-local-signing.md).
-To give Relay to someone else, `node scripts/stable-signing.mjs --dmg --arch arm64 --output release/share`
-makes an Apple silicon DMG (`--arch x64`, `both` or `universal` for Intel Macs);
-the same document explains the one-time "Open Anyway" step.
+How switching, history merging and usage reading work, signing and the Linux specifics are in [docs/development.md](docs/development.md). Contributions are welcome — bug reports, translations and pull requests alike. Copy follows [docs/ux/glossary.md](docs/ux/glossary.md); every UI string lives in [`shared/i18n/catalogs`](shared/i18n/catalogs).
 
-Runtime packages that Vite or esbuild bundle (React, Radix, zod…) are
-`devDependencies`; only `node-pty`, which loads a native module at run time,
-belongs in `dependencies`, because electron-builder copies those into the app.
+## Star history
 
-Development: `npm run dev` (Electron + Vite), `npm run dev:ui` (browser preview
-with sample data, `?demo=50` for 50 accounts), `npm test`, `npm run typecheck`.
+<a href="https://star-history.com/#ahmetcankacar54/relay&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ahmetcankacar54/relay&type=Date&theme=dark">
+    <img src="https://api.star-history.com/svg?repos=ahmetcankacar54/relay&type=Date" width="600" alt="Star history chart">
+  </picture>
+</a>
 
-Icon sources: `assets/icon-artwork.png` (Imagegen ribbon R artwork),
-`assets/icon.svg` (vector companion), `assets/relay-mark.svg` (standalone mark)
-and `assets/trayTemplate.svg` (menu-bar silhouette). Run `npm run icons` to
-regenerate 16–1024px PNGs, `assets/icon.icns`, 1×/2×/3× template and color tray
-PNGs, the bundled tray representations and `assets/icons/preview.png`.
-The Electron build regenerates these assets automatically; macOS template mode
-adapts the menu-bar icon to light and dark appearances.
+## License
 
-## First use
-
-1. Open Claude Desktop, sign in, open the **Code** tab once (Overview's **Open Code**
-   does it for you).
-2. In Relay, **Add account**. Relay saves the account open in Claude, or restarts
-   Claude on its sign-in screen; once you sign in and open Code it saves the
-   sign-in by itself.
-3. Usage access starts on its own in a Relay window with its own claude.ai session
-   per account (official CLI sign-in in an isolated profile).
-4. The last step suggests the account's name, type and group.
-5. Settings → What comes along → choose how Code history, the browser extension
-   and the terminal follow a switch.
-
-## How it works
-
-- Relay's data lives in `~/Library/Application Support/Relay` on macOS and
-  `~/.config/Relay` on Linux (`$XDG_CONFIG_HOME/Relay` when set). Saved Desktop
-  sign-ins are encrypted with the operating system (`safeStorage`). Claude's files
-  are only changed while Claude is closed, after an encrypted backup and a write
-  journal; an interrupted switch can be restored from the app.
-- Code history: `claude-code-sessions/<account>/<org>/local_*.json` index records
-  are merged. Records of one conversation are grouped by alias, CLI session id and
-  resumed lineage, and the newest wins. Transcripts in `~/.claude` are shared by
-  all accounts and are never copied or rewritten. Deleted conversations stay
-  deleted.
-- Usage: each account has an isolated CLI profile. Relay reads its credential with
-  `/usr/bin/security` on macOS (no Keychain dialog) and from the profile's
-  `.credentials.json` on Linux, renews it near expiry with the official
-  `CLAUDE_CODE_OAUTH_REFRESH_TOKEN` login, and calls the OAuth profile/usage
-  endpoints. Credentials never reach the UI.
-- Settings → Advanced → Claude Code CLI wants the `claude` CLI (usually
-  `~/.local/bin/claude`), not the Claude app: Relay refuses the app there and
-  ignores it when an older version saved it.
-
-## Limits
-
-- Switching restarts Claude; a running reply or subagent is not moved to another
-  account. Claude may warn that thinking from another organization cannot be
-  reused; the conversation text still continues.
-- Relay depends on Claude Desktop's private local file formats and, for automatic
-  continuation, on its accessibility tree. A Claude update can break either.
-- macOS is the main platform. The Windows installer (`.exe`) switches Claude
-  Desktop by hand, reads usage limits and manages accounts, but has no automatic
-  switch, continuation, draft re-typing, Claude extension or terminal `claude`
-  carry-over, menu bar panel or widget; it is untested on a real machine.
-- The `relay` CLI runs on macOS only.
-
-## Linux
-
-Relay works with the official Claude Desktop for Linux (`/usr/bin/claude-desktop`,
-data in `~/.config/Claude`) and still finds the community packages and a Claude
-AppImage in `~/Applications`; Settings → Advanced can point it at another one.
-Saved sign-ins are sealed through the Secret Service or KWallet, so one of them
-must be running and unlocked.
-
-Works on Linux:
-
-- Switching by hand, from the window or the tray, with Claude's own log telling
-  when its page has loaded and when an account was signed out.
-- Separate Claude windows (Settings → Advanced), each on its own data folder.
-- Overview's **Open Code** (the `claude://code/new` link the package registers).
-- The Claude extension in Chrome and the terminal's `claude` follow a switch.
-- Automatic switching "when I quit the Claude app", and usage read from the
-  Claude app's own session (KWallet or Secret Service; allowed once in Relay).
-- Draft capture: drafts left in Claude at a switch are saved for you to copy back.
-  Capture needs Claude and Relay on the same Electron major; it is skipped
-  otherwise.
-
-macOS only:
-
-- Switch and continue at quota, and re-typing drafts into Claude: both need
-  macOS Accessibility.
-- The menu bar panel, the panda and usage in the menu bar title, and the widget.
-- The `relay` CLI.
-
+[MIT](LICENSE) © Ahmet Can Kaçar. Relay is an independent project and is not affiliated with Anthropic, OpenAI or Google.

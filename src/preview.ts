@@ -36,14 +36,14 @@ const ids = [
 const accounts: Account[] = [
   {
     id: ids[0],
-    name: "Kişisel · Max",
+    name: "Personal · Max",
     kind: "personal",
     group: "personal",
     color: "terra",
   },
   {
     id: ids[1],
-    name: "Kişisel · İkinci",
+    name: "Personal · Backup",
     kind: "personal",
     group: "personal",
     color: "olive",
@@ -52,14 +52,14 @@ const accounts: Account[] = [
     id: ids[2],
     name: "Studio",
     kind: "work",
-    group: "work:studio",
+    group: "work:Studio",
     color: "blue",
   },
   {
     id: ids[3],
-    name: "Danışmanlık",
+    name: "Consulting",
     kind: "work",
-    group: "work:consulting",
+    group: "work:Consulting",
     color: "plum",
   },
 ].map((a) => ({
@@ -80,10 +80,10 @@ const accounts: Account[] = [
 const previewExtension: ExtensionStatus = {
   setting: { mode: "guide" },
   instances: [
-    { app: "chrome", profile: "Default", name: "Kişi 1", opened: true, usedAt: Date.now() - 9 * 86_400_000 },
-    { app: "brave", profile: "Default", name: "Kişisel", opened: true, usedAt: Date.now() - 60_000 },
+    { app: "chrome", profile: "Default", name: "Person 1", opened: true, usedAt: Date.now() - 9 * 86_400_000 },
+    { app: "brave", profile: "Default", name: "Personal", opened: true, usedAt: Date.now() - 60_000 },
   ],
-  target: { app: "brave", profile: "Default", name: "Kişisel", opened: true },
+  target: { app: "brave", profile: "Default", name: "Personal", opened: true },
   picked: "recent",
   restoresTabs: false,
   saved: [{ accountUuid: ids[0], savedAt: new Date().toISOString() }],
@@ -555,6 +555,7 @@ if (scenario === "planning") {
     ...state.settings.planning,
     autoStart: true,
     weekday: { enabled: true, start: "09:00", end: "18:00" },
+    weekend: { enabled: true, start: "10:00", end: "18:00" },
     accounts: ids.slice(0, 3).map((id) => ({ id })),
   };
   const hour = 3_600_000;
