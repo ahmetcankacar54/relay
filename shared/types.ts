@@ -178,6 +178,8 @@ export interface Snapshot {
   windows?: SeparateWindows;
   /** Relay's own updates: a newer release found, downloaded and ready to install. */
   update?: UpdateState;
+  /** Whether each global shortcut is registered; absent before Relay has tried. */
+  shortcuts?: Record<ShortcutAction, ShortcutState>;
   /** Google's Antigravity app on this computer and which Relay account it is signed in with. */
   antigravity?: AntigravityAppState;
   usage: Record<string, AccountUsage>;
@@ -625,6 +627,8 @@ export interface RelayAPI {
   setUpdateAuto(enabled: boolean): Promise<void>;
   /** Opens the newer release's page in the browser. */
   openUpdateNotes(): Promise<void>;
+  /** Lets the global shortcuts go while Settings records one (true), and registers them again (false). */
+  pauseShortcuts(paused: boolean): Promise<void>;
   /** Turns separate Claude windows on or off (Settings). */
   setSeparateWindows(enabled: boolean): Promise<void>;
   /** Opens the account in a separate Claude window, or brings its window forward. */
@@ -830,6 +834,13 @@ export interface RelaySettings {
   notifications?: NotificationSettings;
   /** Start Relay hidden at login (Settings → General); missing means off. */
   launchAtLogin?: boolean;
+  /** Which releases Relay updates to (Settings → Updates); missing means "stable". */
+  updateChannel?: UpdateChannel;
+  /**
+   * Relay's global keyboard shortcuts, as Electron accelerators (shared/shortcuts.ts); a missing
+   * key means its default, an empty one means off.
+   */
+  shortcuts?: ShortcutSettings;
   /**
    * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
    * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
@@ -837,6 +848,13 @@ export interface RelaySettings {
   riskAcknowledged: RiskAcknowledgements;
 }
 export type PrankLevel = "sometimes" | "rarely" | "off";
+/** "beta" also takes GitHub pre-releases; going back to "stable" never installs an older version. */
+export type UpdateChannel = "stable" | "beta";
+/** What a global shortcut does. */
+export type ShortcutAction = "openPanel" | "switchToSuggested";
+export type ShortcutSettings = Partial<Record<ShortcutAction, string>>;
+/** A shortcut as registered: off, working, or held by another app (or the other action). */
+export type ShortcutState = "off" | "on" | "taken";
 /** Whom the "ready again" notice is for: nobody, the account open in the Claude app, or every account. */
 export type LimitResetNotice = "off" | "in-use" | "all";
 /**
@@ -966,6 +984,7 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   autoSwitchAccounts: [],
   historyPolicyVersion: 2,
   launchAtLogin: false,
+  updateChannel: "stable",
   riskAcknowledged: {},
 };
 export type AutoSwitchReason =

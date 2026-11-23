@@ -13,7 +13,7 @@
  * Usage:
  *   node scripts/update-signing.mjs init                   create the key file if absent; print the public key
  *   node scripts/update-signing.mjs public-key             print the public key of the configured key
- *   node scripts/update-signing.mjs sums <dir> [--tag vX.Y.Z] [--require-key]
+ *   node scripts/update-signing.mjs sums <dir> [--tag vX.Y.Z[-beta.N]] [--require-key]
  *     writes <dir>/SHA256SUMS.txt over the release assets in <dir> (merged with the sums already
  *     on the GitHub release <tag>, verified) and <dir>/SHA256SUMS.txt.sig when a key is available.
  */
@@ -30,6 +30,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { releaseChannel } from "./release-channel.mjs";
 
 export const SUMS_NAME = "SHA256SUMS.txt";
 export const SIGNATURE_NAME = `${SUMS_NAME}.sig`;
@@ -278,8 +279,8 @@ function main(args) {
     const dir = rest.find((a) => !a.startsWith("--"));
     const tagIndex = rest.indexOf("--tag");
     const tag = tagIndex >= 0 ? rest[tagIndex + 1] : undefined;
-    if (!dir || (tagIndex >= 0 && !/^v\d+\.\d+\.\d+$/.test(tag ?? "")))
-      throw new Error("Usage: update-signing.mjs sums <dir> [--tag vX.Y.Z] [--require-key]");
+    if (!dir || (tagIndex >= 0 && !(tag?.startsWith("v") && releaseChannel(tag.slice(1)))))
+      throw new Error("Usage: update-signing.mjs sums <dir> [--tag vX.Y.Z[-beta.N]] [--require-key]");
     writeReleaseSums(path.resolve(dir), { tag, requireKey: rest.includes("--require-key") });
     return;
   }

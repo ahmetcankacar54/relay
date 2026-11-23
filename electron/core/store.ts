@@ -19,6 +19,9 @@ import {
 } from "../../shared/browser-extension";
 import { defaultPlanning, systemTimeZone } from "../../shared/planning";
 import { FEATURE_RISK_IDS } from "../../shared/feature-risk";
+import { normalizeAccelerator } from "../../shared/shortcuts";
+import { REMOTE_NOTIFY_URL_MAX, remoteNotifyUrl } from "../../shared/remote-notify";
+import { METER_PROVIDERS } from "../../shared/meters";
 
 export const accountPlanningSchema = z
   .object({
@@ -127,7 +130,8 @@ export function planningFromWorkday(raw: unknown): PlanningSettings {
     accounts: ids.map((id) => ({ id })),
   };
 }
-const accountSchema = z.object({
+/** One saved account; the account backup checks the ones it brings in with it. */
+export const accountSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(64),
   kind: z.enum(["personal", "work"]),
@@ -138,6 +142,8 @@ const accountSchema = z.object({
   provider: z.enum(["claude", "codex", "antigravity", "gemini"]).optional(),
   cooldownUntil: z.iso.datetime().optional(),
   planning: accountPlanningSchema.optional(),
+  // A whole percent from 50 (leave at half) to 100 (only when full); missing means the global line.
+  switchAtPercent: z.number().int().min(50).max(100).optional(),
   desktop: z
     .object({
       accountUuid: z.uuid(),
@@ -219,10 +225,53 @@ export const settingsSchema = z
       .strict()
       .optional(),
     launchAtLogin: z.boolean().optional(),
+    updateChannel: z.enum(["stable", "beta"]).optional(),
+    // A saved key Relay cannot read is skipped when registering, never a reason to reject the file.
+    shortcuts: z
+      .object({
+        openPanel: z.string().max(100).optional(),
+        switchToSuggested: z.string().max(100).optional(),
+      })
+      .strict()
+      .optional(),
+    // Missing means all off; a patch sends all four choices, so no .default() is needed.
+    configSync: z
+      .object({
+        mcpServers: z.boolean(),
+        skills: z.boolean(),
+        settings: z.boolean(),
+        claudeMd: z.boolean(),
+      })
+      .strict()
+      .optional(),
+    // Missing means "best", today's ranking; no .default() so a patch keeps the stored choice.
+    autoSwitchStrategy: z.enum(["best", "weekly-first", "consume-first"]).optional(),
+    // A URL the sender refuses (plain http across a network, a password in it) is never saved.
+    remoteNotify: z
+      .object({
+        url: z
+          .string()
+          .max(REMOTE_NOTIFY_URL_MAX)
+          .refine((url) => !!remoteNotifyUrl(url), "Use https, or http to this computer.")
+          .optional(),
+        kind: z.enum(["ntfy", "webhook"]),
+        events: z
+          .object({ limit: z.boolean(), reset: z.boolean(), autoSwitch: z.boolean(), signIn: z.boolean() })
+          .strict(),
+      })
+      .strict()
+      .optional(),
+    // Missing means none; each meter once. Turning one on is checked against its risk in main.
+    meters: z
+      .array(z.enum(METER_PROVIDERS))
+      .max(METER_PROVIDERS.length)
+      .refine((list) => new Set(list).size === list.length, "Each meter once.")
+      .optional(),
     // A registry from before the risk notes has accepted none of them.
     riskAcknowledged: z.partialRecord(z.enum(FEATURE_RISK_IDS), z.number().int().min(1)).default({}),
   })
   .strict();
+const acceleratorChoice = z.string().refine((key) => key === "" || normalizeAccelerator(key) === key);
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
 // Zod applies nested defaults even under partial(), which would otherwise reset
 // selected accounts whenever an unrelated preference is changed.
@@ -233,6 +282,11 @@ export const settingsPatchSchema = settingsSchema
       settingsSchema.shape.desktopHistoryAccounts.removeDefault(),
     autoSwitchMode: settingsSchema.shape.autoSwitchMode.removeDefault(),
     autoSwitchAccounts: settingsSchema.shape.autoSwitchAccounts.removeDefault(),
+    // A new choice is one accelerator in Relay's own spelling, or "" for off.
+    shortcuts: z
+      .object({ openPanel: acceleratorChoice.optional(), switchToSuggested: acceleratorChoice.optional() })
+      .strict()
+      .optional(),
   })
   // The gateway's settings change through its own calls, which restart it when needed;
   // planning changes only through `update-planning`, which validates and re-plans; a risk is
@@ -252,7 +306,11 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
  * only swapped the extension's hints) are read as "guide" until the user picks them again.
  * 6 added the terminal's Claude Code setting. 7 added the Proxy Gateway's settings and an
  * account's provider; 0.18.0 and 0.18.1 wrote them under 6, which 0.17 builds cannot read.
- * 8 added the W1 settings: accepted risk notes, notification choices and launch at login.
+ * 8 added the W1 settings: accepted risk notes, notification choices and launch at login, and
+ * the W2 settings of the same unreleased build: the update channel and the global shortcuts,
+ * and the W3 settings: what a switch carries between the accounts' Claude Code profiles, the
+ * switch strategy, an account's own switch line, the remote notifications and the other tools'
+ * usage meters.
  */
 export const STATE_SCHEMA = 8;
 const stateSchema = z.object({

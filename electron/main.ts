@@ -8,6 +8,7 @@ import {
   Menu,
   nativeTheme,
   Notification,
+  globalShortcut,
   powerMonitor,
   shell,
   systemPreferences,
@@ -35,12 +36,13 @@ import {
 import { runDetached } from "./core/detached-exec";
 import {
   AppUpdates,
-  LATEST_RELEASE_FEED,
+  RELEASE_FEEDS,
   UPDATE_BUSY,
   releasePage,
 } from "./core/app-update";
 import { MacUpdateDriver } from "./core/mac-update";
 import { ElectronUpdateDriver } from "./core/win-linux-update";
+import { GlobalShortcuts, shortcutSwitchTarget } from "./core/global-shortcuts";
 import { openCodeTab } from "./core/code-tab";
 import { AutoCapture } from "./core/auto-capture";
 import { authWindows, forgetSignInSession } from "./auth-window";
@@ -374,6 +376,8 @@ let trayToday: TrayToday | undefined;
 /** The menu bar's last snapshot, so Settings can show what it shows. */
 let lastTraySnapshot: TraySnapshot | undefined;
 let trayPanel: TrayPanel | undefined;
+/** The global shortcuts (Settings → General), registered once the tray exists. */
+let globalShortcuts: GlobalShortcuts | undefined;
 let switchWindow: SwitchWindow | undefined;
 let switchStory: SwitchStory | undefined;
 let usageHistory: UsageHistory;
@@ -1663,6 +1667,12 @@ else {
       }
       trayTimer = setInterval(() => tray?.update(), 5000);
       trayTimer.unref();
+      globalShortcuts = new GlobalShortcuts(
+        globalShortcut,
+        { openPanel: openFromShortcut, switchToSuggested: () => void switchFromShortcut() },
+        logDraftEvent,
+      );
+      globalShortcuts.apply(service.store.state.settings.shortcuts);
       void service
         .reconcileAuth()
         // A profile saved in the wrong workspace of its own account, before Relay could tell.
@@ -1872,6 +1882,45 @@ async function traySwitch(profileId: string) {
   } finally {
     void tray?.update();
     broadcastChanged();
+  }
+}
+/**
+ * The "open Relay" shortcut: the menu bar panel on macOS, shown without bringing Relay forward
+ * like a click on the menu bar icon (a second press closes it); the main window elsewhere, or
+ * when the panel cannot open.
+ */
+function openFromShortcut() {
+  const bounds = tray?.bounds();
+  if (trayPanel?.usable() && bounds) return trayPanel.toggle(bounds);
+  showWindow();
+}
+/** A shortcut's switch question is on screen: another press does not ask twice. */
+let shortcutSwitchAsking = false;
+/**
+ * The "switch to the suggested account" shortcut: the account the panel's badge names, through
+ * the menu bar's own confirmation, never silently. Without one, Relay opens to show why.
+ */
+async function switchFromShortcut() {
+  if (shortcutSwitchAsking) return;
+  shortcutSwitchAsking = true;
+  try {
+    const now = Date.now();
+    const windows = await separateWindows();
+    const target = shortcutSwitchTarget({
+      activeId: observedDesktop?.activeProfileId,
+      accounts: service.store.state.accounts,
+      usage: usage.snapshot(),
+      settings: service.store.state.settings,
+      now,
+      rate: widgetTempoRate(now),
+      inWindows: new Set(windows?.open.map((open) => open.accountId)),
+    });
+    if (!target) return openFromShortcut();
+    // From another app the question would open behind it: Relay comes forward to ask.
+    if (process.platform === "darwin") app.focus({ steal: true });
+    await traySwitch(target.id);
+  } finally {
+    shortcutSwitchAsking = false;
   }
 }
 /** Accounts the extension notice was shown for since Relay started: once each, not every switch. */
@@ -2105,7 +2154,8 @@ function startAppUpdates() {
   const mac =
     process.platform === "darwin" && bundle
       ? new MacUpdateDriver({
-          feed: testFeed ?? LATEST_RELEASE_FEED,
+          feeds: testFeed ? { stable: testFeed, beta: testFeed } : RELEASE_FEEDS,
+          channel: () => service.store.state.settings.updateChannel ?? "stable",
           folder,
           current,
           arch: process.arch,
@@ -2149,6 +2199,7 @@ function startAppUpdates() {
         current,
         platform: process.platform,
         env: process.env,
+        channel: () => service.store.state.settings.updateChannel ?? "stable",
       }),
     now: Date.now,
     notify: notifyUpdate,
@@ -3126,7 +3177,24 @@ function bindIPC() {
   handle("update-notes", async () => {
     const version = appUpdates?.state().version;
     // Only the release page of a version the feed named, never a URL from the renderer.
-    if (version && /^\d+\.\d+\.\d+$/.test(version)) await shell.openExternal(releasePage(version));
+    if (version && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) await shell.openExternal(releasePage(version));
+  });
+  // Settings records a shortcut: the registered keys are let go meanwhile, so pressing one is
+  // recorded instead of acting. A recorder that never says it ended resumes them after a minute.
+  let shortcutResume: NodeJS.Timeout | undefined;
+  handle("pause-shortcuts", (paused) => {
+    clearTimeout(shortcutResume);
+    if (z.boolean().parse(paused)) {
+      globalShortcuts?.pause();
+      shortcutResume = setTimeout(() => {
+        globalShortcuts?.resume();
+        broadcastChanged();
+      }, 60_000);
+      shortcutResume.unref();
+      return;
+    }
+    globalShortcuts?.resume();
+    broadcastChanged();
   });
   // Separate Claude windows: an account opened in its own Claude beside the main one.
   handle("set-separate-windows", (enabled) => {
@@ -3581,11 +3649,15 @@ function bindIPC() {
     }
     const retype = draftRetype();
     const launchAtLogin = service.store.state.settings.launchAtLogin;
+    const updateChannel = service.store.state.settings.updateChannel ?? "stable";
     service.store.update((s) => {
       Object.assign(s.settings, patch);
     });
     nativeTheme.themeSource = themeSource(service.store.state.settings);
     if (service.store.state.settings.launchAtLogin !== launchAtLogin) void applyLaunchAtLogin();
+    if (patch.shortcuts) globalShortcuts?.apply(service.store.state.settings.shortcuts);
+    if ((service.store.state.settings.updateChannel ?? "stable") !== updateChannel)
+      void appUpdates?.channelChanged();
     usage.tick();
     void autoSwitch.tick();
     // Turned off, the drafts still pending go to Copy now, not at the next switch.
@@ -3664,6 +3736,7 @@ function bindIPC() {
       ...(await service.snapshot()),
       windows: await separateWindows(),
       update: appUpdates?.state(),
+      shortcuts: globalShortcuts?.status(),
       antigravity: await antigravityApp(),
       usage: displayUsage(),
       continuation: continuation.snapshot(),
@@ -4022,6 +4095,7 @@ app.on("will-quit", () => {
   } catch {}
   for (const bridge of antigravityBridges.values()) bridge.stop();
   appUpdates?.stop();
+  globalShortcuts?.dispose();
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);
   tokenScanStopped = true;

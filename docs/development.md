@@ -190,6 +190,13 @@ Each version:
 4. Homebrew: copy `release/homebrew/Casks/relay.rb` into the tap repository
    (see [packaging/homebrew/README.md](../packaging/homebrew/README.md)).
 
+A beta is versioned `X.Y.Z-beta.N` (tag `vX.Y.Z-beta.N`; other pre-release tags
+are refused, because electron-updater follows only the `alpha` and `beta`
+channels). The same steps publish it as a GitHub **pre-release**; its Windows
+and Linux updater files are `beta.yml` and `beta-linux.yml`, which
+`npm run release` requires instead of the `latest` ones, and no Homebrew cask is
+written. Only Relays with Settings → Updates → "Get pre-releases" on install it.
+
 How the updates are trusted:
 
 - macOS: Relay downloads the DMG for its own architecture (`process.arch`),

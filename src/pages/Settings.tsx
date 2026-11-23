@@ -21,6 +21,7 @@ import type {
 } from "../../shared/types";
 import { MenuBarTitleRows } from "./settings/MenuBarItems";
 import { NotificationGroup } from "./settings/NotificationSettings";
+import { ShortcutGroup } from "./settings/ShortcutSettings";
 import { Disclosure } from "@/components/Disclosure";
 import { localizeError } from "../../shared/error-text";
 import { updateShown, updateTitle } from "@/lib/update-text";
@@ -191,6 +192,20 @@ export function UpdatesGroup({
           onCheckedChange={(enabled) => void action("update-auto", () => api.setUpdateAuto(enabled))}
         />
       </SettingRow>
+      <SettingRow
+        label={t("settings.getPreReleases")}
+        htmlFor="update-beta"
+        description={t("settings.getPreReleasesDescription")}
+      >
+        <Switch
+          id="update-beta"
+          checked={data?.settings?.updateChannel === "beta"}
+          disabled={!!busy}
+          onCheckedChange={(beta) =>
+            void action("settings", () => api.updateSettings({ updateChannel: beta ? "beta" : "stable" }))
+          }
+        />
+      </SettingRow>
     </SettingGroup>
   );
 }
@@ -341,6 +356,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               <RefreshIntervalRow />
             </SettingGroup>
             <NotificationGroup />
+            <ShortcutGroup />
             {/* The menu bar title and the switch window are macOS-only; other platforms keep the R icon. */}
             {data?.diagnostics.platform === "darwin" && (
               <SettingGroup id="settings-menu-bar" title={t("settings.menuBar")}>

@@ -1109,6 +1109,8 @@ export const previewApi: RelayAPI = {
     state.update = { ...(state.update ?? previewUpdate()), autoCheck: enabled };
   },
   openUpdateNotes: async () => {},
+  // The preview registers no global shortcuts.
+  pauseShortcuts: async () => {},
   setSeparateWindows: async (enabled) => {
     state.windows = { supported: true, open: [], others: 0, ...state.windows, enabled };
   },

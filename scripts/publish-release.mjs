@@ -11,7 +11,9 @@
  *    with the update signing key (SHA256SUMS.txt.sig) and renders the Homebrew cask.
  * 4. Creates the GitHub release as a DRAFT first and uploads all assets.
  * 5. Verifies every asset is attached, the Windows and Linux ones included.
- * 6. Only once verified, publishes the release (removes draft status) atomically.
+ * 6. Only once verified, publishes the release (removes draft status) atomically. A beta
+ *    (X.Y.Z-beta.N) is published as a GitHub pre-release, with beta.yml and beta-linux.yml as its
+ *    Windows and Linux updater files, and gets no Homebrew cask.
  *
  * Usage:
  *   node scripts/publish-release.mjs [version] [--draft] [--skip-build] [--skip-tests] [--force]
@@ -23,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { caskFromSums, dmgName, TAP_CASK } from "./homebrew-cask.mjs";
 import { releaseAssetNames, SIGNATURE_NAME, SUMS_NAME, writeReleaseSums } from "./update-signing.mjs";
+import { releaseChannel } from "./release-channel.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
@@ -32,8 +35,9 @@ const flags = new Set(args.filter((a) => a.startsWith("--")));
 const positional = args.filter((a) => !a.startsWith("--"));
 
 const version = positional[0] ?? pkg.version;
-if (!/^\d+\.\d+\.\d+$/.test(version)) {
-  console.error(`❌ Invalid version: "${version}". Expected semver (e.g. 0.18.0)`);
+const channel = releaseChannel(version);
+if (!channel) {
+  console.error(`❌ Invalid version: "${version}". Expected X.Y.Z or X.Y.Z-beta.N (e.g. 0.18.0, 0.19.0-beta.1)`);
   process.exit(1);
 }
 
@@ -143,10 +147,13 @@ try {
   process.exit(1);
 }
 
+// The tap installs stable releases only: a beta reaches those who turned on pre-releases in Relay.
 const caskFile = path.join(root, "release/homebrew/Casks/relay.rb");
-fs.mkdirSync(path.dirname(caskFile), { recursive: true });
-fs.writeFileSync(caskFile, caskFromSums(version, sums.text), "utf8");
-console.log(`   Homebrew cask: ${caskFile}`);
+if (!channel.prerelease) {
+  fs.mkdirSync(path.dirname(caskFile), { recursive: true });
+  fs.writeFileSync(caskFile, caskFromSums(version, sums.text), "utf8");
+  console.log(`   Homebrew cask: ${caskFile}`);
+}
 
 const allFilesToUpload = [
   ...releaseAssetNames(shareDir).map((name) => path.join(shareDir, name)),
@@ -185,6 +192,7 @@ if (!releaseExists) {
     "--title",
     tagName,
     "--draft",
+    ...channel.ghFlags,
     "--generate-notes",
   ]);
   isCurrentlyDraft = true;
@@ -206,8 +214,9 @@ for (const name of [...allFilesToUpload.map((file) => path.basename(file)), ...s
 }
 console.log(`   ✅ All ${remoteAssetNames.size} assets verified on GitHub.`);
 
-// The Windows and Linux updaters read latest.yml and latest-linux.yml from the latest release.
-const missingPlatforms = ["latest.yml", "latest-linux.yml"].filter((name) => !remoteAssetNames.has(name));
+// The Windows and Linux updaters read their channel's files: latest.yml and latest-linux.yml, or
+// beta.yml and beta-linux.yml for a beta.
+const missingPlatforms = channel.updaterFiles.filter((name) => !remoteAssetNames.has(name));
 if (missingPlatforms.length > 0 && !isDraftOnly) {
   const note = `${missingPlatforms.join(" and ")} missing: the Release workflow has not attached the Windows and Linux builds yet.`;
   if (!force) {
@@ -222,13 +231,15 @@ if (isDraftOnly) {
   console.log(`\n🎉 Release ${tagName} left as DRAFT as requested (--draft).`);
 } else if (isCurrentlyDraft) {
   console.log(`\n📢 Step 7: Publishing release (undrafting ${tagName})...`);
-  run("gh", ["release", "edit", tagName, "--draft=false"]);
+  // A beta stays a pre-release also when the Release workflow made the draft.
+  run("gh", ["release", "edit", tagName, "--draft=false", ...channel.ghFlags]);
   console.log(`\n🎉 SUCCESS! Relay ${tagName} is now publicly released with all assets atomically attached.`);
 } else {
   console.log(`\n🎉 Release ${tagName} updated with all assets.`);
 }
 
 console.log(`   View release: https://github.com/ahmetcankacar54/relay/releases/tag/${tagName}`);
-console.log(
-  `   Homebrew: copy ${path.relative(root, caskFile)} to Casks/relay.rb in ahmetcankacar54/homebrew-tap (brew install --cask ${TAP_CASK}).\n`,
-);
+if (!channel.prerelease)
+  console.log(
+    `   Homebrew: copy ${path.relative(root, caskFile)} to Casks/relay.rb in ahmetcankacar54/homebrew-tap (brew install --cask ${TAP_CASK}).\n`,
+  );

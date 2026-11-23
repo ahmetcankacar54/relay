@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, createPublicKey, verify } from "node:crypto";
-import type { UpdateState } from "../../shared/types";
+import type { UpdateChannel, UpdateState } from "../../shared/types";
 import {
   RELEASE_REPO,
   compareVersions,
@@ -21,6 +21,10 @@ export interface ElectronUpdater {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
   logger: unknown;
+  /** Setting it also turns allowDowngrade on, so the driver sets that after it. */
+  channel: string | null;
+  allowPrerelease: boolean;
+  allowDowngrade: boolean;
   checkForUpdates(): Promise<{
     isUpdateAvailable?: boolean;
     updateInfo: { version: string };
@@ -74,6 +78,8 @@ export class ElectronUpdateDriver implements UpdateDriver {
       current: string;
       platform: NodeJS.Platform;
       env: NodeJS.ProcessEnv;
+      /** The channel chosen in Settings, read at every check. */
+      channel(): UpdateChannel;
       request?: typeof fetch;
       /** Tests sign with their own key. */
       publicKey?: string;
@@ -86,6 +92,13 @@ export class ElectronUpdateDriver implements UpdateDriver {
     updater.autoDownload = !(this.deps.platform === "linux" && !this.deps.env.APPIMAGE);
     updater.autoInstallOnAppQuit = false;
     updater.logger = null;
+    // Beta takes the newest release of either kind (its beta.yml, else latest.yml); stable only
+    // the latest stable one. Stable is set explicitly: electron-updater allows pre-releases by
+    // itself when the running version is one. Never a downgrade, also not after leaving beta.
+    const beta = this.deps.channel() === "beta";
+    updater.channel = beta ? "beta" : "latest";
+    updater.allowPrerelease = beta;
+    updater.allowDowngrade = false;
     // Progress can come before checkForUpdates returns: it counts once the version is known.
     let known = false;
     let last: number | undefined;

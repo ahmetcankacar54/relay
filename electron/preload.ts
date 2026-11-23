@@ -40,6 +40,7 @@ const api: RelayAPI = {
   installUpdate: () => ipcRenderer.invoke("relay:update-install"),
   setUpdateAuto: (enabled) => ipcRenderer.invoke("relay:set-update-auto", enabled),
   openUpdateNotes: () => ipcRenderer.invoke("relay:update-notes"),
+  pauseShortcuts: (paused) => ipcRenderer.invoke("relay:pause-shortcuts", paused),
   setSeparateWindows: (enabled) => ipcRenderer.invoke("relay:set-separate-windows", enabled),
   openWindow: (accountId) => ipcRenderer.invoke("relay:open-window", accountId),
   closeWindow: (accountId) => ipcRenderer.invoke("relay:close-window", accountId),

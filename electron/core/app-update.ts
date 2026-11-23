@@ -1,12 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { UpdateState } from "../../shared/types";
+import type { UpdateChannel, UpdateState } from "../../shared/types";
 import { privateJournalDirectory, writePrivateJson } from "./continuation-journal";
 
 /** The public repository Relay's releases are published in. */
 export const RELEASE_REPO = "ahmetcankacar54/relay";
-/** Its newest published release: never a draft or a pre-release. */
-export const LATEST_RELEASE_FEED = `https://api.github.com/repos/${RELEASE_REPO}/releases/latest`;
+/**
+ * Where each channel looks: stable reads GitHub's newest release, which is never a draft or a
+ * pre-release; beta reads the newest few releases of either kind and takes the highest version.
+ */
+export const RELEASE_FEEDS: Record<UpdateChannel, string> = {
+  stable: `https://api.github.com/repos/${RELEASE_REPO}/releases/latest`,
+  beta: `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=10`,
+};
 /** A release's own page, for "What's new". */
 export const releasePage = (version: string) =>
   `https://github.com/${RELEASE_REPO}/releases/tag/v${version}`;
@@ -30,6 +36,22 @@ export function parseVersion(text: string) {
   };
 }
 
+/** Semver's pre-release order: identifier by identifier, numbers by value and below words. */
+function comparePre(a: string, b: string) {
+  const x = a.split(".");
+  const y = b.split(".");
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if (x[i] === undefined) return -1;
+    if (y[i] === undefined) return 1;
+    const xNumber = /^\d+$/.test(x[i]);
+    const yNumber = /^\d+$/.test(y[i]);
+    if (xNumber && yNumber && Number(x[i]) !== Number(y[i])) return Number(x[i]) - Number(y[i]);
+    if (xNumber !== yNumber) return xNumber ? -1 : 1;
+    if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  }
+  return 0;
+}
+
 /** Below 0 when `a` is older than `b`, 0 when equal, above 0 when newer. A pre-release is older. */
 export function compareVersions(a: string, b: string): number {
   const x = parseVersion(a);
@@ -39,7 +61,7 @@ export function compareVersions(a: string, b: string): number {
   if (x.pre === y.pre) return 0;
   if (x.pre === undefined) return 1;
   if (y.pre === undefined) return -1;
-  return x.pre < y.pre ? -1 : 1;
+  return comparePre(x.pre, y.pre);
 }
 
 export interface ReleaseAsset {
@@ -56,14 +78,19 @@ export interface Release {
 /** Downloads come over https; plain http only from this computer, for a local test feed. */
 const DOWNLOAD_URL = /^(?:https:\/\/|http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/)/;
 
-/** A GitHub release from its API JSON; undefined for a draft, a pre-release or a bad tag. */
-export function releaseFrom(json: unknown): Release | undefined {
+/**
+ * A GitHub release from its API JSON; undefined for a draft or a bad tag, and on the stable
+ * channel also for a pre-release (by its flag or its tag). A pre-release keeps its tag's
+ * pre-release part in its version, as its assets and its bundle name it.
+ */
+export function releaseFrom(json: unknown, channel: UpdateChannel = "stable"): Release | undefined {
   if (!json || typeof json !== "object") return undefined;
   const r = json as Record<string, unknown>;
-  if (r.draft === true || r.prerelease === true || typeof r.tag_name !== "string") return undefined;
+  if (r.draft === true || typeof r.tag_name !== "string") return undefined;
+  if (channel === "stable" && r.prerelease === true) return undefined;
   const parsed = parseVersion(r.tag_name);
-  if (!parsed || parsed.pre !== undefined) return undefined;
-  const version = parsed.parts.join(".");
+  if (!parsed || (channel === "stable" && parsed.pre !== undefined)) return undefined;
+  const version = parsed.parts.join(".") + (parsed.pre === undefined ? "" : `-${parsed.pre}`);
   const assets = (Array.isArray(r.assets) ? r.assets : []).flatMap((asset) => {
     const a = asset as Record<string, unknown>;
     return typeof a?.name === "string" &&
@@ -74,6 +101,19 @@ export function releaseFrom(json: unknown): Release | undefined {
       : [];
   });
   return { version, notesUrl: releasePage(version), assets };
+}
+
+/**
+ * The highest usable release in a feed for `channel`: GitHub's release list, or one release (the
+ * stable feed, or a local test feed).
+ */
+export function newestRelease(feed: unknown, channel: UpdateChannel): Release | undefined {
+  let newest: Release | undefined;
+  for (const json of Array.isArray(feed) ? feed : [feed]) {
+    const release = releaseFrom(json, channel);
+    if (release && (!newest || compareVersions(release.version, newest.version) > 0)) newest = release;
+  }
+  return newest;
 }
 
 /** `SHA256SUMS.txt` (`<hex>  <name>` lines) as name → lower-case hex. */
@@ -273,6 +313,17 @@ export class AppUpdates {
       if (this.running === run) this.running = undefined;
     });
     return run;
+  }
+  /**
+   * The update channel changed: what the old channel found no longer counts, so a beta ready to
+   * install is not offered after going back to stable. The new channel is checked at once while
+   * automatic checks are on. A check under way finishes first; an install under way is left alone.
+   */
+  async channelChanged(): Promise<UpdateState> {
+    if (this.running) await this.running;
+    if (this.current.status === "installing") return this.state();
+    this.set({ status: "idle" }, true);
+    return this.saved.autoCheck ? this.check() : this.state();
   }
   /** Installs the ready update and quits Relay; the new version opens by itself. */
   async install() {
