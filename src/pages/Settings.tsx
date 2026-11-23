@@ -399,7 +399,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
         </TabsContent>
         <TabsContent value="gelismis">
           <div className="grid max-w-2xl gap-4">
-            <p className="px-1 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("settings.mostPeopleNeverNeedToChange")}
             </p>
             <SettingGroup id="settings-system" title={t("settings.system")}>

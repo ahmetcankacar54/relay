@@ -1,7 +1,6 @@
 import { Fragment, useState } from "react";
-import { AccountDot } from "@/components/AccountDot";
-import { LimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, ListSkeleton, narrowHidden } from "@/components/ListCard";
+import { AccountCard, AccountLimits } from "@/components/AccountCard";
+import { ListCard, ListGroup, ListNote, ListSection, ListSkeleton } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -50,7 +49,7 @@ export function AccountsBoard({ now }: { now: number }) {
   if (relay.data === undefined)
     return (
       <PageSection title={t("accountsBoard.allAccounts")} slot="accounts-board">
-        <ListCard label={t("accountsBoard.allAccounts")}>
+        <ListCard label={t("accountsBoard.allAccounts")} layout="cards">
           <ListSkeleton />
         </ListCard>
       </PageSection>
@@ -82,49 +81,36 @@ export function AccountsBoard({ now }: { now: number }) {
     const own = boardOrder(listed.filter((a) => (a.provider ?? "claude") === provider), usage, now);
     return own.length ? [{ provider, own }] : [];
   });
-  const line = (window: Window | undefined, name: string, pooled: boolean, faded: boolean) =>
-    window ? (
-      <LimitLine
-        label={pooled ? window.label ?? "" : ""}
-        ariaLabel={name}
-        usedPercent={window.usedPercent}
-        resetsAt={window.resetsAt}
-        period={name === t("common.week") ? "seven_day" : "five_hour"}
-        now={now}
-        t={t}
-        faded={faded}
-      />
-    ) : (
-      <span className="text-xs text-muted-foreground">—</span>
-    );
+  const otherBadge = (other: { text: string; full: boolean }) => (
+    <span data-slot="other-limit" title={other.text} className="inline-flex min-w-0 max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
+      <span className={other.full ? "truncate text-crit" : "truncate text-foreground"}>{other.text}</span>
+    </span>
+  );
   const row = (a: Account) => {
     const u = usage[a.id];
     const { five, week, pooled } = limitColumns(u, now);
     const faded = !!u && !freshUsage(u, now);
     const other = otherLimit(u, [five, week].filter((w): w is Window => !!w), now, t);
+    const open = () => (window.location.hash = accountHash(a.id));
     return (
       <Fragment key={a.id}>
-        <ListRow columns="board" onOpen={() => (window.location.hash = accountHash(a.id))} data={{ "data-account": a.id }}>
-          <AccountDot color={a.color} />
-          <div className="flex min-w-0 items-baseline gap-1.5">
-            <ListOpen onOpen={() => (window.location.hash = accountHash(a.id))} title={a.name}>
-              {a.name}
-            </ListOpen>
-            {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("accountsBoard.inUse")}</span>}
-          </div>
-          {line(five, t("common.n5Hours"), pooled, faded)}
-          {line(week, t("common.week"), pooled, faded)}
-          <span className={narrowHidden}>
-            {other && (
-              <span data-slot="other-limit" className="inline-flex max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
-                <span className={other.full ? "truncate text-crit" : "truncate"}>{other.text}</span>
-              </span>
-            )}
-          </span>
-          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-            {a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
-          </div>
-        </ListRow>
+        <AccountCard
+          color={a.color}
+          name={a.name}
+          onOpen={open}
+          data={{ "data-account": a.id }}
+          meta={
+            (inUse.has(a.id) || other) && (
+              <>
+                {inUse.has(a.id) && <span className="shrink-0">{t("accountsBoard.inUse")}</span>}
+                {inUse.has(a.id) && other && <span aria-hidden="true">·</span>}
+                {other && otherBadge(other)}
+              </>
+            )
+          }
+          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          action={a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
+        />
         {a.provider === "antigravity" && promptOn(a.id) && (
           <ListNote>
             <AntigravityPrompt ask={ask} onClose={() => setAsk(undefined)} now={now} size="sm" />
@@ -143,15 +129,7 @@ export function AccountsBoard({ now }: { now: number }) {
         </span>
       }
     >
-      <ListCard label={t("accountsBoard.allAccounts")}>
-        <ListHead columns="board">
-          <span />
-          <span>{t("common.account")}</span>
-          <span>{t("common.n5Hours")}</span>
-          <span>{t("common.week")}</span>
-          <span className={narrowHidden}>{t("accountsBoard.modelLimit")}</span>
-          <span />
-        </ListHead>
+      <ListCard label={t("accountsBoard.allAccounts")} layout="cards">
         {groups.map(({ provider, own }) => (
           <Fragment key={provider}>
             <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />

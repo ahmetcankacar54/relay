@@ -49,9 +49,13 @@ export function AntigravityAction({
   const state = antigravityAccountState(app, account.id);
   if (state !== "saved" && state !== "unsaved") return null;
   const busy = !!app?.busy || !!relay.busy;
+  // A list column is narrower than a long label in some languages: as a block the button truncates its
+  // label with an ellipsis, and the title says it whole.
   return state === "saved" ? (
     <Button
       size="xs"
+      className="block min-w-0 max-w-full truncate leading-6"
+      title={t("common.switch")}
       variant={primary ? "default" : "outline"}
       disabled={busy}
       aria-label={t("antigravityAccount.moveAntigravityTo", { accountName: account.name })}
@@ -62,6 +66,8 @@ export function AntigravityAction({
   ) : (
     <Button
       size="xs"
+      className="block min-w-0 max-w-full truncate leading-6"
+      title={t("common.saveSignIn")}
       variant="outline"
       disabled={busy}
       aria-label={t("antigravityAccount.saveSAntigravitySignIn", { accountName: account.name })}

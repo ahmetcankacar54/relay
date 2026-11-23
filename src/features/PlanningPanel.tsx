@@ -32,7 +32,7 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AccountDot } from "@/components/AccountDot";
-import { ListCard, ListFoot, ListGroup, ListHead, ListRow, ListSection, narrowHidden } from "@/components/ListCard";
+import { ListCard, ListFoot, ListGroup, ListHead, ListRow, ListSection, planNarrow, planWide } from "@/components/ListCard";
 import { InfoTip, PageSection } from "@/components/PageSection";
 import { StatusDot } from "@/components/StatusDot";
 import { StatusLabel } from "@/components/StatusLabel";
@@ -572,7 +572,7 @@ function EmptyPlan({ onPick, t }: { onPick: () => void; t: T }) {
       <p className={cn(noteClass, "max-w-sm")}>
         {t("planningPanel.theChosenAccountsPeriodsLineUp")}
       </p>
-      <Button size="sm" onClick={onPick}>
+      <Button size="sm" className="mt-2" onClick={onPick}>
         {t("planningPanel.chooseAccounts")}
       </Button>
     </Card>
@@ -647,7 +647,7 @@ export function PlanningPanel(props: PlanningPanelProps) {
       <span>{t("common.account")}</span>
       <span>{t("planningPanel.plan")}</span>
       <span>{t("planningPanel.firstStart")}</span>
-      <span className={narrowHidden}>{t("planningPanel.status")}</span>
+      <span className={planWide}>{t("planningPanel.status")}</span>
     </ListHead>
   );
   return (
@@ -742,24 +742,27 @@ export function PlanningPanel(props: PlanningPanelProps) {
                         compact
                       />
                       <div className="grid min-w-0 justify-items-start gap-0.5">
-                        <div className="flex min-w-0 items-center gap-1.5">
+                        <div className="flex min-w-0 max-w-full items-center gap-1.5">
                           {first ? (
-                            <TimePicker
-                              id={`first-${entry.id}`}
-                              label={t("planningPanel.firstStart2", { accountName: account.name })}
-                              value={first}
-                              disabled={disabled}
-                              onChange={(firstStart) =>
-                                update({
-                                  accounts: included.map((a) => (a.id === entry.id ? { ...a, firstStart } : a)),
-                                })
-                              }
-                              t={t}
-                            />
+                            <div className="w-[5.75rem] shrink-0">
+                              <TimePicker
+                                id={`first-${entry.id}`}
+                                label={t("planningPanel.firstStart2", { accountName: account.name })}
+                                value={first}
+                                disabled={disabled}
+                                onChange={(firstStart) =>
+                                  update({
+                                    accounts: included.map((a) => (a.id === entry.id ? { ...a, firstStart } : a)),
+                                  })
+                                }
+                                t={t}
+                              />
+                            </div>
                           ) : (
                             <span className="text-sm text-muted-foreground tabular-nums">—</span>
                           )}
-                          <Badge variant="outline">
+                          {/* The time always shows whole; a long word for "automatic" gives way. */}
+                          <Badge variant="outline" className="block min-w-0 shrink truncate leading-[1.125rem]" title={entry.firstStart ? t("planningPanel.manual") : t("planningPanel.auto")}>
                             {entry.firstStart ? t("planningPanel.manual") : t("planningPanel.auto")}
                           </Badge>
                         </div>
@@ -781,7 +784,7 @@ export function PlanningPanel(props: PlanningPanelProps) {
                           </Button>
                         )}
                       </div>
-                      <div className={cn(narrowHidden, "flex min-w-0 flex-wrap items-center gap-x-2")}>
+                      <div className={cn(planWide, "flex min-w-0 flex-wrap items-center gap-x-2")}>
                         <StatusLabel status={planStatus(status, lastFailure, zone, t)} />
                         {stopReason(status) && (
                           <Button type="button" variant="ghost" size="xs" disabled={disabled} onClick={() => update({})}>
@@ -790,11 +793,14 @@ export function PlanningPanel(props: PlanningPanelProps) {
                         )}
                       </div>
                       {/* How long a window lasts and when it works today: a quiet second line the whole row wide. */}
-                      <span data-slot="window-line" className="col-start-2 col-span-4 flex min-w-0 items-center gap-2 @max-2xl:col-span-3 [&>small]:truncate">
+                      <span data-slot="window-line" className="col-start-2 col-span-4 flex min-w-0 items-center gap-2 @max-3xl:col-span-3 [&>small]:truncate">
+                        {/* A narrower list drops the status column; the status and its retry lead this line instead. */}
+                        <span className={cn(planNarrow, "shrink-0")}>
+                          <StatusLabel status={planStatus(status, lastFailure, zone, t)} />
+                        </span>
                         <AccountWindowLine account={account} rate={todayRate} lane={todayView.lane} clock={model.clock} t={t} />
-                        {/* A narrow list drops the status column; its retry moves here. */}
                         {stopReason(status) && (
-                          <Button type="button" variant="ghost" size="xs" className="@2xl:hidden" disabled={disabled} onClick={() => update({})}>
+                          <Button type="button" variant="ghost" size="xs" className={planNarrow} disabled={disabled} onClick={() => update({})}>
                             {t("planningPanel.tryAgain")}
                           </Button>
                         )}
@@ -831,7 +837,7 @@ export function PlanningPanel(props: PlanningPanelProps) {
                       compact
                     />
                     <span />
-                    <span className={cn(narrowHidden, noteClass)}>{t("planningPanel.notInThePlan")}</span>
+                    <span className={cn(planWide, noteClass)}>{t("planningPanel.notInThePlan")}</span>
                   </ListRow>
                 ))}
               </ListSection>

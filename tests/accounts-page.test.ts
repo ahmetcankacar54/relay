@@ -105,10 +105,11 @@ test("the accounts page lists accounts with their status and limits", () => {
   assert.match(html, /placeholder="Ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
   assert.match(html, /Max 5×/);
-  // One Durum column, then a column per limit; no column per sign-in.
-  assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
+  // Two lines per account, no column header: the status under the name, each limit labelled.
+  assert.doesNotMatch(html, /data-slot="list-head"/);
+  for (const row of listRows(html)) assert.match(row, /data-slot="row-limits"[^>]*>.*>5 saat<.*>Hafta</);
   const [active, studio, work] = listRows(html);
-  assert.match(active, /data-slot="status-label" data-tone="ok"[^>]*>.*>Açık<\/span>/);
+  assert.match(active, /data-slot="status-label" data-tone="ok"[^>]*>.*>Kullanımda<\/span>/);
   assert.match(studio, /data-slot="status-label" data-tone="off" title="Claude uygulaması girişi yok"[^>]*>.*>Uygulama girişi yok<\/span>/);
   assert.match(work, />Uygulama girişi yok<\/span>/);
   assert.doesNotMatch(html, /Bağlı değil|Süresi doldu/);
@@ -146,11 +147,11 @@ test("the accounts list has one Durum column with a fix button only where someth
       ),
     );
   const html = table([a, critical, b]);
-  assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
-  assert.deepEqual(listHead(table([a], "en")), ["", "Account", "Status", "5 hours", "Week", "", ""]);
+  assert.doesNotMatch(html, /data-slot="list-head"/);
+  assert.match(listRows(table([a], "en"))[0], /data-slot="row-limits"[^>]*>.*>5 hours<.*>Week</);
   const [okRow, critRow, offRow] = listRows(html);
   // An ok row shows its status and no inline button; only the ⋯ menu button is there.
-  assert.match(okRow, />Açık<\/span>/);
+  assert.match(okRow, />Kullanımda<\/span>/);
   assert.doesNotMatch(okRow, /data-size="xs"/);
   // A crit row says it in a few words, the full reason in the title, and offers the fix in one word.
   assert.match(critRow, /data-slot="status-label" data-tone="crit" title="Limit okuma girişi gerekli"[^>]*>.*>Giriş gerekli<\/span>/);
@@ -390,7 +391,9 @@ test("an account without a plan shows its subscription beside its name, saying s
   // The short plan sits beside the name, its source in the title; an account with neither shows none.
   // Claude's accounts span two work groups, so the personal ones come first, then the team's.
   const [none, chosen, team] = listRows(tr);
-  assert.match(none, /title="Studio">Studio<\/button><\/div>/);
+  // No plan tag; the only thing beside the name is its work group.
+  assert.match(none, /title="Studio">Studio<\/button>/);
+  assert.doesNotMatch(none, /rounded-sm bg-secondary px-1\.5 py-px/);
   assert.match(team, /title="Şirket">Şirket<\/button><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
   assert.doesNotMatch(tr, /Plan seç/);
   assert.match(html("en"), /title="Subscription · no plan selected for planning">Team<\/span>/);
@@ -521,7 +524,7 @@ test("the page header shows the status and one primary action, with the rest in 
   assert.match(primaryButtons(waiting)[0], />Geç<\/button>$/);
   // No fix and the account in use: nothing to do.
   const active = headerOf(a, {}, { a: readNow(usage.a) });
-  assert.deepEqual(statusOf(active), ["ok", "Açık", "Açık"]);
+  assert.deepEqual(statusOf(active), ["ok", "Kullanımda", "Kullanımda"]);
   assert.equal(primaryButtons(active).length, 0);
   // The same status the list shows for the account.
   const listed = wrap(relayOf({}, expiredC), createElement(AccountsTable, { accounts: [c], open() {}, link() {} }));

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ListTree } from "lucide-react";
 import {
   copySidebarRecipeAction,
   sidebarActionKeys,
@@ -233,10 +232,7 @@ function SidebarSections() {
   const gap = relay.data?.sidebar;
   return (
     <div id="gecis-kenar" className={rowClass}>
-      <SectionHeading
-        icon={<ListTree />}
-        title={t("switchingTabs.sidebarSections")}
-      />
+      <SectionHeading title={t("switchingTabs.sidebarSections")} />
       <SettingRow
         label={
           gap

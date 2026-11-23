@@ -256,9 +256,9 @@ test("limit percentages read %38 in Turkish and 38% in English", () => {
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
   assert.match(table("tr"), />%38<.*>%78</);
   assert.match(table("en"), />38%<.*>78%</);
-  // The list's header names the two columns.
-  assert.match(table("tr"), /data-slot="list-head"[^>]*>.*<span>5 saat<\/span><span[^>]*>Hafta<\/span>/);
-  assert.match(table("en"), /data-slot="list-head"[^>]*>.*<span>5 hours<\/span><span[^>]*>Week<\/span>/);
+  // Each row names its two limits.
+  assert.match(table("tr"), /data-slot="row-limits"[^>]*>.*>5 saat<.*>Hafta</);
+  assert.match(table("en"), /data-slot="row-limits"[^>]*>.*>5 hours<.*>Week</);
 });
 
 test("a confirmed Desktop action shows the travelling panda until it finishes", () => {

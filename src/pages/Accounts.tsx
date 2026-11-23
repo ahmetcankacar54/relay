@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProviderLogo } from "@/components/ProviderLogo";
-import { Link2 } from "lucide-react";
+import { ArrowUpDown, Link2 } from "lucide-react";
 import { PlusIcon, SearchIcon } from "@/components/icons";
 import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -132,6 +141,10 @@ export function Accounts() {
   const toggleSection = (key: string) =>
     setView("collapsed", view.collapsed.includes(key) ? view.collapsed.filter((k) => k !== key) : [...view.collapsed, key]);
   const mac = macWording(usePlatform());
+  // The button says the current grouping and order, so a screen reader hears what the dot shows.
+  const groupByLabel = { provider: t("common.provider"), workGroup: t("accounts.workGroup"), none: t("accounts.none") }[view.groupBy];
+  const sortLabel = { default: t("accounts.default"), name: t("accounts.name"), usage: t("accounts.n5HourUse"), reset: t("accounts.nextReset") }[view.sort];
+  const viewLabel = `${t("accounts.groupBy")}: ${groupByLabel} · ${t("accounts.sort")}: ${sortLabel}`;
   const [adding, setAdding] = useState(false);
   const [addProvider, setAddProvider] = useState<AddProvider>();
   const [linking, setLinking] = useState(false);
@@ -338,8 +351,8 @@ export function Accounts() {
                 ))}
             </ToggleGroup>
           )}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="relative w-40 max-w-full">
+          <div className="ml-auto flex min-w-0 flex-1 basis-64 items-center justify-end gap-2">
+          <div className="relative w-40 min-w-24 shrink">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={search}
@@ -359,7 +372,7 @@ export function Accounts() {
             >
               <SelectTrigger
                 aria-label={t("accounts.filterAccounts")}
-                className="w-fit min-w-28 max-w-56"
+                className="w-fit min-w-0 max-w-56 shrink"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -374,27 +387,43 @@ export function Accounts() {
                 <SelectItem value="work">{t("common.work")}</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={view.groupBy} onValueChange={(v) => setView("groupBy", v as AccountGroupBy)}>
-              <SelectTrigger aria-label={t("accounts.groupBy")} className="w-fit min-w-28 max-w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="provider">{t("common.provider")}</SelectItem>
-                <SelectItem value="workGroup">{t("accounts.workGroup")}</SelectItem>
-                <SelectItem value="none">{t("accounts.none")}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={view.sort} onValueChange={(v) => setView("sort", v as AccountSort)}>
-              <SelectTrigger aria-label={t("accounts.sort")} className="w-fit min-w-28 max-w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">{t("accounts.default")}</SelectItem>
-                <SelectItem value="name">{t("accounts.name")}</SelectItem>
-                <SelectItem value="usage">{t("accounts.n5HourUse")}</SelectItem>
-                <SelectItem value="reset">{t("accounts.nextReset")}</SelectItem>
-              </SelectContent>
-            </Select>
+            {/*
+             * Grouping and order in one menu behind one button: with three selects the toolbar took two
+             * rows in a 1000 px window. A dot on the button says the list is not in its default view.
+             */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative shrink-0"
+                  aria-label={viewLabel}
+                  title={viewLabel}
+                  data-slot="accounts-view"
+                >
+                  <ArrowUpDown />
+                  {(view.groupBy !== "provider" || view.sort !== "default") && (
+                    <span aria-hidden="true" className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuLabel>{t("accounts.groupBy")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={view.groupBy} onValueChange={(v) => setView("groupBy", v as AccountGroupBy)}>
+                  <DropdownMenuRadioItem value="provider">{t("common.provider")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="workGroup">{t("accounts.workGroup")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="none">{t("accounts.none")}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t("accounts.sort")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={view.sort} onValueChange={(v) => setView("sort", v as AccountSort)}>
+                  <DropdownMenuRadioItem value="default">{t("accounts.default")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="name">{t("accounts.name")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="usage">{t("accounts.n5HourUse")}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="reset">{t("accounts.nextReset")}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         {visible.length ? (

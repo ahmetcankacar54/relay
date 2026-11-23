@@ -233,14 +233,18 @@ export function SharedHistoryPreferences({
         label={<span className="font-medium">{t("switchPreferences.sharedCodeHistory")}</span>}
         htmlFor="history-transfer"
         description={
-          <span className="inline-flex items-center gap-1">
+          <>
             {where}
-            {/* Which accounts share, and that only local Code history does: behind the ⓘ. */}
-            {!off && <InfoTip>{historyScopeNote(value.desktopHistoryTransfer, t)}</InfoTip>}
-          </span>
+            {/* Which accounts share, and that only local Code history does: behind the ⓘ, after the last word. */}
+            {!off && (
+              <span className="ms-1 inline-flex align-middle">
+                <InfoTip>{historyScopeNote(value.desktopHistoryTransfer, t)}</InfoTip>
+              </span>
+            )}
+          </>
         }
       >
-        <span className="flex gap-1">
+        <span className="flex max-w-full flex-wrap justify-end gap-1">
           <OptionSelect
             id="history-transfer"
             value={value.desktopHistoryTransfer}

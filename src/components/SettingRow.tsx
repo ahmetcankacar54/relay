@@ -60,7 +60,7 @@ export function SettingGroup({
 }) {
   return (
     <section aria-labelledby={id} data-slot="setting-group" className="grid gap-1.5">
-      <h3 id={id} className="px-1 text-xs font-semibold text-muted-foreground">
+      <h3 id={id} className="text-xs font-semibold text-muted-foreground">
         {title}
       </h3>
       <div className={cn("rounded-lg border bg-card px-3", className)}>{children}</div>
@@ -81,8 +81,10 @@ export function SettingRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-10 items-center justify-between gap-4 border-t border-border py-2 first:border-t-0">
-      <div className="min-w-0">
+    // The controls wrap under the label when both do not fit (a long language, a narrow window), instead
+    // of pushing the page wider than the window.
+    <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border py-2 first:border-t-0">
+      <div className="min-w-0 flex-1 basis-56">
         <label htmlFor={htmlFor} className="text-sm">
           {label}
         </label>
@@ -92,7 +94,7 @@ export function SettingRow({
           </p>
         )}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="ms-auto flex min-w-0 max-w-full shrink-0 justify-end">{children}</div>
     </div>
   );
 }
@@ -134,7 +136,7 @@ export function OptionSelect<V extends string>({
       disabled={disabled}
       onValueChange={(v) => onChange(v as V)}
     >
-      <SelectTrigger id={id} className={cn("min-w-44", className)}>
+      <SelectTrigger id={id} className={cn("min-w-44 max-w-full", className)}>
         <SelectValue>{current?.label}</SelectValue>
       </SelectTrigger>
       <SelectContent>

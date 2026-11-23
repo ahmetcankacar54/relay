@@ -248,7 +248,7 @@ export function AutomationSettings() {
   const fleet = relay.data?.fleet;
   return (
     <section aria-labelledby="automation-title" className="grid gap-3">
-      <h2 id="automation-title" className="px-1 text-sm font-semibold">
+      <h2 id="automation-title" className="text-sm font-semibold">
         {t("automationControl.whenToSwitch")}
       </h2>
       <div

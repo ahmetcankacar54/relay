@@ -75,7 +75,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Kişisel · Max/);
   // One chip: the provider and the plan.
   assert.match(html, /data-provider="claude" title="Planlama için seçildi">[\s\S]*?Claude<span[^>]*>· Max 5×<\/span>/);
-  assert.deepEqual(heroStatus(html), { tone: "ok", title: "Açık", text: "Açık" });
+  assert.deepEqual(heroStatus(html), { tone: "ok", title: "Kullanımda", text: "Kullanımda" });
   // The hero is a grouped box: the account, then one line per limit with its percent.
   assert.match(html, /data-slot="active-account"/);
   assert.match(html, /role="meter" aria-label="5 saat %38"[^>]*aria-valuenow="38"/);
@@ -327,7 +327,7 @@ test("the hero shows the account's status where something is wrong, in a few wor
   assert.equal(heroStatus(render(waiting))?.text, "Tarayıcıda onayla");
   // Stale but healthy: an old reading, quiet; fresh and healthy: in use.
   assert.deepEqual(heroStatus(render(relayFor(active, [active], { active: stale }))), { tone: "off", title: "Eski okuma", text: "Eski okuma" });
-  assert.deepEqual(status(active, use("active", 1, 1)), ["Açık", "Açık"]);
+  assert.deepEqual(status(active, use("active", 1, 1)), ["Kullanımda", "Kullanımda"]);
   // Another account's problem is on its own page: its board row has no figure to show and opens it.
   const other = acct("other", "Vertex", "pro");
   const row = rowFor(render(relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...failed("expired"), accountId: "other" } })), "Vertex");
@@ -797,7 +797,7 @@ test("the hero shows the plan, else the subscription, and says when Claude is cl
   const html = render(relayFor(subscribed, [subscribed], usage));
   assert.match(html, /data-provider="claude" title="Abonelik · planlama için plan seçilmedi">[\s\S]*?Claude<span[^>]*>· Team<\/span>/);
   // Running, the account is in use: a green dot; closed, the status says so in grey.
-  assert.match(html, /data-slot="status-label" data-tone="ok"[^>]*><span aria-hidden="true" class="[^"]*bg-ok[^"]*"><\/span><span class="truncate">Açık<\/span>/);
+  assert.match(html, /data-slot="status-label" data-tone="ok"[^>]*><span aria-hidden="true" class="[^"]*bg-ok[^"]*"><\/span><span class="truncate">Kullanımda<\/span>/);
   const closed = render(relayFor(active, [active], usage, {
     desktop: { available: true, running: false, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, activeProfileId: "active" },
   }));
@@ -805,7 +805,7 @@ test("the hero shows the plan, else the subscription, and says when Claude is cl
   // A used-up limit draws its line red and the status says the account is full.
   const exhausted = render(relayFor(active, [active], { active: use("active", 100, 40, NOW + 3_600_000) }));
   assert.match(exhausted, /role="meter" aria-label="5 saat %100"[^>]*><div class="h-full rounded-full bg-crit"/);
-  assert.deepEqual(heroStatus(exhausted), { tone: "crit", title: "Açık · Dolu", text: "Açık · Dolu" });
+  assert.deepEqual(heroStatus(exhausted), { tone: "crit", title: "Kullanımda · Dolu", text: "Kullanımda · Dolu" });
 });
 
 test("the hero says why its switch to the suggestion is disabled", () => {
@@ -860,7 +860,7 @@ test("the Overview lists Antigravity's accounts on the board: the account the ap
   const plainRelay = withApp({ installed: true, canOpen: false, accountId: "g1" });
   const plain = group(render(plainRelay));
   // The account the app uses is marked; its spent pool leads, red, with when it opens; the other pool beside it.
-  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/button><span[^>]*>açık<\/span>/);
+  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/button>[\s\S]*?<span[^>]*>kullanımda<\/span>/);
   assert.match(plain, /data-account="g1"[\s\S]*?Gemini 4 Carbon \(High\)[\s\S]*?text-crit">Dolu · 25 dk</);
   assert.match(plain, /data-account="g1"[\s\S]*?data-slot="other-limit"[^>]*><span[^>]*>Gemini 4 Argon %0</);
   // Never the roomiest pool as "%0" for the other account: its own figure.

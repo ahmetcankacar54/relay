@@ -145,7 +145,7 @@ export const tokenColumns = (
 /** A row's dot: its account's colour, or grey; the unknown row fainter, as in the chart. */
 function RowDot({ column }: { column: Column }) {
   return (
-    <span aria-hidden className={column.kind === "unknown" ? "opacity-50" : undefined}>
+    <span aria-hidden className={column.kind === "unknown" ? "flex shrink-0 opacity-50" : "flex shrink-0"}>
       <AccountDot color={column.dot} />
     </span>
   );
@@ -226,7 +226,7 @@ function TodayTile({ today }: { today: TokenToday }) {
       : new Intl.DateTimeFormat(FORMAT_LOCALE[language], { hour: "2-digit", minute: "2-digit" }).format(today.slotsSince);
   const config: ChartConfig = { value: { label: t("common.apiValue"), color: "var(--meter)" } };
   return (
-    <section data-slot="token-today" aria-label={t("common.today")} className="contents">
+    <section data-slot="token-today" aria-label={t("common.today")} className="grid min-w-0">
       <Tile
         label={t("common.today")}
         value={formatTokens(total, language)}

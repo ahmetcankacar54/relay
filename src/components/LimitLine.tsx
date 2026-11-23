@@ -34,6 +34,7 @@ export function LimitLine({
   title,
   showReset = true,
   ariaLabel,
+  hint,
 }: {
   label: string;
   usedPercent: number;
@@ -50,6 +51,8 @@ export function LimitLine({
   showReset?: boolean;
   /** The meter's name when the label is empty (a list column names it). */
   ariaLabel?: string;
+  /** Said in the tooltip after the label, not shown (a pooled provider's pool). */
+  hint?: string;
 }) {
   const { language } = useI18n();
   // A window whose reset has passed is empty again, whatever the reading says.
@@ -60,19 +63,31 @@ export function LimitLine({
   const ahead = elapsed !== undefined && used / 100 > elapsed + 0.05;
   // "%45" in Turkish, "45%" in English, as every other percentage in the app.
   const percent = formatPercent(used, language);
+  const reset = countdown(resetsAt, now, t);
+  const fullText = left ? t("limitLine.full", { left }) : t("common.full");
+  // The whole reading, for the tooltip: a narrow column may cut the label or the reset time.
+  const reading = [label, hint, full ? (reset ? t("limitLine.full", { left: reset }) : t("common.full")) : reset ? `${percent} · ${reset}` : percent]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title ?? (showReset ? undefined : countdown(resetsAt, now, t))}>
+    <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title ?? reading}>
+      {/*
+       * One line that never spills into the next column: the reset time truncates first, the label
+       * keeps at most 60 % of the line, the percentage always shows; the tooltip has the whole reading.
+       */}
       <div className={head({ size })}>
-        <span className="truncate text-muted-foreground">{label}</span>
-        <span className="shrink-0 tabular-nums">
+        {label && (
+          <span className="max-w-[60%] shrink-0 truncate text-muted-foreground">{label}</span>
+        )}
+        <span data-slot="limit-value" className="ms-auto flex min-w-0 items-baseline whitespace-nowrap tabular-nums">
           {full ? (
-            <span className="font-semibold text-crit">{left ? t("limitLine.full", { left }) : t("common.full")}</span>
+            <span className="truncate font-semibold text-crit">{fullText}</span>
           ) : (
             <>
-              <span className={cn("font-semibold", used >= 90 ? "text-crit" : used >= 75 ? "text-warn-foreground" : "text-foreground")}>
+              <span className={cn("shrink-0 font-semibold", used >= 90 ? "text-crit" : used >= 75 ? "text-warn-foreground" : "text-foreground")}>
                 {percent}
               </span>
-              {left && <span className="text-muted-foreground"> · {left}</span>}
+              {left && <span className="min-w-0 truncate text-muted-foreground">&nbsp;· {left}</span>}
             </>
           )}
         </span>
@@ -94,6 +109,22 @@ export function LimitLine({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A list cell for a limit with no reading: a dash where the percentage goes and an empty track, so the
+ * row lines up with the rows that have one.
+ */
+export function NoLimitLine({ label, size = "sm", title }: { label?: string; size?: "sm" | "md"; title?: string }) {
+  return (
+    <div data-slot="limit-line" data-empty="" className="grid min-w-0 gap-1" title={title}>
+      <div className={head({ size })}>
+        {label && <span className="min-w-0 truncate text-muted-foreground">{label}</span>}
+        <span className="ms-auto text-muted-foreground">—</span>
+      </div>
+      <div className={cn(track({ size }), "bg-track/50")} aria-hidden="true" />
     </div>
   );
 }

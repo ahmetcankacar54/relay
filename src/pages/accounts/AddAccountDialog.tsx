@@ -230,7 +230,10 @@ export function AddAccountFlow({ close, start }: { close: () => void; start?: Ad
                 onClick={() => setView(way.view)}
                 className="flex w-full items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5 text-left outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
               >
-                <ProviderBadge provider={way.provider} />
+                {/* A fixed slot, so the titles line up whatever the provider's name. */}
+                <span className="flex w-[6.5rem] shrink-0">
+                  <ProviderBadge provider={way.provider} />
+                </span>
                 <span className="grid min-w-0 flex-1 gap-0.5">
                   <span className="text-sm font-medium">{way.title}</span>
                   <span className="text-xs text-muted-foreground">{way.disabled ?? way.hint}</span>

@@ -26,7 +26,7 @@ import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 
 const RULER = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 const rowClass =
-  "grid grid-cols-[84px_minmax(0,1fr)] items-center text-xs @xl:grid-cols-[128px_minmax(0,1fr)]";
+  "grid grid-cols-[7rem_minmax(0,1fr)] items-center text-xs @xl:grid-cols-[9rem_minmax(0,1fr)]";
 const noteClass = "text-xs text-muted-foreground";
 /** The lane block's name shows only when the block is this wide (% of the day). */
 const NAMED_WIDTH = 8;
@@ -72,12 +72,22 @@ function Stat({
       </strong>
       {/* Who warms up when: visible, and still the title for a pointer resting on the value. */}
       {valueTitle && <small className="text-2xs text-muted-foreground">{valueTitle}</small>}
-      {note && (
-        <span className={noteClass} title={noteTitle}>
-          {note}
-        </span>
+      {/*
+       * The comparison (the even spread) as its own block under a rule, so its early-start line reads as
+       * the other option's, not as this plan's said twice.
+       */}
+      {noteTitle ? (
+        <div data-slot="stat-compare" className="mt-1.5 grid gap-0.5 border-s-2 ps-2">
+          {note && (
+            <span className={noteClass} title={noteTitle}>
+              {note}
+            </span>
+          )}
+          <small className="text-2xs text-muted-foreground">{noteTitle}</small>
+        </div>
+      ) : (
+        note && <span className={noteClass}>{note}</span>
       )}
-      {noteTitle && <small className="text-2xs text-muted-foreground">{noteTitle}</small>}
       {chips}
     </div>
   );
