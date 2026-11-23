@@ -826,6 +826,8 @@ export interface RelaySettings {
   claudeExtension?: ExtensionSetting;
   /** What Relay does with the terminal's Claude Code sign-in at a switch; missing means "follow". */
   terminalCli?: TerminalMode;
+  /** Which notifications Relay shows (Settings → General → Notifications); missing keys mean DEFAULT_NOTIFICATIONS. */
+  notifications?: NotificationSettings;
   /** Start Relay hidden at login (Settings → General); missing means off. */
   launchAtLogin?: boolean;
   /**
@@ -835,6 +837,28 @@ export interface RelaySettings {
   riskAcknowledged: RiskAcknowledgements;
 }
 export type PrankLevel = "sometimes" | "rarely" | "off";
+/** Whom the "ready again" notice is for: nobody, the account open in the Claude app, or every account. */
+export type LimitResetNotice = "off" | "in-use" | "all";
+/**
+ * One switch per notification type; each missing key means on (see shared/notifications.ts). The
+ * gateway's loop alarm has none: it guards against a runaway prompt spending a subscription.
+ */
+export interface NotificationSettings {
+  /** The 5-hour window: its warning at the threshold and its "ready again" notice. */
+  limitFiveHour?: boolean;
+  /** The weekly window: its warning at the threshold and its "ready again" notice. */
+  limitWeekly?: boolean;
+  /** After a window that reached the warning threshold resets; missing means "in-use". */
+  limitReset?: LimitResetNotice;
+  /** A finished switch, an automatic switch, rescued drafts, and the browser extension left on another account. */
+  switches?: boolean;
+  /** A Claude Code or Claude app sign-in that ends or has ended, and the browser extension that cannot sign in. */
+  signIns?: boolean;
+  /** Early start: a failed start and a plan adapted to today's pace. */
+  earlyStart?: boolean;
+  /** A downloaded Relay update is ready to install. */
+  updates?: boolean;
+}
 export interface PlanningHours {
   enabled: boolean;
   start: string;

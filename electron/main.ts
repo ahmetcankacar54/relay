@@ -265,6 +265,7 @@ import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
 import { LimitNotices, type LimitWindowKind } from "./core/limit-notice";
+import { notificationSettings } from "../shared/notifications";
 import { formatPercent, percentUsed } from "../shared/percent";
 import { FORMAT_LOCALE } from "../shared/i18n/locales";
 
@@ -442,12 +443,20 @@ let widgetActiveId: string | undefined;
 let languagePref: LanguagePref = "system";
 let keeper: WindowKeeper;
 let observedDesktop: DesktopState | undefined;
-/** A notification when the account in use crosses the warning threshold; the switch "Mark accounts near their limit" turns it off. */
+/**
+ * The limit notices: a warning when the account in use crosses the threshold (also gated by "Mark
+ * accounts near their limit"), and "ready again" after a window that reached it resets.
+ */
 const limitNotices = new LimitNotices({
   settings: () => service.store.state.settings,
   inUse: () => observedDesktop?.activeProfileId,
   notify: notifyLimitNear,
+  ready: notifyLimitReady,
+  file: () => path.join(app.getPath("userData"), "limit-notices.json"),
 });
+/** Whether a notification type is on in Settings → General → Notifications. */
+const notifies = (kind: "switches" | "signIns" | "earlyStart" | "updates") =>
+  notificationSettings(service.store.state.settings)[kind];
 let initialized = false;
 let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
@@ -939,9 +948,9 @@ else {
       service.signInFit = async (account) => {
         switch (await alignDesktopWorkspace(account)) {
           case "other-account":
-            return "Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.";
+            return "The browser signed in with another Claude account; this profile belongs to its Claude app account. Switch to the right account on claude.ai or use “Open in Relay window”, then renew the sign-in.";
           case "no-workspace":
-            return "Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.";
+            return "This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.";
           default:
             return undefined;
         }
@@ -1203,8 +1212,8 @@ else {
           const result = await desktop.adoptTerminalSignIn(accountId, ports);
           if (result === "saved") return true;
           return result === "other-account"
-            ? "Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene."
-            : "Terminal girişi tamamlanmadı. Yeniden dene.";
+            ? "The approval in the browser came from another Claude account or workspace. Try again with this profile’s account."
+            : "The terminal sign-in did not complete. Try again.";
         } finally {
           await ports.keychain.remove().catch(() => undefined);
           broadcastChanged();
@@ -1510,7 +1519,7 @@ else {
           });
         },
         notify: (account, reason) => {
-          if (!Notification.isSupported()) return;
+          if (!Notification.isSupported() || !notifies("earlyStart")) return;
           new Notification({
             title: say("electronMain.earlyStartFailed"),
             body: routineFailureNotice(account.name, reason, getAppLocale()),
@@ -1885,6 +1894,7 @@ function notifyExtensionLeft(target: Account) {
       ((outcome.result === "skipped" || outcome.result === "failed") && !quiet.has(outcome.reason ?? "")));
   if (
     !Notification.isSupported() ||
+    !notifies("switches") ||
     !outcome ||
     !left ||
     Date.now() - Date.parse(outcome.at) > 5 * 60_000 ||
@@ -1927,7 +1937,7 @@ function notifyLoopAlarm(alarm: ProxyLoopAlarm) {
   notice.show();
 }
 function notifyExtensionBroken(account: Account) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("signIns")) return;
   const notice = new Notification({
     title: say("electronMain.extensionCannotSignIn"),
     body: say("electronMain.claudeSBrowserToolsDoNot2", { accountName: account.name }),
@@ -2020,7 +2030,7 @@ async function renewSignInQuietly(account: Account): Promise<RenewalResult> {
 }
 /** Says that an account's Claude Code sign-in ends soon (or ended) and Relay could not renew it. */
 function notifySignInEnding(account: Account, endsAt?: string) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("signIns")) return;
   const end = endsAt ? Date.parse(endsAt) : NaN;
   const days = Number.isFinite(end) && end > Date.now() ? Math.max(1, Math.ceil((end - Date.now()) / 86_400_000)) : 0;
   const notice = new Notification({
@@ -2051,9 +2061,19 @@ function notifyLimitNear(account: Account, kind: LimitWindowKind, window: { used
   notice.on("click", () => openPage("genel"));
   notice.show();
 }
+/** Says that a window which reached the warning threshold has reset; a click opens Overview. */
+function notifyLimitReady(account: Account, kind: LimitWindowKind) {
+  if (!Notification.isSupported()) return;
+  const notice = new Notification({
+    title: say("electronMain.accountReadyAgain", { accountName: account.name }),
+    body: say(kind === "five_hour" ? "electronMain.fiveHourLimitReset" : "electronMain.weeklyLimitReset"),
+  });
+  notice.on("click", () => openPage("genel"));
+  notice.show();
+}
 /** Says that an account's saved Claude sign-in ended; a click opens the account. */
 function notifySignInEnded(account: Account) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("signIns")) return;
   const notice = new Notification({
     title: say("electronMain.claudeSignInEnded"),
     body: say("electronMain.theSavedSignInOfNo", { accountName: account.name }),
@@ -2063,7 +2083,7 @@ function notifySignInEnded(account: Account) {
 }
 /** Says once per version that a downloaded update is ready; a click opens Overview, where the sidebar row offers it. */
 function notifyUpdate(version: string) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("updates")) return;
   const notice = new Notification({
     title: say("electronMain.updateReady"),
     body: say("electronMain.clickToInstallRelay", { version }),
@@ -2145,7 +2165,7 @@ function startAppUpdates() {
 }
 /** Same copy as the menu bar switch; shown after a tray or panel switch. */
 function notifySwitched(name: string) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("switches")) return;
   new Notification({
     title: say("electronMain.switchComplete"),
     body: say("electronMain.theClaudeAppSwitchedTo", { name }),
@@ -2156,7 +2176,7 @@ function notifyFleet(
   last: NonNullable<FleetContinuationState["last"]>,
   reason?: string,
 ) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("switches")) return;
   const name =
     service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
     say("electronMain.another");
@@ -2168,14 +2188,14 @@ function notifyFleet(
 /** After a draft restore: how many drafts were typed back, and how many wait in the panel. */
 function notifyDrafts(summary: { restored: number; left: number }) {
   const body = draftNotice(summary, getAppLocale());
-  if (!body || !Notification.isSupported()) return;
+  if (!body || !Notification.isSupported() || !notifies("switches")) return;
   new Notification({ title: say("common.rescuedDrafts"), body }).show();
 }
 /** Today's plan was re-planned at today's pace, or is back to normal. */
 function notifyAdapted(
   notice: Parameters<NonNullable<KeeperDeps["adapted"]>>[0],
 ) {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported() || !notifies("earlyStart")) return;
   const { accounts, settings } = service.store.state;
   // Clocks in the planning zone, without suffixes.
   const clock = new Intl.DateTimeFormat("en-GB", {

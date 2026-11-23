@@ -37,7 +37,7 @@ test("readProfileAuth reports a failed status as signed out with the error text"
   const s = script(t, "exit 1");
   const auth = await readProfileAuth(s.file, s.profile, undefined);
   assert.equal(auth.loggedIn, false);
-  assert.equal(auth.error, "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.");
+  assert.equal(auth.error, "The usage sign-in could not be verified. Renew the usage sign-in.");
 });
 
 test("diagnoseCli reports the version and whether it supports Desktop", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
@@ -52,5 +52,5 @@ test("diagnoseCli reports the version and whether it supports Desktop", { skip: 
 test("diagnoseCli says when no CLI is found", async (t) => {
   const s = script(t, "exit 0");
   const d = await diagnoseCli(path.join(s.dir, "missing"), s.dir);
-  assert.match(d.error!, /Claude Code bulunamadı/);
+  assert.match(d.error!, /Claude Code was not found/);
 });

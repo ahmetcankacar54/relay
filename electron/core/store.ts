@@ -17,7 +17,7 @@ import {
   EXTENSION_MODES,
   PROFILE_FOLDER,
 } from "../../shared/browser-extension";
-import { defaultPlanning } from "../../shared/planning";
+import { defaultPlanning, systemTimeZone } from "../../shared/planning";
 import { FEATURE_RISK_IDS } from "../../shared/feature-risk";
 
 export const accountPlanningSchema = z
@@ -85,12 +85,13 @@ export function planningFromWorkday(raw: unknown): PlanningSettings {
   const clock = (value: unknown, fallback: string) =>
     clockSchema.safeParse(value).success ? (value as string) : fallback;
   const days = Array.isArray(w.weekdays) ? w.weekdays : [];
-  if (!Object.keys(w).length) return structuredClone(DEFAULT_PLANNING);
+  // No workday was ever saved: the new install's planning, in the system's time zone.
+  if (!Object.keys(w).length) return defaultPlanning();
   const start = clock(w.start, DEFAULT_PLANNING.weekday.start);
   const end = clock(w.end, DEFAULT_PLANNING.weekday.end);
   const timeZone = timeZoneSchema.safeParse(w.timeZone).success
     ? (w.timeZone as string)
-    : DEFAULT_PLANNING.timeZone;
+    : systemTimeZone();
   // The old screen saved its 00:00–00:00 every-day default even when unused;
   // that is not a request for 24-hour work days.
   if (
@@ -204,6 +205,19 @@ export const settingsSchema = z
     claudeExtension: extensionSettingSchema.optional(),
     // Missing means "follow"; no .default() so a patch keeps the stored choice.
     terminalCli: z.enum(TERMINAL_MODES).optional(),
+    // Missing keys mean their defaults; no .default() so a patch keeps the stored choices.
+    notifications: z
+      .object({
+        limitFiveHour: z.boolean().optional(),
+        limitWeekly: z.boolean().optional(),
+        limitReset: z.enum(["off", "in-use", "all"]).optional(),
+        switches: z.boolean().optional(),
+        signIns: z.boolean().optional(),
+        earlyStart: z.boolean().optional(),
+        updates: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     launchAtLogin: z.boolean().optional(),
     // A registry from before the risk notes has accepted none of them.
     riskAcknowledged: z.partialRecord(z.enum(FEATURE_RISK_IDS), z.number().int().min(1)).default({}),
@@ -263,10 +277,12 @@ const stateSchema = z.object({
         ? saved
         : { ...saved, planning: planningFromWorkday(workday) };
     }, settingsSchema)
-    .default({
+    // A registry without settings never saved planning either: it plans in the system's zone.
+    .default(() => ({
       ...DEFAULT_SETTINGS,
+      planning: defaultPlanning(),
       desktopHistoryTransfer: SAVED_WITHOUT_HISTORY_MODE,
-    }),
+    })),
   accounts: z.array(accountSchema).max(50),
   pinned: z.array(z.string()),
   importEnabled: z.boolean(),

@@ -116,7 +116,7 @@ export class Runner {
         new Promise<never>((_, reject) => {
           timer = setTimeout(
             () =>
-              reject(new Error("İşlem henüz kapanmadı. Aktarım başlatılmadı.")),
+              reject(new Error("The process has not closed yet. The transfer did not start.")),
             5000,
           );
         }),

@@ -203,7 +203,7 @@ export class AuthManager {
         this.finish(
           e,
           "failed",
-          "Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.",
+          "Could not start the usage sign-in. Check Claude Code CLI in Settings.",
         );
     });
     child.once("error", () => releaseProfile?.());
@@ -218,7 +218,7 @@ export class AuthManager {
         this.finish(
           e,
           "failed",
-          "Limit okuma girişi tamamlanmadı. Yeniden dene ve tarayıcıda onayla.",
+          "The usage sign-in did not finish. Try again and approve it in the browser.",
         );
         return;
       }
@@ -304,7 +304,7 @@ export class AuthManager {
     this.finish(
       e,
       timedOut ? "failed" : "cancelled",
-      timedOut ? "Giriş süresi doldu. Girişi yeniden başlat." : undefined,
+      timedOut ? "The sign-in timed out. Start it again." : undefined,
     );
     e.stopping = false;
   }
@@ -332,14 +332,14 @@ export class AuthManager {
           ? undefined
           : typeof verdict === "string"
             ? verdict
-            : "Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
+            : "The browser approval came through, but the account could not be verified. Refresh limits; if it persists, renew the usage sign-in.",
       );
     } catch {
       if (!e.stopping && authPending(e.flow))
         this.finish(
           e,
           "failed",
-          "Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
+          "The account could not be verified. Refresh limits; if it persists, renew the usage sign-in.",
         );
     }
   }
