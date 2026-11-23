@@ -1,8 +1,6 @@
 import { Fragment, useState } from "react";
-import { AccountDot } from "@/components/AccountDot";
-import { LimitLine, limitCell, NoLimitLine } from "@/components/LimitLine";
-import { boardNarrow, boardWide, ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, ListSkeleton } from "@/components/ListCard";
-import { cn } from "@/lib/utils";
+import { AccountRow, RowLimits } from "@/components/AccountRow";
+import { ListCard, ListGroup, ListNote, ListSection, ListSkeleton } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -83,21 +81,6 @@ export function AccountsBoard({ now }: { now: number }) {
     const own = boardOrder(listed.filter((a) => (a.provider ?? "claude") === provider), usage, now);
     return own.length ? [{ provider, own }] : [];
   });
-  const line = (window: Window | undefined, name: string, pooled: boolean, faded: boolean) =>
-    window ? (
-      <LimitLine
-        label={pooled ? window.label ?? "" : ""}
-        ariaLabel={name}
-        usedPercent={window.usedPercent}
-        resetsAt={window.resetsAt}
-        period={name === t("common.week") ? "seven_day" : "five_hour"}
-        now={now}
-        t={t}
-        faded={faded}
-      />
-    ) : (
-      <NoLimitLine />
-    );
   const otherBadge = (other: { text: string; full: boolean }) => (
     <span data-slot="other-limit" title={other.text} className="inline-flex min-w-0 max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
       <span className={other.full ? "truncate text-crit" : "truncate text-foreground"}>{other.text}</span>
@@ -108,33 +91,24 @@ export function AccountsBoard({ now }: { now: number }) {
     const { five, week, pooled } = limitColumns(u, now);
     const faded = !!u && !freshUsage(u, now);
     const other = otherLimit(u, [five, week].filter((w): w is Window => !!w), now, t);
+    const open = () => (window.location.hash = accountHash(a.id));
     return (
       <Fragment key={a.id}>
-        <ListRow columns="board" onOpen={() => (window.location.hash = accountHash(a.id))} data={{ "data-account": a.id }}>
-          <AccountDot color={a.color} />
-          {/*
-           * The name has the first line to itself; "in use" and, in a card too narrow for its own column,
-           * the model limit sit quietly under it, so neither squeezes the name.
-           */}
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-muted-foreground [&>[data-list-nav]]:basis-full [&>[data-list-nav]]:text-foreground">
-            <ListOpen onOpen={() => (window.location.hash = accountHash(a.id))} title={a.name}>
-              {a.name}
-            </ListOpen>
-            {inUse.has(a.id) && <span className="shrink-0">{t("accountsBoard.inUse")}</span>}
-            {other && (
-              <span className={cn("flex min-w-0 flex-1 basis-0 items-center gap-1.5", boardNarrow)}>
-                {inUse.has(a.id) && <span aria-hidden="true">·</span>}
-                {otherBadge(other)}
-              </span>
-            )}
-          </div>
-          <div className={limitCell}>{line(five, t("common.n5Hours"), pooled, faded)}</div>
-          <div className={limitCell}>{line(week, t("common.week"), pooled, faded)}</div>
-          <span className={cn("flex min-w-0", boardWide)}>{other && otherBadge(other)}</span>
-          <div className="flex min-w-0 justify-end" onClick={(e) => e.stopPropagation()}>
-            {a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
-          </div>
-        </ListRow>
+        <AccountRow
+          color={a.color}
+          name={a.name}
+          onOpen={open}
+          data={{ "data-account": a.id }}
+          meta={
+            <>
+              {inUse.has(a.id) && <span className="shrink-0">{t("accountsBoard.inUse")}</span>}
+              {inUse.has(a.id) && other && <span aria-hidden="true">·</span>}
+              {other && otherBadge(other)}
+            </>
+          }
+          limits={<RowLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          actions={a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
+        />
         {a.provider === "antigravity" && promptOn(a.id) && (
           <ListNote>
             <AntigravityPrompt ask={ask} onClose={() => setAsk(undefined)} now={now} size="sm" />
@@ -154,14 +128,6 @@ export function AccountsBoard({ now }: { now: number }) {
       }
     >
       <ListCard label={t("accountsBoard.allAccounts")}>
-        <ListHead columns="board">
-          <span />
-          <span>{t("common.account")}</span>
-          <span>{t("common.n5Hours")}</span>
-          <span>{t("common.week")}</span>
-          <span className={cn("truncate", boardWide)}>{t("accountsBoard.modelLimit")}</span>
-          <span />
-        </ListHead>
         {groups.map(({ provider, own }) => (
           <Fragment key={provider}>
             <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />

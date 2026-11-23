@@ -105,8 +105,9 @@ test("the accounts page lists accounts with their status and limits", () => {
   assert.match(html, /placeholder="Ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
   assert.match(html, /Max 5×/);
-  // One Durum column, then a column per limit; no column per sign-in.
-  assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
+  // Two lines per account, no column header: the status under the name, each limit labelled.
+  assert.doesNotMatch(html, /data-slot="list-head"/);
+  for (const row of listRows(html)) assert.match(row, /data-slot="row-limits"[^>]*>.*>5 saat<.*>Hafta</);
   const [active, studio, work] = listRows(html);
   assert.match(active, /data-slot="status-label" data-tone="ok"[^>]*>.*>Kullanımda<\/span>/);
   assert.match(studio, /data-slot="status-label" data-tone="off" title="Claude uygulaması girişi yok"[^>]*>.*>Uygulama girişi yok<\/span>/);
@@ -146,8 +147,8 @@ test("the accounts list has one Durum column with a fix button only where someth
       ),
     );
   const html = table([a, critical, b]);
-  assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
-  assert.deepEqual(listHead(table([a], "en")), ["", "Account", "Status", "5 hours", "Week", "", ""]);
+  assert.doesNotMatch(html, /data-slot="list-head"/);
+  assert.match(listRows(table([a], "en"))[0], /data-slot="row-limits"[^>]*>.*>5 hours<.*>Week</);
   const [okRow, critRow, offRow] = listRows(html);
   // An ok row shows its status and no inline button; only the ⋯ menu button is there.
   assert.match(okRow, />Kullanımda<\/span>/);
@@ -870,7 +871,7 @@ test("a stale row says its reading is old, fades its limits and offers a Refresh
   assert.doesNotMatch(row, /data-slot="data-age"/);
   assert.match(row, /data-slot="limit-line" class="[^"]*opacity-60/);
   assert.match(row, /<button[^>]*data-variant="outline"[^>]*data-size="xs"[^>]*aria-label="Limitleri yenile · Üçüncü" title="Limitleri yenile">Yenile<\/button>/);
-  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Old reading<\/span>.*aria-label="Refresh limits · Üçüncü"[^>]*>Refresh<\/button>/);
+  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], /aria-label="Refresh limits · Üçüncü"[^>]*>Refresh<\/button>.*>Old reading<\/span>/);
   // A fresh row has neither.
   const fresh = rowsOf(suggestedTable({ suggestion: undefined }))[1];
   assert.doesNotMatch(fresh, /Eski okuma|opacity-60|>Yenile<\/button>/);
@@ -944,7 +945,7 @@ test("a row that needs a step says so in its status and offers that step; the co
   // The icons and their key live on the account's page now.
   assert.doesNotMatch(html, /data-slot="connection-legend"|data-step=|role="img"/);
   const en = suggestedTable({}, {}, "en");
-  assert.match(rowsOf(en)[2], />No app sign-in<\/span>.*>Save<\/button>/);
+  assert.match(rowsOf(en)[2], />Save<\/button>.*>No app sign-in<\/span>/);
   assert.doesNotMatch(en, /data-slot="connection-legend"/);
 });
 

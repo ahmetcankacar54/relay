@@ -43,9 +43,8 @@ import { groupAccounts, sectionCount, type AccountGroupBy, type AccountSection, 
 import { isClaudeAccount } from "@/lib/account-health";
 import { limitColumns } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
-import { AccountDot } from "@/components/AccountDot";
-import { LimitLine, NoLimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, midHidden, narrowHidden } from "@/components/ListCard";
+import { AccountRow, RowLimits, RowTag } from "@/components/AccountRow";
+import { ListCard, ListGroup, ListNote, ListSection } from "@/components/ListCard";
 import { ProviderLogo } from "@/components/ProviderLogo";
 import { StatusLabel } from "@/components/StatusLabel";
 import { relayProviders } from "@/features/Providers";
@@ -406,68 +405,53 @@ export function AccountsTable({
     // The two columns as every list fills them: Antigravity's from its pools (`limitColumns`).
     const { five, week, pooled } = limitColumns(usage, now);
     const faded = !!usage && !freshUsage(usage, now);
-    const cell = (window: typeof five, name: string) =>
-      window ? (
-        <LimitLine
-          label=""
-          ariaLabel={pooled ? `${name} · ${(window as { label?: string }).label ?? ""}` : name}
-          usedPercent={window.usedPercent}
-          resetsAt={window.resetsAt}
-          now={now}
-          t={t}
-          faded={faded}
-          showReset={false}
-        />
-      ) : (
-        <NoLimitLine />
-      );
     const stop = (e: MouseEvent) => e.stopPropagation();
+    // The one visible step, then the menu with every action.
+    const actionsNode = (
+      <>
+        {a.provider === "antigravity" && !step ? (
+          <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
+        ) : step ? (
+          <Button size="xs" variant="outline" className="block min-w-0 max-w-full truncate leading-6" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
+            {step === refresh ? t("accountsTable.refresh") : shortFix(step.key, t) ?? step.label}
+          </Button>
+        ) : switchTo ? (
+          <Button size="xs" className="block min-w-0 max-w-full truncate leading-6" title={t("common.switch")} aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
+            {t("common.switch")}
+          </Button>
+        ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={t("accountsTable.actions", { aName: a.name })}>
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          {/* Portaled, but React events still bubble to the row. */}
+          <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+            <RowActionItems actions={actions} prank={prank} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
     return (
       <Fragment key={a.id}>
-        <ListRow columns="accounts" onOpen={() => open(a.id)} selected={selected === a.id} data={{ "data-account": a.id }}>
-          <AccountDot color={a.color} />
-          <div className="flex min-w-0 items-center gap-1.5">
-            {markRows && <ProviderLogo provider={accountProvider(a)} />}
-            <ListOpen onOpen={() => open(a.id)} title={a.name}>
-              {a.name}
-            </ListOpen>
-            {plan && (
-              <span className={cn("shrink-0 text-2xs text-muted-foreground", midHidden)} title={planTitle(a, plan, t)}>
-                {plan.short}
-              </span>
-            )}
-            {inWindows.has(a.id) && <WindowBadge t={t} compact />}
-          </div>
-          <StatusLabel status={status} />
-          {cell(five, t("common.n5Hours"))}
-          <div className={narrowHidden}>{cell(week, t("common.week"))}</div>
-          <div className="flex min-w-0 justify-end" onClick={stop}>
-            {a.provider === "antigravity" && !step ? (
-              <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
-            ) : step ? (
-              <Button size="xs" variant="outline" className="block min-w-0 max-w-full truncate leading-6" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
-                {step === refresh ? t("accountsTable.refresh") : shortFix(step.key, t) ?? step.label}
-              </Button>
-            ) : switchTo ? (
-              <Button size="xs" className="block min-w-0 max-w-full truncate leading-6" title={t("common.switch")} aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
-                {t("common.switch")}
-              </Button>
-            ) : null}
-          </div>
-          <div onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={t("accountsTable.actions", { aName: a.name })}>
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              {/* Portaled, but React events still bubble to the row. */}
-              <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
-                <RowActionItems actions={actions} prank={prank} />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </ListRow>
+        <AccountRow
+          color={a.color}
+          name={a.name}
+          onOpen={() => open(a.id)}
+          selected={selected === a.id}
+          data={{ "data-account": a.id }}
+          tags={
+            <>
+              {markRows && <ProviderLogo provider={accountProvider(a)} />}
+              {plan && <RowTag title={planTitle(a, plan, t)}>{plan.short}</RowTag>}
+              {inWindows.has(a.id) && <WindowBadge t={t} compact />}
+            </>
+          }
+          meta={<StatusLabel status={status} />}
+          limits={<RowLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          actions={actionsNode}
+        />
         {a.provider === "antigravity" && promptOn(a.id) && (
           <ListNote>
             <AntigravityPrompt ask={antigravityAsk} onClose={() => setAntigravityAsk(undefined)} now={now} size="sm" />
@@ -500,15 +484,6 @@ export function AccountsTable({
   };
   return (
     <ListCard label={t("common.accounts")} slot="accounts-list">
-      <ListHead columns="accounts">
-        <span />
-        <span>{t("common.account")}</span>
-        <span>{t("accountsTable.status")}</span>
-        <span>{t("common.n5Hours")}</span>
-        <span className={narrowHidden}>{t("common.week")}</span>
-        <span />
-        <span />
-      </ListHead>
       {groupBy === "none" ? sections.flatMap((s) => s.accounts).map(row) : sections.map(section)}
     </ListCard>
   );

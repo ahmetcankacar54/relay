@@ -34,6 +34,7 @@ export function LimitLine({
   title,
   showReset = true,
   ariaLabel,
+  hint,
 }: {
   label: string;
   usedPercent: number;
@@ -50,6 +51,8 @@ export function LimitLine({
   showReset?: boolean;
   /** The meter's name when the label is empty (a list column names it). */
   ariaLabel?: string;
+  /** Said in the tooltip after the label, not shown (a pooled provider's pool). */
+  hint?: string;
 }) {
   const { language } = useI18n();
   // A window whose reset has passed is empty again, whatever the reading says.
@@ -63,19 +66,18 @@ export function LimitLine({
   const reset = countdown(resetsAt, now, t);
   const fullText = left ? t("limitLine.full", { left }) : t("common.full");
   // The whole reading, for the tooltip: a narrow column may cut the label or the reset time.
-  const reading = [label, full ? (reset ? t("limitLine.full", { left: reset }) : t("common.full")) : reset ? `${percent} · ${reset}` : percent]
+  const reading = [label, hint, full ? (reset ? t("limitLine.full", { left: reset }) : t("common.full")) : reset ? `${percent} · ${reset}` : percent]
     .filter(Boolean)
     .join(" ");
   return (
     <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title ?? reading}>
       {/*
-       * One line that never spills into the next column: the reset time truncates first; the label shows
-       * whole, or not at all in a list cell (`limitCell`) under 8.5rem (the column names the period and
-       * the title the pool); the percentage always shows.
+       * One line that never spills into the next column: the reset time truncates first, the label
+       * keeps at most 60 % of the line, the percentage always shows; the tooltip has the whole reading.
        */}
       <div className={head({ size })}>
         {label && (
-          <span className="max-w-[60%] shrink-0 truncate text-muted-foreground @max-[8.5rem]/limit-cell:hidden">{label}</span>
+          <span className="max-w-[60%] shrink-0 truncate text-muted-foreground">{label}</span>
         )}
         <span data-slot="limit-value" className="ms-auto flex min-w-0 items-baseline whitespace-nowrap tabular-nums">
           {full ? (
@@ -126,9 +128,6 @@ export function NoLimitLine({ label, size = "sm", title }: { label?: string; siz
     </div>
   );
 }
-
-/** Wraps a `LimitLine` in a list column, so a narrow column drops the line's label before its figures. */
-export const limitCell = "@container/limit-cell min-w-0";
 
 /** A bare bar for a row (no label): the account's binding limit at a glance. */
 export function MiniMeter({ usedPercent, label }: { usedPercent: number | undefined; label: string }) {

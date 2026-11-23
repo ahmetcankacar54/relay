@@ -1,9 +1,8 @@
 import { Fragment } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { intentHash } from "@/app/routes";
-import { AccountDot } from "@/components/AccountDot";
-import { LimitLine, limitCell, NoLimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListRow, ListSection, narrowHidden } from "@/components/ListCard";
+import { AccountRow, RowLimits } from "@/components/AccountRow";
+import { ListCard, ListGroup, ListSection } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { Private } from "@/components/Private";
 import { StatusDot } from "@/components/StatusDot";
@@ -155,13 +154,6 @@ export function PoolCard({
       <ListCard label={t("poolCard.accountsInThePool")}>
         {accounts.length ? (
           <>
-            <ListHead columns="pool">
-              <span />
-              <span>{t("common.account")}</span>
-              <span>{t("common.n5Hours")}</span>
-              <span className={narrowHidden}>{t("common.week")}</span>
-              <span className="text-end">{t("poolCard.inPool")}</span>
-            </ListHead>
             {groups.map(({ provider, own }) => (
               <Fragment key={provider}>
                 <ListGroup provider={provider} name={POOL_PROVIDER_NAMES[provider]} count={own.length} />
@@ -204,99 +196,82 @@ export function PoolCard({
                     ]
                       .filter(Boolean)
                       .join(" ");
-                    const cell = (window: { usedPercent: number; resetsAt?: string; label?: string } | undefined, name: string) =>
-                      window ? (
-                        <LimitLine
-                          label={pools ? (window.label ?? "") : ""}
-                          ariaLabel={name}
-                          usedPercent={window.usedPercent}
-                          resetsAt={window.resetsAt}
-                          period={pools ? undefined : name === t("common.week") ? "seven_day" : "five_hour"}
-                          now={now}
-                          t={t}
-                        />
-                      ) : (
-                        <NoLimitLine />
-                      );
                     const unread = !five && !week;
+                    const unreadNote =
+                      account.provider === undefined || account.provider === "claude" ? (
+                        <span className="text-2xs text-muted-foreground" title={t("poolCard.limitsNotReadYet")}>
+                          {t("poolCard.notReadYet")}
+                        </span>
+                      ) : (
+                        <span className="text-2xs text-muted-foreground" title={t("poolCard.relayCannotReadThisProviderS")}>
+                          {t("poolCard.notReadable")}
+                        </span>
+                      );
                     return (
-                      <ListRow
+                      <AccountRow
                         key={account.id}
-                        columns="pool"
+                        color={known?.color}
+                        name={account.name}
+                        quiet={quiet}
+                        title={details || undefined}
                         data={{
                           "data-account": account.id,
                           "data-in-pool": String(account.inPool),
                           ...(account.active ? { "data-active": "true" } : {}),
                         }}
-                      >
-                        <span className="flex flex-col">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            disabled={disabled || index === 0}
-                            aria-label={t("poolCard.moveUp", { accountName: account.name })}
-                            onClick={() => move(account.id, -1)}
-                          >
-                            <ArrowUp />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            disabled={disabled || index === own.length - 1}
-                            aria-label={t("poolCard.moveDown", { accountName: account.name })}
-                            onClick={() => move(account.id, 1)}
-                          >
-                            <ArrowDown />
-                          </Button>
-                        </span>
-                        <div className={cn("grid min-w-0 gap-0.5", quiet && "opacity-60")} title={details || undefined}>
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <AccountDot color={known?.color} />
-                            <span className="min-w-0 truncate text-sm font-medium">{account.name}</span>
-                            <PoolNote account={account} />
+                        lead={
+                          <span className="flex flex-col">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              disabled={disabled || index === 0}
+                              aria-label={t("poolCard.moveUp", { accountName: account.name })}
+                              onClick={() => move(account.id, -1)}
+                            >
+                              <ArrowUp />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              disabled={disabled || index === own.length - 1}
+                              aria-label={t("poolCard.moveDown", { accountName: account.name })}
+                              onClick={() => move(account.id, 1)}
+                            >
+                              <ArrowDown />
+                            </Button>
                           </span>
-                          {(served.length > 0 || account.email || clock) && (
-                            <span className="truncate text-2xs text-muted-foreground tabular-nums">
+                        }
+                        tags={<PoolNote account={account} />}
+                        meta={
+                          (served.length > 0 || account.email || clock) && (
+                            <span className="min-w-0 truncate text-2xs tabular-nums">
                               {account.email && <Private>{account.email}</Private>}
                               {account.email && served.length ? " · " : ""}
                               {served.join(" · ")}
                               {clock && (
-                                <span
-                                  data-slot="full-at"
-                                  className="text-warn-foreground"
-                                  title={t("poolCard.atTheLastHalfHourS")}
-                                >
+                                <span data-slot="full-at" className="text-warn-foreground" title={t("poolCard.atTheLastHalfHourS")}>
                                   {t("poolCard.fullBy", { clock })}
                                 </span>
                               )}
                             </span>
-                          )}
-                        </div>
-                        {unread ? (
-                          <span
-                            className="text-2xs text-muted-foreground"
-                            title={
-                              account.provider === undefined || account.provider === "claude"
-                                ? t("poolCard.limitsNotReadYet")
-                                : t("poolCard.relayCannotReadThisProviderS")
-                            }
-                          >
-                            {account.provider === undefined || account.provider === "claude"
-                              ? t("poolCard.notReadYet")
-                              : t("poolCard.notReadable")}
-                          </span>
-                        ) : (
-                          <div className={cn(limitCell, quiet && "opacity-60")}>{cell(five, t("common.n5Hours"))}</div>
-                        )}
-                        <div className={cn(limitCell, narrowHidden, quiet && "opacity-60")}>{unread ? null : cell(week, t("common.week"))}</div>
-                        <Switch
-                          className="justify-self-end"
-                          checked={account.inPool}
-                          disabled={disabled}
-                          aria-label={t("poolCard.inThePool", { accountName: account.name })}
-                          onCheckedChange={(on) => setInPool(account.id, on)}
-                        />
-                      </ListRow>
+                          )
+                        }
+                        limits={
+                          unread ? (
+                            <span className="col-span-2 justify-self-end">{unreadNote}</span>
+                          ) : (
+                            <RowLimits five={five} week={week} pooled={!!pools} now={now} t={t} />
+                          )
+                        }
+                        actions={
+                          <Switch
+                            checked={account.inPool}
+                            disabled={disabled}
+                            aria-label={t("poolCard.inThePool", { accountName: account.name })}
+                            onCheckedChange={(on) => setInPool(account.id, on)}
+                          />
+                        }
+                      />
                     );
                   })}
                 </ListSection>

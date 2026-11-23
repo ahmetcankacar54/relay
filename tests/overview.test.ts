@@ -860,7 +860,7 @@ test("the Overview lists Antigravity's accounts on the board: the account the ap
   const plainRelay = withApp({ installed: true, canOpen: false, accountId: "g1" });
   const plain = group(render(plainRelay));
   // The account the app uses is marked; its spent pool leads, red, with when it opens; the other pool beside it.
-  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/button><span[^>]*>kullanımda<\/span>/);
+  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/button>[\s\S]*?<span[^>]*>kullanımda<\/span>/);
   assert.match(plain, /data-account="g1"[\s\S]*?Gemini 4 Carbon \(High\)[\s\S]*?text-crit">Dolu · 25 dk</);
   assert.match(plain, /data-account="g1"[\s\S]*?data-slot="other-limit"[^>]*><span[^>]*>Gemini 4 Argon %0</);
   // Never the roomiest pool as "%0" for the other account: its own figure.
