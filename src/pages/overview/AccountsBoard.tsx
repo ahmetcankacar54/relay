@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { AccountRow, RowLimits } from "@/components/AccountRow";
+import { AccountCard, AccountLimits } from "@/components/AccountCard";
 import { ListCard, ListGroup, ListNote, ListSection, ListSkeleton } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { useI18n, type T } from "@/data/i18n";
@@ -49,7 +49,7 @@ export function AccountsBoard({ now }: { now: number }) {
   if (relay.data === undefined)
     return (
       <PageSection title={t("accountsBoard.allAccounts")} slot="accounts-board">
-        <ListCard label={t("accountsBoard.allAccounts")}>
+        <ListCard label={t("accountsBoard.allAccounts")} layout="cards">
           <ListSkeleton />
         </ListCard>
       </PageSection>
@@ -94,20 +94,22 @@ export function AccountsBoard({ now }: { now: number }) {
     const open = () => (window.location.hash = accountHash(a.id));
     return (
       <Fragment key={a.id}>
-        <AccountRow
+        <AccountCard
           color={a.color}
           name={a.name}
           onOpen={open}
           data={{ "data-account": a.id }}
           meta={
-            <>
-              {inUse.has(a.id) && <span className="shrink-0">{t("accountsBoard.inUse")}</span>}
-              {inUse.has(a.id) && other && <span aria-hidden="true">·</span>}
-              {other && otherBadge(other)}
-            </>
+            (inUse.has(a.id) || other) && (
+              <>
+                {inUse.has(a.id) && <span className="shrink-0">{t("accountsBoard.inUse")}</span>}
+                {inUse.has(a.id) && other && <span aria-hidden="true">·</span>}
+                {other && otherBadge(other)}
+              </>
+            )
           }
-          limits={<RowLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
-          actions={a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
+          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          action={a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
         />
         {a.provider === "antigravity" && promptOn(a.id) && (
           <ListNote>
@@ -127,7 +129,7 @@ export function AccountsBoard({ now }: { now: number }) {
         </span>
       }
     >
-      <ListCard label={t("accountsBoard.allAccounts")}>
+      <ListCard label={t("accountsBoard.allAccounts")} layout="cards">
         {groups.map(({ provider, own }) => (
           <Fragment key={provider}>
             <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />

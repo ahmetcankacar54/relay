@@ -12,6 +12,7 @@ import {
   Pencil,
   RefreshCw,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import type { Account } from "../../../shared/types";
@@ -43,7 +44,7 @@ import { groupAccounts, sectionCount, type AccountGroupBy, type AccountSection, 
 import { isClaudeAccount } from "@/lib/account-health";
 import { limitColumns } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
-import { AccountRow, RowLimits, RowTag } from "@/components/AccountRow";
+import { AccountCard, AccountLimits, AccountTag } from "@/components/AccountCard";
 import { ListCard, ListGroup, ListNote, ListSection } from "@/components/ListCard";
 import { ProviderLogo } from "@/components/ProviderLogo";
 import { StatusLabel } from "@/components/StatusLabel";
@@ -380,7 +381,8 @@ export function AccountsTable({
   const sections = groupAccounts(accounts, { by: groupBy, sort, usage: data?.usage ?? {}, now, language, t });
   // Grouped by provider, the header names it; otherwise each row carries its provider's mark.
   const markRows = groupBy !== "provider";
-  const row = (a: Account) => {
+  // `group`: the work group a card is in, when its provider's cards flow together (no sub-heading).
+  const row = (a: Account, group?: string) => {
     const isActive = a.id === active?.id;
     const usage = data?.usage[a.id];
     const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
@@ -407,35 +409,34 @@ export function AccountsTable({
     const faded = !!usage && !freshUsage(usage, now);
     const stop = (e: MouseEvent) => e.stopPropagation();
     // The one visible step, then the menu with every action.
-    const actionsNode = (
-      <>
-        {a.provider === "antigravity" && !step ? (
-          <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
-        ) : step ? (
-          <Button size="xs" variant="outline" className="block min-w-0 max-w-full truncate leading-6" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
-            {step === refresh ? t("accountsTable.refresh") : shortFix(step.key, t) ?? step.label}
+    const actionNode =
+      a.provider === "antigravity" && !step ? (
+        <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
+      ) : step ? (
+        <Button size="xs" variant="outline" className="block min-w-0 max-w-full truncate leading-6" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
+          {step === refresh ? t("accountsTable.refresh") : shortFix(step.key, t) ?? step.label}
+        </Button>
+      ) : switchTo ? (
+        <Button size="xs" className="block min-w-0 max-w-full truncate leading-6" title={t("common.switch")} aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
+          {t("common.switch")}
+        </Button>
+      ) : null;
+    const menuNode = (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={t("accountsTable.actions", { aName: a.name })}>
+            <MoreHorizontal />
           </Button>
-        ) : switchTo ? (
-          <Button size="xs" className="block min-w-0 max-w-full truncate leading-6" title={t("common.switch")} aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
-            {t("common.switch")}
-          </Button>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={t("accountsTable.actions", { aName: a.name })}>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          {/* Portaled, but React events still bubble to the row. */}
-          <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
-            <RowActionItems actions={actions} prank={prank} />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </>
+        </DropdownMenuTrigger>
+        {/* Portaled, but React events still bubble to the card. */}
+        <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+          <RowActionItems actions={actions} prank={prank} />
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
     return (
       <Fragment key={a.id}>
-        <AccountRow
+        <AccountCard
           color={a.color}
           name={a.name}
           onOpen={() => open(a.id)}
@@ -444,13 +445,21 @@ export function AccountsTable({
           tags={
             <>
               {markRows && <ProviderLogo provider={accountProvider(a)} />}
-              {plan && <RowTag title={planTitle(a, plan, t)}>{plan.short}</RowTag>}
+              {plan && <AccountTag title={planTitle(a, plan, t)}>{plan.short}</AccountTag>}
+              {/* Its work group, unless the group is just the account (its own workspace). */}
+              {group && group !== a.name && (
+                <span className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground" title={group}>
+                  <Users aria-hidden="true" className="size-3 shrink-0" />
+                  <span className="truncate">{group}</span>
+                </span>
+              )}
               {inWindows.has(a.id) && <WindowBadge t={t} compact />}
             </>
           }
           meta={<StatusLabel status={status} />}
-          limits={<RowLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
-          actions={actionsNode}
+          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          action={actionNode}
+          menu={menuNode}
         />
         {a.provider === "antigravity" && promptOn(a.id) && (
           <ListNote>
@@ -475,16 +484,24 @@ export function AccountsTable({
           onToggle={toggle && (() => toggle(s.key))}
           controls={toggle && id}
         />
+        {/*
+         * A provider's work groups do not get sub-headings: their cards flow together in one grid, each
+         * naming its group, so a group of one does not leave half a line empty and nothing steps in.
+         */}
         <ListSection id={id} level={s.level} label={s.label} hidden={!shown}>
-          {s.accounts.map(row)}
-          {s.children.map(section)}
+          {s.accounts.map((a) => row(a))}
+          {s.children.flatMap((c) => [...c.accounts.map((a) => row(a, c.label)), ...c.children.flatMap((g) => g.accounts.map((a) => row(a, g.label)))])}
         </ListSection>
       </Fragment>
     );
   };
   return (
-    <ListCard label={t("common.accounts")} slot="accounts-list">
-      {groupBy === "none" ? sections.flatMap((s) => s.accounts).map(row) : sections.map(section)}
+    <ListCard label={t("common.accounts")} slot="accounts-list" layout="cards">
+      {groupBy === "none" ? (
+        <ListSection label={t("common.accounts")}>{sections.flatMap((s) => s.accounts).map((a) => row(a))}</ListSection>
+      ) : (
+        sections.map(section)
+      )}
     </ListCard>
   );
 }

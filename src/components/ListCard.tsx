@@ -11,9 +11,9 @@ import type { AccountProvider } from "../../shared/types";
  * gateway's pool are all this list, so an account reads the same wherever it is listed. The card is a
  * container, so a narrow window rearranges a row (`@max-2xl`) instead of cutting the names.
  *
- * A group's rows sit in a `ListSection`, which indents them under the group's header and draws a guide
- * line from the header's mark down to the last row, so a row reads as the group's child. Sections nest
- * one level (provider → work group).
+ * A group's items sit in a `ListSection` under the group's header, without stepping in: the header says
+ * which group they are in. Accounts are cards in a grid (`layout="cards"`, `AccountCard`); the plan
+ * keeps rows.
  */
 
 /*
@@ -43,7 +43,19 @@ export type ListColumns = NonNullable<Parameters<typeof grid>[0]>["columns"];
 /** How deep the rows below sit: 0 outside any section, one more inside each `ListSection`. */
 export const ListIndentContext = createContext(0);
 
-const indent = ["ps-4", "ps-9", "ps-14"] as const;
+/*
+ * A row sits one modest step in under a work group (provider → work group), no deeper: the group
+ * headers already say which group a row is in, so the list does not walk to the right.
+ */
+const indent = ["ps-4", "ps-4", "ps-7"] as const;
+
+/**
+ * How the list draws its items: rows in a bordered card (the plan), or cards in a grid under plain
+ * group headings (accounts: `AccountCard`).
+ */
+export type ListLayout = "rows" | "cards";
+const ListLayoutContext = createContext<ListLayout>("rows");
+export const useListLayout = () => useContext(ListLayoutContext);
 
 /** The elements the arrow keys move between: group headers and the rows' names. */
 const NAV = "[data-list-nav]";
@@ -95,10 +107,17 @@ function navigate(e: KeyboardEvent<HTMLDivElement>) {
   next?.focus();
 }
 
-export function ListCard({ children, label, slot }: { children: ReactNode; label?: string; slot?: string }) {
+export function ListCard({ children, label, slot, layout = "rows" }: { children: ReactNode; label?: string; slot?: string; layout?: ListLayout }) {
   return (
-    <div data-slot={slot ?? "list-card"} role="group" aria-label={label} onKeyDown={navigate} className="@container overflow-hidden rounded-lg border bg-card">
-      {children}
+    <div
+      data-slot={slot ?? "list-card"}
+      data-layout={layout}
+      role="group"
+      aria-label={label}
+      onKeyDown={navigate}
+      className={layout === "cards" ? "@container grid gap-2" : "@container overflow-hidden rounded-lg border bg-card"}
+    >
+      <ListLayoutContext.Provider value={layout}>{children}</ListLayoutContext.Provider>
     </div>
   );
 }
@@ -113,17 +132,25 @@ export function ListHead({ columns, children }: { columns: ListColumns; children
 }
 
 // A closed section last in its list leaves its header last: the list's own edge is its bottom line.
-const groupClass = cva("flex w-full items-center gap-2 border-b text-xs [&:has(+[hidden]:last-child)]:border-b-0", {
+const groupClass = cva("flex w-full items-center gap-2 text-xs", {
   variants: {
-    level: {
-      0: "h-9 bg-muted/60 px-4 font-semibold",
-      1: "h-8 bg-transparent ps-9 pe-4 font-medium text-muted-foreground",
+    level: { 0: "", 1: "" },
+    layout: {
+      rows: "border-b [&:has(+[hidden]:last-child)]:border-b-0",
+      // A plain heading over its cards, across the whole grid.
+      cards: "col-span-full rounded-md px-1",
     },
     toggles: {
       true: "text-start outline-none transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50",
       false: "",
     },
   },
+  compoundVariants: [
+    { layout: "rows", level: 0, className: "h-9 bg-muted/60 px-4 font-semibold" },
+    { layout: "rows", level: 1, className: "h-8 bg-transparent px-4 font-medium text-muted-foreground" },
+    { layout: "cards", level: 0, className: "mt-2 h-8 text-sm font-semibold first:mt-0" },
+    { layout: "cards", level: 1, className: "h-7 font-medium text-muted-foreground" },
+  ],
 });
 
 /**
@@ -148,6 +175,7 @@ export function ListGroup({
   controls?: string;
   level?: 0 | 1;
 }) {
+  const layout = useListLayout();
   const content = (
     <>
       {provider ? <ProviderLogo provider={provider} /> : <Users aria-hidden="true" className="size-3.5 shrink-0" />}
@@ -157,7 +185,7 @@ export function ListGroup({
   );
   if (!onToggle) {
     return (
-      <div data-slot="list-group" data-provider={provider} className={groupClass({ level, toggles: false })}>
+      <div data-slot="list-group" data-provider={provider} className={groupClass({ level, layout, toggles: false })}>
         {content}
       </div>
     );
@@ -171,7 +199,7 @@ export function ListGroup({
       aria-expanded={open}
       aria-controls={controls}
       onClick={onToggle}
-      className={groupClass({ level, toggles: true })}
+      className={groupClass({ level, layout, toggles: true })}
     >
       {content}
       <ChevronDown aria-hidden="true" className={cn("ms-auto size-3.5 text-muted-foreground transition-transform", !open && "-rotate-90")} />
@@ -179,11 +207,10 @@ export function ListGroup({
   );
 }
 
-const sectionLine = { 0: "before:start-[1.4375rem]", 1: "before:start-[2.6875rem]" } as const;
-
 /**
- * A group's rows, indented one step under its `ListGroup` with a guide line down from the header's mark.
- * A closed section stays in the page (its header points at it) but holds no rows.
+ * A group's items under its `ListGroup`. In rows, the rows; in cards, a grid of cards (two a line from
+ * 42rem, three from 64rem) that a nested group's heading and section span. A closed section stays in
+ * the page (its header points at it) but holds nothing.
  */
 export function ListSection({
   id,
@@ -198,6 +225,7 @@ export function ListSection({
   hidden?: boolean;
   children: ReactNode;
 }) {
+  const layout = useListLayout();
   return (
     <div
       data-slot="list-section"
@@ -205,10 +233,11 @@ export function ListSection({
       role="group"
       aria-label={label}
       hidden={hidden}
-      className={cn(
-        "relative border-b last:border-b-0 before:pointer-events-none before:absolute before:inset-y-0 before:w-px before:bg-border",
-        sectionLine[level],
-      )}
+      className={
+        layout === "cards"
+          ? "col-span-full grid gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3"
+          : "border-b last:border-b-0"
+      }
     >
       {!hidden && <ListIndentContext.Provider value={level + 1}>{children}</ListIndentContext.Provider>}
     </div>
@@ -281,6 +310,8 @@ export function ListOpen({ onOpen, children, title }: { onOpen: () => void; chil
 /** A full-width line under a row (a prompt, a few steps), indented like the rows of its section. */
 export function ListNote({ children, className }: { children: ReactNode; className?: string }) {
   const level = useContext(ListIndentContext);
+  const layout = useListLayout();
+  if (layout === "cards") return <div className={cn("col-span-full rounded-lg border bg-card px-4 py-2.5", className)}>{children}</div>;
   return <div className={cn("border-b pe-4 py-2 last:border-b-0", indent[Math.min(level, 2)], className)}>{children}</div>;
 }
 

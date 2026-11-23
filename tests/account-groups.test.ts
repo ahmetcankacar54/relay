@@ -137,14 +137,18 @@ test("a collapsed section's header says so and its rows are not drawn; the other
   assert.match(html, /id="accounts-provider:codex" role="group" aria-label="Codex" hidden=""/);
 });
 
-test("rows open through their name, the one keyboard stop, and nest under work groups", () => {
+test("cards open through their name, the one keyboard stop, and name their work group", () => {
   const list = [of("claude", "c1", "work:a"), of("claude", "c2", "work:b")];
   const html = render(list, { toggle() {} });
   const row = html.slice(html.indexOf('data-slot="list-row"'));
   assert.doesNotMatch(row.slice(0, row.indexOf(">")), /role="button"|tabindex/);
   assert.match(row, /<button type="button" data-list-nav="" class="[^"]*" title="c1">c1<\/button>/);
-  // Provider (level 0) then its work group (level 1) and the row indented twice.
-  assert.match(html, /data-slot="list-section" id="accounts-provider:claude"[\s\S]*?data-slot="list-section" id="accounts-provider:claude\/group:work:a"[\s\S]*?data-slot="list-row"[^>]*class="[^"]*ps-14/);
+  // The provider's section, then its cards side by side: no work-group sub-section, no step in;
+  // each card names its work group instead.
+  assert.match(html, /data-slot="list-section" id="accounts-provider:claude"/);
+  assert.doesNotMatch(html, /id="accounts-provider:claude\/group:/);
+  assert.doesNotMatch(html, /data-slot="list-row"[^>]*class="[^"]*ps-1[04]/);
+  assert.match(row, /title="c1">c1<\/button>[\s\S]*?title="[^"]+"><svg[\s\S]*?<\/svg><span class="truncate">[^<]+<\/span>/);
 });
 
 test("without provider groups each row carries its provider's mark", () => {

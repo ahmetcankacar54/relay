@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { intentHash } from "@/app/routes";
-import { AccountRow, RowLimits } from "@/components/AccountRow";
+import { AccountCard, AccountLimits } from "@/components/AccountCard";
 import { ListCard, ListGroup, ListSection } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { Private } from "@/components/Private";
@@ -151,7 +151,7 @@ export function PoolCard({
           : t("poolCard.eachRequestGoesToAnAccount")
       }
     >
-      <ListCard label={t("poolCard.accountsInThePool")}>
+      <ListCard label={t("poolCard.accountsInThePool")} layout="cards">
         {accounts.length ? (
           <>
             {groups.map(({ provider, own }) => (
@@ -208,7 +208,7 @@ export function PoolCard({
                         </span>
                       );
                     return (
-                      <AccountRow
+                      <AccountCard
                         key={account.id}
                         color={known?.color}
                         name={account.name}
@@ -219,8 +219,8 @@ export function PoolCard({
                           "data-in-pool": String(account.inPool),
                           ...(account.active ? { "data-active": "true" } : {}),
                         }}
-                        lead={
-                          <span className="flex flex-col">
+                        action={
+                          <span className="flex">
                             <Button
                               variant="ghost"
                               size="icon-xs"
@@ -258,12 +258,12 @@ export function PoolCard({
                         }
                         limits={
                           unread ? (
-                            <span className="col-span-2 justify-self-end">{unreadNote}</span>
+                            unreadNote
                           ) : (
-                            <RowLimits five={five} week={week} pooled={!!pools} now={now} t={t} />
+                            <AccountLimits five={five} week={week} pooled={!!pools} now={now} t={t} />
                           )
                         }
-                        actions={
+                        menu={
                           <Switch
                             checked={account.inPool}
                             disabled={disabled}
@@ -278,7 +278,7 @@ export function PoolCard({
               </Fragment>
             ))}
             {status.nextPick && (
-              <p data-slot="next-pick" className="border-t px-4 py-2 text-2xs text-muted-foreground">
+              <p data-slot="next-pick" className="px-1 pt-1 text-2xs text-muted-foreground">
                 {Object.entries(status.nextPick).map(([provider, pick], index, all) => {
                   const nameOf = (id: string) => accounts.find((a) => a.id === id)?.name ?? "?";
                   const skipped = pick.nearlyFull?.length

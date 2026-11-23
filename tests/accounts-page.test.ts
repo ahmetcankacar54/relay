@@ -391,7 +391,9 @@ test("an account without a plan shows its subscription beside its name, saying s
   // The short plan sits beside the name, its source in the title; an account with neither shows none.
   // Claude's accounts span two work groups, so the personal ones come first, then the team's.
   const [none, chosen, team] = listRows(tr);
-  assert.match(none, /title="Studio">Studio<\/button><\/div>/);
+  // No plan tag; the only thing beside the name is its work group.
+  assert.match(none, /title="Studio">Studio<\/button>/);
+  assert.doesNotMatch(none, /rounded-sm bg-secondary px-1\.5 py-px/);
   assert.match(team, /title="Şirket">Şirket<\/button><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
   assert.doesNotMatch(tr, /Plan seç/);
   assert.match(html("en"), /title="Subscription · no plan selected for planning">Team<\/span>/);
@@ -871,7 +873,7 @@ test("a stale row says its reading is old, fades its limits and offers a Refresh
   assert.doesNotMatch(row, /data-slot="data-age"/);
   assert.match(row, /data-slot="limit-line" class="[^"]*opacity-60/);
   assert.match(row, /<button[^>]*data-variant="outline"[^>]*data-size="xs"[^>]*aria-label="Limitleri yenile · Üçüncü" title="Limitleri yenile">Yenile<\/button>/);
-  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], /aria-label="Refresh limits · Üçüncü"[^>]*>Refresh<\/button>.*>Old reading<\/span>/);
+  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Old reading<\/span>.*aria-label="Refresh limits · Üçüncü"[^>]*>Refresh<\/button>/);
   // A fresh row has neither.
   const fresh = rowsOf(suggestedTable({ suggestion: undefined }))[1];
   assert.doesNotMatch(fresh, /Eski okuma|opacity-60|>Yenile<\/button>/);
@@ -945,7 +947,7 @@ test("a row that needs a step says so in its status and offers that step; the co
   // The icons and their key live on the account's page now.
   assert.doesNotMatch(html, /data-slot="connection-legend"|data-step=|role="img"/);
   const en = suggestedTable({}, {}, "en");
-  assert.match(rowsOf(en)[2], />Save<\/button>.*>No app sign-in<\/span>/);
+  assert.match(rowsOf(en)[2], />No app sign-in<\/span>.*>Save<\/button>/);
   assert.doesNotMatch(en, /data-slot="connection-legend"/);
 });
 
