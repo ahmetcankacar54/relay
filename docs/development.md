@@ -15,9 +15,9 @@ npm run install:mac      # build, sign with the local certificate, install to /A
 
 Signing every build with the same local certificate keeps macOS permissions
 across updates. One-time setup: [macos-local-signing.md](macos-local-signing.md).
-To give Relay to someone else, `node scripts/stable-signing.mjs --dmg --arch arm64 --output release/share`
-makes an Apple silicon DMG (`--arch x64`, `both` or `universal` for Intel Macs);
-the same document explains the one-time "Open Anyway" step.
+To give Relay to someone else, `npm run dist:mac:share` makes a DMG for Apple
+silicon and one for Intel Macs (`--arch arm64` or `x64` for one); the same
+document explains the one-time "Open Anyway" step.
 
 Runtime packages that Vite or esbuild bundle (React, Radix, zod…) are
 `devDependencies`; only `node-pty`, which loads a native module at run time,
@@ -109,3 +109,55 @@ macOS only:
 - The menu bar panel, the panda and usage in the menu bar title, and the widget.
 - The `relay` CLI.
 
+## Releasing
+
+A release has signed macOS DMGs for Apple silicon and Intel, a Windows installer,
+a Linux AppImage, and a `SHA256SUMS.txt` with its Ed25519 signature
+`SHA256SUMS.txt.sig`. The DMGs need the local certificate, so they are built on
+the Mac; GitHub Actions builds the rest.
+
+One-time setup:
+
+- `node scripts/update-signing.mjs init` creates the update signing key in
+  `~/.config/relay-release/update-signing-ed25519.pem` (mode 600; another path
+  through `RELAY_UPDATE_SIGNING_KEY_FILE`). Back it up. Its public half is in
+  `electron/core/update-signing-key.ts`; a new key means a new public key there,
+  and Relays built with the old one no longer accept updates on Windows and Linux.
+- Add the PEM's contents as the repository secret `RELAY_UPDATE_SIGNING_KEY`, so
+  the workflow signs too. Without it, the workflow's sums stay unsigned until the
+  Mac step signs them.
+
+Each version:
+
+1. Bump the version, commit on `main`, then `git tag v<version> && git push origin main v<version>`.
+2. The **Release** workflow (`.github/workflows/release.yml`) runs typecheck and
+   tests on Windows and Linux, builds `Relay-Setup-<version>-x64.exe` (with its
+   blockmap and `latest.yml`) and `Relay-<version>-x86_64.AppImage` (with
+   `latest-linux.yml`), and attaches them, `INSTALL.txt` and the sums to a
+   **draft** release. It never changes a published release.
+3. When it is done, on the Mac: `npm run release`. It builds and verifies both
+   DMGs, merges their lines into the draft's `SHA256SUMS.txt` (the workflow's
+   lines are kept when their signature verifies, otherwise their files are
+   downloaded and hashed), signs the result, uploads, checks every listed file
+   is attached and publishes the release. It refuses to publish while
+   `latest.yml` or `latest-linux.yml` is missing; `--force` publishes without
+   them, `--draft` leaves the release a draft, `--skip-build` reuses DMGs in
+   `release/share/<version>`.
+4. Homebrew: copy `release/homebrew/Casks/relay.rb` into the tap repository
+   (see [packaging/homebrew/README.md](../packaging/homebrew/README.md)).
+
+How the updates are trusted:
+
+- macOS: Relay downloads the DMG for its own architecture (`process.arch`),
+  checks it against `SHA256SUMS.txt`, and installs it only when it is signed with
+  the same certificate as the running app.
+- Windows and Linux: electron-updater checks the download against the SHA-512 in
+  `latest.yml`, which comes from the same host. Relay then requires a valid
+  signature on `SHA256SUMS.txt` under the embedded key, and the installer's
+  SHA-256 listed there under its own name for that version. Otherwise the
+  download is deleted and nothing is installed.
+
+Dependencies: `npm audit --audit-level=high` runs over the whole tree in the
+Check workflow (Electron is a devDependency but ships in the app), and
+Dependabot (`.github/dependabot.yml`) opens weekly grouped minor and patch
+updates for npm and GitHub Actions.

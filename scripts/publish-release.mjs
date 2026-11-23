@@ -1,22 +1,28 @@
 #!/usr/bin/env node
 /**
- * Atomic, race-condition-free release publishing pipeline.
+ * Atomic, race-condition-free release publishing pipeline, run on the Mac that holds the signing
+ * certificate. Windows and Linux assets come from the Release workflow, which attaches them to
+ * the same draft release on tag push (docs/development.md, "Releasing").
  *
  * Enforces the industry best practice:
  * 1. Pre-flight checks: clean git tree, on main branch, typecheck and test verification.
- * 2. Builds local release artifacts (signed macOS DMG, checksums, install notes).
- * 3. Creates the GitHub release as a DRAFT first and uploads all assets.
- * 4. Verifies every asset is attached and checksums match on GitHub.
- * 5. Only once verified, publishes the release (removes draft status) atomically.
+ * 2. Builds local release artifacts (signed macOS DMGs for Apple silicon and Intel, install notes).
+ * 3. Writes SHA256SUMS.txt over these and the files already on the release (verified), signs it
+ *    with the update signing key (SHA256SUMS.txt.sig) and renders the Homebrew cask.
+ * 4. Creates the GitHub release as a DRAFT first and uploads all assets.
+ * 5. Verifies every asset is attached, the Windows and Linux ones included.
+ * 6. Only once verified, publishes the release (removes draft status) atomically.
  *
  * Usage:
- *   node scripts/publish-release.mjs [version] [--draft] [--skip-build] [--skip-tests]
+ *   node scripts/publish-release.mjs [version] [--draft] [--skip-build] [--skip-tests] [--force]
+ * --force skips the branch and clean-tree checks and publishes without Windows and Linux assets.
  */
-import { execFileSync, execSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { caskFromSums, dmgName, TAP_CASK } from "./homebrew-cask.mjs";
+import { releaseAssetNames, SIGNATURE_NAME, SUMS_NAME, writeReleaseSums } from "./update-signing.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
@@ -35,6 +41,7 @@ const isDraftOnly = flags.has("--draft");
 const skipBuild = flags.has("--skip-build");
 const skipTests = flags.has("--skip-tests");
 const force = flags.has("--force");
+const tagName = `v${version}`;
 
 console.log(`\n🚀 Starting Relay release pipeline for v${version}...`);
 
@@ -76,7 +83,15 @@ if (!skipTests) {
   try {
     run("npm", ["run", "typecheck"]);
     run("npm", ["run", "build"]);
-    run("node", ["--import", "tsx", "--test", "tests/proxy-*.test.ts", "tests/settings-*.test.ts", "tests/app-update.test.ts"]);
+    run("node", [
+      "--import",
+      "tsx",
+      "--test",
+      "tests/proxy-*.test.ts",
+      "tests/settings-*.test.ts",
+      "tests/app-update.test.ts",
+      "tests/update-signing.test.ts",
+    ]);
     console.log("   ✅ Typecheck and core tests passed.");
   } catch (error) {
     console.error("❌ Tests failed. Fix issues before releasing.");
@@ -90,60 +105,53 @@ if (!skipTests) {
 const shareDir = path.join(root, "release/share", version);
 fs.mkdirSync(shareDir, { recursive: true });
 
-const dmgName = `Relay-${version}-arm64.dmg`;
-const dmgPath = path.join(shareDir, dmgName);
+const dmgPaths = ["arm64", "x64"].map((arch) => path.join(shareDir, dmgName(version, arch)));
 
 if (!skipBuild && process.platform === "darwin") {
-  console.log(`\n📦 Step 3: Building signed macOS DMG...`);
+  console.log(`\n📦 Step 3: Building signed macOS DMGs (Apple silicon and Intel)...`);
   run("node", [
     path.join(root, "scripts/stable-signing.mjs"),
     "--dmg",
     "--arch",
-    "arm64",
+    "both",
     "--output",
     shareDir,
   ]);
-} else if (fs.existsSync(dmgPath)) {
-  console.log(`\n📦 Step 3: Using existing DMG at ${dmgPath}`);
-} else if (process.platform === "darwin") {
-  console.error(`❌ DMG not found at ${dmgPath} and --skip-build was set.`);
+} else if (dmgPaths.every((file) => fs.existsSync(file))) {
+  console.log(`\n📦 Step 3: Using existing DMGs in ${shareDir}`);
+} else {
+  const missing = dmgPaths.filter((file) => !fs.existsSync(file));
+  console.error(`❌ Missing ${missing.join(", ")}; build them on a Mac without --skip-build.`);
   process.exit(1);
 }
 
-// 4. Gather assets & generate checksums
-console.log("\n🔒 Step 4: Generating checksums and verifying assets...");
+// 4. Gather assets, generate and sign checksums, render the cask
+console.log("\n🔒 Step 4: Generating and signing checksums...");
 const installNotes = path.join(root, "docs/share/install-notes.md");
 const installTxt = path.join(shareDir, "INSTALL.txt");
 if (fs.existsSync(installNotes)) {
   fs.copyFileSync(installNotes, installTxt);
 }
 
-const EXCLUDED_EXTS = new Set([".yaml", ".yml"]);
-const isReleaseAsset = (name) => {
-  const filePath = path.join(shareDir, name);
-  if (!fs.statSync(filePath).isFile()) return false;
-  if (name === "SHA256SUMS.txt" || name.startsWith(".")) return false;
-  if (name.startsWith("builder-")) return false;
-  return true;
-};
-
-const assetNames = fs.readdirSync(shareDir).filter(isReleaseAsset);
-if (assetNames.length === 0) {
-  console.error(`❌ No release assets found in ${shareDir}`);
+let sums;
+try {
+  // The draft may already hold the Windows and Linux files from the Release workflow: their
+  // lines are kept (verified) and the combined file is signed here.
+  sums = writeReleaseSums(shareDir, { tag: tagName, requireKey: true });
+} catch (error) {
+  console.error(`❌ ${error.message}`);
   process.exit(1);
 }
 
-const sha256 = (file) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
-const sumsContent = assetNames
-  .map((name) => `${sha256(path.join(shareDir, name))}  ${name}`)
-  .join("\n") + "\n";
-
-const sumsFile = path.join(shareDir, "SHA256SUMS.txt");
-fs.writeFileSync(sumsFile, sumsContent, "utf8");
+const caskFile = path.join(root, "release/homebrew/Casks/relay.rb");
+fs.mkdirSync(path.dirname(caskFile), { recursive: true });
+fs.writeFileSync(caskFile, caskFromSums(version, sums.text), "utf8");
+console.log(`   Homebrew cask: ${caskFile}`);
 
 const allFilesToUpload = [
-  ...assetNames.map((name) => path.join(shareDir, name)),
-  sumsFile,
+  ...releaseAssetNames(shareDir).map((name) => path.join(shareDir, name)),
+  path.join(shareDir, SUMS_NAME),
+  path.join(shareDir, SIGNATURE_NAME),
 ];
 
 console.log(`   Assets ready (${allFilesToUpload.length} files):`);
@@ -153,7 +161,6 @@ for (const file of allFilesToUpload) {
 }
 
 // 5. GitHub Release: Atomic Draft-First Workflow
-const tagName = `v${version}`;
 console.log(`\n📤 Step 5: Publishing to GitHub Releases using Draft-First Best Practice...`);
 
 let releaseExists = false;
@@ -191,14 +198,24 @@ console.log(`\n🔍 Step 6: Verifying remote GitHub assets...`);
 const remoteInfo = JSON.parse(runCapture("gh", ["release", "view", tagName, "--json", "assets"]));
 const remoteAssetNames = new Set(remoteInfo.assets.map((a) => a.name));
 
-for (const localFile of allFilesToUpload) {
-  const name = path.basename(localFile);
+for (const name of [...allFilesToUpload.map((file) => path.basename(file)), ...sums.sums.keys()]) {
   if (!remoteAssetNames.has(name)) {
     console.error(`❌ Verification failed: ${name} is NOT present in GitHub release assets!`);
     process.exit(1);
   }
 }
-console.log(`   ✅ All ${allFilesToUpload.length} assets verified on GitHub.`);
+console.log(`   ✅ All ${remoteAssetNames.size} assets verified on GitHub.`);
+
+// The Windows and Linux updaters read latest.yml and latest-linux.yml from the latest release.
+const missingPlatforms = ["latest.yml", "latest-linux.yml"].filter((name) => !remoteAssetNames.has(name));
+if (missingPlatforms.length > 0 && !isDraftOnly) {
+  const note = `${missingPlatforms.join(" and ")} missing: the Release workflow has not attached the Windows and Linux builds yet.`;
+  if (!force) {
+    console.error(`❌ ${note} Wait for it and run again with --skip-build, or use --force to publish without them.`);
+    process.exit(1);
+  }
+  console.warn(`⚠️ ${note} Publishing anyway (--force).`);
+}
 
 // 7. Atomic Publication (Undraft)
 if (isDraftOnly) {
@@ -211,4 +228,7 @@ if (isDraftOnly) {
   console.log(`\n🎉 Release ${tagName} updated with all assets.`);
 }
 
-console.log(`   View release: https://github.com/ahmetcankacar54/relay/releases/tag/${tagName}\n`);
+console.log(`   View release: https://github.com/ahmetcankacar54/relay/releases/tag/${tagName}`);
+console.log(
+  `   Homebrew: copy ${path.relative(root, caskFile)} to Casks/relay.rb in ahmetcankacar54/homebrew-tap (brew install --cask ${TAP_CASK}).\n`,
+);

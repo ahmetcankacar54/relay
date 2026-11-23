@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import {
   AppUpdates,
   CHECK_EVERY_MS,
@@ -20,11 +20,12 @@ import {
   INSTALL_SCRIPT,
   MacUpdateDriver,
   UPDATE_CHECKSUM_MISMATCH,
+  UPDATE_NO_CHECKSUM,
   UPDATE_SIGNATURE_MISMATCH,
   designatedRequirement,
   dmgFor,
 } from "../electron/core/mac-update";
-import { ElectronUpdateDriver, type ElectronUpdater } from "../electron/core/win-linux-update";
+import { ElectronUpdateDriver, installerName, type ElectronUpdater } from "../electron/core/win-linux-update";
 import type { UpdateState } from "../shared/types";
 import { localizeError } from "../shared/error-text";
 import "./i18n";
@@ -388,7 +389,7 @@ test("the install script puts the old app back when the copy fails", (t) => {
   assert.match(r.log, /old app put back/);
 });
 
-function fakeUpdater(version: string | undefined): ElectronUpdater & { installs: unknown[][] } {
+function fakeUpdater(version: string | undefined, file?: string): ElectronUpdater & { installs: unknown[][] } {
   const listeners: ((info: { percent: number }) => void)[] = [];
   const updater = {
     autoDownload: false,
@@ -402,6 +403,7 @@ function fakeUpdater(version: string | undefined): ElectronUpdater & { installs:
         updateInfo: { version },
         downloadPromise: (async () => {
           for (const l of listeners) l({ percent: 50 });
+          return file ? [file] : [];
         })(),
       };
     },
@@ -420,9 +422,56 @@ function fakeUpdater(version: string | undefined): ElectronUpdater & { installs:
   return updater;
 }
 
-test("Windows and Linux: electron-updater downloads by itself, never installs on quit, and installs on Update", async () => {
-  const updater = fakeUpdater("0.16.0");
-  const driver = new ElectronUpdateDriver({ updater: async () => updater, current: "0.15.0", platform: "win32", env: {} });
+interface SignedRelease {
+  file: string;
+  digest: string;
+  fetched: string[];
+  driver(updater: ElectronUpdater, env?: NodeJS.ProcessEnv): ElectronUpdateDriver;
+}
+
+/**
+ * A release on a fake host: an installer downloaded to a temporary folder, and its
+ * SHA256SUMS.txt signed with a throwaway key the driver is given instead of the embedded one.
+ * `signer` signs instead of that key; `tamper` rewrites the sums after they were signed.
+ */
+function signedRelease(
+  t: any,
+  {
+    version = "0.16.0",
+    platform = "win32" as NodeJS.Platform,
+    sums = undefined as string | undefined,
+    signature = undefined as string | undefined,
+    signer = undefined as KeyObject | undefined,
+    tamper = (text: string) => text,
+    missing = [] as string[],
+  } = {},
+): SignedRelease {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const file = path.join(temp(t), installerName(platform, version));
+  fs.writeFileSync(file, "installer bytes");
+  const digest = createHash("sha256").update("installer bytes").digest("hex");
+  const text = sums ?? `${"0".repeat(64)}  INSTALL.txt\n${digest}  ${installerName(platform, version)}\n`;
+  const files: Record<string, string> = {
+    "SHA256SUMS.txt": tamper(text),
+    "SHA256SUMS.txt.sig": signature ?? sign(null, Buffer.from(text), signer ?? privateKey).toString("base64") + "\n",
+  };
+  const fetched: string[] = [];
+  const request = (async (url: string) => {
+    fetched.push(url);
+    const name = String(url).split("/").pop()!;
+    const body = missing.includes(name) ? undefined : files[name];
+    return new Response(body ?? "not found", { status: body === undefined ? 404 : 200 });
+  }) as typeof fetch;
+  const key = publicKey.export({ type: "spki", format: "der" }).toString("base64");
+  const driver = (updater: ElectronUpdater, env: NodeJS.ProcessEnv = {}) =>
+    new ElectronUpdateDriver({ updater: async () => updater, current: "0.15.0", platform, env, request, publicKey: key });
+  return { file, digest, driver, fetched };
+}
+
+test("Windows and Linux: electron-updater downloads by itself, never installs on quit, and installs on Update", async (t) => {
+  const release = signedRelease(t);
+  const updater = fakeUpdater("0.16.0", release.file);
+  const driver = release.driver(updater);
   const reports: Partial<UpdateState>[] = [];
   await driver.check((p) => reports.push(p));
   assert.equal(updater.autoDownload, true);
@@ -430,8 +479,18 @@ test("Windows and Linux: electron-updater downloads by itself, never installs on
   // Progress that came before the version was known is shown once it is.
   assert.deepEqual(reports.map((r) => r.status), ["available", "downloading", "ready"]);
   assert.equal(reports[1].progress, 0.5);
+  // The sums come from the release of the version electron-updater found.
+  assert.deepEqual(release.fetched, [
+    "https://github.com/ahmetcankacar54/relay/releases/download/v0.16.0/SHA256SUMS.txt",
+    "https://github.com/ahmetcankacar54/relay/releases/download/v0.16.0/SHA256SUMS.txt.sig",
+  ]);
   await driver.install();
   assert.deepEqual(updater.installs, [[false, true]]);
+  // An AppImage running as one is checked the same way.
+  const appImage = signedRelease(t, { platform: "linux" });
+  const linuxReports: Partial<UpdateState>[] = [];
+  await appImage.driver(fakeUpdater("0.16.0", appImage.file), { APPIMAGE: appImage.file }).check((p) => linuxReports.push(p));
+  assert.equal(linuxReports.at(-1)?.status, "ready");
   // Linux outside an AppImage cannot replace itself.
   const linux = new ElectronUpdateDriver({ updater: async () => fakeUpdater("0.16.0"), current: "0.15.0", platform: "linux", env: {} });
   const seen: Partial<UpdateState>[] = [];
@@ -442,4 +501,54 @@ test("Windows and Linux: electron-updater downloads by itself, never installs on
   const none: Partial<UpdateState>[] = [];
   await new ElectronUpdateDriver({ updater: async () => fakeUpdater(undefined), current: "0.15.0", platform: "win32", env: {} }).check((p) => none.push(p));
   assert.deepEqual(none, [{ status: "up-to-date" }]);
+});
+
+test("Windows and Linux: an installer the signed sums do not vouch for is deleted, never installed", async (t) => {
+  const rejected = async (release: SignedRelease, error: string, file = release.file) => {
+    const updater = fakeUpdater("0.16.0", file);
+    const driver = release.driver(updater);
+    await assert.rejects(driver.check(() => {}), new RegExp(error));
+    assert.equal(fs.existsSync(file), false, "the rejected download is removed");
+    await assert.rejects(driver.install(), /No update is ready/);
+    assert.deepEqual(updater.installs, []);
+  };
+  // A tampered installer: latest.yml (served with it) matched, the signed sums do not.
+  const tampered = signedRelease(t);
+  fs.writeFileSync(tampered.file, "something else");
+  await rejected(tampered, UPDATE_CHECKSUM_MISMATCH);
+  // The tampered installer again, now with the sums edited to its digest; the signature is the
+  // original one, over the original sums.
+  const edited = signedRelease(t, {
+    tamper: (text) => text.replace(/^[0-9a-f]{64}(?=  Relay-Setup)/m, createHash("sha256").update("something else").digest("hex")),
+  });
+  fs.writeFileSync(edited.file, "something else");
+  await rejected(edited, UPDATE_SIGNATURE_MISMATCH);
+  // Sums signed by another key (the release host's own, say).
+  await rejected(signedRelease(t, { signer: generateKeyPairSync("ed25519").privateKey }), UPDATE_SIGNATURE_MISMATCH);
+  // A garbled signature, and none at all.
+  await rejected(signedRelease(t, { signature: "not base64 at all" }), UPDATE_SIGNATURE_MISMATCH);
+  await rejected(signedRelease(t, { missing: ["SHA256SUMS.txt.sig"] }), UPDATE_SIGNATURE_MISMATCH);
+  await rejected(signedRelease(t, { missing: ["SHA256SUMS.txt"] }), UPDATE_NO_CHECKSUM);
+  // Signed sums that do not list this installer.
+  await rejected(signedRelease(t, { sums: `${"a".repeat(64)}  INSTALL.txt\n` }), UPDATE_NO_CHECKSUM);
+  // A tampered latest.yml naming another (older, validly listed) file: refused by name.
+  const renamed = signedRelease(t);
+  const older = path.join(path.dirname(renamed.file), "Relay-Setup-0.14.0-x64.exe");
+  fs.copyFileSync(renamed.file, older);
+  await rejected(renamed, UPDATE_CHECKSUM_MISMATCH, older);
+  // No downloaded file reported at all.
+  const empty = signedRelease(t);
+  await assert.rejects(empty.driver(fakeUpdater("0.16.0")).check(() => {}), new RegExp(UPDATE_CHECKSUM_MISMATCH));
+});
+
+test("the installer names the updater expects are package.json's artifact names", () => {
+  const build = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../package.json"), "utf8")).build;
+  const name = (template: string, ext: string) => template.replace("${version}", "1.2.3").replace("${ext}", ext);
+  assert.equal(installerName("win32", "1.2.3"), name(build.win.artifactName, "exe"));
+  assert.equal(installerName("linux", "1.2.3"), name(build.linux.artifactName, "AppImage"));
+  // The macOS updater picks the DMG for the running architecture: Apple silicon and Intel.
+  const assets = ["arm64", "x64"].map((arch) => ({ name: `Relay-1.2.3-${arch}.dmg`, url: `https://x/${arch}`, size: 1 }));
+  assert.equal(dmgFor(assets, "1.2.3", "arm64")?.url, "https://x/arm64");
+  assert.equal(dmgFor(assets, "1.2.3", "x64")?.url, "https://x/x64");
+  assert.equal(dmgFor(assets.slice(0, 1), "1.2.3", "x64"), undefined);
 });

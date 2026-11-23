@@ -1,5 +1,20 @@
+import fs from "node:fs";
+import path from "node:path";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import type { UpdateState } from "../../shared/types";
-import { compareVersions, releasePage, type UpdateDriver } from "./app-update";
+import {
+  RELEASE_REPO,
+  compareVersions,
+  parseChecksums,
+  readCapped,
+  releasePage,
+  type UpdateDriver,
+} from "./app-update";
+import { UPDATE_CHECKSUM_MISMATCH, UPDATE_NO_CHECKSUM, UPDATE_SIGNATURE_MISMATCH } from "./mac-update";
+import { UPDATE_SIGNING_PUBLIC_KEY } from "./update-signing-key";
+
+const MAX_SUMS_BYTES = 64 * 1024;
+const MAX_SIGNATURE_BYTES = 1024;
 
 /** The part of electron-updater's AppUpdater this driver uses. */
 export interface ElectronUpdater {
@@ -9,17 +24,47 @@ export interface ElectronUpdater {
   checkForUpdates(): Promise<{
     isUpdateAvailable?: boolean;
     updateInfo: { version: string };
-    downloadPromise?: Promise<unknown> | null;
+    /** Resolves with the downloaded files, the installer first. */
+    downloadPromise?: Promise<string[]> | null;
   } | null>;
   on(event: "download-progress", listener: (info: { percent: number }) => void): unknown;
   off?(event: "download-progress", listener: (info: { percent: number }) => void): unknown;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
 }
 
+/** The installer a release publishes for this platform: package.json's artifactName for it. */
+export function installerName(platform: NodeJS.Platform, version: string) {
+  return platform === "win32" ? `Relay-Setup-${version}-x64.exe` : `Relay-${version}-x86_64.AppImage`;
+}
+
+/** A file of a release, by name. */
+export const releaseFile = (version: string, name: string) =>
+  `https://github.com/${RELEASE_REPO}/releases/download/v${version}/${name}`;
+
+/** Whether `signature` (base64 Ed25519) signs `text` under `publicKey` (SPKI DER, base64). */
+export function signedBy(text: string, signature: string, publicKey: string) {
+  try {
+    const key = createPublicKey({ key: Buffer.from(publicKey, "base64"), format: "der", type: "spki" });
+    if (key.asymmetricKeyType !== "ed25519") return false;
+    return verify(null, Buffer.from(text, "utf8"), key, Buffer.from(signature.trim(), "base64"));
+  } catch {
+    return false;
+  }
+}
+
+async function sha256File(file: string) {
+  const hash = createHash("sha256");
+  for await (const chunk of fs.createReadStream(file)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
 /**
  * Windows and Linux updates through electron-updater, from the release's latest.yml or
  * latest-linux.yml: it checks, downloads and verifies (the SHA-512 in the yml) by itself, and
- * installs on `quitAndInstall`. An AppImage can only update when it runs as one (APPIMAGE set).
+ * installs on `quitAndInstall`. The yml comes from the same host as the installer, so Relay also
+ * requires the release's SHA256SUMS.txt to carry a valid signature by the embedded key and to
+ * list the downloaded installer, under its own name for that version; otherwise the download is
+ * deleted and never installed. An AppImage can only update when it runs as one (APPIMAGE set).
  */
 export class ElectronUpdateDriver implements UpdateDriver {
   private ready = false;
@@ -29,9 +74,13 @@ export class ElectronUpdateDriver implements UpdateDriver {
       current: string;
       platform: NodeJS.Platform;
       env: NodeJS.ProcessEnv;
+      request?: typeof fetch;
+      /** Tests sign with their own key. */
+      publicKey?: string;
     },
   ) {}
   async check(report: (patch: Partial<UpdateState>) => void) {
+    this.ready = false;
     const updater = await this.deps.updater();
     // An AppImage that does not run as one cannot replace itself: nothing to download for it.
     updater.autoDownload = !(this.deps.platform === "linux" && !this.deps.env.APPIMAGE);
@@ -55,15 +104,47 @@ export class ElectronUpdateDriver implements UpdateDriver {
         return report({ status: "manual", manualReason: "not-appimage", version, notesUrl });
       report({ status: "available", version, notesUrl });
       known = true;
+      let files: string[] | undefined;
       if (result.downloadPromise) {
         report({ status: "downloading", progress: last ?? 0 });
-        await result.downloadPromise;
+        files = await result.downloadPromise;
+      }
+      const installer = files?.[0];
+      if (!installer) throw new Error(UPDATE_CHECKSUM_MISMATCH);
+      try {
+        await this.verify(version, installer);
+      } catch (error) {
+        fs.rmSync(installer, { force: true });
+        throw error;
       }
       this.ready = true;
       report({ status: "ready", progress: undefined });
     } finally {
       updater.off?.("download-progress", progress);
     }
+  }
+  /** The signed sums of `version` list `installer`, with its digest, under the expected name. */
+  private async verify(version: string, installer: string) {
+    const name = installerName(this.deps.platform, version);
+    if (path.basename(installer) !== name) throw new Error(UPDATE_CHECKSUM_MISMATCH);
+    const sums = await this.text(releaseFile(version, "SHA256SUMS.txt"), MAX_SUMS_BYTES).catch(() => {
+      throw new Error(UPDATE_NO_CHECKSUM);
+    });
+    const signature = await this.text(releaseFile(version, "SHA256SUMS.txt.sig"), MAX_SIGNATURE_BYTES).catch(
+      () => {
+        throw new Error(UPDATE_SIGNATURE_MISMATCH);
+      },
+    );
+    if (!signedBy(sums, signature, this.deps.publicKey ?? UPDATE_SIGNING_PUBLIC_KEY))
+      throw new Error(UPDATE_SIGNATURE_MISMATCH);
+    const expected = parseChecksums(sums).get(name);
+    if (!expected) throw new Error(UPDATE_NO_CHECKSUM);
+    if ((await sha256File(installer)) !== expected) throw new Error(UPDATE_CHECKSUM_MISMATCH);
+  }
+  private async text(url: string, maxBytes: number) {
+    const response = await (this.deps.request ?? fetch)(url, { signal: AbortSignal.timeout(30_000) });
+    if (!response.ok) throw new Error(`The update download failed (HTTP ${response.status}).`);
+    return readCapped(response, maxBytes);
   }
   async install() {
     if (!this.ready) throw new Error("No update is ready to install.");

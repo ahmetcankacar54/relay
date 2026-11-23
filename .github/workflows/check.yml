@@ -20,7 +20,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+      # The whole tree: Electron, which ships inside the app, is a devDependency.
+      - run: npm audit --audit-level=high
       - run: npm run typecheck
       - name: Widget strings match the catalogs
         run: node --import tsx scripts/i18n/widget-strings.ts --check
