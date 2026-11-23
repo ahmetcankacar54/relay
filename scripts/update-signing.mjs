@@ -41,7 +41,10 @@ export const DEFAULT_KEY_FILE = path.join(
   "update-signing-ed25519.pem",
 );
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-const EMBEDDED_KEY_FILE = path.join(root, "electron/core/update-signing-key.ts");
+const EMBEDDED_KEY_FILE = path.join(
+  root,
+  "electron/core/update-signing-key.ts",
+);
 
 /** The configured private key file. */
 export function signingKeyFile(env = process.env) {
@@ -76,7 +79,8 @@ export function loadSigningKey(env = process.env, platform = process.platform) {
 
 /** Creates the key file (mode 600) unless it exists; returns the key either way. */
 export function createSigningKey(file = signingKeyFile()) {
-  if (fs.existsSync(file)) return ed25519(createPrivateKey(fs.readFileSync(file, "utf8")));
+  if (fs.existsSync(file))
+    return ed25519(createPrivateKey(fs.readFileSync(file, "utf8")));
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const { privateKey } = generateKeyPairSync("ed25519");
   // "wx": never overwrites a key that appeared in between.
@@ -89,7 +93,9 @@ export function createSigningKey(file = signingKeyFile()) {
 
 /** The public half as SPKI DER, base64: the form electron/core/update-signing-key.ts embeds. */
 export function publicKeyBase64(key) {
-  return createPublicKey(key).export({ type: "spki", format: "der" }).toString("base64");
+  return createPublicKey(key)
+    .export({ type: "spki", format: "der" })
+    .toString("base64");
 }
 
 /** SHA-256 of the SPKI DER, for telling keys apart without showing them. */
@@ -110,7 +116,12 @@ export function verifySums(text, signature, publicBase64) {
       format: "der",
       type: "spki",
     });
-    return verify(null, Buffer.from(text, "utf8"), ed25519(key), Buffer.from(signature.trim(), "base64"));
+    return verify(
+      null,
+      Buffer.from(text, "utf8"),
+      ed25519(key),
+      Buffer.from(signature.trim(), "base64"),
+    );
   } catch {
     return false;
   }
@@ -146,7 +157,7 @@ export function sha256File(file) {
   const fd = fs.openSync(file, "r");
   try {
     const chunk = Buffer.allocUnsafe(1 << 20);
-    for (let read; (read = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0; )
+    for (let read; (read = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0;)
       hash.update(chunk.subarray(0, read));
   } finally {
     fs.closeSync(fd);
@@ -184,7 +195,11 @@ export function mergeSums(remote, local) {
 
 /** Runs gh; its stderr ("release not found") stays in the thrown error instead of the log. */
 function gh(args) {
-  return execFileSync("gh", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  return execFileSync("gh", args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
 }
 
 /**
@@ -196,32 +211,60 @@ function gh(args) {
 export function remoteSums(tag, local, publicBase64, log = console.log) {
   let assets;
   try {
-    assets = JSON.parse(gh(["release", "view", tag, "--json", "assets"])).assets.map((a) => a.name);
+    assets = JSON.parse(
+      gh(["release", "view", tag, "--json", "assets"]),
+    ).assets.map((a) => a.name);
   } catch {
     return new Map();
   }
   if (!assets.includes(SUMS_NAME)) return new Map();
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "relay-sums-"));
   try {
-    const patterns = assets.includes(SIGNATURE_NAME) ? [SUMS_NAME, SIGNATURE_NAME] : [SUMS_NAME];
-    gh(["release", "download", tag, "--dir", temp, ...patterns.flatMap((p) => ["--pattern", p])]);
+    const patterns = assets.includes(SIGNATURE_NAME)
+      ? [SUMS_NAME, SIGNATURE_NAME]
+      : [SUMS_NAME];
+    gh([
+      "release",
+      "download",
+      tag,
+      "--dir",
+      temp,
+      ...patterns.flatMap((p) => ["--pattern", p]),
+    ]);
     const text = fs.readFileSync(path.join(temp, SUMS_NAME), "utf8");
     const listed = parseSums(text);
     const theirs = new Map(
       [...listed].filter(([name]) => !local.has(name) && assets.includes(name)),
     );
     const signature = path.join(temp, SIGNATURE_NAME);
-    if (publicBase64 && fs.existsSync(signature) && verifySums(text, fs.readFileSync(signature, "utf8"), publicBase64)) {
+    if (
+      publicBase64 &&
+      fs.existsSync(signature) &&
+      verifySums(text, fs.readFileSync(signature, "utf8"), publicBase64)
+    ) {
       log(`   Release ${tag}: kept ${theirs.size} signed entries.`);
       return theirs;
     }
-    log(`   Release ${tag}: sums are not signed by this key; hashing ${theirs.size} files from the release.`);
+    log(
+      `   Release ${tag}: sums are not signed by this key; hashing ${theirs.size} files from the release.`,
+    );
     for (const [name, expected] of theirs) {
-      gh(["release", "download", tag, "--dir", temp, "--pattern", name, "--clobber"]);
+      gh([
+        "release",
+        "download",
+        tag,
+        "--dir",
+        temp,
+        "--pattern",
+        name,
+        "--clobber",
+      ]);
       const actual = sha256File(path.join(temp, name));
       fs.rmSync(path.join(temp, name), { force: true });
       if (actual !== expected)
-        throw new Error(`${name} on release ${tag} does not match its line in ${SUMS_NAME}.`);
+        throw new Error(
+          `${name} on release ${tag} does not match its line in ${SUMS_NAME}.`,
+        );
     }
     return theirs;
   } finally {
@@ -233,7 +276,10 @@ export function remoteSums(tag, local, publicBase64, log = console.log) {
  * Writes `<dir>/SHA256SUMS.txt` and, with a key, its signature. A key whose public half is not
  * the one the app embeds is refused: no Relay would accept what it signs.
  */
-export function writeReleaseSums(dir, { tag, requireKey = false, env = process.env, log = console.log } = {}) {
+export function writeReleaseSums(
+  dir,
+  { tag, requireKey = false, env = process.env, log = console.log } = {},
+) {
   const key = loadSigningKey(env);
   if (!key && requireKey)
     throw new Error(
@@ -246,13 +292,17 @@ export function writeReleaseSums(dir, { tag, requireKey = false, env = process.e
     );
   const local = localSums(dir);
   if (local.size === 0) throw new Error(`No release assets in ${dir}.`);
-  const sums = tag ? mergeSums(remoteSums(tag, local, embedded, log), local) : local;
+  const sums = tag
+    ? mergeSums(remoteSums(tag, local, embedded, log), local)
+    : local;
   const text = formatSums(sums);
   fs.writeFileSync(path.join(dir, SUMS_NAME), text, "utf8");
   const signatureFile = path.join(dir, SIGNATURE_NAME);
   if (key) fs.writeFileSync(signatureFile, signSums(text, key), "utf8");
   else fs.rmSync(signatureFile, { force: true });
-  log(`   ${SUMS_NAME}: ${sums.size} files${key ? `, signed (${publicKeyFingerprint(embedded)})` : ", NOT signed"}.`);
+  log(
+    `   ${SUMS_NAME}: ${sums.size} files${key ? `, signed (${publicKeyFingerprint(embedded)})` : ", NOT signed"}.`,
+  );
   return { text, sums, signed: Boolean(key) };
 }
 
@@ -262,8 +312,12 @@ function main(args) {
     const file = signingKeyFile();
     const existed = fs.existsSync(file);
     const publicBase64 = publicKeyBase64(createSigningKey(file));
-    console.log(`${existed ? "Using the existing" : "Created the"} private key ${file} (keep it secret, back it up).`);
-    console.log(`Public key (embed in electron/core/update-signing-key.ts): ${publicBase64}`);
+    console.log(
+      `${existed ? "Using the existing" : "Created the"} private key ${file} (keep it secret, back it up).`,
+    );
+    console.log(
+      `Public key (embed in electron/core/update-signing-key.ts): ${publicBase64}`,
+    );
     console.log(`Fingerprint: ${publicKeyFingerprint(publicBase64)}`);
     return;
   }
@@ -279,15 +333,28 @@ function main(args) {
     const dir = rest.find((a) => !a.startsWith("--"));
     const tagIndex = rest.indexOf("--tag");
     const tag = tagIndex >= 0 ? rest[tagIndex + 1] : undefined;
-    if (!dir || (tagIndex >= 0 && !(tag?.startsWith("v") && releaseChannel(tag.slice(1)))))
-      throw new Error("Usage: update-signing.mjs sums <dir> [--tag vX.Y.Z[-beta.N]] [--require-key]");
-    writeReleaseSums(path.resolve(dir), { tag, requireKey: rest.includes("--require-key") });
+    if (
+      !dir ||
+      (tagIndex >= 0 && !(tag?.startsWith("v") && releaseChannel(tag.slice(1))))
+    )
+      throw new Error(
+        "Usage: update-signing.mjs sums <dir> [--tag vX.Y.Z[-beta.N]] [--require-key]",
+      );
+    writeReleaseSums(path.resolve(dir), {
+      tag,
+      requireKey: rest.includes("--require-key"),
+    });
     return;
   }
-  throw new Error("Usage: update-signing.mjs init | public-key | sums <dir> [--tag vX.Y.Z] [--require-key]");
+  throw new Error(
+    "Usage: update-signing.mjs init | public-key | sums <dir> [--tag vX.Y.Z] [--require-key]",
+  );
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

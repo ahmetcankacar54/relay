@@ -7,7 +7,9 @@ import type { useRelay } from "@/data/relay-context";
 import { useCopy } from "../proxy/hooks";
 import { RELAY_CLI_INSTALL } from "../../../shared/cli-package";
 
-type Setup = Awaited<ReturnType<ReturnType<typeof useRelay>["api"]["claudeStatusline"]>>;
+type Setup = Awaited<
+  ReturnType<ReturnType<typeof useRelay>["api"]["claudeStatusline"]>
+>;
 
 /**
  * Relay in Claude Code's status line: the switch writes `statusLine` in `~/.claude/settings.json`
@@ -19,7 +21,9 @@ export function ClaudeStatuslineRow({
   api,
   action,
   t,
-}: Pick<ReturnType<typeof useRelay>, "api" | "action"> & { t: ReturnType<typeof useI18n>["t"] }) {
+}: Pick<ReturnType<typeof useRelay>, "api" | "action"> & {
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   const [setup, setSetup] = useState<Setup>();
   const { copied, copy } = useCopy();
   useEffect(() => {
@@ -44,11 +48,20 @@ export function ClaudeStatuslineRow({
           {missing && (
             <span className="mt-2 flex flex-wrap items-center gap-2">
               <span>{t("statusline.installCliFirst")}</span>
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs" translate="no">
+              <code
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
+                translate="no"
+              >
                 {RELAY_CLI_INSTALL}
               </code>
-              <Button variant="outline" size="sm" onClick={() => copy("relay-cli-install", RELAY_CLI_INSTALL)}>
-                {copied === "relay-cli-install" ? t("toolsTab.copied") : t("common.copy")}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copy("relay-cli-install", RELAY_CLI_INSTALL)}
+              >
+                {copied === "relay-cli-install"
+                  ? t("toolsTab.copied")
+                  : t("common.copy")}
               </Button>
             </span>
           )}
@@ -61,7 +74,9 @@ export function ClaudeStatuslineRow({
         // Turned off it can always be; turned on only with a relay Claude Code can run.
         disabled={missing && !setup.installed}
         onCheckedChange={(enable) =>
-          void action("claude-statusline", async () => setSetup(await api.claudeStatusline(enable)))
+          void action("claude-statusline", async () =>
+            setSetup(await api.claudeStatusline(enable)),
+          )
         }
       />
     </SettingRow>

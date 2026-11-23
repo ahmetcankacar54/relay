@@ -10,10 +10,22 @@ import {
 } from "../../shared/types";
 
 /** The rows, in order: each choice with its label and its one-line note. */
-const ROWS: { key: keyof ConfigSyncSettings; label: MessageId; hint?: MessageId }[] = [
-  { key: "mcpServers", label: "configSync.mcpServers", hint: "configSync.mcpServersHint" },
+const ROWS: {
+  key: keyof ConfigSyncSettings;
+  label: MessageId;
+  hint?: MessageId;
+}[] = [
+  {
+    key: "mcpServers",
+    label: "configSync.mcpServers",
+    hint: "configSync.mcpServersHint",
+  },
   { key: "skills", label: "configSync.skills", hint: "configSync.skillsHint" },
-  { key: "settings", label: "configSync.settings", hint: "configSync.settingsHint" },
+  {
+    key: "settings",
+    label: "configSync.settings",
+    hint: "configSync.settingsHint",
+  },
   { key: "claudeMd", label: "configSync.claudeMd" },
 ];
 
@@ -47,7 +59,9 @@ export function ConfigSyncPreference({
               id={`config-sync-${key}`}
               checked={value[key]}
               disabled={disabled}
-              onCheckedChange={(on) => update({ configSync: { ...value, [key]: on } })}
+              onCheckedChange={(on) =>
+                update({ configSync: { ...value, [key]: on } })
+              }
             />
           </SettingRow>
         ))}

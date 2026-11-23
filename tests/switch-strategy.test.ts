@@ -53,7 +53,9 @@ function usage(
     checkedAt: at(0),
     fiveHour: {
       usedPercent: fiveHour.used,
-      ...(fiveHour.resetsIn === undefined ? {} : { resetsAt: at(fiveHour.resetsIn) }),
+      ...(fiveHour.resetsIn === undefined
+        ? {}
+        : { resetsAt: at(fiveHour.resetsIn) }),
     },
     sevenDay: { usedPercent: week.used, resetsAt: at(week.resetsIn) },
   };
@@ -71,9 +73,21 @@ function fleet() {
   const cirrus = account("Cirrus");
   const accounts = [source, alto, vertex, cirrus];
   const readings: Record<string, AccountUsage> = {
-    [source.id]: usage(source, { used: 100, resetsIn: 2 * HOUR }, { used: 50, resetsIn: 4 * DAY }),
-    [alto.id]: usage(alto, { used: 70, resetsIn: 4 * HOUR }, { used: 20, resetsIn: 6 * DAY }),
-    [vertex.id]: usage(vertex, { used: 20, resetsIn: 1 * HOUR }, { used: 10, resetsIn: 5 * DAY }),
+    [source.id]: usage(
+      source,
+      { used: 100, resetsIn: 2 * HOUR },
+      { used: 50, resetsIn: 4 * DAY },
+    ),
+    [alto.id]: usage(
+      alto,
+      { used: 70, resetsIn: 4 * HOUR },
+      { used: 20, resetsIn: 6 * DAY },
+    ),
+    [vertex.id]: usage(
+      vertex,
+      { used: 20, resetsIn: 1 * HOUR },
+      { used: 10, resetsIn: 5 * DAY },
+    ),
     [cirrus.id]: usage(cirrus, { used: 0 }, { used: 40, resetsIn: 1 * DAY }),
   };
   return { source, alto, vertex, cirrus, accounts, readings };
@@ -83,7 +97,10 @@ const EXPECTED: Record<AutoSwitchStrategy, string> = {
   "weekly-first": "Cirrus",
   "consume-first": "Alto",
 };
-const settingsFor = (strategy: AutoSwitchStrategy | undefined, f = fleet()): RelaySettings => ({
+const settingsFor = (
+  strategy: AutoSwitchStrategy | undefined,
+  f = fleet(),
+): RelaySettings => ({
   ...DEFAULT_SETTINGS,
   autoSwitchStrategy: strategy,
   autoSwitchMode: "after-exit",
@@ -92,16 +109,23 @@ const settingsFor = (strategy: AutoSwitchStrategy | undefined, f = fleet()): Rel
 
 test("each strategy picks a different target from the same three accounts", () => {
   const f = fleet();
-  const candidates = [f.alto, f.vertex, f.cirrus].map((account) => ({ account, usage: f.readings[account.id] }));
+  const candidates = [f.alto, f.vertex, f.cirrus].map((account) => ({
+    account,
+    usage: f.readings[account.id],
+  }));
   for (const rate of [undefined, 60])
     for (const strategy of AUTO_SWITCH_STRATEGIES)
       assert.equal(
-        rankContinuationTargets(candidates, { now: NOW, rate, strategy })[0].account.name,
+        rankContinuationTargets(candidates, { now: NOW, rate, strategy })[0]
+          .account.name,
         EXPECTED[strategy],
         `${strategy} at ${rate ?? "no"} tempo`,
       );
   // No strategy is "best", today's rule: the open 5-hour period that resets soonest.
-  assert.equal(rankContinuationTargets(candidates, { now: NOW })[0].account.name, "Vertex");
+  assert.equal(
+    rankContinuationTargets(candidates, { now: NOW })[0].account.name,
+    "Vertex",
+  );
   // Without a context there is no strategy: capacity × remaining, as before (Vertex has 80% left).
   assert.deepEqual(
     rankContinuationTargets(candidates).map((r) => r.account.name),
@@ -114,14 +138,30 @@ test("automatic switching, the fleet, the suggestion and the panel agree on the 
     const f = fleet();
     const settings = settingsFor(strategy, f);
     const expected = EXPECTED[strategy ?? "best"];
-    assert.equal(chooseTarget(f.source, f.accounts, settings, f.readings, NOW)?.name, expected, `fleet ${strategy}`);
+    assert.equal(
+      chooseTarget(f.source, f.accounts, settings, f.readings, NOW)?.name,
+      expected,
+      `fleet ${strategy}`,
+    );
     assert.equal(
       suggestedAccount(f.source, f.accounts, f.readings, settings, NOW)?.name,
       expected,
       `suggestion ${strategy}`,
     );
-    const panel = overviewAccounts(f.source, f.accounts, f.readings, NOW, undefined, new Set(), strategy);
-    assert.equal(panel.find((row) => row.recommended)?.account.name, expected, `panel ${strategy}`);
+    const panel = overviewAccounts(
+      f.source,
+      f.accounts,
+      f.readings,
+      NOW,
+      undefined,
+      new Set(),
+      strategy,
+    );
+    assert.equal(
+      panel.find((row) => row.recommended)?.account.name,
+      expected,
+      `panel ${strategy}`,
+    );
     const desktop: DesktopState = {
       available: true,
       running: false,
@@ -132,7 +172,15 @@ test("automatic switching, the fleet, the suggestion and the panel agree on the 
       recoveryRequired: false,
       errorRevision: 0,
     };
-    const decision = autoSwitchDecision(settings, f.accounts, desktop, f.readings, NOW, false, true);
+    const decision = autoSwitchDecision(
+      settings,
+      f.accounts,
+      desktop,
+      f.readings,
+      NOW,
+      false,
+      true,
+    );
     assert.equal(
       f.accounts.find((a) => a.id === decision.state.targetId)?.name,
       expected,
@@ -148,19 +196,53 @@ test("an account's own switch line: it is left earlier and never chosen past it"
   assert.equal(switchAtPercent(f.alto, 90), 60);
   // Alto is 70% used, past its own 60%: consume-first drains Cirrus (60% left) next instead.
   const settings = settingsFor("consume-first", f);
-  const candidates = [f.alto, f.vertex, f.cirrus].map((account) => ({ account, usage: f.readings[account.id] }));
-  const ranked = rankContinuationTargets(candidates, { now: NOW, strategy: "consume-first" });
+  const candidates = [f.alto, f.vertex, f.cirrus].map((account) => ({
+    account,
+    usage: f.readings[account.id],
+  }));
+  const ranked = rankContinuationTargets(candidates, {
+    now: NOW,
+    strategy: "consume-first",
+  });
   assert.equal(ranked[0].account.name, "Cirrus");
   assert.equal(ranked.at(-1)?.account.name, "Alto");
-  assert.notEqual(chooseTarget(f.source, f.accounts, settings, f.readings, NOW)?.name, "Alto");
-  assert.notEqual(suggestedAccount(f.source, f.accounts, f.readings, settings, NOW)?.name, "Alto");
+  assert.notEqual(
+    chooseTarget(f.source, f.accounts, settings, f.readings, NOW)?.name,
+    "Alto",
+  );
+  assert.notEqual(
+    suggestedAccount(f.source, f.accounts, f.readings, settings, NOW)?.name,
+    "Alto",
+  );
   // A source with its own line is suggested away from before the warning threshold (90%).
   const early = fleet();
-  early.readings[early.source.id] = usage(early.source, { used: 75, resetsIn: 2 * HOUR }, { used: 10, resetsIn: 4 * DAY });
+  early.readings[early.source.id] = usage(
+    early.source,
+    { used: 75, resetsIn: 2 * HOUR },
+    { used: 10, resetsIn: 4 * DAY },
+  );
   const earlySettings = settingsFor(undefined, early);
-  assert.equal(suggestedAccount(early.source, early.accounts, early.readings, earlySettings, NOW), undefined);
+  assert.equal(
+    suggestedAccount(
+      early.source,
+      early.accounts,
+      early.readings,
+      earlySettings,
+      NOW,
+    ),
+    undefined,
+  );
   early.source.switchAtPercent = 70;
-  assert.equal(suggestedAccount(early.source, early.accounts, early.readings, earlySettings, NOW)?.name, "Vertex");
+  assert.equal(
+    suggestedAccount(
+      early.source,
+      early.accounts,
+      early.readings,
+      earlySettings,
+      NOW,
+    )?.name,
+    "Vertex",
+  );
   // Preparing on quit leaves it at 70% too, not only at a full limit.
   const desktop: DesktopState = {
     available: true,
@@ -172,7 +254,16 @@ test("an account's own switch line: it is left earlier and never chosen past it"
     recoveryRequired: false,
     errorRevision: 0,
   };
-  const decide = () => autoSwitchDecision(earlySettings, early.accounts, desktop, early.readings, NOW, false, true).state;
+  const decide = () =>
+    autoSwitchDecision(
+      earlySettings,
+      early.accounts,
+      desktop,
+      early.readings,
+      NOW,
+      false,
+      true,
+    ).state;
   assert.equal(decide().reason, "quota-exhausted");
   assert.equal(decide().targetId, early.vertex.id);
   delete early.source.switchAtPercent;
@@ -181,12 +272,18 @@ test("an account's own switch line: it is left earlier and never chosen past it"
 
 test("the strategy and the line are saved only as whole known values", () => {
   for (const strategy of AUTO_SWITCH_STRATEGIES)
-    assert.deepEqual(settingsPatchSchema.parse({ autoSwitchStrategy: strategy }), { autoSwitchStrategy: strategy });
-  assert.throws(() => settingsPatchSchema.parse({ autoSwitchStrategy: "round-robin" }));
+    assert.deepEqual(
+      settingsPatchSchema.parse({ autoSwitchStrategy: strategy }),
+      { autoSwitchStrategy: strategy },
+    );
+  assert.throws(() =>
+    settingsPatchSchema.parse({ autoSwitchStrategy: "round-robin" }),
+  );
   const line = accountSchema.shape.switchAtPercent;
   assert.equal(line.parse(80), 80);
   assert.equal(line.parse(undefined), undefined);
-  for (const bad of [49, 101, 85.5, "80"]) assert.throws(() => line.parse(bad), String(bad));
+  for (const bad of [49, 101, 85.5, "80"])
+    assert.throws(() => line.parse(bad), String(bad));
   // A saved line outside 50–100 (a hand-edited file) falls back to the rule's own.
   assert.equal(switchAtPercent({ switchAtPercent: 20 }, 90), 90);
   assert.equal(DEFAULT_SETTINGS.autoSwitchStrategy, "best");

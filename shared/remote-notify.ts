@@ -1,7 +1,13 @@
-import type { RemoteNotifyEvents, RemoteNotifySettings, RelaySettings } from "./types";
+import type {
+  RemoteNotifyEvents,
+  RemoteNotifySettings,
+  RelaySettings,
+} from "./types";
 
 /** Every event on and ntfy picked: what the group shows before a URL is saved. */
-export const DEFAULT_REMOTE_NOTIFY: Required<Omit<RemoteNotifySettings, "url">> = {
+export const DEFAULT_REMOTE_NOTIFY: Required<
+  Omit<RemoteNotifySettings, "url">
+> = {
   kind: "ntfy",
   events: { limit: true, reset: true, autoSwitch: true, signIn: true },
 };
@@ -19,7 +25,11 @@ export function remoteNotifySettings(
 }
 
 /** Hosts plain http may reach: a self-hosted ntfy on this computer, never one across a network. */
-const LOCAL_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const LOCAL_HOSTS: ReadonlySet<string> = new Set([
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+]);
 export const REMOTE_NOTIFY_URL_MAX = 2_000;
 
 /**
@@ -38,5 +48,7 @@ export function remoteNotifyUrl(raw: string | undefined): URL | undefined {
   }
   if (url.username || url.password || !url.hostname) return undefined;
   if (url.protocol === "https:") return url;
-  return url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname) ? url : undefined;
+  return url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname)
+    ? url
+    : undefined;
 }

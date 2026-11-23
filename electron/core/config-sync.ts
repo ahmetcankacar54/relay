@@ -40,8 +40,19 @@ const ENTRY_FOLDERS = ["skills", "agents"] as const;
 
 /** The name words that mark an `env` variable as a secret (see `accountLocalEnv`). */
 const SECRET_WORDS = [
-  "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "CREDENTIALS", "KEY", "APIKEY",
-  "AUTH", "OAUTH", "COOKIE", "SESSION", "PAT",
+  "TOKEN",
+  "SECRET",
+  "PASSWORD",
+  "PASSWD",
+  "CREDENTIAL",
+  "CREDENTIALS",
+  "KEY",
+  "APIKEY",
+  "AUTH",
+  "OAUTH",
+  "COOKIE",
+  "SESSION",
+  "PAT",
 ];
 
 /**
@@ -90,7 +101,9 @@ const isObject = (value: unknown): value is Json =>
 
 /** The `code` of a Node file error, such as "ENOENT". */
 const errorCode = (error: unknown) =>
-  error && typeof error === "object" && "code" in error ? error.code : undefined;
+  error && typeof error === "object" && "code" in error
+    ? error.code
+    : undefined;
 
 /** A regular file's stat, or undefined when it is missing, a link or not a file. */
 async function fileStat(file: string) {
@@ -104,7 +117,9 @@ async function fileStat(file: string) {
 }
 
 /** The JSON object in `file`: undefined when it is missing, an error when it is not an object. */
-async function readJsonObject(file: string): Promise<{ value: Json; mtime: number } | undefined> {
+async function readJsonObject(
+  file: string,
+): Promise<{ value: Json; mtime: number } | undefined> {
   const stat = await fileStat(file);
   if (!stat) {
     // A link or folder in its place is never read or replaced.
@@ -144,18 +159,26 @@ async function profileConfigFile(profile: string) {
 }
 
 /** Files and links under `dir` with their bytes and the newest modification time anywhere in it. */
-async function tree(root: string): Promise<{ files: Map<string, string>; mtime: number }> {
+async function tree(
+  root: string,
+): Promise<{ files: Map<string, string>; mtime: number }> {
   const files = new Map<string, string>();
   let mtime = 0;
   const walk = async (relative: string) => {
     const full = path.join(root, relative);
     const stat = await fs.lstat(full);
     mtime = Math.max(mtime, stat.mtimeMs);
-    if (stat.isSymbolicLink()) files.set(relative, `link:${await fs.readlink(full)}`);
-    else if (stat.isFile()) files.set(relative, `file:${(await fs.readFile(full)).toString("base64")}`);
+    if (stat.isSymbolicLink())
+      files.set(relative, `link:${await fs.readlink(full)}`);
+    else if (stat.isFile())
+      files.set(
+        relative,
+        `file:${(await fs.readFile(full)).toString("base64")}`,
+      );
     else if (stat.isDirectory()) {
       if (relative) files.set(relative, "dir");
-      for (const name of (await fs.readdir(full)).sort()) await walk(path.join(relative, name));
+      for (const name of (await fs.readdir(full)).sort())
+        await walk(path.join(relative, name));
     }
   };
   await walk("");
@@ -171,7 +194,8 @@ async function entries(dir: string): Promise<string[]> {
       .map((e) => e.name)
       .sort();
   } catch (error) {
-    if (errorCode(error) === "ENOENT" || errorCode(error) === "ENOTDIR") return [];
+    if (errorCode(error) === "ENOENT" || errorCode(error) === "ENOTDIR")
+      return [];
     throw error;
   }
 }
@@ -180,10 +204,18 @@ async function entries(dir: string): Promise<string[]> {
  * Carries the chosen items from `from` to `to` (see the file comment). Each item is done on its
  * own: one that fails is named in `failed`, and the others still sync.
  */
-export async function syncProfileConfig(options: ConfigSyncOptions): Promise<ConfigSyncResult> {
+export async function syncProfileConfig(
+  options: ConfigSyncOptions,
+): Promise<ConfigSyncResult> {
   const { from, to, choice, backups } = options;
   const now = options.now ?? Date.now;
-  const result: ConfigSyncResult = { mcpServers: 0, entries: 0, settings: 0, claudeMd: false, failed: [] };
+  const result: ConfigSyncResult = {
+    mcpServers: 0,
+    entries: 0,
+    settings: 0,
+    claudeMd: false,
+    failed: [],
+  };
   if (path.resolve(from) === path.resolve(to)) return result;
   let backupDir: string | undefined;
   /** This switch's backup folder, made on the first loss. */
@@ -218,13 +250,23 @@ export async function syncProfileConfig(options: ConfigSyncOptions): Promise<Con
       if (!source || !isObject(servers) || !Object.keys(servers).length) return;
       const file = await profileConfigFile(to);
       const target = (await readJsonObject(file)) ?? { value: {}, mtime: 0 };
-      if (target.value.mcpServers !== undefined && !isObject(target.value.mcpServers)) return;
-      const own = isObject(target.value.mcpServers) ? target.value.mcpServers : {};
+      if (
+        target.value.mcpServers !== undefined &&
+        !isObject(target.value.mcpServers)
+      )
+        return;
+      const own = isObject(target.value.mcpServers)
+        ? target.value.mcpServers
+        : {};
       const next: Json = { ...own };
       const lost: Json = {};
       for (const [name, server] of Object.entries(servers)) {
         if (!(name in own)) next[name] = server;
-        else if (isDeepStrictEqual(own[name], server) || target.mtime >= source.mtime) continue;
+        else if (
+          isDeepStrictEqual(own[name], server) ||
+          target.mtime >= source.mtime
+        )
+          continue;
         else {
           lost[name] = own[name];
           next[name] = server;
@@ -233,8 +275,14 @@ export async function syncProfileConfig(options: ConfigSyncOptions): Promise<Con
       }
       if (!result.mcpServers) return;
       if (Object.keys(lost).length)
-        await writeAtomic(path.join(await backup(), "mcpServers.json"), JSON.stringify(lost, null, 2));
-      await writeAtomic(file, JSON.stringify({ ...target.value, mcpServers: next }, null, 2));
+        await writeAtomic(
+          path.join(await backup(), "mcpServers.json"),
+          JSON.stringify(lost, null, 2),
+        );
+      await writeAtomic(
+        file,
+        JSON.stringify({ ...target.value, mcpServers: next }, null, 2),
+      );
     });
 
   if (choice.skills)
@@ -256,15 +304,30 @@ export async function syncProfileConfig(options: ConfigSyncOptions): Promise<Con
             const ours = await tree(target);
             const same =
               ours.files.size === theirs.files.size &&
-              [...ours.files].every(([key, value]) => theirs.files.get(key) === value);
+              [...ours.files].every(
+                ([key, value]) => theirs.files.get(key) === value,
+              );
             if (same || ours.mtime >= theirs.mtime) continue;
             const saved = path.join(await backup(), folder, name);
-            await fs.mkdir(path.dirname(saved), { recursive: true, mode: 0o700 });
-            await fs.cp(target, saved, { recursive: true, verbatimSymlinks: true });
+            await fs.mkdir(path.dirname(saved), {
+              recursive: true,
+              mode: 0o700,
+            });
+            await fs.cp(target, saved, {
+              recursive: true,
+              verbatimSymlinks: true,
+            });
           }
-          const temporary = path.join(targetDir, `.${name}.${randomUUID()}.tmp`);
+          const temporary = path.join(
+            targetDir,
+            `.${name}.${randomUUID()}.tmp`,
+          );
           try {
-            await fs.cp(source, temporary, { recursive: true, verbatimSymlinks: true, preserveTimestamps: true });
+            await fs.cp(source, temporary, {
+              recursive: true,
+              verbatimSymlinks: true,
+              preserveTimestamps: true,
+            });
             await fs.rm(target, { recursive: true, force: true });
             await fs.rename(temporary, target);
           } finally {
@@ -290,23 +353,35 @@ export async function syncProfileConfig(options: ConfigSyncOptions): Promise<Con
         /** The account-local `env` variables of the profile switched to: they stay whoever wins. */
         let kept: Json = {};
         if (key === "env") {
-          if (!isObject(theirs) || (ours !== undefined && !isObject(ours))) continue;
+          if (!isObject(theirs) || (ours !== undefined && !isObject(ours)))
+            continue;
           const own = isObject(ours) ? Object.entries(ours) : [];
-          kept = Object.fromEntries(own.filter(([name]) => accountLocalEnv(name)));
+          kept = Object.fromEntries(
+            own.filter(([name]) => accountLocalEnv(name)),
+          );
           const ownTravelling = own.filter(([name]) => !accountLocalEnv(name));
-          const travelling = Object.entries(theirs).filter(([name]) => !accountLocalEnv(name));
+          const travelling = Object.entries(theirs).filter(
+            ([name]) => !accountLocalEnv(name),
+          );
           if (!travelling.length) continue;
           theirs = Object.fromEntries(travelling);
-          ours = ownTravelling.length ? Object.fromEntries(ownTravelling) : undefined;
+          ours = ownTravelling.length
+            ? Object.fromEntries(ownTravelling)
+            : undefined;
         }
-        if (ours !== undefined && (isDeepStrictEqual(ours, theirs) || !newer)) continue;
+        if (ours !== undefined && (isDeepStrictEqual(ours, theirs) || !newer))
+          continue;
         if (ours !== undefined) lost[key] = ours;
-        next[key] = isObject(theirs) && key === "env" ? { ...kept, ...theirs } : theirs;
+        next[key] =
+          isObject(theirs) && key === "env" ? { ...kept, ...theirs } : theirs;
         result.settings++;
       }
       if (!result.settings) return;
       if (Object.keys(lost).length)
-        await writeAtomic(path.join(await backup(), "settings.json"), JSON.stringify(lost, null, 2));
+        await writeAtomic(
+          path.join(await backup(), "settings.json"),
+          JSON.stringify(lost, null, 2),
+        );
       await writeAtomic(file, JSON.stringify(next, null, 2));
     });
 
@@ -335,7 +410,10 @@ export async function syncProfileConfig(options: ConfigSyncOptions): Promise<Con
  * Removes all but the newest `keep` backup folders, by name (each is named by its time). Never
  * throws: an old backup left behind costs a little disk, a failed switch far more.
  */
-export async function pruneConfigSyncBackups(root: string, keep = CONFIG_SYNC_BACKUP_LIMIT): Promise<number> {
+export async function pruneConfigSyncBackups(
+  root: string,
+  keep = CONFIG_SYNC_BACKUP_LIMIT,
+): Promise<number> {
   try {
     const found = (await fs.readdir(root, { withFileTypes: true }))
       .filter((e) => e.isDirectory() && /^\d{4}-\d{2}-\d{2}T/.test(e.name))

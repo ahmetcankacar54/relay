@@ -3,7 +3,12 @@ import path from "node:path";
 import http from "node:http";
 import { createAnthropicUsageExtractor } from "./anthropic-upstream";
 import type { ProxyStats } from "./proxy-stats";
-import { buildTargetUrl, errorMessage, forwardUpstream, type UpstreamOutcome } from "./upstream-common";
+import {
+  buildTargetUrl,
+  errorMessage,
+  forwardUpstream,
+  type UpstreamOutcome,
+} from "./upstream-common";
 import {
   overflowModel,
   type ApiUpstream,
@@ -16,7 +21,12 @@ import {
  * Relay's own headers, and Claude Code's session and hint headers belong to the subscription
  * route, and a third party has no use for them.
  */
-const PASSED_HEADERS = ["content-type", "accept", "anthropic-version", "anthropic-beta"] as const;
+const PASSED_HEADERS = [
+  "content-type",
+  "accept",
+  "anthropic-version",
+  "anthropic-beta",
+] as const;
 /** Betas only a subscription's OAuth token carries; an API key is refused with them. */
 const SUBSCRIPTION_BETA = /^oauth-/i;
 const MAX_TEST_MESSAGE = 200;
@@ -35,7 +45,8 @@ export function overflowHeaders(
   const out: http.OutgoingHttpHeaders = {};
   for (const name of PASSED_HEADERS) {
     const value = source[name];
-    if (value !== undefined && name !== "anthropic-beta") out[name] = Array.isArray(value) ? value.join(", ") : value;
+    if (value !== undefined && name !== "anthropic-beta")
+      out[name] = Array.isArray(value) ? value.join(", ") : value;
   }
   if (upstream.preset === "anthropic") {
     const raw = source["anthropic-beta"];
@@ -53,8 +64,13 @@ export function overflowHeaders(
 }
 
 /** The request body with the upstream's model in it; the bytes as they came when nothing changes. */
-export function overflowBody(body: Buffer, parsed: unknown, model: string): Buffer {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return body;
+export function overflowBody(
+  body: Buffer,
+  parsed: unknown,
+  model: string,
+): Buffer {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    return body;
   if ("model" in parsed && parsed.model === model) return body;
   return Buffer.from(JSON.stringify({ ...parsed, model }));
 }
@@ -114,7 +130,11 @@ export async function testOverflowUpstream(
     const response = await fetchImpl(target, {
       method: "POST",
       headers: overflowHeaders({}, upstream, key) as Record<string, string>,
-      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: "user", content: "Hi" }] }),
+      body: JSON.stringify({
+        model,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "Hi" }],
+      }),
       signal: AbortSignal.timeout(TEST_TIMEOUT_MS),
     });
     if (response.ok) {
@@ -122,10 +142,24 @@ export async function testOverflowUpstream(
       return { ok: true, model, status: response.status };
     }
     const text = await response.text().catch(() => "");
-    const message = (errorMessage(text)?.message ?? text).trim().slice(0, MAX_TEST_MESSAGE);
-    return { ok: false, model, status: response.status, ...(message ? { message } : {}) };
+    const message = (errorMessage(text)?.message ?? text)
+      .trim()
+      .slice(0, MAX_TEST_MESSAGE);
+    return {
+      ok: false,
+      model,
+      status: response.status,
+      ...(message ? { message } : {}),
+    };
   } catch (error) {
-    return { ok: false, model, message: String((error as Error)?.message ?? error).slice(0, MAX_TEST_MESSAGE) };
+    return {
+      ok: false,
+      model,
+      message: String((error as Error)?.message ?? error).slice(
+        0,
+        MAX_TEST_MESSAGE,
+      ),
+    };
   }
 }
 
@@ -135,14 +169,22 @@ const RETRY_MS = 3_600_000;
 const OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models";
 /** Prices per token, as OpenRouter publishes them, become prices per million. */
 const perMillion = (value: unknown) => {
-  const number = typeof value === "string" || typeof value === "number" ? Number(value) : NaN;
-  return Number.isFinite(number) && number >= 0 ? number * 1_000_000 : undefined;
+  const number =
+    typeof value === "string" || typeof value === "number"
+      ? Number(value)
+      : NaN;
+  return Number.isFinite(number) && number >= 0
+    ? number * 1_000_000
+    : undefined;
 };
 
 /** OpenRouter's `/api/v1/models` answer as prices per million tokens, by model id. */
-export function parseOpenRouterModels(json: unknown): Map<string, OverflowRates> {
+export function parseOpenRouterModels(
+  json: unknown,
+): Map<string, OverflowRates> {
   const out = new Map<string, OverflowRates>();
-  const data = json && typeof json === "object" && "data" in json ? json.data : undefined;
+  const data =
+    json && typeof json === "object" && "data" in json ? json.data : undefined;
   if (!Array.isArray(data)) return out;
   for (const row of data) {
     const id = typeof row?.id === "string" ? row.id : undefined;
@@ -172,13 +214,22 @@ export class OpenRouterPrices {
   private running?: Promise<void>;
 
   constructor(
-    private readonly options: { file?: string; fetch?: typeof fetch; url?: string; now?: () => number } = {},
+    private readonly options: {
+      file?: string;
+      fetch?: typeof fetch;
+      url?: string;
+      now?: () => number;
+    } = {},
   ) {
     if (!options.file) return;
     try {
       const saved = JSON.parse(fs.readFileSync(options.file, "utf8"));
       this.rates = parseOpenRouterModels(saved?.models);
-      if (typeof saved?.fetchedAt === "number" && Number.isFinite(saved.fetchedAt)) this.fetchedAt = saved.fetchedAt;
+      if (
+        typeof saved?.fetchedAt === "number" &&
+        Number.isFinite(saved.fetchedAt)
+      )
+        this.fetchedAt = saved.fetchedAt;
     } catch {
       // None kept yet: read on first use.
     }
@@ -203,10 +254,13 @@ export class OpenRouterPrices {
 
   private async read(): Promise<void> {
     try {
-      const response = await (this.options.fetch ?? fetch)(this.options.url ?? OPENROUTER_MODELS, {
-        headers: { accept: "application/json" },
-        signal: AbortSignal.timeout(15_000),
-      });
+      const response = await (this.options.fetch ?? fetch)(
+        this.options.url ?? OPENROUTER_MODELS,
+        {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const json = await response.json();
       const rates = parseOpenRouterModels(json);
@@ -221,14 +275,25 @@ export class OpenRouterPrices {
             pricing: {
               prompt: r.input / 1_000_000,
               completion: r.output / 1_000_000,
-              ...(r.cacheRead !== undefined ? { input_cache_read: r.cacheRead / 1_000_000 } : {}),
-              ...(r.cacheWrite !== undefined ? { input_cache_write: r.cacheWrite / 1_000_000 } : {}),
+              ...(r.cacheRead !== undefined
+                ? { input_cache_read: r.cacheRead / 1_000_000 }
+                : {}),
+              ...(r.cacheWrite !== undefined
+                ? { input_cache_write: r.cacheWrite / 1_000_000 }
+                : {}),
             },
           })),
         };
-        fs.mkdirSync(path.dirname(this.options.file), { recursive: true, mode: 0o700 });
+        fs.mkdirSync(path.dirname(this.options.file), {
+          recursive: true,
+          mode: 0o700,
+        });
         const temp = `${this.options.file}.tmp`;
-        fs.writeFileSync(temp, JSON.stringify({ fetchedAt: this.fetchedAt, models }), { mode: 0o600 });
+        fs.writeFileSync(
+          temp,
+          JSON.stringify({ fetchedAt: this.fetchedAt, models }),
+          { mode: 0o600 },
+        );
         fs.renameSync(temp, this.options.file);
       }
     } catch {

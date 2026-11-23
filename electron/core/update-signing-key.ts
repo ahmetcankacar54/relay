@@ -4,4 +4,5 @@
  * Windows and Linux updates install only when sums signed by this key list the downloaded
  * installer. The private half never enters the repository: see scripts/update-signing.mjs.
  */
-export const UPDATE_SIGNING_PUBLIC_KEY = "MCowBQYDK2VwAyEAa/6A8ozVRHKMFUYNkgyK8tF7eBdUpjcfDVPsCPvqMrA=";
+export const UPDATE_SIGNING_PUBLIC_KEY =
+  "MCowBQYDK2VwAyEAa/6A8ozVRHKMFUYNkgyK8tF7eBdUpjcfDVPsCPvqMrA=";

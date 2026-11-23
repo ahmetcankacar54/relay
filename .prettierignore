@@ -1,0 +1,2 @@
+# Moved verbatim out of the hand-formatted electron/main.ts; tests read this source text.
+electron/main/

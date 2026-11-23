@@ -1,5 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { remoteNotifySettings, remoteNotifyUrl } from "../../shared/remote-notify";
+import {
+  remoteNotifySettings,
+  remoteNotifyUrl,
+} from "../../shared/remote-notify";
 import type {
   RelaySettings,
   RemoteNotifyEvents,
@@ -18,7 +21,10 @@ export type RemoteEventName =
   | "sign-in-ended"
   | "test";
 
-const EVENT_CHOICE: Record<Exclude<RemoteEventName, "test">, keyof RemoteNotifyEvents> = {
+const EVENT_CHOICE: Record<
+  Exclude<RemoteEventName, "test">,
+  keyof RemoteNotifyEvents
+> = {
   "limit-near": "limit",
   "limit-ready": "reset",
   "auto-switch": "autoSwitch",
@@ -80,16 +86,24 @@ export function scrubRemoteText(text: string, max = 200): string {
 }
 
 /** The JSON a webhook receives. */
-export function webhookPayload(notice: RemoteNotice, at: Date, relayVersion: string): WebhookPayload {
+export function webhookPayload(
+  notice: RemoteNotice,
+  at: Date,
+  relayVersion: string,
+): WebhookPayload {
   const reset = Date.parse(notice.resetsAt ?? "");
   const used = notice.usedPercent;
   return {
     event: notice.event,
-    account: notice.accountName ? { name: scrubRemoteText(notice.accountName, 64) } : null,
+    account: notice.accountName
+      ? { name: scrubRemoteText(notice.accountName, 64) }
+      : null,
     window: notice.window ?? null,
     // Rounded down, as every bar shows it: 99.6 reads 99, never 100.
     usedPercent:
-      typeof used === "number" && Number.isFinite(used) ? Math.floor(Math.min(100, Math.max(0, used))) : null,
+      typeof used === "number" && Number.isFinite(used)
+        ? Math.floor(Math.min(100, Math.max(0, used)))
+        : null,
     resetsAt: Number.isFinite(reset) ? new Date(reset).toISOString() : null,
     at: at.toISOString(),
     relayVersion: scrubRemoteText(relayVersion, 40),
@@ -101,11 +115,16 @@ export function webhookPayload(notice: RemoteNotice, at: Date, relayVersion: str
  * title) RFC 2047 encoded, which ntfy decodes.
  */
 function headerValue(text: string) {
-  return /^[\x20-\x7e]*$/.test(text) ? text : `=?UTF-8?B?${Buffer.from(text, "utf8").toString("base64")}?=`;
+  return /^[\x20-\x7e]*$/.test(text)
+    ? text
+    : `=?UTF-8?B?${Buffer.from(text, "utf8").toString("base64")}?=`;
 }
 
 /** ntfy's publish request (https://docs.ntfy.sh/publish/): the text as the body, Title and Tags as headers. */
-export function ntfyRequest(notice: RemoteNotice): { body: string; headers: Record<string, string> } {
+export function ntfyRequest(notice: RemoteNotice): {
+  body: string;
+  headers: Record<string, string>;
+} {
   const title = scrubRemoteText(notice.title);
   const message = scrubRemoteText(notice.message, 1_000);
   return {
@@ -132,10 +151,25 @@ export interface RemoteDeps {
 
 /** Why a post failed, in words that never hold the URL or a secret from the answer. */
 function failure(error: unknown, url: URL): string {
-  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return "timeout";
-  const cause = error instanceof Error ? (error.cause as { code?: unknown } | undefined) : undefined;
-  const text = typeof cause?.code === "string" ? cause.code : error instanceof Error ? error.message : String(error);
-  return scrubRemoteText(text.split(url.href).join("[url]").split(url.host).join("[host]"), 120);
+  if (
+    error instanceof Error &&
+    (error.name === "TimeoutError" || error.name === "AbortError")
+  )
+    return "timeout";
+  const cause =
+    error instanceof Error
+      ? (error.cause as { code?: unknown } | undefined)
+      : undefined;
+  const text =
+    typeof cause?.code === "string"
+      ? cause.code
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  return scrubRemoteText(
+    text.split(url.href).join("[url]").split(url.host).join("[host]"),
+    120,
+  );
 }
 
 /**
@@ -155,12 +189,21 @@ export async function postRemoteNotice(
     target.kind === "ntfy"
       ? ntfyRequest(notice)
       : {
-          body: JSON.stringify(webhookPayload(notice, new Date((deps.now ?? Date.now)()), deps.version())),
+          body: JSON.stringify(
+            webhookPayload(
+              notice,
+              new Date((deps.now ?? Date.now)()),
+              deps.version(),
+            ),
+          ),
           headers: { "Content-Type": "application/json" },
         };
   const send = deps.fetch ?? fetch;
   const sleep = deps.sleep ?? delay;
-  let result: Extract<RemoteNotifyResult, { ok: false }> = { ok: false, reason: "failed" };
+  let result: Extract<RemoteNotifyResult, { ok: false }> = {
+    ok: false,
+    reason: "failed",
+  };
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt) await sleep(deps.retryMs ?? REMOTE_NOTIFY_RETRY_MS);
     try {
@@ -174,7 +217,12 @@ export async function postRemoteNotice(
       // The answer is never read: it may echo the topic or the body back.
       await response.body?.cancel().catch(() => {});
       if (response.ok) return { ok: true, status: response.status };
-      result = { ok: false, reason: "failed", status: response.status, error: `HTTP ${response.status}` };
+      result = {
+        ok: false,
+        reason: "failed",
+        status: response.status,
+        error: `HTTP ${response.status}`,
+      };
       if (response.status < 500 && response.status !== 429) break;
     } catch (error) {
       result = { ok: false, reason: "failed", error: failure(error, url) };
@@ -191,13 +239,19 @@ export async function postRemoteNotice(
  */
 export class RemoteNotifier {
   private inFlight = 0;
-  constructor(private deps: RemoteDeps & { settings: () => Pick<RelaySettings, "remoteNotify"> }) {}
+  constructor(
+    private deps: RemoteDeps & {
+      settings: () => Pick<RelaySettings, "remoteNotify">;
+    },
+  ) {}
   notify(notice: RemoteNotice): void {
     if (notice.event === "test") return;
     const settings = remoteNotifySettings(this.deps.settings());
     if (!settings.url || !settings.events[EVENT_CHOICE[notice.event]]) return;
     if (this.inFlight >= MAX_IN_FLIGHT) {
-      this.deps.log?.(`${settings.kind} ${notice.event}: dropped, ${MAX_IN_FLIGHT} posts still waiting`);
+      this.deps.log?.(
+        `${settings.kind} ${notice.event}: dropped, ${MAX_IN_FLIGHT} posts still waiting`,
+      );
       return;
     }
     this.inFlight++;
@@ -208,7 +262,10 @@ export class RemoteNotifier {
       });
   }
   /** Posts a sample "test" event to a URL that may not be saved yet, and says how it went. */
-  test(target: { url: string; kind: RemoteNotifyKind }, notice: Omit<RemoteNotice, "event">) {
+  test(
+    target: { url: string; kind: RemoteNotifyKind },
+    notice: Omit<RemoteNotice, "event">,
+  ) {
     return postRemoteNotice(target, { ...notice, event: "test" }, this.deps);
   }
 }

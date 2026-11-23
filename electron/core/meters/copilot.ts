@@ -2,8 +2,22 @@ import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { MeterUnit, MeterWindow, MeterWindowName } from "../../../shared/meters";
-import { MeterError, clampPercent, isoDate, num, plainLabel, requestJson, type Json, type MeterRead, type MeterReaderOptions } from "./common";
+import type {
+  MeterUnit,
+  MeterWindow,
+  MeterWindowName,
+} from "../../../shared/meters";
+import {
+  MeterError,
+  clampPercent,
+  isoDate,
+  num,
+  plainLabel,
+  requestJson,
+  type Json,
+  type MeterRead,
+  type MeterReaderOptions,
+} from "./common";
 
 /**
  * GitHub Copilot's monthly quotas, from `api.github.com/copilot_internal/user`: the private call
@@ -30,9 +44,19 @@ export interface CopilotToken {
 }
 
 /** Copilot's plugins keep their sign-in under the config folder: `~/.config/github-copilot` (`%LOCALAPPDATA%` on Windows). */
-function copilotDirs(home: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string[] {
-  const dirs = [path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "github-copilot")];
-  if (platform === "win32" && env.LOCALAPPDATA) dirs.push(path.join(env.LOCALAPPDATA, "github-copilot"));
+function copilotDirs(
+  home: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): string[] {
+  const dirs = [
+    path.join(
+      env.XDG_CONFIG_HOME || path.join(home, ".config"),
+      "github-copilot",
+    ),
+  ];
+  if (platform === "win32" && env.LOCALAPPDATA)
+    dirs.push(path.join(env.LOCALAPPDATA, "github-copilot"));
   return dirs;
 }
 
@@ -44,9 +68,17 @@ export function copilotTokenFromFile(value: unknown): CopilotToken | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return;
   for (const [host, entry] of Object.entries(value as Json)) {
     if (host !== "github.com" && !host.startsWith("github.com:")) continue;
-    const token = entry && typeof entry === "object" ? (entry as Json).oauth_token : undefined;
+    const token =
+      entry && typeof entry === "object"
+        ? (entry as Json).oauth_token
+        : undefined;
     if (typeof token === "string" && /^[\w.-]{20,255}$/.test(token))
-      return { token, ...(plainLabel((entry as Json).user) ? { login: plainLabel((entry as Json).user) } : {}) };
+      return {
+        token,
+        ...(plainLabel((entry as Json).user)
+          ? { login: plainLabel((entry as Json).user) }
+          : {}),
+      };
   }
 }
 
@@ -66,7 +98,9 @@ export function ghTokenFromHosts(text: string): CopilotToken | undefined {
     if (field?.[1] === "oauth_token") token = field[2];
     else if (field?.[1] === "user") login = plainLabel(field[2]);
   }
-  return token && /^[\w.-]{20,255}$/.test(token) ? { token, ...(login ? { login } : {}) } : undefined;
+  return token && /^[\w.-]{20,255}$/.test(token)
+    ? { token, ...(login ? { login } : {}) }
+    : undefined;
 }
 
 /** `gh auth token`, which prints the token `gh` keeps (in its own keyring item, which it may read without asking). */
@@ -75,7 +109,11 @@ function ghAuthToken(env: NodeJS.ProcessEnv): Promise<string | undefined> {
     execFile(
       "gh",
       ["auth", "token", "--hostname", "github.com"],
-      { timeout: 5_000, env: { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" }, windowsHide: true },
+      {
+        timeout: 5_000,
+        env: { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
+        windowsHide: true,
+      },
       (error, stdout) => {
         const token = String(stdout ?? "").trim();
         resolve(!error && /^[\w.-]{20,255}$/.test(token) ? token : undefined);
@@ -97,17 +135,27 @@ const readJson = async (file: string): Promise<unknown> => {
  * plain-text `hosts.yml`, then `gh auth token`.
  */
 export async function findCopilotToken(
-  options: MeterReaderOptions & { ghToken?: (env: NodeJS.ProcessEnv) => Promise<string | undefined> } = {},
+  options: MeterReaderOptions & {
+    ghToken?: (env: NodeJS.ProcessEnv) => Promise<string | undefined>;
+  } = {},
 ): Promise<CopilotToken | undefined> {
   const home = options.home ?? os.homedir();
   const env = options.env ?? process.env;
-  for (const dir of copilotDirs(home, env, options.platform ?? process.platform))
+  for (const dir of copilotDirs(
+    home,
+    env,
+    options.platform ?? process.platform,
+  ))
     for (const name of ["apps.json", "hosts.json"]) {
       const found = copilotTokenFromFile(await readJson(path.join(dir, name)));
       if (found) return found;
     }
-  const ghDir = env.GH_CONFIG_DIR || path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "gh");
-  const hosts = await fs.readFile(path.join(ghDir, "hosts.yml"), "utf8").catch(() => "");
+  const ghDir =
+    env.GH_CONFIG_DIR ||
+    path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "gh");
+  const hosts = await fs
+    .readFile(path.join(ghDir, "hosts.yml"), "utf8")
+    .catch(() => "");
   const plain = ghTokenFromHosts(hosts);
   if (plain) return plain;
   const token = await (options.ghToken ?? ghAuthToken)(env);
@@ -121,7 +169,12 @@ const SNAPSHOTS: [key: string, name: MeterWindowName, unit: MeterUnit][] = [
 ];
 
 /** One quota snapshot as a window, or none when it is unlimited or an org seat's empty placeholder. */
-function snapshotWindow(raw: unknown, name: MeterWindowName, unit: MeterUnit, resetsAt: string | undefined): MeterWindow | undefined {
+function snapshotWindow(
+  raw: unknown,
+  name: MeterWindowName,
+  unit: MeterUnit,
+  resetsAt: string | undefined,
+): MeterWindow | undefined {
   if (!raw || typeof raw !== "object") return;
   const s = raw as Json;
   if (s.unlimited === true) return;
@@ -130,14 +183,20 @@ function snapshotWindow(raw: unknown, name: MeterWindowName, unit: MeterUnit, re
   if (limit === 0 && (remaining ?? 0) === 0) return;
   const left = num(s.percent_remaining);
   const usedPercent =
-    left !== undefined ? clampPercent(100 - left) : limit && remaining !== undefined ? clampPercent(((limit - remaining) / limit) * 100) : undefined;
+    left !== undefined
+      ? clampPercent(100 - left)
+      : limit && remaining !== undefined
+        ? clampPercent(((limit - remaining) / limit) * 100)
+        : undefined;
   if (usedPercent === undefined) return;
   return {
     name,
     kind: "monthly",
     unit,
     usedPercent,
-    ...(limit !== undefined && remaining !== undefined ? { used: Math.max(0, limit - remaining), limit } : {}),
+    ...(limit !== undefined && remaining !== undefined
+      ? { used: Math.max(0, limit - remaining), limit }
+      : {}),
     ...(resetsAt ? { resetsAt } : {}),
   };
 }
@@ -148,10 +207,18 @@ export function parseCopilotUser(value: unknown, login?: string): MeterRead {
     throw new MeterError("unsupported", undefined, "copilot: not an object");
   const root = value as Json;
   if (root.access_type_sku === "subscription_ended")
-    throw new MeterError("not-available", undefined, "copilot: subscription ended");
-  const resetsAt = isoDate(root.quota_reset_date) ?? isoDate(root.limited_user_reset_date);
+    throw new MeterError(
+      "not-available",
+      undefined,
+      "copilot: subscription ended",
+    );
+  const resetsAt =
+    isoDate(root.quota_reset_date) ?? isoDate(root.limited_user_reset_date);
   const windows: MeterWindow[] = [];
-  const snapshots = root.quota_snapshots && typeof root.quota_snapshots === "object" ? (root.quota_snapshots as Json) : undefined;
+  const snapshots =
+    root.quota_snapshots && typeof root.quota_snapshots === "object"
+      ? (root.quota_snapshots as Json)
+      : undefined;
   if (snapshots) {
     for (const [key, name, unit] of SNAPSHOTS) {
       const window = snapshotWindow(snapshots[key], name, unit, resetsAt);
@@ -181,10 +248,17 @@ export function parseCopilotUser(value: unknown, login?: string): MeterRead {
 
 /** Reads the Copilot quotas of the GitHub sign-in found on this computer. */
 export async function readCopilot(
-  options: MeterReaderOptions & { ghToken?: (env: NodeJS.ProcessEnv) => Promise<string | undefined> } = {},
+  options: MeterReaderOptions & {
+    ghToken?: (env: NodeJS.ProcessEnv) => Promise<string | undefined>;
+  } = {},
 ): Promise<MeterRead> {
   const found = await findCopilotToken(options);
-  if (!found) throw new MeterError("not-signed-in", undefined, "copilot: no GitHub token");
+  if (!found)
+    throw new MeterError(
+      "not-signed-in",
+      undefined,
+      "copilot: no GitHub token",
+    );
   const answer = await requestJson(
     COPILOT_USER_URL,
     { headers: { ...HEADERS, Authorization: `token ${found.token}` } },
@@ -192,6 +266,11 @@ export async function readCopilot(
     // A 403 or 404 is an account without Copilot; a 401 a token GitHub no longer takes.
     { ...options, accept: (status) => status === 403 || status === 404 },
   );
-  if (answer.status !== 200) throw new MeterError("not-available", undefined, `copilot user ${answer.status}`);
+  if (answer.status !== 200)
+    throw new MeterError(
+      "not-available",
+      undefined,
+      `copilot user ${answer.status}`,
+    );
   return parseCopilotUser(answer.body, found.login);
 }

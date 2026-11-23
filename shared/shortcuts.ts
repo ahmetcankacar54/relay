@@ -1,6 +1,9 @@
 import type { ShortcutAction, ShortcutSettings } from "./types";
 
-export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = ["openPanel", "switchToSuggested"];
+export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
+  "openPanel",
+  "switchToSuggested",
+];
 
 /**
  * What a missing setting means. Opening Relay gets a four-key chord: Ctrl+Alt with a letter is
@@ -13,7 +16,10 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
 };
 
 /** The accelerator an action uses now; "" when it is off. */
-export function shortcutFor(choice: ShortcutSettings | undefined, action: ShortcutAction) {
+export function shortcutFor(
+  choice: ShortcutSettings | undefined,
+  action: ShortcutAction,
+) {
   return choice?.[action] ?? DEFAULT_SHORTCUTS[action];
 }
 
@@ -31,15 +37,50 @@ const MODIFIERS: Record<string, string> = {
   super: "Super",
   meta: "Super",
 };
-const MODIFIER_ORDER = ["CommandOrControl", "Command", "Control", "Alt", "Shift", "Super"];
+const MODIFIER_ORDER = [
+  "CommandOrControl",
+  "Command",
+  "Control",
+  "Alt",
+  "Shift",
+  "Super",
+];
 
 /** Named keys, by their lower-case spelling, as Electron spells them. */
 const NAMED_KEYS: Record<string, string> = Object.fromEntries(
   [
-    "Space", "Tab", "Backspace", "Delete", "Insert", "Return", "Up", "Down", "Left", "Right",
-    "Home", "End", "PageUp", "PageDown", "Escape", "Plus", "PrintScreen",
-    "num0", "num1", "num2", "num3", "num4", "num5", "num6", "num7", "num8", "num9",
-    "numdec", "numadd", "numsub", "nummult", "numdiv",
+    "Space",
+    "Tab",
+    "Backspace",
+    "Delete",
+    "Insert",
+    "Return",
+    "Up",
+    "Down",
+    "Left",
+    "Right",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    "Escape",
+    "Plus",
+    "PrintScreen",
+    "num0",
+    "num1",
+    "num2",
+    "num3",
+    "num4",
+    "num5",
+    "num6",
+    "num7",
+    "num8",
+    "num9",
+    "numdec",
+    "numadd",
+    "numsub",
+    "nummult",
+    "numdiv",
     ...Array.from({ length: 24 }, (_, i) => `F${i + 1}`),
   ].map((key) => [key.toLowerCase(), key]),
 );
@@ -117,7 +158,10 @@ const CODES: Record<string, string> = {
  * reads the same on every computer. Undefined while only modifiers are down, or when the press
  * is no shortcut Relay registers (normalizeAccelerator).
  */
-export function acceleratorFromKeys(press: KeyPress, platform: string): string | undefined {
+export function acceleratorFromKeys(
+  press: KeyPress,
+  platform: string,
+): string | undefined {
   const code = press.code;
   const key =
     CODES[code] ??
@@ -165,8 +209,17 @@ export function formatAccelerator(accelerator: string, platform: string) {
   const parts = accelerator.replace(/\+\+$/, "+Plus").split("+");
   const key = parts.pop() ?? "";
   if (platform === "darwin") {
-    const order = ["Control", "Alt", "Shift", "CommandOrControl", "Command", "Super"];
-    const mods = order.filter((m) => parts.includes(m)).map((m) => MAC_SYMBOLS[m]);
+    const order = [
+      "Control",
+      "Alt",
+      "Shift",
+      "CommandOrControl",
+      "Command",
+      "Super",
+    ];
+    const mods = order
+      .filter((m) => parts.includes(m))
+      .map((m) => MAC_SYMBOLS[m]);
     return [...mods, MAC_SYMBOLS[key] ?? key].join("");
   }
   const names: Record<string, string> = {
@@ -178,5 +231,7 @@ export function formatAccelerator(accelerator: string, platform: string) {
     Super: platform === "win32" ? "Win" : "Super",
     Plus: "+",
   };
-  return [...new Set(parts.map((m) => names[m] ?? m)), names[key] ?? key].join("+");
+  return [...new Set(parts.map((m) => names[m] ?? m)), names[key] ?? key].join(
+    "+",
+  );
 }

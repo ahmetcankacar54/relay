@@ -5,8 +5,17 @@ import { Note, SettingGroup, SettingRow } from "@/components/SettingRow";
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { FEATURE_RISKS, POLICY_LINKS, meterRisk } from "../../../shared/feature-risk";
-import { METER_NAMES, METER_PROVIDERS, enabledMeters, type MeterProvider } from "../../../shared/meters";
+import {
+  FEATURE_RISKS,
+  POLICY_LINKS,
+  meterRisk,
+} from "../../../shared/feature-risk";
+import {
+  METER_NAMES,
+  METER_PROVIDERS,
+  enabledMeters,
+  type MeterProvider,
+} from "../../../shared/meters";
 
 const DESCRIPTION = {
   copilot: "meters.settingsCopilot",
@@ -27,7 +36,9 @@ export function MeterGroup() {
   const on = enabledMeters(settings);
   const toggle = async (provider: MeterProvider, checked: boolean) => {
     if (checked && !(await consent.ask([meterRisk(provider)]))) return;
-    const meters = checked ? [...on, provider] : on.filter((p) => p !== provider);
+    const meters = checked
+      ? [...on, provider]
+      : on.filter((p) => p !== provider);
     void action("settings", () => api.updateSettings({ meters }));
   };
   return (
@@ -48,7 +59,8 @@ export function MeterGroup() {
             htmlFor={id}
             description={
               <>
-                {t(DESCRIPTION[provider])} <ExternalLink href={link.href}>{t(link.label)}</ExternalLink>
+                {t(DESCRIPTION[provider])}{" "}
+                <ExternalLink href={link.href}>{t(link.label)}</ExternalLink>
               </>
             }
           >

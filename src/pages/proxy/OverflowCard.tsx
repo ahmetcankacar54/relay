@@ -1,6 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
-import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
+import {
+  Note,
+  OptionSelect,
+  SectionHeading,
+  SettingRow,
+} from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,23 +32,38 @@ import {
 type Upstream = OverflowStatus["upstreams"][number];
 
 /** Presets Relay has no price table for (or not for every model they map to): prices are asked for. */
-const UNPRICED: readonly ApiUpstreamPreset[] = ["kimi", "kimi-cn", "glm", "glm-cn", "custom"];
+const UNPRICED: readonly ApiUpstreamPreset[] = [
+  "kimi",
+  "kimi-cn",
+  "glm",
+  "glm-cn",
+  "custom",
+];
 /** Presets whose provider also sells coding plans limited to their own tools. */
-const PLAN_KEYS: readonly ApiUpstreamPreset[] = ["kimi", "kimi-cn", "glm", "glm-cn"];
+const PLAN_KEYS: readonly ApiUpstreamPreset[] = [
+  "kimi",
+  "kimi-cn",
+  "glm",
+  "glm-cn",
+];
 const FAMILIES = ["opus", "sonnet", "haiku", "default"] as const;
 
 /** A preset's name: brand names stay as they are; "Custom" and the China endpoints are said. */
 function presetLabel(preset: ApiUpstreamPreset, t: T): string {
   if (preset === "custom") return t("apiOverflow.presetCustom");
-  if (preset === "kimi-cn") return t("apiOverflow.presetChina", { name: OVERFLOW_PRESETS.kimi.label });
-  if (preset === "glm-cn") return t("apiOverflow.presetChina", { name: "Zhipu GLM" });
+  if (preset === "kimi-cn")
+    return t("apiOverflow.presetChina", { name: OVERFLOW_PRESETS.kimi.label });
+  if (preset === "glm-cn")
+    return t("apiOverflow.presetChina", { name: "Zhipu GLM" });
   return OVERFLOW_PRESETS[preset].label;
 }
 
 /** A cap typed in the field, when it is one main accepts. */
 function parseCap(text: string): number | undefined {
   const value = Number(text.replace(",", ".").trim());
-  return Number.isFinite(value) && value >= 0.01 && value <= 10_000 ? Math.round(value * 100) / 100 : undefined;
+  return Number.isFinite(value) && value >= 0.01 && value <= 10_000
+    ? Math.round(value * 100) / 100
+    : undefined;
 }
 
 /** Whether a base URL can be saved: https, or http on this computer (main checks it again). */
@@ -51,7 +71,11 @@ function urlAllowed(text: string): boolean {
   try {
     const url = new URL(text.trim());
     if (url.username || url.password || url.search || url.hash) return false;
-    return url.protocol === "https:" || (url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname));
+    return (
+      url.protocol === "https:" ||
+      (url.protocol === "http:" &&
+        ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))
+    );
   } catch {
     return false;
   }
@@ -113,15 +137,21 @@ function UpstreamForm({
 }) {
   const { t } = useI18n();
   const isNew = !draft.id;
-  const price = (text: string) => (text.trim() === "" ? undefined : Number(text.replace(",", ".")));
+  const price = (text: string) =>
+    text.trim() === "" ? undefined : Number(text.replace(",", "."));
   const pricesValid = [draft.priceIn, draft.priceOut].every((text) => {
     const value = price(text);
-    return value === undefined || (Number.isFinite(value) && value >= 0 && value <= 1_000);
+    return (
+      value === undefined ||
+      (Number.isFinite(value) && value >= 0 && value <= 1_000)
+    );
   });
   const valid =
     draft.label.trim().length > 0 &&
     urlAllowed(draft.baseUrl) &&
-    (draft.key.trim() ? /^[\x21-\x7e]{8,512}$/.test(draft.key.trim()) : !isNew) &&
+    (draft.key.trim()
+      ? /^[\x21-\x7e]{8,512}$/.test(draft.key.trim())
+      : !isNew) &&
     pricesValid;
   const field = (id: string, label: string, input: ReactNode) => (
     <label key={id} className="grid gap-1 text-xs font-medium" htmlFor={id}>
@@ -129,9 +159,17 @@ function UpstreamForm({
       {input}
     </label>
   );
-  const familyLabel = { opus: "Opus", sonnet: "Sonnet", haiku: "Haiku", default: t("apiOverflow.modelOther") };
+  const familyLabel = {
+    opus: "Opus",
+    sonnet: "Sonnet",
+    haiku: "Haiku",
+    default: t("apiOverflow.modelOther"),
+  };
   return (
-    <div data-slot="overflow-form" className="grid gap-3 rounded-md border bg-muted/30 p-3">
+    <div
+      data-slot="overflow-form"
+      className="grid gap-3 rounded-md border bg-muted/30 p-3"
+    >
       <div className="grid gap-3 @lg:grid-cols-2">
         {field(
           "overflow-preset",
@@ -140,8 +178,13 @@ function UpstreamForm({
             id="overflow-preset"
             value={draft.preset}
             disabled={disabled || !isNew}
-            options={OVERFLOW_PRESET_IDS.map((preset) => ({ value: preset, label: presetLabel(preset, t) }))}
-            onChange={(preset) => onChange({ ...freshDraft(preset, t), key: draft.key })}
+            options={OVERFLOW_PRESET_IDS.map((preset) => ({
+              value: preset,
+              label: presetLabel(preset, t),
+            }))}
+            onChange={(preset) =>
+              onChange({ ...freshDraft(preset, t), key: draft.key })
+            }
           />,
         )}
         {field(
@@ -193,13 +236,19 @@ function UpstreamForm({
           value={draft.key}
           spellCheck={false}
           autoComplete="off"
-          placeholder={draft.keyHint ? t("apiOverflow.keepSavedKey", { hint: draft.keyHint }) : ""}
+          placeholder={
+            draft.keyHint
+              ? t("apiOverflow.keepSavedKey", { hint: draft.keyHint })
+              : ""
+          }
           disabled={disabled}
           onChange={(e) => onChange({ ...draft, key: e.target.value })}
         />,
       )}
       <fieldset className="grid gap-2">
-        <legend className="pb-1 text-xs font-medium">{t("apiOverflow.models")}</legend>
+        <legend className="pb-1 text-xs font-medium">
+          {t("apiOverflow.models")}
+        </legend>
         <div className="grid gap-2 @lg:grid-cols-4">
           {FAMILIES.map((family) =>
             field(
@@ -214,7 +263,8 @@ function UpstreamForm({
                 disabled={disabled}
                 onChange={(e) => {
                   const modelMap = { ...draft.modelMap };
-                  if (e.target.value.trim()) modelMap[family] = e.target.value.trim();
+                  if (e.target.value.trim())
+                    modelMap[family] = e.target.value.trim();
                   else delete modelMap[family];
                   onChange({ ...draft, modelMap });
                 }}
@@ -225,7 +275,9 @@ function UpstreamForm({
       </fieldset>
       {UNPRICED.includes(draft.preset) && (
         <fieldset className="grid gap-2">
-          <legend className="pb-1 text-xs font-medium">{t("apiOverflow.pricePerMillion")}</legend>
+          <legend className="pb-1 text-xs font-medium">
+            {t("apiOverflow.pricePerMillion")}
+          </legend>
           <div className="grid grid-cols-2 gap-2 @lg:max-w-sm">
             {field(
               "overflow-price-in",
@@ -235,7 +287,9 @@ function UpstreamForm({
                 inputMode="decimal"
                 value={draft.priceIn}
                 disabled={disabled}
-                onChange={(e) => onChange({ ...draft, priceIn: e.target.value })}
+                onChange={(e) =>
+                  onChange({ ...draft, priceIn: e.target.value })
+                }
               />,
             )}
             {field(
@@ -246,19 +300,28 @@ function UpstreamForm({
                 inputMode="decimal"
                 value={draft.priceOut}
                 disabled={disabled}
-                onChange={(e) => onChange({ ...draft, priceOut: e.target.value })}
+                onChange={(e) =>
+                  onChange({ ...draft, priceOut: e.target.value })
+                }
               />,
             )}
           </div>
           <Note>{t("apiOverflow.withoutPricesCostIsUnknown")}</Note>
         </fieldset>
       )}
-      {PLAN_KEYS.includes(draft.preset) && <Note>{t("apiOverflow.usePayAsYouGoKey")}</Note>}
+      {PLAN_KEYS.includes(draft.preset) && (
+        <Note>{t("apiOverflow.usePayAsYouGoKey")}</Note>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={disabled || !valid} onClick={onSave}>
           {t("apiOverflow.save")}
         </Button>
-        <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel}>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={onCancel}
+        >
           {t("common.cancel")}
         </Button>
       </div>
@@ -270,7 +333,10 @@ function UpstreamForm({
 function inputOf(draft: Draft): OverflowUpstreamInput {
   const priceIn = Number(draft.priceIn.replace(",", "."));
   const priceOut = Number(draft.priceOut.replace(",", "."));
-  const priced = UNPRICED.includes(draft.preset) && draft.priceIn.trim() !== "" && draft.priceOut.trim() !== "";
+  const priced =
+    UNPRICED.includes(draft.preset) &&
+    draft.priceIn.trim() !== "" &&
+    draft.priceOut.trim() !== "";
   return {
     ...(draft.id ? { id: draft.id } : {}),
     preset: draft.preset,
@@ -310,8 +376,11 @@ export function OverflowCard({
   };
   const [capDraft, setCapDraft] = useState<string>();
   const [draft, setDraft] = useState<Draft>();
-  const [tests, setTests] = useState<Record<string, OverflowTestResult | "running">>({});
-  const capText = capDraft ?? String(overflow.dailyCapUsd ?? DEFAULT_OVERFLOW_CAP_USD);
+  const [tests, setTests] = useState<
+    Record<string, OverflowTestResult | "running">
+  >({});
+  const capText =
+    capDraft ?? String(overflow.dailyCapUsd ?? DEFAULT_OVERFLOW_CAP_USD);
   const cap = parseCap(capText);
   const upstreams = overflow.upstreams;
   const run = (key: string, call: () => Promise<ProxyStatus>) =>
@@ -330,7 +399,11 @@ export function OverflowCard({
       (error: unknown) =>
         setTests((all) => ({
           ...all,
-          [id]: { ok: false, model: "", message: localizeError(errorMessage(error), language) },
+          [id]: {
+            ok: false,
+            model: "",
+            message: localizeError(errorMessage(error), language),
+          },
         })),
     );
   };
@@ -345,9 +418,16 @@ export function OverflowCard({
             id="overflow-enabled"
             aria-label={t("apiOverflow.useOverflow")}
             checked={overflow.enabled}
-            disabled={disabled || (!overflow.enabled && (!upstreams.length || cap === undefined))}
+            disabled={
+              disabled ||
+              (!overflow.enabled && (!upstreams.length || cap === undefined))
+            }
             onCheckedChange={(enabled) =>
-              void configure(enabled ? { enabled, dailyCapUsd: cap ?? DEFAULT_OVERFLOW_CAP_USD } : { enabled })
+              void configure(
+                enabled
+                  ? { enabled, dailyCapUsd: cap ?? DEFAULT_OVERFLOW_CAP_USD }
+                  : { enabled },
+              )
             }
           />
         }
@@ -373,7 +453,9 @@ export function OverflowCard({
                 size="sm"
                 disabled={disabled || cap === undefined}
                 onClick={() =>
-                  void configure({ dailyCapUsd: cap! }).then((saved) => saved && setCapDraft(undefined))
+                  void configure({ dailyCapUsd: cap! }).then(
+                    (saved) => saved && setCapDraft(undefined),
+                  )
                 }
               >
                 {t("apiOverflow.save")}
@@ -381,46 +463,76 @@ export function OverflowCard({
             )}
           </span>
         </SettingRow>
-        <SettingRow label={t("apiOverflow.whenToUseIt")} htmlFor="overflow-trigger">
+        <SettingRow
+          label={t("apiOverflow.whenToUseIt")}
+          htmlFor="overflow-trigger"
+        >
           <OptionSelect
             id="overflow-trigger"
             value={overflow.trigger}
             disabled={disabled}
             options={[
-              { value: "limited", label: t("apiOverflow.onlyWhenEveryAccountIsLimited") },
-              { value: "unavailable", label: t("apiOverflow.alsoWhenNoAccountCanAnswer") },
+              {
+                value: "limited",
+                label: t("apiOverflow.onlyWhenEveryAccountIsLimited"),
+              },
+              {
+                value: "unavailable",
+                label: t("apiOverflow.alsoWhenNoAccountCanAnswer"),
+              },
             ]}
             onChange={(trigger) => void configure({ trigger })}
           />
         </SettingRow>
-        <p data-slot="overflow-spend" className="text-2xs text-muted-foreground tabular-nums">
+        <p
+          data-slot="overflow-spend"
+          className="text-2xs text-muted-foreground tabular-nums"
+        >
           {overflow.dailyCapUsd !== undefined
-            ? t("apiOverflow.todaySpentOfCap", { spent, cap: usd(overflow.dailyCapUsd, locale) })
+            ? t("apiOverflow.todaySpentOfCap", {
+                spent,
+                cap: usd(overflow.dailyCapUsd, locale),
+              })
             : t("apiOverflow.todaySpent", { spent })}
         </p>
         {overflow.capReached && (
-          <Note className="text-warn-foreground">{t("apiOverflow.todaysCapIsReached")}</Note>
+          <Note className="text-warn-foreground">
+            {t("apiOverflow.todaysCapIsReached")}
+          </Note>
         )}
       </div>
       <ol aria-label={t("apiOverflow.upstreams")} className="grid pt-2">
         {upstreams.map((upstream, index) => {
           const result = tests[upstream.id];
           return (
-            <li key={upstream.id} data-slot="overflow-upstream" className="grid gap-1 border-t py-2 first:border-t-0">
+            <li
+              key={upstream.id}
+              data-slot="overflow-upstream"
+              className="grid gap-1 border-t py-2 first:border-t-0"
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <Switch
-                  aria-label={t("apiOverflow.useUpstream", { name: upstream.label })}
+                  aria-label={t("apiOverflow.useUpstream", {
+                    name: upstream.label,
+                  })}
                   checked={upstream.enabled}
                   disabled={disabled}
                   onCheckedChange={(enabled) =>
                     void run("proxy-overflow", () =>
-                      api.proxyOverflowSaveUpstream({ ...inputOf(draftOf(upstream)), enabled }),
+                      api.proxyOverflowSaveUpstream({
+                        ...inputOf(draftOf(upstream)),
+                        enabled,
+                      }),
                     )
                   }
                 />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{upstream.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {upstream.label}
+                </span>
                 {upstream.keyHint && (
-                  <span className="font-mono text-2xs text-muted-foreground">{upstream.keyHint}</span>
+                  <span className="font-mono text-2xs text-muted-foreground">
+                    {upstream.keyHint}
+                  </span>
                 )}
                 <Button
                   size="icon-sm"
@@ -440,17 +552,33 @@ export function OverflowCard({
                 >
                   <ArrowDown />
                 </Button>
-                <Button size="sm" variant="outline" disabled={disabled || result === "running"} onClick={() => test(upstream.id)}>
-                  {result === "running" ? t("apiOverflow.testing") : t("apiOverflow.test")}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={disabled || result === "running"}
+                  onClick={() => test(upstream.id)}
+                >
+                  {result === "running"
+                    ? t("apiOverflow.testing")
+                    : t("apiOverflow.test")}
                 </Button>
-                <Button size="sm" variant="ghost" disabled={disabled} onClick={() => setDraft(draftOf(upstream))}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={disabled}
+                  onClick={() => setDraft(draftOf(upstream))}
+                >
                   {t("apiOverflow.edit")}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   disabled={disabled}
-                  onClick={() => void run("proxy-overflow", () => api.proxyOverflowRemoveUpstream(upstream.id))}
+                  onClick={() =>
+                    void run("proxy-overflow", () =>
+                      api.proxyOverflowRemoveUpstream(upstream.id),
+                    )
+                  }
                 >
                   {t("apiOverflow.remove")}
                 </Button>
@@ -458,16 +586,23 @@ export function OverflowCard({
               <span className="truncate pl-11 font-mono text-2xs text-muted-foreground">
                 {upstream.baseUrl}
                 {Object.keys(upstream.modelMap).length
-                  ? ` · ${FAMILIES.filter((f) => upstream.modelMap[f]).map((f) => upstream.modelMap[f]).join(", ")}`
+                  ? ` · ${FAMILIES.filter((f) => upstream.modelMap[f])
+                      .map((f) => upstream.modelMap[f])
+                      .join(", ")}`
                   : ""}
               </span>
               {result && result !== "running" && (
-                <span data-slot="overflow-test" className="flex items-center gap-1.5 pl-11 text-2xs">
+                <span
+                  data-slot="overflow-test"
+                  className="flex items-center gap-1.5 pl-11 text-2xs"
+                >
                   <StatusDot tone={result.ok ? "ok" : "crit"} />
                   {result.ok
                     ? t("apiOverflow.testWorks", { model: result.model })
                     : t("apiOverflow.testFailed", {
-                        message: [result.status, result.message].filter((part) => part !== undefined && part !== "").join(" · "),
+                        message: [result.status, result.message]
+                          .filter((part) => part !== undefined && part !== "")
+                          .join(" · "),
                       })}
                 </span>
               )}
@@ -478,9 +613,9 @@ export function OverflowCard({
                   onChange={setDraft}
                   onCancel={() => setDraft(undefined)}
                   onSave={() =>
-                    void run("proxy-overflow", () => api.proxyOverflowSaveUpstream(inputOf(draft))).then(
-                      (saved) => saved && setDraft(undefined),
-                    )
+                    void run("proxy-overflow", () =>
+                      api.proxyOverflowSaveUpstream(inputOf(draft)),
+                    ).then((saved) => saved && setDraft(undefined))
                   }
                 />
               )}
@@ -488,7 +623,9 @@ export function OverflowCard({
           );
         })}
       </ol>
-      {!upstreams.length && !draft && <Note className="pt-1">{t("apiOverflow.noUpstreamYet")}</Note>}
+      {!upstreams.length && !draft && (
+        <Note className="pt-1">{t("apiOverflow.noUpstreamYet")}</Note>
+      )}
       {draft && !draft.id ? (
         <div className="pt-2">
           <UpstreamForm
@@ -497,15 +634,20 @@ export function OverflowCard({
             onChange={setDraft}
             onCancel={() => setDraft(undefined)}
             onSave={() =>
-              void run("proxy-overflow", () => api.proxyOverflowSaveUpstream(inputOf(draft))).then(
-                (saved) => saved && setDraft(undefined),
-              )
+              void run("proxy-overflow", () =>
+                api.proxyOverflowSaveUpstream(inputOf(draft)),
+              ).then((saved) => saved && setDraft(undefined))
             }
           />
         </div>
       ) : (
         <div className="pt-2">
-          <Button size="sm" variant="outline" disabled={disabled} onClick={() => setDraft(freshDraft("anthropic", t))}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => setDraft(freshDraft("anthropic", t))}
+          >
             <Plus />
             {t("apiOverflow.addUpstream")}
           </Button>

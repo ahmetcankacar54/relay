@@ -101,5 +101,7 @@ export interface MeterReading {
 }
 
 /** The meters turned on, once each, in Relay's order. */
-export const enabledMeters = (settings: { meters?: readonly MeterProvider[] }): MeterProvider[] =>
+export const enabledMeters = (settings: {
+  meters?: readonly MeterProvider[];
+}): MeterProvider[] =>
   METER_PROVIDERS.filter((provider) => settings.meters?.includes(provider));

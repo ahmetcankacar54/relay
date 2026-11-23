@@ -31,7 +31,15 @@ import type { Account, ProxyStatus, RelaySettings } from "../../shared/types";
  * A feature's risk in one short note with its policy pages, where the feature lives (the
  * gateway's head, the pool's Antigravity group). The same words the consent dialog shows.
  */
-export function RiskNote({ id, slot, className }: { id: FeatureRiskId; slot: string; className?: string }) {
+export function RiskNote({
+  id,
+  slot,
+  className,
+}: {
+  id: FeatureRiskId;
+  slot: string;
+  className?: string;
+}) {
   const { t } = useI18n();
   const risk = FEATURE_RISKS[id];
   return (
@@ -40,7 +48,9 @@ export function RiskNote({ id, slot, className }: { id: FeatureRiskId; slot: str
       {risk.links.map((link) => (
         <span key={link}>
           {" "}
-          <ExternalLink href={POLICY_LINKS[link].href}>{t(POLICY_LINKS[link].label)}</ExternalLink>
+          <ExternalLink href={POLICY_LINKS[link].href}>
+            {t(POLICY_LINKS[link].label)}
+          </ExternalLink>
         </span>
       ))}
     </span>
@@ -59,16 +69,27 @@ export function RiskConsentBody({ ids }: { ids: readonly FeatureRiskId[] }) {
       {ids.map((id) => {
         const risk = FEATURE_RISKS[id];
         return (
-          <section key={id} className="grid gap-1" data-risk={id} data-level={risk.level}>
+          <section
+            key={id}
+            className="grid gap-1"
+            data-risk={id}
+            data-level={risk.level}
+          >
             <h3 className="flex flex-wrap items-baseline gap-2 font-semibold">
               {t(risk.title)}
               <span
                 className={cn(
                   "rounded px-1.5 text-2xs font-medium",
-                  risk.level === "R2" ? "bg-crit/10 text-crit" : "bg-warn/10 text-warn",
+                  risk.level === "R2"
+                    ? "bg-crit/10 text-crit"
+                    : "bg-warn/10 text-warn",
                 )}
               >
-                {t(risk.level === "R2" ? "featureRisk.levelAgainstTerms" : "featureRisk.levelGreyArea")}
+                {t(
+                  risk.level === "R2"
+                    ? "featureRisk.levelAgainstTerms"
+                    : "featureRisk.levelGreyArea",
+                )}
               </span>
             </h3>
             <p className="text-muted-foreground">{t(risk.body)}</p>
@@ -83,7 +104,9 @@ export function RiskConsentBody({ ids }: { ids: readonly FeatureRiskId[] }) {
         );
       })}
       <div className="grid gap-1.5 border-t pt-3">
-        <h3 className="text-xs font-semibold">{t("featureRisk.ladderTitle")}</h3>
+        <h3 className="text-xs font-semibold">
+          {t("featureRisk.ladderTitle")}
+        </h3>
         <ol className="grid gap-0.5 text-xs" data-slot="risk-ladder">
           {RISK_LADDER.map((rung, index) => {
             const here = rungs.has(index + 1);
@@ -91,7 +114,10 @@ export function RiskConsentBody({ ids }: { ids: readonly FeatureRiskId[] }) {
               <li
                 key={rung}
                 aria-current={here ? "step" : undefined}
-                className={cn("flex gap-2 text-muted-foreground", here && "font-semibold text-foreground")}
+                className={cn(
+                  "flex gap-2 text-muted-foreground",
+                  here && "font-semibold text-foreground",
+                )}
               >
                 <span className="w-4 tabular-nums">{index + 1}.</span>
                 <span>
@@ -132,7 +158,10 @@ function RiskConsentDialog({
 }) {
   const { t } = useI18n();
   return (
-    <Dialog open={!!ids?.length} onOpenChange={(open) => !open && !saving && onDismiss()}>
+    <Dialog
+      open={!!ids?.length}
+      onOpenChange={(open) => !open && !saving && onDismiss()}
+    >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("featureRisk.dialogTitle")}</DialogTitle>
@@ -141,7 +170,12 @@ function RiskConsentDialog({
         {ids && <RiskConsentBody ids={ids} />}
         {note && <p className="text-xs text-muted-foreground">{note}</p>}
         <DialogFooter>
-          <Button variant="ghost" disabled={saving} onClick={onDecline} data-slot="risk-decline">
+          <Button
+            variant="ghost"
+            disabled={saving}
+            onClick={onDecline}
+            data-slot="risk-decline"
+          >
             {declineLabel}
           </Button>
           <Button disabled={saving} onClick={onAccept} data-slot="risk-accept">
@@ -211,15 +245,23 @@ export function useRiskConsent() {
  * What is on now, from what the main window knows: the saved settings (early start, the meters),
  * the accounts, and the gateway's live state (its bound clients and pool) once it has been read.
  */
-export function featuresInUse(settings: RelaySettings, accounts: readonly Account[], status?: ProxyStatus): FeaturesInUse {
+export function featuresInUse(
+  settings: RelaySettings,
+  accounts: readonly Account[],
+  status?: ProxyStatus,
+): FeaturesInUse {
   return {
     earlyStart: settings.planning.autoStart,
     accounts,
     gateway: {
       on: settings.proxy?.enabled === true || status?.running === true,
       host: status?.host ?? settings.proxy?.host ?? DEFAULT_PROXY_CONFIG.host,
-      excludedAccountIds: status?.accounts.filter((a) => !a.inPool).map((a) => a.id),
-      boundClients: (status?.clients ?? []).filter((c) => c.bound).map((c) => c.id),
+      excludedAccountIds: status?.accounts
+        .filter((a) => !a.inPool)
+        .map((a) => a.id),
+      boundClients: (status?.clients ?? [])
+        .filter((c) => c.bound)
+        .map((c) => c.id),
     },
     meters: enabledMeters(settings),
   };
@@ -232,13 +274,18 @@ export function featuresInUse(settings: RelaySettings, accounts: readonly Accoun
  * again at the next start.
  */
 export function ExistingRiskConsent() {
-  const { api, settings, accounts, data, desktop, action, setNotice } = useRelay();
+  const { api, settings, accounts, data, desktop, action, setNotice } =
+    useRelay();
   const { t } = useI18n();
   const [answered, setAnswered] = useState<readonly FeatureRiskId[]>([]);
   const [saving, setSaving] = useState(false);
   const state = featuresInUse(settings, accounts, desktop?.proxyStatus);
   // Only once the first snapshot is in: before it, settings and accounts are the defaults.
-  const pending = data ? pendingRisks(settings, enabledRisks(state)).filter((id) => !answered.includes(id)) : [];
+  const pending = data
+    ? pendingRisks(settings, enabledRisks(state)).filter(
+        (id) => !answered.includes(id),
+      )
+    : [];
   const settle = () => setAnswered((done) => [...done, ...pending]);
   const accept = () => {
     setSaving(true);
@@ -254,10 +301,14 @@ export function ExistingRiskConsent() {
       for (const step of steps) {
         if (step.kind === "unbind") await api.proxyUnbindClient(step.client);
         else if (step.kind === "gateway-off") await api.proxyToggle(false);
-        else if (step.kind === "gateway-host") await api.proxyConfigure({ host: step.host });
-        else if (step.kind === "exclude") await api.proxyConfigure({ excludedAccountIds: step.accountIds });
-        else if (step.kind === "early-start-off") await api.updatePlanning({ autoStart: false });
-        else if (step.kind === "meters") await api.updateSettings({ meters: step.keep });
+        else if (step.kind === "gateway-host")
+          await api.proxyConfigure({ host: step.host });
+        else if (step.kind === "exclude")
+          await api.proxyConfigure({ excludedAccountIds: step.accountIds });
+        else if (step.kind === "early-start-off")
+          await api.updatePlanning({ autoStart: false });
+        else if (step.kind === "meters")
+          await api.updateSettings({ meters: step.keep });
         else await api.removeAccount(step.accountId);
       }
     })
@@ -269,7 +320,11 @@ export function ExistingRiskConsent() {
       ids={pending}
       description={t("featureRisk.alreadyOnDescription")}
       declineLabel={t("featureRisk.turnItOff")}
-      note={pending.includes("antigravity-account") ? t("featureRisk.turnOffRemovesAntigravity") : undefined}
+      note={
+        pending.includes("antigravity-account")
+          ? t("featureRisk.turnOffRemovesAntigravity")
+          : undefined
+      }
       saving={saving}
       onAccept={accept}
       onDecline={turnOff}

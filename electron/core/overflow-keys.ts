@@ -39,7 +39,11 @@ export class OverflowKeys {
   }
 
   private async save(keys: Map<string, string>): Promise<void> {
-    await writeBytes(this.vault, FILE, keys.size ? this.seal(JSON.stringify(Object.fromEntries(keys))) : null);
+    await writeBytes(
+      this.vault,
+      FILE,
+      keys.size ? this.seal(JSON.stringify(Object.fromEntries(keys))) : null,
+    );
     this.keys = keys;
   }
 
@@ -65,6 +69,8 @@ export class OverflowKeys {
       void this.load().catch(() => {});
       return {};
     }
-    return Object.fromEntries([...this.keys].map(([id, key]) => [id, keyHint(key)]));
+    return Object.fromEntries(
+      [...this.keys].map(([id, key]) => [id, keyHint(key)]),
+    );
   }
 }

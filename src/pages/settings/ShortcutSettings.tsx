@@ -13,8 +13,14 @@ import {
 import type { ShortcutAction } from "../../../shared/types";
 
 const TEXT = {
-  openPanel: ["shortcutSettings.openRelay", "shortcutSettings.openRelayDescription"],
-  switchToSuggested: ["shortcutSettings.switchToSuggested", "shortcutSettings.switchToSuggestedDescription"],
+  openPanel: [
+    "shortcutSettings.openRelay",
+    "shortcutSettings.openRelayDescription",
+  ],
+  switchToSuggested: [
+    "shortcutSettings.switchToSuggested",
+    "shortcutSettings.switchToSuggestedDescription",
+  ],
 } as const;
 
 /** Keys that only modify: while just these are down, the recorder keeps waiting. */
@@ -53,16 +59,36 @@ export function ShortcutGroup() {
     void action("settings", () =>
       api.updateSettings({
         shortcuts: {
-          ...Object.fromEntries(SHORTCUT_ACTIONS.map((a) => [a, shortcutFor(settings.shortcuts, a)])),
+          ...Object.fromEntries(
+            SHORTCUT_ACTIONS.map((a) => [
+              a,
+              shortcutFor(settings.shortcuts, a),
+            ]),
+          ),
           [which]: accelerator,
         },
       }),
     );
-  const record = (which: ShortcutAction, event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey) return;
+  const record = (
+    which: ShortcutAction,
+    event: KeyboardEvent<HTMLButtonElement>,
+  ) => {
+    if (
+      event.key === "Tab" &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    )
+      return;
     event.preventDefault();
     event.stopPropagation();
-    if (event.key === "Escape" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    if (
+      event.key === "Escape" &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
       setRecording(undefined);
       return;
     }
@@ -77,7 +103,10 @@ export function ShortcutGroup() {
     save(which, accelerator);
   };
   return (
-    <SettingGroup id="settings-shortcuts" title={t("shortcutSettings.keyboardShortcuts")}>
+    <SettingGroup
+      id="settings-shortcuts"
+      title={t("shortcutSettings.keyboardShortcuts")}
+    >
       {SHORTCUT_ACTIONS.map((which) => {
         const accelerator = shortcutFor(settings.shortcuts, which);
         const id = `shortcut-${which}`;
@@ -118,7 +147,9 @@ export function ShortcutGroup() {
                   setRejected(undefined);
                   setRecording(listening ? undefined : which);
                 }}
-                onKeyDown={listening ? (event) => record(which, event) : undefined}
+                onKeyDown={
+                  listening ? (event) => record(which, event) : undefined
+                }
                 onBlur={() => listening && setRecording(undefined)}
               >
                 {listening

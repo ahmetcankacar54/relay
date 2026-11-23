@@ -5,8 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Note, OptionSelect, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { REMOTE_NOTIFY_URL_MAX, remoteNotifySettings, remoteNotifyUrl } from "../../../shared/remote-notify";
-import type { RemoteNotifyEvents, RemoteNotifyKind, RemoteNotifyResult } from "../../../shared/types";
+import {
+  REMOTE_NOTIFY_URL_MAX,
+  remoteNotifySettings,
+  remoteNotifyUrl,
+} from "../../../shared/remote-notify";
+import type {
+  RemoteNotifyEvents,
+  RemoteNotifyKind,
+  RemoteNotifyResult,
+} from "../../../shared/types";
 import type { MessageId } from "../../../shared/i18n/translate";
 
 /** The events a post can be about, in the order of the local notifications above them. */
@@ -34,7 +42,11 @@ export function RemoteNotifyRows() {
   const save = (patch: Partial<typeof current>) => {
     const { url: savedUrl, ...rest } = { ...current, ...patch };
     void action("settings", () =>
-      api.updateSettings({ remoteNotify: savedUrl?.trim() ? { ...rest, url: savedUrl.trim() } : rest }),
+      api.updateSettings({
+        remoteNotify: savedUrl?.trim()
+          ? { ...rest, url: savedUrl.trim() }
+          : rest,
+      }),
     );
   };
   const saveUrl = () => {
@@ -45,7 +57,9 @@ export function RemoteNotifyRows() {
     setTesting(true);
     setResult(undefined);
     try {
-      setResult(await api.testRemoteNotify({ url: url.trim(), kind: current.kind }));
+      setResult(
+        await api.testRemoteNotify({ url: url.trim(), kind: current.kind }),
+      );
     } catch {
       setResult({ ok: false, reason: "failed" });
     } finally {
@@ -83,7 +97,11 @@ export function RemoteNotifyRows() {
             autoComplete="off"
             maxLength={REMOTE_NOTIFY_URL_MAX}
             className="min-w-0 flex-1 basis-64"
-            placeholder={current.kind === "ntfy" ? "https://ntfy.sh/…" : "https://example.com/hooks/relay"}
+            placeholder={
+              current.kind === "ntfy"
+                ? "https://ntfy.sh/…"
+                : "https://example.com/hooks/relay"
+            }
             value={url}
             disabled={disabled}
             aria-invalid={invalid || undefined}
@@ -97,22 +115,36 @@ export function RemoteNotifyRows() {
               if (e.key === "Enter") saveUrl();
             }}
           />
-          <Button type="button" variant="outline" disabled={disabled || testing || !url.trim() || invalid} onClick={() => void test()}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || testing || !url.trim() || invalid}
+            onClick={() => void test()}
+          >
             {testing ? <LoaderCircle className="animate-spin" /> : <Send />}
             {t("remoteNotifySettings.sendTest")}
           </Button>
         </div>
-        <p id="remote-notify-result" role="status" className="text-xs text-muted-foreground">
+        <p
+          id="remote-notify-result"
+          role="status"
+          className="text-xs text-muted-foreground"
+        >
           {invalid
             ? t("remoteNotifySettings.urlInvalid")
             : result?.ok
               ? t("remoteNotifySettings.testSent", { status: result.status })
               : result
-                ? t("remoteNotifySettings.testFailed", { error: result.error ?? t("remoteNotifySettings.noAnswer") })
+                ? t("remoteNotifySettings.testFailed", {
+                    error: result.error ?? t("remoteNotifySettings.noAnswer"),
+                  })
                 : t("remoteNotifySettings.neverSecrets")}
         </p>
       </div>
-      <fieldset className="grid gap-2 border-t py-2" disabled={disabled || !current.url}>
+      <fieldset
+        className="grid gap-2 border-t py-2"
+        disabled={disabled || !current.url}
+      >
         <legend className="sr-only">{t("remoteNotifySettings.events")}</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {EVENTS.map(([key, label]) => (
@@ -122,7 +154,11 @@ export function RemoteNotifyRows() {
                 className="size-4 shrink-0 accent-primary"
                 type="checkbox"
                 checked={current.events[key]}
-                onChange={(e) => save({ events: { ...current.events, [key]: e.target.checked } })}
+                onChange={(e) =>
+                  save({
+                    events: { ...current.events, [key]: e.target.checked },
+                  })
+                }
               />
               {t(label)}
             </label>

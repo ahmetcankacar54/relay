@@ -35,7 +35,7 @@
     "release": "node scripts/publish-release.mjs",
     "postinstall": "electron-builder install-app-deps",
     "format": "prettier --write src electron shared tests scripts",
-    "format:check": "prettier --check src electron shared tests scripts"
+    "format:check": "node scripts/format-check.mjs"
   },
   "dependencies": {
     "classic-level": "3.0.0",

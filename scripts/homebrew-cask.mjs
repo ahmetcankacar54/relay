@@ -23,12 +23,15 @@ export const dmgName = (version, arch) => `Relay-${version}-${arch}.dmg`;
  * otherwise (releases before the first x64 build).
  */
 export function renderCask({ version, arm64, x64 }) {
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Not a release version: ${version}`);
+  if (!/^\d+\.\d+\.\d+$/.test(version))
+    throw new Error(`Not a release version: ${version}`);
   const hex = (value, arch) => {
-    if (!/^[0-9a-f]{64}$/.test(value ?? "")) throw new Error(`No SHA-256 for the ${arch} DMG.`);
+    if (!/^[0-9a-f]{64}$/.test(value ?? ""))
+      throw new Error(`No SHA-256 for the ${arch} DMG.`);
     return value;
   };
-  const release = "https://github.com/ahmetcankacar54/relay/releases/download/v#{version}";
+  const release =
+    "https://github.com/ahmetcankacar54/relay/releases/download/v#{version}";
   const head = x64
     ? [
         `  arch arm: "arm64", intel: "x64"`,
@@ -97,7 +100,10 @@ export function caskFromSums(version, sumsText) {
   });
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   const args = process.argv.slice(2);
   const outputIndex = args.indexOf("--output");
   const output = outputIndex >= 0 ? args[outputIndex + 1] : undefined;
@@ -106,7 +112,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   );
   try {
     if (!version || !sumsFile || (outputIndex >= 0 && !output))
-      throw new Error("Usage: homebrew-cask.mjs <version> <SHA256SUMS.txt> [--output <file>]");
+      throw new Error(
+        "Usage: homebrew-cask.mjs <version> <SHA256SUMS.txt> [--output <file>]",
+      );
     const cask = caskFromSums(version, fs.readFileSync(sumsFile, "utf8"));
     if (output) {
       fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });

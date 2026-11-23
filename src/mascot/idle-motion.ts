@@ -60,8 +60,12 @@ export function runIdleMotion(
   if (routine.length) {
     // One play: every motion of the routine starts together and rests when its own play ends.
     const play = (playing: readonly PandaMotion[]) => {
-      for (const name of playing) after(OCCASIONAL[name]!.ms, () => setResting(name, true));
-      const longest = Math.max(0, ...playing.map((name) => OCCASIONAL[name]!.ms));
+      for (const name of playing)
+        after(OCCASIONAL[name]!.ms, () => setResting(name, true));
+      const longest = Math.max(
+        0,
+        ...playing.map((name) => OCCASIONAL[name]!.ms),
+      );
       after(longest + restMs(routine[0], random()), () => {
         for (const name of routine) setResting(name, false);
         play(routine);

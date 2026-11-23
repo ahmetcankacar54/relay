@@ -73,7 +73,9 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
 /** Claude Code's stdin JSON; anything unreadable is an empty object, so the line still shows. */
-export function parseStatuslineInput(text: string | undefined): StatuslineInput {
+export function parseStatuslineInput(
+  text: string | undefined,
+): StatuslineInput {
   if (!text?.trim()) return {};
   try {
     const value: unknown = JSON.parse(text);
@@ -84,7 +86,9 @@ export function parseStatuslineInput(text: string | undefined): StatuslineInput 
 }
 
 /** The snapshot, or undefined when the file is missing, unreadable or another layout. */
-export function parseStatuslineSnapshot(text: string | undefined): StatuslineSnapshot | undefined {
+export function parseStatuslineSnapshot(
+  text: string | undefined,
+): StatuslineSnapshot | undefined {
   if (!text) return undefined;
   try {
     const value: unknown = JSON.parse(text);
@@ -103,15 +107,21 @@ export function parseStatuslineSnapshot(text: string | undefined): StatuslineSna
 }
 
 /** Who Claude Code is signed in to, from its `.claude.json` (`oauthAccount`); undefined when signed out. */
-export function claudeSignIn(text: string | undefined): { accountUuid: string; orgId: string } | undefined {
+export function claudeSignIn(
+  text: string | undefined,
+): { accountUuid: string; orgId: string } | undefined {
   if (!text) return undefined;
   try {
     const value: unknown = JSON.parse(text);
     const account = isObject(value) ? value.oauthAccount : undefined;
     if (!isObject(account)) return undefined;
     const { accountUuid, organizationUuid } = account;
-    return typeof accountUuid === "string" && typeof organizationUuid === "string"
-      ? { accountUuid: accountUuid.toLowerCase(), orgId: organizationUuid.toLowerCase() }
+    return typeof accountUuid === "string" &&
+      typeof organizationUuid === "string"
+      ? {
+          accountUuid: accountUuid.toLowerCase(),
+          orgId: organizationUuid.toLowerCase(),
+        }
       : undefined;
   } catch {
     return undefined;
@@ -121,7 +131,9 @@ export function claudeSignIn(text: string | undefined): { accountUuid: string; o
 const samePath = (a: string, b: string) => {
   const norm = (p: string) => {
     const resolved = path.resolve(p);
-    return process.platform === "win32" || process.platform === "darwin" ? resolved.toLowerCase() : resolved;
+    return process.platform === "win32" || process.platform === "darwin"
+      ? resolved.toLowerCase()
+      : resolved;
   };
   return norm(a) === norm(b);
 };
@@ -140,11 +152,19 @@ export function statuslineAccount(
   configDir: string | undefined,
   signIn: () => { accountUuid: string; orgId: string } | undefined,
 ): { account?: StatuslineAccount; viaGateway: boolean } {
-  const byId = (id: string | undefined) => (id ? snapshot.accounts.find((a) => a.id === id) : undefined);
-  const session = typeof input.session_id === "string" ? input.session_id : undefined;
-  const routed = session ? byId(snapshot.gateway?.sessions[session]) : undefined;
+  const byId = (id: string | undefined) =>
+    id ? snapshot.accounts.find((a) => a.id === id) : undefined;
+  const session =
+    typeof input.session_id === "string" ? input.session_id : undefined;
+  const routed = session
+    ? byId(snapshot.gateway?.sessions[session])
+    : undefined;
   if (routed) return { account: routed, viaGateway: true };
-  if (configDir && path.isAbsolute(configDir) && samePath(path.dirname(configDir), snapshot.profiles)) {
+  if (
+    configDir &&
+    path.isAbsolute(configDir) &&
+    samePath(path.dirname(configDir), snapshot.profiles)
+  ) {
     const account = byId(path.basename(configDir));
     if (account) return { account, viaGateway: false };
   }
@@ -152,11 +172,18 @@ export function statuslineAccount(
   if (who)
     return {
       account: snapshot.accounts.find((a) =>
-        a.identities.some((x) => x.accountUuid === who.accountUuid && x.orgId === who.orgId),
+        a.identities.some(
+          (x) => x.accountUuid === who.accountUuid && x.orgId === who.orgId,
+        ),
       ),
       viaGateway: false,
     };
-  return { account: snapshot.terminalFollows ? byId(snapshot.desktopAccountId) : undefined, viaGateway: false };
+  return {
+    account: snapshot.terminalFollows
+      ? byId(snapshot.desktopAccountId)
+      : undefined,
+    viaGateway: false,
+  };
 }
 
 export type StatuslineStyle = "bold" | "dim" | "green" | "yellow" | "red";
@@ -176,26 +203,38 @@ const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (whole, key: string) => values[key] ?? whole);
 
 /** A live window from Claude Code's own stdin: newer than any read, for the session's own account. */
-function liveUsed(window: { used_percentage?: number; resets_at?: number } | undefined, now: number) {
+function liveUsed(
+  window: { used_percentage?: number; resets_at?: number } | undefined,
+  now: number,
+) {
   const used = window?.used_percentage;
   if (typeof used !== "number" || !Number.isFinite(used)) return undefined;
-  if (typeof window?.resets_at === "number" && window.resets_at * 1000 <= now) return undefined;
+  if (typeof window?.resets_at === "number" && window.resets_at * 1000 <= now)
+    return undefined;
   return Math.floor(Math.max(0, Math.min(100, used)));
 }
 
 /** A read window, unless the period it counts has renewed since. */
 const current = (window: StatuslineWindow | undefined, now: number) =>
-  window && (window.resetsAt === undefined || window.resetsAt > now) ? window : undefined;
+  window && (window.resetsAt === undefined || window.resetsAt > now)
+    ? window
+    : undefined;
 
-const percentStyle = (used: number): StatuslineStyle => (used >= 100 ? "red" : used >= 80 ? "yellow" : "green");
+const percentStyle = (used: number): StatuslineStyle =>
+  used >= 100 ? "red" : used >= 80 ? "yellow" : "green";
 
 /** "17 min ago" in the snapshot's language. */
 function ageText(locale: string, ms: number): string {
   const minutes = Math.max(1, Math.floor(ms / 60_000));
-  const format = new Intl.RelativeTimeFormat(locale, { style: "short", numeric: "always" });
+  const format = new Intl.RelativeTimeFormat(locale, {
+    style: "short",
+    numeric: "always",
+  });
   if (minutes < 60) return format.format(-minutes, "minute");
   const hours = Math.floor(minutes / 60);
-  return hours < 48 ? format.format(-hours, "hour") : format.format(-Math.floor(hours / 24), "day");
+  return hours < 48
+    ? format.format(-hours, "hour")
+    : format.format(-Math.floor(hours / 24), "day");
 }
 
 /**
@@ -206,26 +245,45 @@ function ageText(locale: string, ms: number): string {
  */
 export function renderStatusline(render: StatuslineRender): string {
   const { snapshot, input, now, paint } = render;
-  const { account, viaGateway } = statuslineAccount(snapshot, input, render.configDir, render.signIn);
+  const { account, viaGateway } = statuslineAccount(
+    snapshot,
+    input,
+    render.configDir,
+    render.signIn,
+  );
   let percent: Intl.NumberFormat;
   try {
-    percent = new Intl.NumberFormat(snapshot.formatLocale, { style: "percent", maximumFractionDigits: 0, useGrouping: false });
+    percent = new Intl.NumberFormat(snapshot.formatLocale, {
+      style: "percent",
+      maximumFractionDigits: 0,
+      useGrouping: false,
+    });
   } catch {
-    percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 0, useGrouping: false });
+    percent = new Intl.NumberFormat("en", {
+      style: "percent",
+      maximumFractionDigits: 0,
+      useGrouping: false,
+    });
   }
   const fiveHourRead = current(account?.fiveHour, now);
   const weekRead = current(account?.week, now);
-  const fiveHour = liveUsed(input.rate_limits?.five_hour, now) ?? fiveHourRead?.used;
+  const fiveHour =
+    liveUsed(input.rate_limits?.five_hour, now) ?? fiveHourRead?.used;
   const week = liveUsed(input.rate_limits?.seven_day, now) ?? weekRead?.used;
   const parts: string[] = [];
   if (account) parts.push(paint("bold", account.name));
   if (viaGateway) parts.push(snapshot.text.viaGateway);
   const used = (template: string, value: number) =>
-    fill(template, { percent: paint(percentStyle(value), percent.format(value / 100)) });
-  if (fiveHour !== undefined) parts.push(used(snapshot.text.fiveHour, fiveHour));
+    fill(template, {
+      percent: paint(percentStyle(value), percent.format(value / 100)),
+    });
+  if (fiveHour !== undefined)
+    parts.push(used(snapshot.text.fiveHour, fiveHour));
   if (week !== undefined) parts.push(used(snapshot.text.week, week));
   // The next renewal: the five-hour period's, or the week's for an account without one.
-  const resets = fiveHourRead?.resets ?? (fiveHour === undefined ? weekRead?.resets : undefined);
+  const resets =
+    fiveHourRead?.resets ??
+    (fiveHour === undefined ? weekRead?.resets : undefined);
   if (resets) parts.push(paint("dim", resets));
   if (!parts.length) return "";
   const age = now - snapshot.generatedAt;
@@ -236,7 +294,12 @@ export function renderStatusline(render: StatuslineRender): string {
     } catch {
       locale = "en";
     }
-    parts.push(paint("yellow", fill(snapshot.text.updatedAgo, { age: ageText(locale, age) })));
+    parts.push(
+      paint(
+        "yellow",
+        fill(snapshot.text.updatedAgo, { age: ageText(locale, age) }),
+      ),
+    );
   }
   return parts.join(" · ");
 }

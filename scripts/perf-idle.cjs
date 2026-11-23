@@ -10,7 +10,9 @@ const path = require("node:path");
 
 const root = process.env.RELAY_PERF_ROOT;
 if (!root) {
-  console.error("RELAY_PERF_ROOT is not set: run this through scripts/perf-idle.mjs.");
+  console.error(
+    "RELAY_PERF_ROOT is not set: run this through scripts/perf-idle.mjs.",
+  );
   process.exit(1);
 }
 const spawns = path.join(root, "spawns.jsonl");
@@ -62,12 +64,14 @@ function logged(file, args) {
 const spawn = childProcess.ChildProcess.prototype.spawn;
 childProcess.ChildProcess.prototype.spawn = function (options) {
   const file = logged(options.file, options.args?.slice(1));
-  if (file !== options.file) options = { ...options, file, args: [file, ...options.args.slice(1)] };
+  if (file !== options.file)
+    options = { ...options, file, args: [file, ...options.args.slice(1)] };
   return spawn.call(this, options);
 };
 for (const name of ["spawnSync", "execFileSync"]) {
   const original = childProcess[name];
-  childProcess[name] = (file, ...rest) => original(logged(file, Array.isArray(rest[0]) ? rest[0] : []), ...rest);
+  childProcess[name] = (file, ...rest) =>
+    original(logged(file, Array.isArray(rest[0]) ? rest[0] : []), ...rest);
 }
 const execSync = childProcess.execSync;
 childProcess.execSync = (command, ...rest) => {
@@ -83,7 +87,10 @@ app.whenReady().then(async () => {
   for (let i = 0; i < 1200 && !win; i++) {
     // The macOS menu bar panel and the switch window are extra windows; the main one is the rest.
     win = BrowserWindow.getAllWindows().find(
-      (w) => !/(panel|switch)\.html$/.test(w.webContents.getURL()) && w.webContents.getURL() && !w.webContents.isLoading(),
+      (w) =>
+        !/(panel|switch)\.html$/.test(w.webContents.getURL()) &&
+        w.webContents.getURL() &&
+        !w.webContents.isLoading(),
     );
     if (!win) await delay(100);
   }
@@ -93,7 +100,11 @@ app.whenReady().then(async () => {
   // still (src/lib/motion.ts) and would measure less. Each focus change is logged so the result can say.
   if (win && process.env.RELAY_PERF_WINDOW === "open") {
     const focus = path.join(root, "focus.jsonl");
-    const log = (focused) => fs.appendFileSync(focus, `${JSON.stringify({ at: Date.now(), focused })}\n`);
+    const log = (focused) =>
+      fs.appendFileSync(
+        focus,
+        `${JSON.stringify({ at: Date.now(), focused })}\n`,
+      );
     win.on("focus", () => log(true));
     win.on("blur", () => log(false));
     app.focus({ steal: true });
@@ -101,5 +112,8 @@ app.whenReady().then(async () => {
     await delay(500);
     log(win.isFocused());
   }
-  fs.writeFileSync(path.join(root, "ready.json"), JSON.stringify({ at: Date.now(), window: !!win }));
+  fs.writeFileSync(
+    path.join(root, "ready.json"),
+    JSON.stringify({ at: Date.now(), window: !!win }),
+  );
 });

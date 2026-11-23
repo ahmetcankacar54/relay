@@ -3,7 +3,17 @@ import type { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
 import type { MeterWindow } from "../../../shared/meters";
-import { MeterError, clampPercent, isoDate, num, plainLabel, requestJson, type Json, type MeterRead, type MeterReaderOptions } from "./common";
+import {
+  MeterError,
+  clampPercent,
+  isoDate,
+  num,
+  plainLabel,
+  requestJson,
+  type Json,
+  type MeterRead,
+  type MeterReaderOptions,
+} from "./common";
 
 /**
  * Cursor's monthly usage, from `cursor.com/api/usage-summary`: the call cursor.com's own dashboard
@@ -24,7 +34,11 @@ export interface CursorReaderOptions extends MeterReaderOptions {
 }
 
 /** Where the Cursor app keeps its state: the VS Code layout under the system's app-data folder. */
-export function cursorStatePath(home: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string {
+export function cursorStatePath(
+  home: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): string {
   const base =
     platform === "darwin"
       ? path.join(home, "Library", "Application Support")
@@ -36,7 +50,12 @@ export function cursorStatePath(home: string, env: NodeJS.ProcessEnv, platform: 
 
 /** A value of `ItemTable`: the token as text, or JSON text holding it. */
 function itemText(value: unknown): string | undefined {
-  const text = typeof value === "string" ? value : value instanceof Uint8Array ? Buffer.from(value).toString("utf8") : undefined;
+  const text =
+    typeof value === "string"
+      ? value
+      : value instanceof Uint8Array
+        ? Buffer.from(value).toString("utf8")
+        : undefined;
   if (!text) return;
   if (text.startsWith('"')) {
     try {
@@ -49,10 +68,16 @@ function itemText(value: unknown): string | undefined {
   return text;
 }
 
-function queryToken(Database: SqliteDatabase, file: string, readOnly: boolean): string | undefined {
+function queryToken(
+  Database: SqliteDatabase,
+  file: string,
+  readOnly: boolean,
+): string | undefined {
   const db = new Database(file, readOnly ? { readOnly: true } : {});
   try {
-    const row = db.prepare("select value from ItemTable where key = ?").get(TOKEN_KEY) as { value?: unknown } | undefined;
+    const row = db
+      .prepare("select value from ItemTable where key = ?")
+      .get(TOKEN_KEY) as { value?: unknown } | undefined;
     return itemText(row?.value);
   } finally {
     db.close();
@@ -63,7 +88,10 @@ function queryToken(Database: SqliteDatabase, file: string, readOnly: boolean): 
  * The app's access token from `state.vscdb`, opened read-only in place. When that fails (a
  * write-ahead log the read-only open cannot use), from a private copy of the database and its log.
  */
-export async function readCursorStateToken(file: string, loadSqlite: () => Promise<SqliteDatabase>): Promise<string | undefined> {
+export async function readCursorStateToken(
+  file: string,
+  loadSqlite: () => Promise<SqliteDatabase>,
+): Promise<string | undefined> {
   try {
     await fs.access(file);
   } catch {
@@ -75,7 +103,10 @@ export async function readCursorStateToken(file: string, loadSqlite: () => Promi
   } catch {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-meter-"));
     try {
-      for (const suffix of ["", "-wal", "-shm"]) await fs.copyFile(file + suffix, path.join(dir, "state.vscdb" + suffix)).catch(() => {});
+      for (const suffix of ["", "-wal", "-shm"])
+        await fs
+          .copyFile(file + suffix, path.join(dir, "state.vscdb" + suffix))
+          .catch(() => {});
       return queryToken(Database, path.join(dir, "state.vscdb"), false);
     } catch {
       return undefined;
@@ -86,10 +117,24 @@ export async function readCursorStateToken(file: string, loadSqlite: () => Promi
 }
 
 /** The `cursor-agent` sign-in on Linux: `~/.config/cursor/auth.json`'s `accessToken`. */
-async function readAgentToken(home: string, env: NodeJS.ProcessEnv): Promise<string | undefined> {
+async function readAgentToken(
+  home: string,
+  env: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
   try {
-    const value = JSON.parse(await fs.readFile(path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "cursor", "auth.json"), "utf8"));
-    return typeof value?.accessToken === "string" ? value.accessToken : undefined;
+    const value = JSON.parse(
+      await fs.readFile(
+        path.join(
+          env.XDG_CONFIG_HOME || path.join(home, ".config"),
+          "cursor",
+          "auth.json",
+        ),
+        "utf8",
+      ),
+    );
+    return typeof value?.accessToken === "string"
+      ? value.accessToken
+      : undefined;
   } catch {
     return undefined;
   }
@@ -112,25 +157,46 @@ export function jwtClaims(token: string): Json | undefined {
  * user id being the part of the JWT's `sub` after `|`. Refuses a token that is not a JWT or ends
  * within a minute.
  */
-export function cursorSessionCookie(token: string, now: number): { cookie: string; userId: string } {
+export function cursorSessionCookie(
+  token: string,
+  now: number,
+): { cookie: string; userId: string } {
   const claims = jwtClaims(token);
-  if (!claims || !/^[\w.-]+\.[\w-]+\.[\w-]*$/.test(token)) throw new MeterError("unsupported", undefined, "cursor: token is not a JWT");
+  if (!claims || !/^[\w.-]+\.[\w-]+\.[\w-]*$/.test(token))
+    throw new MeterError(
+      "unsupported",
+      undefined,
+      "cursor: token is not a JWT",
+    );
   const exp = num(claims.exp);
-  if (exp !== undefined && exp * 1000 - now <= EXPIRY_MARGIN_MS) throw new MeterError("expired", undefined, "cursor: token ended");
+  if (exp !== undefined && exp * 1000 - now <= EXPIRY_MARGIN_MS)
+    throw new MeterError("expired", undefined, "cursor: token ended");
   const sub = typeof claims.sub === "string" ? claims.sub : "";
   const userId = sub.includes("|") ? sub.slice(sub.lastIndexOf("|") + 1) : sub;
-  if (!/^[\w-]{1,128}$/.test(userId)) throw new MeterError("unsupported", undefined, "cursor: token names no user");
+  if (!/^[\w-]{1,128}$/.test(userId))
+    throw new MeterError(
+      "unsupported",
+      undefined,
+      "cursor: token names no user",
+    );
   return { cookie: `WorkosCursorSessionToken=${userId}%3A%3A${token}`, userId };
 }
 
 /** The token found on this computer: the app's own, else the agent's on Linux. */
-export async function findCursorToken(options: CursorReaderOptions = {}): Promise<string | undefined> {
+export async function findCursorToken(
+  options: CursorReaderOptions = {},
+): Promise<string | undefined> {
   const home = options.home ?? os.homedir();
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
   // Loaded on first use, as cookie-store does: only a Cursor meter needs SQLite in main.
-  const loadSqlite = options.loadSqlite ?? (async () => (await import("node:sqlite")).DatabaseSync);
-  const token = await readCursorStateToken(cursorStatePath(home, env, platform), loadSqlite);
+  const loadSqlite =
+    options.loadSqlite ??
+    (async () => (await import("node:sqlite")).DatabaseSync);
+  const token = await readCursorStateToken(
+    cursorStatePath(home, env, platform),
+    loadSqlite,
+  );
   if (token) return token;
   return platform === "linux" ? readAgentToken(home, env) : undefined;
 }
@@ -145,29 +211,51 @@ export function parseCursorSummary(value: unknown): MeterRead {
   const root = value as Json;
   const resetsAt = isoDate(root.billingCycleEnd);
   const reset = resetsAt ? { resetsAt } : {};
-  const individual = root.individualUsage && typeof root.individualUsage === "object" ? (root.individualUsage as Json) : {};
-  const plan = individual.plan && typeof individual.plan === "object" ? (individual.plan as Json) : undefined;
+  const individual =
+    root.individualUsage && typeof root.individualUsage === "object"
+      ? (root.individualUsage as Json)
+      : {};
+  const plan =
+    individual.plan && typeof individual.plan === "object"
+      ? (individual.plan as Json)
+      : undefined;
   const windows: MeterWindow[] = [];
   if (plan && plan.enabled !== false && root.isUnlimited !== true) {
     const used = num(plan.used);
     const limit = num(plan.limit);
     const total = num(plan.totalPercentUsed) ?? num(root.totalPercentUsed);
-    const usedPercent = total ?? (used !== undefined && limit ? (used / limit) * 100 : undefined);
+    const usedPercent =
+      total ?? (used !== undefined && limit ? (used / limit) * 100 : undefined);
     if (usedPercent !== undefined)
       windows.push({
         name: "included",
         kind: "monthly",
         unit: "$",
         usedPercent: clampPercent(usedPercent),
-        ...(used !== undefined && limit !== undefined ? { used: dollars(used), limit: dollars(limit) } : {}),
+        ...(used !== undefined && limit !== undefined
+          ? { used: dollars(used), limit: dollars(limit) }
+          : {}),
         ...reset,
       });
-    for (const [name, key] of [["auto", "autoPercentUsed"], ["api", "apiPercentUsed"]] as const) {
+    for (const [name, key] of [
+      ["auto", "autoPercentUsed"],
+      ["api", "apiPercentUsed"],
+    ] as const) {
       const share = num(plan[key]) ?? num(root[key]);
-      if (share !== undefined) windows.push({ name, kind: "monthly", unit: "$", usedPercent: clampPercent(share), ...reset });
+      if (share !== undefined)
+        windows.push({
+          name,
+          kind: "monthly",
+          unit: "$",
+          usedPercent: clampPercent(share),
+          ...reset,
+        });
     }
   }
-  const onDemand = individual.onDemand && typeof individual.onDemand === "object" ? (individual.onDemand as Json) : undefined;
+  const onDemand =
+    individual.onDemand && typeof individual.onDemand === "object"
+      ? (individual.onDemand as Json)
+      : undefined;
   const demandLimit = num(onDemand?.limit);
   const demandUsed = num(onDemand?.used);
   if (onDemand?.enabled === true && demandLimit && demandUsed !== undefined)
@@ -188,33 +276,67 @@ export function parseCursorSummary(value: unknown): MeterRead {
 export function parseCursorLegacyUsage(value: unknown): MeterWindow[] {
   if (!value || typeof value !== "object") return [];
   const root = value as Json;
-  const premium = root["gpt-4"] && typeof root["gpt-4"] === "object" ? (root["gpt-4"] as Json) : undefined;
+  const premium =
+    root["gpt-4"] && typeof root["gpt-4"] === "object"
+      ? (root["gpt-4"] as Json)
+      : undefined;
   const used = num(premium?.numRequests) ?? num(premium?.numRequestsTotal);
   const limit = num(premium?.maxRequestUsage);
   if (used === undefined || !limit) return [];
-  const start = Date.parse(typeof root.startOfMonth === "string" ? root.startOfMonth : "");
+  const start = Date.parse(
+    typeof root.startOfMonth === "string" ? root.startOfMonth : "",
+  );
   let resetsAt: string | undefined;
   if (Number.isFinite(start)) {
     const end = new Date(start);
     end.setUTCMonth(end.getUTCMonth() + 1);
     resetsAt = end.toISOString();
   }
-  return [{ name: "requests", kind: "monthly", unit: "requests", usedPercent: clampPercent((used / limit) * 100), used, limit, ...(resetsAt ? { resetsAt } : {}) }];
+  return [
+    {
+      name: "requests",
+      kind: "monthly",
+      unit: "requests",
+      usedPercent: clampPercent((used / limit) * 100),
+      used,
+      limit,
+      ...(resetsAt ? { resetsAt } : {}),
+    },
+  ];
 }
 
 /** Reads the usage of the Cursor sign-in found on this computer. */
-export async function readCursor(options: CursorReaderOptions = {}): Promise<MeterRead> {
+export async function readCursor(
+  options: CursorReaderOptions = {},
+): Promise<MeterRead> {
   const token = await findCursorToken(options);
-  if (!token) throw new MeterError("not-signed-in", undefined, "cursor: no saved sign-in");
+  if (!token)
+    throw new MeterError(
+      "not-signed-in",
+      undefined,
+      "cursor: no saved sign-in",
+    );
   // Encrypted with the app's Keychain key; reading that item could ask for the Keychain.
-  if (token.startsWith("cursor-safe-storage:")) throw new MeterError("encrypted", undefined, "cursor: token encrypted");
+  if (token.startsWith("cursor-safe-storage:"))
+    throw new MeterError("encrypted", undefined, "cursor: token encrypted");
   const now = (options.now ?? Date.now)();
   const { cookie, userId } = cursorSessionCookie(token, now);
   const headers = { Accept: "application/json", Cookie: cookie };
-  const summary = await requestJson(`${CURSOR_ORIGIN}/api/usage-summary`, { headers }, "cursor summary", options);
+  const summary = await requestJson(
+    `${CURSOR_ORIGIN}/api/usage-summary`,
+    { headers },
+    "cursor summary",
+    options,
+  );
   const read = parseCursorSummary(summary.body);
-  if (read.windows.length || (summary.body as Json).isUnlimited === true) return read;
+  if (read.windows.length || (summary.body as Json).isUnlimited === true)
+    return read;
   // A plan counted in requests, not dollars, has no budget in the summary.
-  const legacy = await requestJson(`${CURSOR_ORIGIN}/api/usage?user=${encodeURIComponent(userId)}`, { headers }, "cursor usage", options);
+  const legacy = await requestJson(
+    `${CURSOR_ORIGIN}/api/usage?user=${encodeURIComponent(userId)}`,
+    { headers },
+    "cursor usage",
+    options,
+  );
   return { ...read, windows: parseCursorLegacyUsage(legacy.body) };
 }

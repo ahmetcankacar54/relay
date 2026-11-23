@@ -42,7 +42,9 @@ function DialogError({ text }: { text: string }) {
 export function MoveSteps({ t, mac }: { t: T; mac: boolean }) {
   return (
     <section className="grid gap-1 rounded-md border bg-muted/40 p-3 text-xs">
-      <h4 className="font-semibold">{mac ? t("dataBackup.moveTitleMac") : t("dataBackup.moveTitle")}</h4>
+      <h4 className="font-semibold">
+        {mac ? t("dataBackup.moveTitleMac") : t("dataBackup.moveTitle")}
+      </h4>
       <ol className="list-decimal space-y-0.5 ps-4 text-muted-foreground">
         <li>{t("dataBackup.moveStepExport")}</li>
         <li>{t("dataBackup.moveStepInstall")}</li>
@@ -54,7 +56,13 @@ export function MoveSteps({ t, mac }: { t: T; mac: boolean }) {
 }
 
 /** Export: a passphrase typed twice, and whether the saved sign-ins go into the file (off at first). */
-function ExportBackupDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function ExportBackupDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { t } = useI18n();
   const { api, data, setNotice } = useRelay();
   const [passphrase, setPassphrase] = useState("");
@@ -76,11 +84,19 @@ function ExportBackupDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setError("");
     void api
       .exportBackup({ passphrase, includeSignIns: signIns })
-      .then((result) => {
-        if (!result) return;
-        setNotice(t("dataBackup.exported", { accounts: result.accounts, signIns: result.signIns }));
-        close();
-      }, (failure: unknown) => setError(errorMessage(failure)))
+      .then(
+        (result) => {
+          if (!result) return;
+          setNotice(
+            t("dataBackup.exported", {
+              accounts: result.accounts,
+              signIns: result.signIns,
+            }),
+          );
+          close();
+        },
+        (failure: unknown) => setError(errorMessage(failure)),
+      )
       .finally(() => setSaving(false));
   };
   return (
@@ -88,7 +104,9 @@ function ExportBackupDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("dataBackup.exportTitle")}</DialogTitle>
-          <DialogDescription>{t("dataBackup.exportDescription")}</DialogDescription>
+          <DialogDescription>
+            {t("dataBackup.exportDescription")}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-3"
@@ -122,25 +140,42 @@ function ExportBackupDialog({ open, onOpenChange }: { open: boolean; onOpenChang
               aria-invalid={!!confirm && mismatch}
             />
             {!!confirm && mismatch && (
-              <span className="text-xs text-destructive">{t("dataBackup.passphrasesDiffer")}</span>
+              <span className="text-xs text-destructive">
+                {t("dataBackup.passphrasesDiffer")}
+              </span>
             )}
           </label>
           <div className="flex items-start justify-between gap-3">
             <label htmlFor="backup-sign-ins" className="grid gap-0.5 text-sm">
               {t("dataBackup.includeSignIns")}
-              <span className="text-xs text-muted-foreground">{t("dataBackup.includeSignInsDescription")}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("dataBackup.includeSignInsDescription")}
+              </span>
             </label>
-            <Switch id="backup-sign-ins" checked={signIns} onCheckedChange={setSignIns} />
+            <Switch
+              id="backup-sign-ins"
+              checked={signIns}
+              onCheckedChange={setSignIns}
+            />
           </div>
           {signIns && (
-            <p role="note" data-slot="backup-sign-in-warning" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+            <p
+              role="note"
+              data-slot="backup-sign-in-warning"
+              className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+            >
               {t("dataBackup.signInsWarning")}
             </p>
           )}
           <MoveSteps t={t} mac={macWording(data?.diagnostics.platform)} />
           <DialogError text={error} />
           <DialogFooter>
-            <Button type="button" variant="ghost" disabled={saving} onClick={close}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={saving}
+              onClick={close}
+            >
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={saving || short || mismatch}>
@@ -155,10 +190,19 @@ function ExportBackupDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 }
 
 /** The opened backup: when it was made, its accounts, and whether each is already here. */
-function BackupContents({ summary, t, language }: { summary: BackupSummary; t: T; language: string }) {
-  const made = new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(summary.createdAt),
-  );
+function BackupContents({
+  summary,
+  t,
+  language,
+}: {
+  summary: BackupSummary;
+  t: T;
+  language: string;
+}) {
+  const made = new Intl.DateTimeFormat(language, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(summary.createdAt));
   return (
     <section className="grid gap-2 text-sm">
       <p className="text-xs text-muted-foreground">
@@ -170,14 +214,20 @@ function BackupContents({ summary, t, language }: { summary: BackupSummary; t: T
             <span className="min-w-0 truncate">{account.name}</span>
             <span className="shrink-0 text-xs text-muted-foreground">
               {[
-                account.signIn ? t("dataBackup.withSignIn") : t("dataBackup.withoutSignIn"),
+                account.signIn
+                  ? t("dataBackup.withSignIn")
+                  : t("dataBackup.withoutSignIn"),
                 ...(account.present ? [t("dataBackup.alreadyHere")] : []),
               ].join(" · ")}
             </span>
           </li>
         ))}
       </ul>
-      {summary.signIns && <p className="text-xs text-muted-foreground">{t("dataBackup.importSignInsNote")}</p>}
+      {summary.signIns && (
+        <p className="text-xs text-muted-foreground">
+          {t("dataBackup.importSignInsNote")}
+        </p>
+      )}
     </section>
   );
 }
@@ -186,7 +236,13 @@ function BackupContents({ summary, t, language }: { summary: BackupSummary; t: T
  * Import, once a file was picked: its passphrase, then what it holds and merge or replace. Closing
  * at any step makes main forget the file.
  */
-function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClose: () => void }) {
+function ImportBackupDialog({
+  file,
+  onClose,
+}: {
+  file?: BackupFileChoice;
+  onClose: () => void;
+}) {
   const { t, language } = useI18n();
   const { api, data, settings, setNotice, refresh } = useRelay();
   const consent = useRiskConsent();
@@ -219,15 +275,29 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
     run(async () => {
       // Antigravity accounts the import adds ask for their risk note first, as when added by hand.
       const antigravity = summary?.accounts.some(
-        (account) => account.provider === "antigravity" && (mode === "replace" || !account.present),
+        (account) =>
+          account.provider === "antigravity" &&
+          (mode === "replace" || !account.present),
       );
-      if (antigravity && !(await consent.ask(antigravityAccountRisks(!!settings.proxy?.enabled)))) return;
+      if (
+        antigravity &&
+        !(await consent.ask(antigravityAccountRisks(!!settings.proxy?.enabled)))
+      )
+        return;
       const result = await api.importBackup(mode);
       setNotice(
         [
-          t("dataBackup.imported", { added: result.added, skipped: result.skipped, signIns: result.signIns }),
-          ...(result.signInsFailed ? [t("dataBackup.signInsFailed", { count: result.signInsFailed })] : []),
-          ...(result.before ? [t("dataBackup.savedBefore", { name: result.before })] : []),
+          t("dataBackup.imported", {
+            added: result.added,
+            skipped: result.skipped,
+            signIns: result.signIns,
+          }),
+          ...(result.signInsFailed
+            ? [t("dataBackup.signInsFailed", { count: result.signInsFailed })]
+            : []),
+          ...(result.before
+            ? [t("dataBackup.savedBefore", { name: result.before })]
+            : []),
         ].join(" "),
       );
       close(false);
@@ -235,7 +305,10 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
     });
   const locale = FORMAT_LOCALE[language];
   return (
-    <Dialog open={!!file} onOpenChange={(next) => !next && !working && close(true)}>
+    <Dialog
+      open={!!file}
+      onOpenChange={(next) => !next && !working && close(true)}
+    >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("dataBackup.importTitle")}</DialogTitle>
@@ -249,7 +322,10 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
               if (passphrase && !working) open();
             }}
           >
-            <label className="grid gap-1 text-sm" htmlFor="backup-open-passphrase">
+            <label
+              className="grid gap-1 text-sm"
+              htmlFor="backup-open-passphrase"
+            >
               {t("dataBackup.passphrase")}
               <Input
                 id="backup-open-passphrase"
@@ -262,7 +338,12 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
             <MoveSteps t={t} mac={macWording(data?.diagnostics.platform)} />
             <DialogError text={error} />
             <DialogFooter>
-              <Button type="button" variant="ghost" disabled={working} onClick={() => close(true)}>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={working}
+                onClick={() => close(true)}
+              >
                 {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={working || !passphrase}>
@@ -274,9 +355,15 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
         ) : (
           <div className="grid gap-3">
             <BackupContents summary={summary} t={t} language={locale} />
-            <fieldset className="grid gap-2" aria-label={t("dataBackup.howToImport")}>
+            <fieldset
+              className="grid gap-2"
+              aria-label={t("dataBackup.howToImport")}
+            >
               {(["merge", "replace"] as const).map((value) => (
-                <label key={value} className="flex items-start gap-2 rounded-md border p-2 text-sm has-[:checked]:border-primary">
+                <label
+                  key={value}
+                  className="flex items-start gap-2 rounded-md border p-2 text-sm has-[:checked]:border-primary"
+                >
                   <input
                     type="radio"
                     name="backup-mode"
@@ -286,11 +373,15 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
                     className="mt-1"
                   />
                   <span className="grid gap-0.5">
-                    {value === "merge" ? t("dataBackup.merge") : t("dataBackup.replace")}
+                    {value === "merge"
+                      ? t("dataBackup.merge")
+                      : t("dataBackup.replace")}
                     <span className="text-xs text-muted-foreground">
                       {value === "merge"
                         ? t("dataBackup.mergeDescription")
-                        : t("dataBackup.replaceDescription", { count: summary.currentAccounts })}
+                        : t("dataBackup.replaceDescription", {
+                            count: summary.currentAccounts,
+                          })}
                     </span>
                   </span>
                 </label>
@@ -298,7 +389,12 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
             </fieldset>
             <DialogError text={error} />
             <DialogFooter>
-              <Button type="button" variant="ghost" disabled={working} onClick={() => close(true)}>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={working}
+                onClick={() => close(true)}
+              >
                 {t("common.cancel")}
               </Button>
               <Button disabled={working} onClick={bring}>
@@ -318,7 +414,13 @@ function ImportBackupDialog({ file, onClose }: { file?: BackupFileChoice; onClos
  * The confirmation for removing Relay's data: what goes, what stays, and what Relay does first.
  * Main refuses while a Desktop operation, a terminal or a sign-in runs, and says so here.
  */
-function ResetDataDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function ResetDataDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { t } = useI18n();
   const { api, data } = useRelay();
   const [working, setWorking] = useState(false);
@@ -332,12 +434,10 @@ function ResetDataDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
     setWorking(true);
     setError("");
     // On success Relay quits and opens again; the dialog goes with the window.
-    void api
-      .resetData()
-      .catch((failure: unknown) => {
-        setError(errorMessage(failure));
-        setWorking(false);
-      });
+    void api.resetData().catch((failure: unknown) => {
+      setError(errorMessage(failure));
+      setWorking(false);
+    });
   };
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !working && close()}>
@@ -350,7 +450,11 @@ function ResetDataDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
           <h4 className="font-semibold">{t("dataReset.removes")}</h4>
           <ul className="list-disc space-y-0.5 ps-5 text-muted-foreground">
             <li>{t("dataReset.removesAccounts")}</li>
-            <li>{mac ? t("dataReset.removesSignInsMac") : t("dataReset.removesSignIns")}</li>
+            <li>
+              {mac
+                ? t("dataReset.removesSignInsMac")
+                : t("dataReset.removesSignIns")}
+            </li>
             <li>{t("dataReset.removesProfiles")}</li>
             <li>{t("dataReset.removesHistory")}</li>
             <li>{t("dataReset.removesHelper")}</li>
@@ -365,13 +469,25 @@ function ResetDataDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <li>{t("dataReset.keepsExports")}</li>
           </ul>
         </section>
-        <p className="text-xs text-muted-foreground">{t("dataReset.firstSteps")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("dataReset.firstSteps")}
+        </p>
         <DialogError text={error} />
         <DialogFooter>
-          <Button type="button" variant="ghost" disabled={working} onClick={close}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={working}
+            onClick={close}
+          >
             {t("common.cancel")}
           </Button>
-          <Button variant="destructive" disabled={working} onClick={remove} data-slot="reset-confirm">
+          <Button
+            variant="destructive"
+            disabled={working}
+            onClick={remove}
+            data-slot="reset-confirm"
+          >
             {working && <LoaderCircle className="animate-spin" />}
             {t("dataReset.confirm")}
           </Button>
@@ -391,9 +507,17 @@ export function DataGroups() {
   return (
     <>
       <SettingGroup id="settings-backup" title={t("dataBackup.groupTitle")}>
-        <SettingRow label={t("dataBackup.rowLabel")} description={t("dataBackup.rowDescription")}>
+        <SettingRow
+          label={t("dataBackup.rowLabel")}
+          description={t("dataBackup.rowDescription")}
+        >
           <span className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={!!busy} onClick={() => setExporting(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!!busy}
+              onClick={() => setExporting(true)}
+            >
               {t("settings.export")}
             </Button>
             <Button
@@ -413,8 +537,16 @@ export function DataGroups() {
         </SettingRow>
       </SettingGroup>
       <SettingGroup id="settings-reset" title={t("dataReset.groupTitle")}>
-        <SettingRow label={t("dataReset.rowLabel")} description={t("dataReset.rowDescription")}>
-          <Button variant="outline" size="sm" disabled={!!busy} onClick={() => setResetting(true)}>
+        <SettingRow
+          label={t("dataReset.rowLabel")}
+          description={t("dataReset.rowDescription")}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!!busy}
+            onClick={() => setResetting(true)}
+          >
             {t("dataReset.removeEllipsis")}
           </Button>
         </SettingRow>

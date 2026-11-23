@@ -10,14 +10,23 @@ import { listedMainFiles, mainModuleFiles } from "./helpers/main-source";
 const root = path.join(import.meta.dirname, "..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 const parse = (file: string) =>
-  ts.createSourceFile(file, read(file), ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+  ts.createSourceFile(
+    file,
+    read(file),
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS,
+  );
 
 function electronFiles(dir = "electron"): string[] {
-  return readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) => {
-    const file = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) return entry.name === "native" ? [] : electronFiles(file);
-    return /\.tsx?$/.test(entry.name) ? [file] : [];
-  });
+  return readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap(
+    (entry) => {
+      const file = `${dir}/${entry.name}`;
+      if (entry.isDirectory())
+        return entry.name === "native" ? [] : electronFiles(file);
+      return /\.tsx?$/.test(entry.name) ? [file] : [];
+    },
+  );
 }
 
 /** Every relative module a file imports, resolved to a repository path without its extension. */
@@ -35,7 +44,8 @@ function relativeImports(file: string): string[] {
             ts.isStringLiteral(node.arguments[0])
           ? node.arguments[0].text
           : undefined;
-    if (spec?.startsWith(".")) found.push(path.posix.join(path.posix.dirname(file), spec));
+    if (spec?.startsWith("."))
+      found.push(path.posix.join(path.posix.dirname(file), spec));
     ts.forEachChild(node, visit);
   };
   visit(parse(file));
@@ -69,7 +79,11 @@ test("the tests read every main module, each once", () => {
 test("nothing imports the bootstrap", () => {
   for (const file of electronFiles())
     for (const target of relativeImports(file))
-      assert.notEqual(target, "electron/main", `${file} imports electron/main.ts`);
+      assert.notEqual(
+        target,
+        "electron/main",
+        `${file} imports electron/main.ts`,
+      );
 });
 
 test("no main module touches Electron's app while it is imported", () => {
@@ -82,7 +96,9 @@ test("no main module touches Electron's app while it is imported", () => {
         ts.isIdentifier(node.expression.expression) &&
         node.expression.expression.text === "app"
       )
-        assert.fail(`${file} calls app.${node.expression.name.text}() at import`);
+        assert.fail(
+          `${file} calls app.${node.expression.name.text}() at import`,
+        );
     });
 });
 
@@ -98,13 +114,21 @@ test("no main module keeps a copy of a late-bound singleton", () => {
         /^\.{1,2}\/(?:\.\.\/)*state$/.test(statement.moduleSpecifier.text)
       ) {
         const named = statement.importClause?.namedBindings;
-        if (named && ts.isNamedImports(named)) for (const element of named.elements) fromState.add(element.name.text);
+        if (named && ts.isNamedImports(named))
+          for (const element of named.elements)
+            fromState.add(element.name.text);
       }
     for (const statement of source.statements)
       if (ts.isVariableStatement(statement))
         for (const declaration of statement.declarationList.declarations)
-          if (declaration.initializer && ts.isIdentifier(declaration.initializer))
-            assert.ok(!fromState.has(declaration.initializer.text), `${file} copies ${declaration.initializer.text}`);
+          if (
+            declaration.initializer &&
+            ts.isIdentifier(declaration.initializer)
+          )
+            assert.ok(
+              !fromState.has(declaration.initializer.text),
+              `${file} copies ${declaration.initializer.text}`,
+            );
   }
 });
 
@@ -112,5 +136,6 @@ test("the IPC handlers stay at the top of their registration functions", () => {
   // Tests find a handler's end at the next "\n  handle(".
   for (const file of mainModuleFiles().filter((name) => name.includes("/ipc/")))
     for (const line of read(file).split("\n"))
-      if (/^\s*handle\("/.test(line)) assert.match(line, /^ {2}handle\("/, `${file}: ${line.trim()}`);
+      if (/^\s*handle\("/.test(line))
+        assert.match(line, /^ {2}handle\("/, `${file}: ${line.trim()}`);
 });

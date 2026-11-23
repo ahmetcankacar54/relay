@@ -28,7 +28,9 @@ const TIMEOUT_MS = 120_000;
 
 const packaged = process.argv.includes("--packaged");
 const main = packaged
-  ? path.resolve(process.env.RELAY_PACKAGED_MAIN || PACKAGED_MAIN[process.platform] || "")
+  ? path.resolve(
+      process.env.RELAY_PACKAGED_MAIN || PACKAGED_MAIN[process.platform] || "",
+    )
   : path.join(here, "../dist-electron/main.cjs");
 if (!existsSync(main.replace(/app\.asar[\\/].*$/, "app.asar"))) {
   console.error(
@@ -38,12 +40,21 @@ if (!existsSync(main.replace(/app\.asar[\\/].*$/, "app.asar"))) {
 }
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-boot-smoke-"));
-const env = { ...process.env, RELAY_SMOKE_ROOT: root, RELAY_SMOKE_MAIN: packaged ? main : "" };
+const env = {
+  ...process.env,
+  RELAY_SMOKE_ROOT: root,
+  RELAY_SMOKE_MAIN: packaged ? main : "",
+};
 // Left over from a parent, it would make Electron a plain Node with no `app`.
 delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(electron, [path.join(here, "smoke-boot.cjs")], { stdio: "inherit", env });
+const child = spawn(electron, [path.join(here, "smoke-boot.cjs")], {
+  stdio: "inherit",
+  env,
+});
 const timer = setTimeout(() => {
-  console.error(`Relay did not quit within ${TIMEOUT_MS / 1000} s; killing it.`);
+  console.error(
+    `Relay did not quit within ${TIMEOUT_MS / 1000} s; killing it.`,
+  );
   child.kill("SIGKILL");
 }, TIMEOUT_MS);
 const exit = await new Promise((resolve, reject) => {
@@ -54,11 +65,16 @@ clearTimeout(timer);
 
 /** Every file under `dir`, or none when it does not exist. */
 async function files(dir) {
-  const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true }).catch(() => []);
-  return entries.filter((e) => e.isFile()).map((e) => path.join(e.parentPath, e.name));
+  const entries = await fs
+    .readdir(dir, { recursive: true, withFileTypes: true })
+    .catch(() => []);
+  return entries
+    .filter((e) => e.isFile())
+    .map((e) => path.join(e.parentPath, e.name));
 }
 const problems = [];
-if (exit.code !== 0) problems.push(`Electron exited with ${exit.code ?? exit.signal}.`);
+if (exit.code !== 0)
+  problems.push(`Electron exited with ${exit.code ?? exit.signal}.`);
 const result = await fs
   .readFile(path.join(root, "boot-result.json"), "utf8")
   .then(JSON.parse)
@@ -66,9 +82,14 @@ const result = await fs
 if (!result.booted) problems.push(`Relay did not boot: ${result.error}`);
 const errorLog = path.join(root, "logs", "main-errors.log");
 if (existsSync(errorLog))
-  problems.push(`The main process logged errors:\n${await fs.readFile(errorLog, "utf8")}`);
-const dumps = (await files(path.join(root, "crashDumps"))).filter((f) => /\.dmp$/i.test(f));
-if (dumps.length) problems.push(`Crash dumps were written:\n${dumps.join("\n")}`);
+  problems.push(
+    `The main process logged errors:\n${await fs.readFile(errorLog, "utf8")}`,
+  );
+const dumps = (await files(path.join(root, "crashDumps"))).filter((f) =>
+  /\.dmp$/i.test(f),
+);
+if (dumps.length)
+  problems.push(`Crash dumps were written:\n${dumps.join("\n")}`);
 
 if (problems.length) {
   console.error(problems.join("\n"));
@@ -82,5 +103,7 @@ if (problems.length) {
   // Chromium's helper processes can hold files a moment after the exit, Windows longest.
   await fs
     .rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
-    .catch((error) => console.warn(`Could not remove ${root}: ${error.message}`));
+    .catch((error) =>
+      console.warn(`Could not remove ${root}: ${error.message}`),
+    );
 }

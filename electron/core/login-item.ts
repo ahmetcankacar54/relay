@@ -15,7 +15,10 @@ export interface LoginItemHost {
   /** The program a login starts: the AppImage on Linux when Relay runs from one. */
   execPath: string;
   getLoginItemSettings(options?: { args?: string[] }): { openAtLogin: boolean };
-  setLoginItemSettings(settings: { openAtLogin: boolean; args?: string[] }): void;
+  setLoginItemSettings(settings: {
+    openAtLogin: boolean;
+    args?: string[];
+  }): void;
 }
 
 /**
@@ -24,7 +27,10 @@ export interface LoginItemHost {
  */
 export function autostartFile(env: NodeJS.ProcessEnv, home: string) {
   const configured = env.XDG_CONFIG_HOME;
-  const config = configured && path.isAbsolute(configured) ? configured : path.join(home, ".config");
+  const config =
+    configured && path.isAbsolute(configured)
+      ? configured
+      : path.join(home, ".config");
   return path.join(config, "autostart", "relay.desktop");
 }
 
@@ -69,7 +75,9 @@ export function launchedAtLogin(
   platform: NodeJS.Platform,
   wasOpenedAtLogin: boolean,
 ) {
-  return platform === "darwin" ? wasOpenedAtLogin : argv.includes(LOGIN_LAUNCH_FLAG);
+  return platform === "darwin"
+    ? wasOpenedAtLogin
+    : argv.includes(LOGIN_LAUNCH_FLAG);
 }
 
 /** Whether the system starts Relay at login now. */
@@ -81,7 +89,8 @@ export async function launchAtLoginEnabled(host: LoginItemHost) {
       .catch(() => false);
   if (host.platform === "win32")
     return host.getLoginItemSettings({ args: [LOGIN_LAUNCH_FLAG] }).openAtLogin;
-  if (host.platform === "darwin") return host.getLoginItemSettings().openAtLogin;
+  if (host.platform === "darwin")
+    return host.getLoginItemSettings().openAtLogin;
   return false;
 }
 
@@ -103,6 +112,10 @@ export async function setLaunchAtLogin(enabled: boolean, host: LoginItemHost) {
     return;
   }
   if (host.platform === "win32")
-    host.setLoginItemSettings({ openAtLogin: enabled, args: [LOGIN_LAUNCH_FLAG] });
-  else if (host.platform === "darwin") host.setLoginItemSettings({ openAtLogin: enabled });
+    host.setLoginItemSettings({
+      openAtLogin: enabled,
+      args: [LOGIN_LAUNCH_FLAG],
+    });
+  else if (host.platform === "darwin")
+    host.setLoginItemSettings({ openAtLogin: enabled });
 }

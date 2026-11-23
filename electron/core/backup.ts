@@ -4,7 +4,13 @@ import path from "node:path";
 import { z } from "zod";
 import { readBytes, writeBytes } from "./desktop-files";
 import { signedOut } from "./profile-auth";
-import { accountSchema, privateDir, proxyConfigSchema, settingsSchema, type Store } from "./store";
+import {
+  accountSchema,
+  privateDir,
+  proxyConfigSchema,
+  settingsSchema,
+  type Store,
+} from "./store";
 import { securityKeychain } from "./terminal-identity";
 import { credentialService } from "./usage-credentials";
 import type { Sealer } from "./vault-crypto";
@@ -62,8 +68,10 @@ export class BackupError extends Error {
     super(
       {
         "not-a-backup": "This file is not a Relay backup.",
-        "newer-format": "This backup was made by a newer Relay. Update Relay, then import it.",
-        "wrong-passphrase": "The passphrase is wrong, or the file was changed after it was saved.",
+        "newer-format":
+          "This backup was made by a newer Relay. Update Relay, then import it.",
+        "wrong-passphrase":
+          "The passphrase is wrong, or the file was changed after it was saved.",
         damaged: "This backup is damaged.",
         "too-large": "This file is too large to be a Relay backup.",
         "short-passphrase": `The passphrase must be at least ${MIN_BACKUP_PASSPHRASE} characters.`,
@@ -80,7 +88,11 @@ export class BackupError extends Error {
  */
 const PROFILE_FILE =
   /^(?:\.claude\.json|\.config\.json|provider-credential\.json|antigravity-oauth\/[A-Za-z0-9][A-Za-z0-9._@+-]{0,199}\.json)$/;
-const PROFILE_FILES = [".claude.json", ".config.json", "provider-credential.json"];
+const PROFILE_FILES = [
+  ".claude.json",
+  ".config.json",
+  "provider-credential.json",
+];
 const OAUTH_DIR = "antigravity-oauth";
 const text = z.string().max(MAX_PROFILE_FILE);
 
@@ -105,7 +117,13 @@ const sessionsSchema = z.object({
   /** Claude Code's credential JSON, by Relay account id: Keychain item or `.credentials.json`. */
   claudeCode: z.record(z.uuid(), text),
   /** Profile files (`PROFILE_FILE`), base64, by Relay account id. */
-  files: z.record(z.uuid(), z.record(z.string().regex(PROFILE_FILE), z.string().max(MAX_PROFILE_FILE * 2))),
+  files: z.record(
+    z.uuid(),
+    z.record(
+      z.string().regex(PROFILE_FILE),
+      z.string().max(MAX_PROFILE_FILE * 2),
+    ),
+  ),
 });
 type Sessions = z.infer<typeof sessionsSchema>;
 
@@ -160,19 +178,30 @@ export interface BackupContext {
   now: () => number;
 }
 
-const profileOf = (host: BackupHost, accountId: string) => path.join(host.data, "profiles", accountId);
+const profileOf = (host: BackupHost, accountId: string) =>
+  path.join(host.data, "profiles", accountId);
 const vaultOf = (host: BackupHost) => path.join(host.data, "desktop-vault");
 
 function checkParams({ logN, r, p }: ScryptParams) {
   const ok =
-    Number.isInteger(logN) && logN >= 10 && logN <= 20 &&
-    Number.isInteger(r) && r >= 1 && r <= 32 &&
-    Number.isInteger(p) && p >= 1 && p <= 16 &&
+    Number.isInteger(logN) &&
+    logN >= 10 &&
+    logN <= 20 &&
+    Number.isInteger(r) &&
+    r >= 1 &&
+    r <= 32 &&
+    Number.isInteger(p) &&
+    p >= 1 &&
+    p <= 16 &&
     128 * 2 ** logN * r <= MAX_SCRYPT_MEMORY;
   if (!ok) throw new BackupError("damaged");
 }
 
-function deriveKey(passphrase: string, salt: Buffer, params: ScryptParams): Promise<Buffer> {
+function deriveKey(
+  passphrase: string,
+  salt: Buffer,
+  params: ScryptParams,
+): Promise<Buffer> {
   checkParams(params);
   const N = 2 ** params.logN;
   return new Promise((resolve, reject) =>
@@ -187,7 +216,12 @@ function deriveKey(passphrase: string, salt: Buffer, params: ScryptParams): Prom
 }
 
 /** Seals the payload under `key`; the salt and parameters go in the header for opening. */
-export function sealWithKey(payload: BackupPayload, key: Buffer, params: ScryptParams, salt: Buffer): Buffer {
+export function sealWithKey(
+  payload: BackupPayload,
+  key: Buffer,
+  params: ScryptParams,
+  salt: Buffer,
+): Buffer {
   const nonce = crypto.randomBytes(NONCE);
   const header = Buffer.concat([
     BACKUP_MAGIC,
@@ -197,7 +231,10 @@ export function sealWithKey(payload: BackupPayload, key: Buffer, params: ScryptP
   ]);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce);
   cipher.setAAD(header);
-  const body = Buffer.concat([cipher.update(JSON.stringify(payload), "utf8"), cipher.final()]);
+  const body = Buffer.concat([
+    cipher.update(JSON.stringify(payload), "utf8"),
+    cipher.final(),
+  ]);
   return Buffer.concat([header, body, cipher.getAuthTag()]);
 }
 
@@ -207,31 +244,49 @@ export async function sealBackup(
   passphrase: string,
   params: ScryptParams = DEFAULT_SCRYPT,
 ): Promise<Buffer> {
-  if ([...passphrase].length < MIN_BACKUP_PASSPHRASE) throw new BackupError("short-passphrase");
+  if ([...passphrase].length < MIN_BACKUP_PASSPHRASE)
+    throw new BackupError("short-passphrase");
   const salt = crypto.randomBytes(SALT);
-  return sealWithKey(payload, await deriveKey(passphrase, salt, params), params, salt);
+  return sealWithKey(
+    payload,
+    await deriveKey(passphrase, salt, params),
+    params,
+    salt,
+  );
 }
 
 /**
  * Checks what can be checked without the passphrase: the size, the magic and the format. A file
  * picked for import is refused here, before the user types anything.
  */
-export function readBackupHeader(file: Buffer): { params: ScryptParams; salt: Buffer; nonce: Buffer } {
+export function readBackupHeader(file: Buffer): {
+  params: ScryptParams;
+  salt: Buffer;
+  nonce: Buffer;
+} {
   if (file.length > MAX_BACKUP_BYTES) throw new BackupError("too-large");
-  if (file.length < 4 || !file.subarray(0, 4).equals(BACKUP_MAGIC)) throw new BackupError("not-a-backup");
+  if (file.length < 4 || !file.subarray(0, 4).equals(BACKUP_MAGIC))
+    throw new BackupError("not-a-backup");
   if (file.length < HEADER + TAG) throw new BackupError("damaged");
   if (file[4] > BACKUP_FORMAT) throw new BackupError("newer-format");
   if (file[4] !== BACKUP_FORMAT) throw new BackupError("damaged");
   const params = { logN: file[5], r: file[6], p: file[7] };
   checkParams(params);
-  return { params, salt: file.subarray(8, 8 + SALT), nonce: file.subarray(8 + SALT, HEADER) };
+  return {
+    params,
+    salt: file.subarray(8, 8 + SALT),
+    nonce: file.subarray(8 + SALT, HEADER),
+  };
 }
 
 /**
  * Opens a backup. A wrong passphrase and a changed file fail the same way (the GCM tag), and
  * nothing of the payload is used before the tag checked.
  */
-export async function openBackup(file: Buffer, passphrase: string): Promise<OpenedBackup> {
+export async function openBackup(
+  file: Buffer,
+  passphrase: string,
+): Promise<OpenedBackup> {
   const { params, salt, nonce } = readBackupHeader(file);
   const key = await deriveKey(passphrase, salt, params);
   let plain: Buffer;
@@ -239,7 +294,10 @@ export async function openBackup(file: Buffer, passphrase: string): Promise<Open
     const decipher = crypto.createDecipheriv("aes-256-gcm", key, nonce);
     decipher.setAAD(file.subarray(0, HEADER));
     decipher.setAuthTag(file.subarray(file.length - TAG));
-    plain = Buffer.concat([decipher.update(file.subarray(HEADER, file.length - TAG)), decipher.final()]);
+    plain = Buffer.concat([
+      decipher.update(file.subarray(HEADER, file.length - TAG)),
+      decipher.final(),
+    ]);
   } catch {
     throw new BackupError("wrong-passphrase");
   }
@@ -260,7 +318,12 @@ export async function openBackup(file: Buffer, passphrase: string): Promise<Open
  * (the system's, set on each computer).
  */
 function portableSettings(settings: RelaySettings): Record<string, unknown> {
-  const { proxy: _proxy, riskAcknowledged: _risks, launchAtLogin: _login, ...rest } = settings;
+  const {
+    proxy: _proxy,
+    riskAcknowledged: _risks,
+    launchAtLogin: _login,
+    ...rest
+  } = settings;
   return rest;
 }
 
@@ -270,14 +333,19 @@ function portableGateway(config: ProxyConfig, withKey: boolean): BackupGateway {
     routingStrategy: config.routingStrategy,
     affinityTtlSeconds: config.affinityTtlSeconds,
     ...(config.accountOrder ? { accountOrder: config.accountOrder } : {}),
-    ...(config.excludedAccountIds ? { excludedAccountIds: config.excludedAccountIds } : {}),
+    ...(config.excludedAccountIds
+      ? { excludedAccountIds: config.excludedAccountIds }
+      : {}),
     ...(config.subagentOverflow ? { subagentOverflow: true } : {}),
     ...(withKey && config.apiKey ? { apiKey: config.apiKey } : {}),
   });
 }
 
 /** A sealed vault file's text; undefined when there is none or this key cannot open it. */
-async function unsealed(host: BackupHost, relative: string): Promise<string | undefined> {
+async function unsealed(
+  host: BackupHost,
+  relative: string,
+): Promise<string | undefined> {
   try {
     const data = await readBytes(vaultOf(host), relative);
     return data ? host.sealer.unseal(data) : undefined;
@@ -291,7 +359,9 @@ async function profileFiles(profile: string): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   let oauth: string[] = [];
   try {
-    oauth = (await fsp.readdir(path.join(profile, OAUTH_DIR))).map((name) => `${OAUTH_DIR}/${name}`);
+    oauth = (await fsp.readdir(path.join(profile, OAUTH_DIR))).map(
+      (name) => `${OAUTH_DIR}/${name}`,
+    );
   } catch {
     // No Antigravity sign-in in this profile.
   }
@@ -299,7 +369,8 @@ async function profileFiles(profile: string): Promise<Record<string, string>> {
     if (!PROFILE_FILE.test(relative)) continue;
     try {
       const data = await readBytes(profile, relative);
-      if (data && data.length <= MAX_PROFILE_FILE) out[relative] = data.toString("base64");
+      if (data && data.length <= MAX_PROFILE_FILE)
+        out[relative] = data.toString("base64");
     } catch {
       // A linked or unreadable file stays out.
     }
@@ -313,7 +384,8 @@ const hasSignIn = (sessions: Sessions | undefined, account: Account) =>
     !!sessions.antigravityApp[account.id] ||
     !!sessions.claudeCode[account.id] ||
     Object.keys(sessions.files[account.id] ?? {}).some(
-      (name) => name === "provider-credential.json" || name.startsWith(`${OAUTH_DIR}/`),
+      (name) =>
+        name === "provider-credential.json" || name.startsWith(`${OAUTH_DIR}/`),
     ));
 
 /**
@@ -325,7 +397,9 @@ export async function collectBackup(
   includeSignIns: boolean,
   context: BackupContext,
 ): Promise<BackupPayload> {
-  const accounts = source.accounts.map((account) => accountSchema.parse(account)) as Account[];
+  const accounts = source.accounts.map((account) =>
+    accountSchema.parse(account),
+  ) as Account[];
   let sessions: Sessions | undefined;
   if (includeSignIns) {
     const { host } = context;
@@ -336,10 +410,15 @@ export async function collectBackup(
         const login = await unsealed(host, `accounts/${uuid}.bin`);
         if (login) sessions.desktop[uuid] = login;
       }
-      const antigravity = await unsealed(host, `antigravity-app/${account.id.toLowerCase()}.bin`);
+      const antigravity = await unsealed(
+        host,
+        `antigravity-app/${account.id.toLowerCase()}.bin`,
+      );
       if (antigravity) sessions.antigravityApp[account.id] = antigravity;
       const profile = profileOf(host, account.id);
-      const credential = await host.claudeCode.read(profile).catch(() => undefined);
+      const credential = await host.claudeCode
+        .read(profile)
+        .catch(() => undefined);
       if (credential) sessions.claudeCode[account.id] = credential;
       const files = await profileFiles(profile);
       if (Object.keys(files).length) sessions.files[account.id] = files;
@@ -362,12 +441,17 @@ function presentAs(account: Account, current: readonly Account[]) {
   return current.find(
     (here) =>
       here.id === account.id ||
-      (!!account.desktop && here.desktop?.accountUuid.toLowerCase() === account.desktop.accountUuid.toLowerCase()),
+      (!!account.desktop &&
+        here.desktop?.accountUuid.toLowerCase() ===
+          account.desktop.accountUuid.toLowerCase()),
   );
 }
 
 /** What the opened backup holds, against the accounts here now. */
-export function summarizeBackup(payload: BackupPayload, current: readonly Account[]): BackupSummary {
+export function summarizeBackup(
+  payload: BackupPayload,
+  current: readonly Account[],
+): BackupSummary {
   return {
     createdAt: payload.createdAt,
     relayVersion: payload.relayVersion,
@@ -410,13 +494,26 @@ async function restoreSignIns(
     const antigravity = sessions.antigravityApp[account.id];
     if (antigravity)
       steps.push(() =>
-        writeBytes(vault, `antigravity-app/${account.id.toLowerCase()}.bin`, host.sealer.seal(antigravity)),
+        writeBytes(
+          vault,
+          `antigravity-app/${account.id.toLowerCase()}.bin`,
+          host.sealer.seal(antigravity),
+        ),
       );
     const profile = profileOf(host, account.id);
     const credential = sessions.claudeCode[account.id];
-    if (credential) steps.push(() => host.claudeCode.write(profile, credential));
-    for (const [relative, data] of Object.entries(sessions.files[account.id] ?? {}))
-      steps.push(() => writeBytes(profile, path.join(...relative.split("/")), Buffer.from(data, "base64")));
+    if (credential)
+      steps.push(() => host.claudeCode.write(profile, credential));
+    for (const [relative, data] of Object.entries(
+      sessions.files[account.id] ?? {},
+    ))
+      steps.push(() =>
+        writeBytes(
+          profile,
+          path.join(...relative.split("/")),
+          Buffer.from(data, "base64"),
+        ),
+      );
     if (!steps.length) continue;
     let ok = true;
     for (const step of steps)
@@ -435,7 +532,10 @@ async function restoreSignIns(
  * gateway, the accepted risk notes and the login item stay this computer's, and early start comes
  * over off until its risk was accepted here: a backup never turns a risky feature on by itself.
  */
-function importedSettings(saved: Record<string, unknown>, current: RelaySettings): RelaySettings {
+function importedSettings(
+  saved: Record<string, unknown>,
+  current: RelaySettings,
+): RelaySettings {
   const value: Record<string, unknown> = {
     ...current,
     ...saved,
@@ -443,7 +543,8 @@ function importedSettings(saved: Record<string, unknown>, current: RelaySettings
     riskAcknowledged: current.riskAcknowledged,
     launchAtLogin: current.launchAtLogin,
   };
-  for (const key of Object.keys(value)) if (value[key] === undefined) delete value[key];
+  for (const key of Object.keys(value))
+    if (value[key] === undefined) delete value[key];
   for (let round = 0; round < 20; round++) {
     const result = settingsSchema.safeParse(value);
     if (result.success) {
@@ -457,7 +558,10 @@ function importedSettings(saved: Record<string, unknown>, current: RelaySettings
       if (issue.code !== "unrecognized_keys") continue;
       let at: unknown = value;
       for (const key of issue.path)
-        at = at && typeof at === "object" ? (at as Record<PropertyKey, unknown>)[key] : undefined;
+        at =
+          at && typeof at === "object"
+            ? (at as Record<PropertyKey, unknown>)[key]
+            : undefined;
       if (!at || typeof at !== "object") continue;
       const object = at as Record<string, unknown>;
       for (const key of issue.keys) delete object[key];
@@ -490,17 +594,25 @@ export async function importBackup(
   let before: string | undefined;
   if (mode === "replace") {
     const copy = await collectBackup(
-      { settings: store.state.settings, accounts: store.state.accounts, gateway: currentGateway },
+      {
+        settings: store.state.settings,
+        accounts: store.state.accounts,
+        gateway: currentGateway,
+      },
       true,
       context,
     );
     const dir = path.join(host.data, "relay-backups");
     privateDir(dir);
     before = `before-import-${stamp(context.now())}.${BACKUP_EXTENSION}`;
-    await fsp.writeFile(path.join(dir, before), sealWithKey(copy, opened.key, opened.params, opened.salt), {
-      mode: 0o600,
-      flag: "wx",
-    });
+    await fsp.writeFile(
+      path.join(dir, before),
+      sealWithKey(copy, opened.key, opened.params, opened.salt),
+      {
+        mode: 0o600,
+        flag: "wx",
+      },
+    );
   }
   const current = store.state.accounts;
   let incoming = payload.accounts as Account[];
@@ -525,7 +637,9 @@ export async function importBackup(
     privateDir(profile);
     // An account that came without a sign-in, and has none here, is signed out until it signs in.
     accounts.push(
-      account.auth?.loggedIn && !hadProfile && !hasSignIn(payload.sessions, account)
+      account.auth?.loggedIn &&
+        !hadProfile &&
+        !hasSignIn(payload.sessions, account)
         ? { ...account, auth: signedOut(account.auth, checkedAt) }
         : account,
     );
@@ -545,7 +659,9 @@ export async function importBackup(
       signInsFailed: restored.failed,
       ...(before ? { before } : {}),
     },
-    ...(mode === "replace" && payload.gateway ? { gateway: payload.gateway } : {}),
+    ...(mode === "replace" && payload.gateway
+      ? { gateway: payload.gateway }
+      : {}),
   };
 }
 
@@ -555,22 +671,34 @@ export async function importBackup(
  * else, and when macOS has none, the profile's `.credentials.json`. Written back the same way, so a
  * credential from a Mac lands in a Linux profile's file and the other way round.
  */
-export function claudeCodeSignIns(platform: NodeJS.Platform = process.platform): ClaudeCodeSignIns {
+export function claudeCodeSignIns(
+  platform: NodeJS.Platform = process.platform,
+): ClaudeCodeSignIns {
   const file = ".credentials.json";
-  const readFile = async (profile: string) => (await readBytes(profile, file))?.toString("utf8") || undefined;
+  const readFile = async (profile: string) =>
+    (await readBytes(profile, file))?.toString("utf8") || undefined;
   return {
     async read(profile) {
       if (platform === "darwin") {
-        const item = await securityKeychain(undefined, undefined, credentialService(profile)).read();
+        const item = await securityKeychain(
+          undefined,
+          undefined,
+          credentialService(profile),
+        ).read();
         if (item) return item;
       }
       return readFile(profile);
     },
     async write(profile, value) {
       if (platform === "darwin") {
-        const keychain = securityKeychain(undefined, undefined, credentialService(profile));
+        const keychain = securityKeychain(
+          undefined,
+          undefined,
+          credentialService(profile),
+        );
         await keychain.write(value);
-        if ((await keychain.read()) !== value) throw new Error("The Keychain did not keep the Claude Code sign-in.");
+        if ((await keychain.read()) !== value)
+          throw new Error("The Keychain did not keep the Claude Code sign-in.");
         return;
       }
       await writeBytes(profile, file, Buffer.from(value, "utf8"));

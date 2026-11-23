@@ -9,11 +9,14 @@ const assert = require("node:assert/strict");
 
 const root = process.env.RELAY_SMOKE_ROOT;
 if (!root) {
-  console.error("RELAY_SMOKE_ROOT is not set: run this through scripts/smoke-boot.mjs.");
+  console.error(
+    "RELAY_SMOKE_ROOT is not set: run this through scripts/smoke-boot.mjs.",
+  );
   process.exit(1);
 }
 const result = path.join(root, "boot-result.json");
-const report = (data) => fs.writeFileSync(result, JSON.stringify(data, null, 2));
+const report = (data) =>
+  fs.writeFileSync(result, JSON.stringify(data, null, 2));
 
 // The logs folder is outside userData on macOS (~/Library/Logs), and Crashpad keeps its own
 // folder: both move into the test folder so main-errors.log and minidumps can be checked there.
@@ -75,15 +78,26 @@ app.whenReady().then(async () => {
       return win && win.webContents.getURL() && !win.webContents.isLoading();
     });
     const page = (code) => win.webContents.executeJavaScript(code);
-    await eventually("the preload bridge", async () => Boolean(await page("Boolean(window.relay)")));
+    await eventually("the preload bridge", async () =>
+      Boolean(await page("Boolean(window.relay)")),
+    );
     // The page is sandboxed: no Node in the renderer, only the preload's API.
     assert.equal(await page("typeof require"), "undefined");
     assert.equal(await page("typeof process"), "undefined");
     // A round trip through the main process: an empty first launch.
     const snapshot = await page("window.relay.snapshot()");
-    assert.equal(snapshot.accounts.length, 0, "a fresh profile has no accounts");
+    assert.equal(
+      snapshot.accounts.length,
+      0,
+      "a fresh profile has no accounts",
+    );
     const booted = Date.now() - started;
-    report({ booted: true, bootMs: booted, platform: process.platform, electron: process.versions.electron });
+    report({
+      booted: true,
+      bootMs: booted,
+      platform: process.platform,
+      electron: process.versions.electron,
+    });
     console.log(`BOOT_SMOKE_READY ${booted} ms`);
     // A normal quit, the one the tray and the menu use: Relay's own before-quit and will-quit
     // handlers run and must let the process end by itself.

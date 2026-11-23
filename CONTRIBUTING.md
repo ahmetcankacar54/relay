@@ -32,7 +32,7 @@ How switching, history merging and usage reading work is in [docs/development.md
    ```sh
    npm run typecheck
    npm run lint
-   npm run format:check   # npm run format fixes what it reports
+   npm run format:check   # Prettier on the files your change adds: npx prettier --write <file> fixes one
    npm test
    npm run build
    npm run test:e2e       # browser preview: axe scan and screenshots (npx playwright install chromium once)

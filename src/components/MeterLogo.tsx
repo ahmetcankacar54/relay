@@ -9,5 +9,11 @@ import type { MeterProvider } from "../../shared/meters";
 export function MeterLogo({ provider }: { provider: MeterProvider }) {
   if (provider === "gemini-cli") return <ProviderLogo provider="gemini" />;
   const Icon = provider === "copilot" ? Github : MousePointer2;
-  return <Icon aria-hidden="true" data-slot="meter-logo" className="size-3.5 shrink-0 text-muted-foreground" />;
+  return (
+    <Icon
+      aria-hidden="true"
+      data-slot="meter-logo"
+      className="size-3.5 shrink-0 text-muted-foreground"
+    />
+  );
 }

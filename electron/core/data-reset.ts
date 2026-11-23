@@ -61,8 +61,12 @@ export function safeResetRoot(root: string, home = os.homedir()): boolean {
  * that reaches outside the folder runs before the marker is written; a failing one stops the reset
  * with nothing deleted, so it can be tried again.
  */
-export async function beginReset(ports: ResetPorts, fsImpl: ResetFs = fs): Promise<void> {
-  if (!safeResetRoot(ports.root)) throw new ResetRefused("This folder cannot be reset.");
+export async function beginReset(
+  ports: ResetPorts,
+  fsImpl: ResetFs = fs,
+): Promise<void> {
+  if (!safeResetRoot(ports.root))
+    throw new ResetRefused("This folder cannot be reset.");
   const busy = ports.busy();
   if (busy) throw new ResetRefused(busy);
   await ports.stopGateway();
@@ -92,7 +96,8 @@ export function finishPendingReset(
 ): string[] | undefined {
   const marker = path.join(root, RESET_MARKER);
   try {
-    if (!safeResetRoot(root, home) || !fsImpl.existsSync(marker)) return undefined;
+    if (!safeResetRoot(root, home) || !fsImpl.existsSync(marker))
+      return undefined;
   } catch {
     return undefined;
   }
@@ -112,9 +117,11 @@ export function finishPendingReset(
   } catch {
     complete = false;
   }
-  for (const name of names) if (name !== RESET_MARKER) remove(path.join(root, name));
+  for (const name of names)
+    if (name !== RESET_MARKER) remove(path.join(root, name));
   for (const target of extra)
-    if (safeResetRoot(target, home) && fsImpl.existsSync(target)) remove(target);
+    if (safeResetRoot(target, home) && fsImpl.existsSync(target))
+      remove(target);
   if (complete) remove(marker);
   return removed;
 }

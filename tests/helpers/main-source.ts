@@ -74,8 +74,11 @@ const join = (files: string[]) => files.map(read).join("\n");
 
 /** Every file under `electron/main/`, as repository paths. */
 function moduleFiles(dir = "electron/main"): string[] {
-  return readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((entry) =>
-    entry.isDirectory() ? moduleFiles(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`],
+  return readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap(
+    (entry) =>
+      entry.isDirectory()
+        ? moduleFiles(`${dir}/${entry.name}`)
+        : [`${dir}/${entry.name}`],
   );
 }
 

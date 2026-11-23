@@ -14,7 +14,10 @@ export interface ZipEntry {
 function dosTime(at: Date) {
   const year = Math.max(at.getFullYear(), 1980);
   return {
-    time: (at.getHours() << 11) | (at.getMinutes() << 5) | Math.floor(at.getSeconds() / 2),
+    time:
+      (at.getHours() << 11) |
+      (at.getMinutes() << 5) |
+      Math.floor(at.getSeconds() / 2),
     date: ((year - 1980) << 9) | ((at.getMonth() + 1) << 5) | at.getDate(),
   };
 }
@@ -23,7 +26,10 @@ function dosTime(at: Date) {
  * A zip archive of `entries`, each deflated, with UTF-8 names. Small and complete enough for a
  * few log files: no zip64, so the archive stays under 4 GB and 65,535 entries.
  */
-export function zipArchive(entries: readonly ZipEntry[], at = new Date()): Buffer {
+export function zipArchive(
+  entries: readonly ZipEntry[],
+  at = new Date(),
+): Buffer {
   const { time, date } = dosTime(at);
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
@@ -85,14 +91,23 @@ const BEARER = /\b(Bearer|Basic)\s+[^\s"',;]+/gi;
  * parameters and Authorization values are cut; then each line goes through `redact`, which
  * removes Anthropic keys, JWTs and long base64 or hex runs.
  */
-export function redactDiagnostics(text: string, names: readonly string[], home?: string) {
+export function redactDiagnostics(
+  text: string,
+  names: readonly string[],
+  home?: string,
+) {
   let out = text.replace(EMAIL, "[email]");
   if (home && home.length > 1) out = out.split(home).join("~");
   // Longest first, so "Alto Work" is masked whole before "Alto".
-  const words = [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
+  const words = [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
   for (const word of words)
     out = out.replace(
-      new RegExp(`(?<![\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "giu"),
+      new RegExp(
+        `(?<![\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`,
+        "giu",
+      ),
       "[account]",
     );
   out = out
@@ -102,7 +117,12 @@ export function redactDiagnostics(text: string, names: readonly string[], home?:
   // `redact` trims each line; the indent stays outside it, so summary.json still reads as JSON.
   return out
     .split(/(\r?\n)/)
-    .map((part) => part.replace(/^([ \t]*)([^\r\n]+)$/, (_, indent: string, rest: string) => indent + redact(rest, Infinity)))
+    .map((part) =>
+      part.replace(
+        /^([ \t]*)([^\r\n]+)$/,
+        (_, indent: string, rest: string) => indent + redact(rest, Infinity),
+      ),
+    )
     .join("");
 }
 
@@ -110,7 +130,10 @@ export function redactDiagnostics(text: string, names: readonly string[], home?:
  * The settings a bug report needs, without names, emails, keys or ids: choices and counts. The
  * planning zone stays, since limits reset by it.
  */
-export function settingsSummary(settings: RelaySettings, accounts: readonly Account[]) {
+export function settingsSummary(
+  settings: RelaySettings,
+  accounts: readonly Account[],
+) {
   const providers: Record<string, number> = {};
   for (const account of accounts) {
     const provider = account.provider ?? "claude";
@@ -152,16 +175,25 @@ export const CRASH_DUMP_NAMES = 5;
  * levels down: `completed/` on macOS and Linux, `reports/` on Windows). Names only; a dump holds
  * memory and never goes into the bundle.
  */
-export async function newestCrashDumps(folder: string, count = CRASH_DUMP_NAMES) {
+export async function newestCrashDumps(
+  folder: string,
+  count = CRASH_DUMP_NAMES,
+) {
   const found: { name: string; at: number }[] = [];
   const walk = async (dir: string, depth: number) => {
-    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    const entries = await fs
+      .readdir(dir, { withFileTypes: true })
+      .catch(() => []);
     for (const entry of entries) {
       const file = path.join(dir, entry.name);
       if (entry.isDirectory() && depth > 0) await walk(file, depth - 1);
       else if (entry.isFile() && entry.name.endsWith(".dmp")) {
         const stat = await fs.stat(file).catch(() => undefined);
-        if (stat) found.push({ name: path.relative(folder, file).split(path.sep).join("/"), at: stat.mtimeMs });
+        if (stat)
+          found.push({
+            name: path.relative(folder, file).split(path.sep).join("/"),
+            at: stat.mtimeMs,
+          });
       }
     }
   };
@@ -188,13 +220,20 @@ export interface DiagnosticsBundleInput {
  * The diagnostics zip for a bug report: a redacted copy of each log that exists and a
  * `summary.json`, all through `redactDiagnostics`.
  */
-export async function buildDiagnosticsBundle(input: DiagnosticsBundleInput): Promise<Buffer> {
-  const clean = (text: string) => Buffer.from(redactDiagnostics(text, input.names, input.home), "utf8");
+export async function buildDiagnosticsBundle(
+  input: DiagnosticsBundleInput,
+): Promise<Buffer> {
+  const clean = (text: string) =>
+    Buffer.from(redactDiagnostics(text, input.names, input.home), "utf8");
   const entries: ZipEntry[] = [];
   for (const file of input.files) {
     const text = await fs.readFile(file, "utf8").catch(() => undefined);
-    if (text !== undefined) entries.push({ name: path.basename(file), data: clean(text) });
+    if (text !== undefined)
+      entries.push({ name: path.basename(file), data: clean(text) });
   }
-  entries.push({ name: "summary.json", data: clean(JSON.stringify(input.summary, null, 2) + "\n") });
+  entries.push({
+    name: "summary.json",
+    data: clean(JSON.stringify(input.summary, null, 2) + "\n"),
+  });
   return zipArchive(entries, input.at);
 }

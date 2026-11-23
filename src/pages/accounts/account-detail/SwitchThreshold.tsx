@@ -19,20 +19,34 @@ export function SwitchThresholdCard({ account }: { account: Account }) {
   const id = `switch-at-${account.id}`;
   return (
     <Card padded>
-      <SettingRow label={t("switchThreshold.switchAwayAt")} htmlFor={id} description={t("switchThreshold.description")}>
+      <SettingRow
+        label={t("switchThreshold.switchAwayAt")}
+        htmlFor={id}
+        description={t("switchThreshold.description")}
+      >
         <OptionSelect<string>
           id={id}
           className="min-w-32"
-          value={account.switchAtPercent === undefined ? "default" : String(account.switchAtPercent)}
+          value={
+            account.switchAtPercent === undefined
+              ? "default"
+              : String(account.switchAtPercent)
+          }
           disabled={!!busy || !!desktop?.busy}
           onChange={(value) =>
             void action("switch-at", () =>
-              api.setAccountSwitchAt(account.id, value === "default" ? undefined : Number(value)),
+              api.setAccountSwitchAt(
+                account.id,
+                value === "default" ? undefined : Number(value),
+              ),
             )
           }
           options={[
             { value: "default", label: t("switchThreshold.default") },
-            ...LINES.map((line) => ({ value: String(line), label: formatPercent(line, language) })),
+            ...LINES.map((line) => ({
+              value: String(line),
+              label: formatPercent(line, language),
+            })),
           ]}
         />
       </SettingRow>

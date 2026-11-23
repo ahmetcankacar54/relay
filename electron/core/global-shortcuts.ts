@@ -6,7 +6,11 @@ import type {
   ShortcutSettings,
   ShortcutState,
 } from "../../shared/types";
-import { SHORTCUT_ACTIONS, normalizeAccelerator, shortcutFor } from "../../shared/shortcuts";
+import {
+  SHORTCUT_ACTIONS,
+  normalizeAccelerator,
+  shortcutFor,
+} from "../../shared/shortcuts";
 import { suggestedAccount } from "../../shared/usage";
 import { desktopCliMismatch } from "../../shared/account-state";
 import { overviewAccounts } from "../../src/data/selectors";
@@ -28,13 +32,19 @@ export type ShortcutStatus = Record<ShortcutAction, ShortcutState>;
  */
 export class GlobalShortcuts {
   private registered = new Map<ShortcutAction, string>();
-  private states: ShortcutStatus = { openPanel: "off", switchToSuggested: "off" };
+  private states: ShortcutStatus = {
+    openPanel: "off",
+    switchToSuggested: "off",
+  };
   private choice: ShortcutSettings | undefined;
   private paused = false;
   constructor(
     private readonly host: ShortcutHost,
     private readonly handlers: Record<ShortcutAction, () => void>,
-    private readonly log?: (event: string, fields: Record<string, unknown>) => void,
+    private readonly log?: (
+      event: string,
+      fields: Record<string, unknown>,
+    ) => void,
   ) {}
 
   /**
@@ -60,7 +70,8 @@ export class GlobalShortcuts {
     for (const action of SHORTCUT_ACTIONS) {
       const accelerator = wanted.get(action);
       if (!accelerator) states[action] = "off";
-      else if (this.registered.get(action) === accelerator) states[action] = "on";
+      else if (this.registered.get(action) === accelerator)
+        states[action] = "on";
       else if (used.has(accelerator)) states[action] = "taken";
       else if (this.take(action, accelerator)) {
         this.registered.set(action, accelerator);
@@ -80,7 +91,8 @@ export class GlobalShortcuts {
   pause() {
     if (this.paused) return;
     this.paused = true;
-    for (const accelerator of this.registered.values()) this.release(accelerator);
+    for (const accelerator of this.registered.values())
+      this.release(accelerator);
     this.registered.clear();
   }
 
@@ -94,7 +106,8 @@ export class GlobalShortcuts {
   /** Lets every key go: Relay is quitting. */
   dispose() {
     this.paused = false;
-    for (const accelerator of this.registered.values()) this.release(accelerator);
+    for (const accelerator of this.registered.values())
+      this.release(accelerator);
     this.registered.clear();
     this.states = { openPanel: "off", switchToSuggested: "off" };
   }
@@ -105,12 +118,18 @@ export class GlobalShortcuts {
         try {
           this.handlers[action]();
         } catch (error) {
-          this.log?.("shortcut-failed", { action, error: error instanceof Error ? error.message : String(error) });
+          this.log?.("shortcut-failed", {
+            action,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       });
     } catch (error) {
       // Electron throws for keys this platform cannot register; it reads as unavailable.
-      this.log?.("shortcut-register-failed", { action, error: error instanceof Error ? error.message : String(error) });
+      this.log?.("shortcut-register-failed", {
+        action,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
   }
@@ -148,10 +167,25 @@ export function shortcutSwitchTarget(input: {
     !!a.desktop?.accountUuid &&
     !!a.desktop.orgId &&
     !desktopCliMismatch(a);
-  const candidates = accounts.filter((a) => a.id === active?.id || switchable(a));
-  const suggestion = suggestedAccount(active, candidates, usage, settings, now, rate);
+  const candidates = accounts.filter(
+    (a) => a.id === active?.id || switchable(a),
+  );
+  const suggestion = suggestedAccount(
+    active,
+    candidates,
+    usage,
+    settings,
+    now,
+    rate,
+  );
   if (suggestion) return suggestion;
-  return overviewAccounts(active, candidates, usage, now, rate, inWindows, settings.autoSwitchStrategy).find(
-    (row) => row.recommended && switchable(row.account),
-  )?.account;
+  return overviewAccounts(
+    active,
+    candidates,
+    usage,
+    now,
+    rate,
+    inWindows,
+    settings.autoSwitchStrategy,
+  ).find((row) => row.recommended && switchable(row.account))?.account;
 }

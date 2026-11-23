@@ -36,10 +36,17 @@ const MAX_BODY = 512 * 1024;
  * One refused answer, as the issue it means: a 401 or 403 is a sign-in the provider no longer
  * takes, unless the reader tells a 403 apart itself (`accept`).
  */
-function refusal(status: number, retryAfter: string | null, label: string, now: number): MeterError {
+function refusal(
+  status: number,
+  retryAfter: string | null,
+  label: string,
+  now: number,
+): MeterError {
   const detail = `${label} ${status}`;
-  if (status === 401 || status === 403) return new MeterError("expired", undefined, detail);
-  if (status === 429) return new MeterError("rate-limited", retryTime(retryAfter, now), detail);
+  if (status === 401 || status === 403)
+    return new MeterError("expired", undefined, detail);
+  if (status === 429)
+    return new MeterError("rate-limited", retryTime(retryAfter, now), detail);
   return new MeterError("unavailable", undefined, detail);
 }
 
@@ -57,7 +64,11 @@ export interface JsonAnswer {
  */
 export async function requestJson(
   url: string,
-  init: { method?: "GET" | "POST"; headers: Record<string, string>; body?: string },
+  init: {
+    method?: "GET" | "POST";
+    headers: Record<string, string>;
+    body?: string;
+  },
   label: string,
   options: MeterReaderOptions & { accept?: (status: number) => boolean } = {},
 ): Promise<JsonAnswer> {
@@ -76,9 +87,16 @@ export async function requestJson(
   }
   const text = await response.text().catch(() => "");
   if (response.status !== 200 && !options.accept?.(response.status))
-    throw refusal(response.status, response.headers.get("retry-after"), label, now);
-  if (text.length > MAX_BODY) throw new MeterError("unsupported", undefined, `${label} too large`);
-  if (response.status !== 200) return { status: response.status, body: undefined, text };
+    throw refusal(
+      response.status,
+      response.headers.get("retry-after"),
+      label,
+      now,
+    );
+  if (text.length > MAX_BODY)
+    throw new MeterError("unsupported", undefined, `${label} too large`);
+  if (response.status !== 200)
+    return { status: response.status, body: undefined, text };
   try {
     return { status: 200, body: JSON.parse(text), text: "" };
   } catch {
@@ -91,12 +109,15 @@ export const num = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
 /** A share in 0–100. */
-export const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
+export const clampPercent = (value: number) =>
+  Math.min(100, Math.max(0, value));
 
 /** A date as ISO text, from ISO text or a bare `YYYY-MM-DD` (read as UTC midnight). */
 export function isoDate(value: unknown): string | undefined {
   if (typeof value !== "string" || !value) return;
-  const ms = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value);
+  const ms = Date.parse(
+    /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value,
+  );
   return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined;
 }
 
@@ -104,5 +125,7 @@ export function isoDate(value: unknown): string | undefined {
 export function plainLabel(value: unknown): string | undefined {
   if (typeof value !== "string") return;
   const text = value.trim();
-  return text && text.length <= 40 && /^[\p{L}\p{N} ._@+-]+$/u.test(text) ? text : undefined;
+  return text && text.length <= 40 && /^[\p{L}\p{N} ._@+-]+$/u.test(text)
+    ? text
+    : undefined;
 }

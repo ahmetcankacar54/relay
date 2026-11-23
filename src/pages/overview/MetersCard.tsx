@@ -6,7 +6,13 @@ import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
 import { FORMAT_LOCALE, type Locale } from "../../../shared/i18n/locales";
-import { METER_NAMES, type MeterIssue, type MeterReading, type MeterWindow, type MeterWindowName } from "../../../shared/meters";
+import {
+  METER_NAMES,
+  type MeterIssue,
+  type MeterReading,
+  type MeterWindow,
+  type MeterWindowName,
+} from "../../../shared/meters";
 
 const WINDOW_NAMES = {
   premium: "meters.windowPremium",
@@ -34,31 +40,56 @@ const ISSUES = {
 } as const satisfies Record<MeterIssue, string>;
 
 /** Why a meter has no current reading, in one short line. Gemini CLI's refusal says whom it leaves out. */
-export function meterIssueText(reading: MeterReading, t: T): string | undefined {
+export function meterIssueText(
+  reading: MeterReading,
+  t: T,
+): string | undefined {
   const issue = reading.error?.issue;
   if (!issue) return;
-  if (issue === "not-available" && reading.provider === "gemini-cli") return t("meters.issueNotAvailableGemini");
+  if (issue === "not-available" && reading.provider === "gemini-cli")
+    return t("meters.issueNotAvailableGemini");
   return t(ISSUES[issue], { tool: METER_NAMES[reading.provider] });
 }
 
 /** "186 of 300", or "$18.20 of $20.00" for a budget. */
-function amount(window: MeterWindow, t: T, language: Locale): string | undefined {
+function amount(
+  window: MeterWindow,
+  t: T,
+  language: Locale,
+): string | undefined {
   if (window.used === undefined || window.limit === undefined) return;
   const format = new Intl.NumberFormat(
     FORMAT_LOCALE[language],
-    window.unit === "$" ? { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" } : { maximumFractionDigits: 0 },
+    window.unit === "$"
+      ? { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" }
+      : { maximumFractionDigits: 0 },
   );
-  return t("meters.usedOf", { used: format.format(window.used), limit: format.format(window.limit) });
+  return t("meters.usedOf", {
+    used: format.format(window.used),
+    limit: format.format(window.limit),
+  });
 }
 
 /**
  * Where the meter's figures came from and when, worded as a limit line's tooltip is
  * (`limitLine.source*`): "Source: Unofficial endpoint · 4 min ago".
  */
-export function meterOriginText(reading: MeterReading, now: number, t: T, language: Locale): string {
-  const source = t(reading.source === "official" ? "limitLine.sourceOfficial" : "meters.sourceUnofficial");
+export function meterOriginText(
+  reading: MeterReading,
+  now: number,
+  t: T,
+  language: Locale,
+): string {
+  const source = t(
+    reading.source === "official"
+      ? "limitLine.sourceOfficial"
+      : "meters.sourceUnofficial",
+  );
   return reading.readAt
-    ? t("limitLine.sourceAge", { source, age: formatRelative(reading.readAt, now, language) })
+    ? t("limitLine.sourceAge", {
+        source,
+        age: formatRelative(reading.readAt, now, language),
+      })
     : t("limitLine.source", { source });
 }
 
@@ -68,14 +99,26 @@ function MeterRow({ reading, now }: { reading: MeterReading; now: number }) {
   const issue = meterIssueText(reading, t);
   const windows = reading.windows.filter((w) => w.usedPercent !== undefined);
   return (
-    <div data-slot="meter-row" data-meter={reading.provider} className="grid gap-2 px-4 py-3">
+    <div
+      data-slot="meter-row"
+      data-meter={reading.provider}
+      className="grid gap-2 px-4 py-3"
+    >
       <div className="flex min-w-0 items-center gap-1.5 text-sm" title={origin}>
         <MeterLogo provider={reading.provider} />
         <span className="font-medium">{METER_NAMES[reading.provider]}</span>
-        {reading.label && <span className="truncate text-muted-foreground">· {reading.label}</span>}
+        {reading.label && (
+          <span className="truncate text-muted-foreground">
+            · {reading.label}
+          </span>
+        )}
       </div>
       {issue && (
-        <p data-slot="meter-issue" data-issue={reading.error?.issue} className="text-xs text-warn-foreground">
+        <p
+          data-slot="meter-issue"
+          data-issue={reading.error?.issue}
+          className="text-xs text-warn-foreground"
+        >
           {issue}
         </p>
       )}
@@ -85,7 +128,13 @@ function MeterRow({ reading, now }: { reading: MeterReading; now: number }) {
             const label = t(WINDOW_NAMES[w.name]);
             const used = amount(w, t, language);
             const reset = countdown(w.resetsAt, now, t);
-            const figure = [label, used, reset ? `${formatPercent(w.usedPercent, language)} · ${reset}` : formatPercent(w.usedPercent, language)]
+            const figure = [
+              label,
+              used,
+              reset
+                ? `${formatPercent(w.usedPercent, language)} · ${reset}`
+                : formatPercent(w.usedPercent, language),
+            ]
               .filter(Boolean)
               .join(" ");
             return (
@@ -104,7 +153,11 @@ function MeterRow({ reading, now }: { reading: MeterReading; now: number }) {
           })}
         </div>
       ) : (
-        !issue && <p className="text-xs text-muted-foreground">{t(reading.readAt ? "meters.noLimits" : "meters.notReadYet")}</p>
+        !issue && (
+          <p className="text-xs text-muted-foreground">
+            {t(reading.readAt ? "meters.noLimits" : "meters.notReadYet")}
+          </p>
+        )
       )}
     </div>
   );

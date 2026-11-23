@@ -15,7 +15,10 @@ import {
 } from "../electron/core/login-item";
 
 test("the Linux autostart entry lives under XDG_CONFIG_HOME, else ~/.config", () => {
-  assert.equal(autostartFile({}, "/home/alto"), path.join("/home/alto", ".config", "autostart", "relay.desktop"));
+  assert.equal(
+    autostartFile({}, "/home/alto"),
+    path.join("/home/alto", ".config", "autostart", "relay.desktop"),
+  );
   assert.equal(
     autostartFile({ XDG_CONFIG_HOME: "/data/config" }, "/home/alto"),
     path.join("/data/config", "autostart", "relay.desktop"),
@@ -41,7 +44,10 @@ test("the autostart entry starts Relay hidden, with its path quoted as the Deskt
       "",
     ].join("\n"),
   );
-  assert.equal(execArgument("/home/alto/Apps/Relay 1.0.AppImage"), '"/home/alto/Apps/Relay 1.0.AppImage"');
+  assert.equal(
+    execArgument("/home/alto/Apps/Relay 1.0.AppImage"),
+    '"/home/alto/Apps/Relay 1.0.AppImage"',
+  );
   // `$` and `"` are escaped inside quotes, and every backslash is doubled again by the string escape.
   assert.equal(execArgument('/tmp/a$b"c'), '"/tmp/a\\\\$b\\\\"c"');
   // A percent sign would read as a field code.
@@ -49,11 +55,20 @@ test("the autostart entry starts Relay hidden, with its path quoted as the Deskt
 });
 
 test("a login launch is the flag on Windows and Linux and the system's word on macOS", () => {
-  assert.equal(launchedAtLogin(["relay", LOGIN_LAUNCH_FLAG], "linux", false), true);
-  assert.equal(launchedAtLogin(["relay.exe", LOGIN_LAUNCH_FLAG], "win32", false), true);
+  assert.equal(
+    launchedAtLogin(["relay", LOGIN_LAUNCH_FLAG], "linux", false),
+    true,
+  );
+  assert.equal(
+    launchedAtLogin(["relay.exe", LOGIN_LAUNCH_FLAG], "win32", false),
+    true,
+  );
   assert.equal(launchedAtLogin(["relay"], "linux", true), false);
   assert.equal(launchedAtLogin(["Relay"], "darwin", true), true);
-  assert.equal(launchedAtLogin(["Relay", LOGIN_LAUNCH_FLAG], "darwin", false), false);
+  assert.equal(
+    launchedAtLogin(["Relay", LOGIN_LAUNCH_FLAG], "darwin", false),
+    false,
+  );
 });
 
 test("on Linux, turning it on writes the AppImage's entry once and turning it off removes it", async (t) => {
@@ -70,13 +85,19 @@ test("on Linux, turning it on writes the AppImage's entry once and turning it of
   const file = autostartFile(host.env, home);
   assert.equal(await launchAtLoginEnabled(host), false);
   await setLaunchAtLogin(true, host);
-  assert.equal(await fs.readFile(file, "utf8"), autostartEntry("/home/alto/Relay.AppImage"));
+  assert.equal(
+    await fs.readFile(file, "utf8"),
+    autostartEntry("/home/alto/Relay.AppImage"),
+  );
   assert.equal(await launchAtLoginEnabled(host), true);
   // An entry for another path (Relay moved) is rewritten.
   await fs.writeFile(file, autostartEntry("/old/Relay.AppImage"));
   assert.equal(await launchAtLoginEnabled(host), false);
   await setLaunchAtLogin(true, host);
-  assert.match(await fs.readFile(file, "utf8"), /^Exec=\/home\/alto\/Relay\.AppImage --hidden$/m);
+  assert.match(
+    await fs.readFile(file, "utf8"),
+    /^Exec=\/home\/alto\/Relay\.AppImage --hidden$/m,
+  );
   await setLaunchAtLogin(false, host);
   await assert.rejects(fs.stat(file), { code: "ENOENT" });
   // Off when already off does nothing.
@@ -104,7 +125,8 @@ test("on macOS and Windows the login item is set only when it differs, with the 
     await setLaunchAtLogin(true, host);
     await setLaunchAtLogin(true, host);
     await setLaunchAtLogin(false, host);
-    const args = platform === "win32" ? { args: [LOGIN_LAUNCH_FLAG] } : undefined;
+    const args =
+      platform === "win32" ? { args: [LOGIN_LAUNCH_FLAG] } : undefined;
     assert.deepEqual(
       calls,
       [

@@ -2,7 +2,17 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { MeterWindow, MeterWindowName } from "../../../shared/meters";
-import { MeterError, clampPercent, isoDate, num, plainLabel, requestJson, type Json, type MeterRead, type MeterReaderOptions } from "./common";
+import {
+  MeterError,
+  clampPercent,
+  isoDate,
+  num,
+  plainLabel,
+  requestJson,
+  type Json,
+  type MeterRead,
+  type MeterReaderOptions,
+} from "./common";
 
 /**
  * Gemini CLI's daily quota, from Code Assist's `loadCodeAssist` (the tier and project) and
@@ -23,7 +33,9 @@ const EXPIRY_MARGIN_MS = 60_000;
 const readJson = async (file: string): Promise<Json | undefined> => {
   try {
     const value = JSON.parse(await fs.readFile(file, "utf8"));
-    return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : undefined;
   } catch {
     return undefined;
   }
@@ -34,36 +46,80 @@ const readJson = async (file: string): Promise<Json | undefined> => {
  * (`selectedAuthType` in older settings) is `oauth-personal` or unset. An API key or Vertex AI has
  * no quota to read.
  */
-export async function findGeminiToken(options: MeterReaderOptions = {}): Promise<string> {
+export async function findGeminiToken(
+  options: MeterReaderOptions = {},
+): Promise<string> {
   const dir = path.join(options.home ?? os.homedir(), ".gemini");
   const settings = await readJson(path.join(dir, "settings.json"));
-  const selected = settings?.security?.auth?.selectedType ?? settings?.selectedAuthType;
+  const selected =
+    settings?.security?.auth?.selectedType ?? settings?.selectedAuthType;
   if (typeof selected === "string" && selected !== "oauth-personal")
-    throw new MeterError("unsupported-auth", undefined, "gemini-cli: not a Google sign-in");
+    throw new MeterError(
+      "unsupported-auth",
+      undefined,
+      "gemini-cli: not a Google sign-in",
+    );
   const creds = await readJson(path.join(dir, "oauth_creds.json"));
   const token = creds?.access_token;
-  if (typeof token !== "string" || !token) throw new MeterError("not-signed-in", undefined, "gemini-cli: no saved sign-in");
+  if (typeof token !== "string" || !token)
+    throw new MeterError(
+      "not-signed-in",
+      undefined,
+      "gemini-cli: no saved sign-in",
+    );
   const expiry = num(creds?.expiry_date);
-  if (expiry !== undefined && expiry - (options.now ?? Date.now)() <= EXPIRY_MARGIN_MS)
+  if (
+    expiry !== undefined &&
+    expiry - (options.now ?? Date.now)() <= EXPIRY_MARGIN_MS
+  )
     throw new MeterError("expired", undefined, "gemini-cli: token ended");
   return token;
 }
 
 /** The plan and project in a `loadCodeAssist` answer; refuses an account with no eligible tier. */
-export function parseLoadCodeAssist(value: unknown): { label?: string; project?: string } {
+export function parseLoadCodeAssist(value: unknown): {
+  label?: string;
+  project?: string;
+} {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new MeterError("unsupported", undefined, "gemini-cli: tier not an object");
+    throw new MeterError(
+      "unsupported",
+      undefined,
+      "gemini-cli: tier not an object",
+    );
   const root = value as Json;
-  const current = root.currentTier && typeof root.currentTier === "object" ? (root.currentTier as Json) : undefined;
+  const current =
+    root.currentTier && typeof root.currentTier === "object"
+      ? (root.currentTier as Json)
+      : undefined;
   if (!current) {
-    const ineligible = Array.isArray(root.ineligibleTiers) && root.ineligibleTiers.length > 0;
-    throw new MeterError(ineligible ? "not-available" : "unsupported", undefined, "gemini-cli: no current tier");
+    const ineligible =
+      Array.isArray(root.ineligibleTiers) && root.ineligibleTiers.length > 0;
+    throw new MeterError(
+      ineligible ? "not-available" : "unsupported",
+      undefined,
+      "gemini-cli: no current tier",
+    );
   }
-  const paid = root.paidTier && typeof root.paidTier === "object" ? (root.paidTier as Json) : undefined;
-  const label = plainLabel(paid?.name) ?? plainLabel(current.name) ?? plainLabel(current.id);
+  const paid =
+    root.paidTier && typeof root.paidTier === "object"
+      ? (root.paidTier as Json)
+      : undefined;
+  const label =
+    plainLabel(paid?.name) ??
+    plainLabel(current.name) ??
+    plainLabel(current.id);
   const raw = root.cloudaicompanionProject;
-  const project = typeof raw === "string" ? raw : raw && typeof raw === "object" && typeof raw.id === "string" ? raw.id : undefined;
-  return { ...(label ? { label } : {}), ...(project && /^[\w.:-]{1,128}$/.test(project) ? { project } : {}) };
+  const project =
+    typeof raw === "string"
+      ? raw
+      : raw && typeof raw === "object" && typeof raw.id === "string"
+        ? raw.id
+        : undefined;
+  return {
+    ...(label ? { label } : {}),
+    ...(project && /^[\w.:-]{1,128}$/.test(project) ? { project } : {}),
+  };
 }
 
 /** A model's family by name: flash-lite before flash, flash before pro. */
@@ -83,13 +139,23 @@ const FAMILY_ORDER: MeterWindowName[] = ["pro", "flash", "flash-lite"];
  */
 export function parseGeminiQuota(value: unknown): MeterWindow[] {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new MeterError("unsupported", undefined, "gemini-cli: quota not an object");
-  const buckets = Array.isArray((value as Json).buckets) ? ((value as Json).buckets as unknown[]) : [];
-  const least = new Map<MeterWindowName, { fraction: number; resetsAt?: string }>();
+    throw new MeterError(
+      "unsupported",
+      undefined,
+      "gemini-cli: quota not an object",
+    );
+  const buckets = Array.isArray((value as Json).buckets)
+    ? ((value as Json).buckets as unknown[])
+    : [];
+  const least = new Map<
+    MeterWindowName,
+    { fraction: number; resetsAt?: string }
+  >();
   for (const raw of buckets) {
     if (!raw || typeof raw !== "object") continue;
     const bucket = raw as Json;
-    const name = typeof bucket.modelId === "string" ? family(bucket.modelId) : undefined;
+    const name =
+      typeof bucket.modelId === "string" ? family(bucket.modelId) : undefined;
     const fraction = num(bucket.remainingFraction);
     if (!name || fraction === undefined) continue;
     const known = least.get(name);
@@ -101,34 +167,75 @@ export function parseGeminiQuota(value: unknown): MeterWindow[] {
   return FAMILY_ORDER.flatMap((name) => {
     const found = least.get(name);
     if (!found) return [];
-    return [{ name, kind: "daily" as const, unit: "requests" as const, usedPercent: clampPercent(100 - found.fraction * 100), ...(found.resetsAt ? { resetsAt: found.resetsAt } : {}) }];
+    return [
+      {
+        name,
+        kind: "daily" as const,
+        unit: "requests" as const,
+        usedPercent: clampPercent(100 - found.fraction * 100),
+        ...(found.resetsAt ? { resetsAt: found.resetsAt } : {}),
+      },
+    ];
   });
 }
 
 /** A refusal that says the client or the account is not supported (a personal account since 2026-06-18). */
-const notSupported = (text: string) => /UNSUPPORTED_CLIENT|INELIGIBLE|not (?:supported|available|eligible)/i.test(text);
+const notSupported = (text: string) =>
+  /UNSUPPORTED_CLIENT|INELIGIBLE|not (?:supported|available|eligible)/i.test(
+    text,
+  );
 
 /** Reads the day's quota of the Gemini CLI sign-in found on this computer. */
-export async function readGeminiCli(options: MeterReaderOptions = {}): Promise<MeterRead> {
+export async function readGeminiCli(
+  options: MeterReaderOptions = {},
+): Promise<MeterRead> {
   const token = await findGeminiToken(options);
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" };
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
   const accept = (status: number) => status === 400 || status === 403;
   const tier = await requestJson(
     `${CODE_ASSIST}:loadCodeAssist`,
-    { method: "POST", headers, body: JSON.stringify({ metadata: { ideType: "GEMINI_CLI", pluginType: "GEMINI" } }) },
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        metadata: { ideType: "GEMINI_CLI", pluginType: "GEMINI" },
+      }),
+    },
     "gemini-cli tier",
     { ...options, accept },
   );
   if (tier.status !== 200)
-    throw new MeterError(notSupported(tier.text) ? "not-available" : tier.status === 403 ? "expired" : "unsupported", undefined, `gemini-cli tier ${tier.status}`);
+    throw new MeterError(
+      notSupported(tier.text)
+        ? "not-available"
+        : tier.status === 403
+          ? "expired"
+          : "unsupported",
+      undefined,
+      `gemini-cli tier ${tier.status}`,
+    );
   const { label, project } = parseLoadCodeAssist(tier.body);
   const quota = await requestJson(
     `${CODE_ASSIST}:retrieveUserQuota`,
-    { method: "POST", headers, body: JSON.stringify(project ? { project } : {}) },
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(project ? { project } : {}),
+    },
     "gemini-cli quota",
     { ...options, accept },
   );
   if (quota.status !== 200)
-    throw new MeterError(notSupported(quota.text) || quota.status === 403 ? "not-available" : "unsupported", undefined, `gemini-cli quota ${quota.status}`);
+    throw new MeterError(
+      notSupported(quota.text) || quota.status === 403
+        ? "not-available"
+        : "unsupported",
+      undefined,
+      `gemini-cli quota ${quota.status}`,
+    );
   return { ...(label ? { label } : {}), windows: parseGeminiQuota(quota.body) };
 }

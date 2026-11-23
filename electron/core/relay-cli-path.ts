@@ -20,13 +20,18 @@ export function isRelayCli(file: string): boolean {
     if (!path.isAbsolute(file) || !fs.statSync(file).isFile()) return false;
     if (process.platform !== "win32") fs.accessSync(file, fs.constants.X_OK);
     const real = fs.realpathSync(file);
-    if (real.split(path.sep).join("/").includes(`${RELAY_CLI_PACKAGE}/dist/`)) return true;
+    if (real.split(path.sep).join("/").includes(`${RELAY_CLI_PACKAGE}/dist/`))
+      return true;
     // npm's Windows shims are scripts that name the package's launcher.
     const fd = fs.openSync(file, "r");
     try {
       const head = Buffer.alloc(4096);
       const read = fs.readSync(fd, head, 0, head.length, 0);
-      return head.subarray(0, read).toString("utf8").replace(/\\/g, "/").includes(`${RELAY_CLI_PACKAGE}/dist/relay.js`);
+      return head
+        .subarray(0, read)
+        .toString("utf8")
+        .replace(/\\/g, "/")
+        .includes(`${RELAY_CLI_PACKAGE}/dist/relay.js`);
     } finally {
       fs.closeSync(fd);
     }
@@ -67,7 +72,9 @@ export function relayCliCandidates(
           p.join(home, ".local", "bin"),
           p.join(home, ".npm-global", "bin"),
           p.join(home, ".volta", "bin"),
-          platform === "darwin" ? p.join(home, "Library", "pnpm") : p.join(home, ".local", "share", "pnpm"),
+          platform === "darwin"
+            ? p.join(home, "Library", "pnpm")
+            : p.join(home, ".local", "share", "pnpm"),
           ...systemDirs,
           ...nvmBins(home),
         ]),
@@ -82,14 +89,21 @@ export function loginShellRelay(
   timeoutMs = LOGIN_SHELL_LOOKUP_MS,
 ): Promise<string | undefined> {
   const shell = env.SHELL;
-  if (process.platform === "win32" || !shell || !path.isAbsolute(shell)) return Promise.resolve(undefined);
+  if (process.platform === "win32" || !shell || !path.isAbsolute(shell))
+    return Promise.resolve(undefined);
   // The interactive login shell reads the same files a terminal does (nvm lives in .zshrc); a
   // marker keeps whatever those files print apart from the answer.
   return new Promise((resolve) => {
     execFile(
       shell,
       ["-ilc", "printf '\\n__RELAY__%s\\n' \"$(command -v relay)\""],
-      { timeout: timeoutMs, killSignal: "SIGKILL", maxBuffer: 256 * 1024, windowsHide: true, env: { ...env, TERM: "dumb" } },
+      {
+        timeout: timeoutMs,
+        killSignal: "SIGKILL",
+        maxBuffer: 256 * 1024,
+        windowsHide: true,
+        env: { ...env, TERM: "dumb" },
+      },
       (_error, stdout) => {
         const match = /__RELAY__(.*)/.exec(String(stdout ?? ""));
         const file = match?.[1]?.trim();
@@ -114,7 +128,12 @@ export async function findRelayCli(
   } = {},
 ): Promise<string | undefined> {
   const env = options.env ?? process.env;
-  const found = relayCliCandidates(env, options.home, options.platform, options.systemDirs).find(isRelayCli);
+  const found = relayCliCandidates(
+    env,
+    options.home,
+    options.platform,
+    options.systemDirs,
+  ).find(isRelayCli);
   if (found) return found;
   const shell = await (options.loginShell ?? (() => loginShellRelay(env)))();
   return shell && isRelayCli(shell) ? shell : undefined;

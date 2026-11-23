@@ -32,7 +32,8 @@ function unzip(zip: Buffer) {
     const local = zip.readUInt32LE(at + 42);
     const name = zip.toString("utf8", at + 46, at + 46 + nameLength);
     assert.equal(zip.readUInt32LE(local), 0x04034b50);
-    const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+    const start =
+      local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
     const packed = zip.subarray(start, start + packedSize);
     const data = method === 8 ? zlib.inflateRawSync(packed) : packed;
     assert.equal(data.length, size, name);
@@ -59,18 +60,32 @@ test("the zip writer round-trips names, bytes and an empty file", () => {
     { name: "empty.log", data: Buffer.alloc(0) },
   ];
   const files = unzip(zipArchive(entries, new Date(2026, 10, 23, 9, 30)));
-  assert.deepEqual([...files.keys()], entries.map((e) => e.name));
-  for (const entry of entries) assert.equal(files.get(entry.name), entry.data.toString("utf8"));
+  assert.deepEqual(
+    [...files.keys()],
+    entries.map((e) => e.name),
+  );
+  for (const entry of entries)
+    assert.equal(files.get(entry.name), entry.data.toString("utf8"));
 });
 
-test("a system unzip reads the archive", { skip: !hasUnzip && "no unzip on this machine" }, async (t) => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-zip-"));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const file = path.join(dir, "bundle.zip");
-  await fs.writeFile(file, zipArchive([{ name: "summary.json", data: Buffer.from("{}\n") }]));
-  execFileSync("unzip", ["-t", file], { stdio: "ignore" });
-  assert.equal(execFileSync("unzip", ["-p", file, "summary.json"], { encoding: "utf8" }), "{}\n");
-});
+test(
+  "a system unzip reads the archive",
+  { skip: !hasUnzip && "no unzip on this machine" },
+  async (t) => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-zip-"));
+    t.after(() => fs.rm(dir, { recursive: true, force: true }));
+    const file = path.join(dir, "bundle.zip");
+    await fs.writeFile(
+      file,
+      zipArchive([{ name: "summary.json", data: Buffer.from("{}\n") }]),
+    );
+    execFileSync("unzip", ["-t", file], { stdio: "ignore" });
+    assert.equal(
+      execFileSync("unzip", ["-p", file, "summary.json"], { encoding: "utf8" }),
+      "{}\n",
+    );
+  },
+);
 
 const EMAIL = "vertex.alto@example.com";
 const NAME = "Alto Vertex";
@@ -90,7 +105,18 @@ test("redaction masks emails, account names, keys, token fields and the home fol
     `Altogether fine; ${ORG} org.`,
   ].join("\n");
   const out = redactDiagnostics(text, [NAME, ORG, ""], "/Users/alto");
-  for (const secret of [EMAIL, "Alto Vertex", "alto vertex", SK, REFRESH, "at-plain", BEARER, "abc123", ORG, "/Users/alto"])
+  for (const secret of [
+    EMAIL,
+    "Alto Vertex",
+    "alto vertex",
+    SK,
+    REFRESH,
+    "at-plain",
+    BEARER,
+    "abc123",
+    ORG,
+    "/Users/alto",
+  ])
     assert.ok(!out.includes(secret), secret);
   assert.match(out, /\[account\] \(\[email\]\) failed with \[redacted\]/);
   assert.match(out, /~\/Library\/Application Support\/Relay/);
@@ -106,25 +132,64 @@ test("the bundle holds redacted logs and a summary, skips missing files and carr
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const errors = path.join(dir, "main-errors.log");
   const issues = path.join(dir, "usage-issues.json");
-  await fs.writeFile(errors, `2026-11-23T09:00:00.000Z unhandledRejection ${NAME} ${EMAIL} ${SK}\n`);
+  await fs.writeFile(
+    errors,
+    `2026-11-23T09:00:00.000Z unhandledRejection ${NAME} ${EMAIL} ${SK}\n`,
+  );
   await fs.writeFile(
     issues,
-    JSON.stringify({ version: 1, entries: [{ accountId: "a", detail: `${EMAIL} refreshToken`, refreshToken: REFRESH }] }),
+    JSON.stringify({
+      version: 1,
+      entries: [
+        {
+          accountId: "a",
+          detail: `${EMAIL} refreshToken`,
+          refreshToken: REFRESH,
+        },
+      ],
+    }),
   );
   const accounts = [
-    { id: "a", name: NAME, kind: "personal", group: "personal", color: "#000", createdAt: "", desktop: { accountUuid: "u", orgId: "o", savedAt: "", email: EMAIL } },
-    { id: "b", name: "Alto", kind: "personal", group: "personal", color: "#000", createdAt: "", provider: "codex" },
+    {
+      id: "a",
+      name: NAME,
+      kind: "personal",
+      group: "personal",
+      color: "#000",
+      createdAt: "",
+      desktop: { accountUuid: "u", orgId: "o", savedAt: "", email: EMAIL },
+    },
+    {
+      id: "b",
+      name: "Alto",
+      kind: "personal",
+      group: "personal",
+      color: "#000",
+      createdAt: "",
+      provider: "codex",
+    },
   ] as Account[];
   const zip = await buildDiagnosticsBundle({
     files: [errors, issues, path.join(dir, "fleet-events.json")],
     names: accounts.map((a) => a.name),
     home: dir,
-    summary: { relay: "0.28.0", settings: settingsSummary({ ...DEFAULT_SETTINGS, launchAtLogin: true }, accounts), crashDumps: ["completed/x.dmp"] },
+    summary: {
+      relay: "0.28.0",
+      settings: settingsSummary(
+        { ...DEFAULT_SETTINGS, launchAtLogin: true },
+        accounts,
+      ),
+      crashDumps: ["completed/x.dmp"],
+    },
   });
   const files = unzip(zip);
-  assert.deepEqual([...files.keys()], ["main-errors.log", "usage-issues.json", "summary.json"]);
+  assert.deepEqual(
+    [...files.keys()],
+    ["main-errors.log", "usage-issues.json", "summary.json"],
+  );
   const all = [...files.values()].join("\n");
-  for (const secret of [EMAIL, NAME, "Alto", SK, REFRESH]) assert.ok(!all.includes(secret), secret);
+  for (const secret of [EMAIL, NAME, "Alto", SK, REFRESH])
+    assert.ok(!all.includes(secret), secret);
   const summary = JSON.parse(files.get("summary.json")!);
   assert.equal(summary.relay, "0.28.0");
   assert.deepEqual(summary.settings.providers, { claude: 1, codex: 1 });
@@ -133,7 +198,10 @@ test("the bundle holds redacted logs and a summary, skips missing files and carr
   assert.equal(summary.settings.launchAtLogin, true);
   assert.deepEqual(summary.crashDumps, ["completed/x.dmp"]);
   // The issues log is still JSON after redaction.
-  assert.equal(JSON.parse(files.get("usage-issues.json")!).entries[0].refreshToken, "[redacted]");
+  assert.equal(
+    JSON.parse(files.get("usage-issues.json")!).entries[0].refreshToken,
+    "[redacted]",
+  );
 });
 
 test("the newest crash dump names are listed, newest first, without their contents", async (t) => {
@@ -147,6 +215,9 @@ test("the newest crash dump names are listed, newest first, without their conten
     await fs.utimes(file, 1_000 + i, 1_000 + i);
   }
   await fs.writeFile(path.join(dir, "settings.dat"), "");
-  assert.deepEqual(await newestCrashDumps(dir, 2), ["completed/three.dmp", "completed/two.dmp"]);
+  assert.deepEqual(await newestCrashDumps(dir, 2), [
+    "completed/three.dmp",
+    "completed/two.dmp",
+  ]);
   assert.deepEqual(await newestCrashDumps(path.join(dir, "missing")), []);
 });

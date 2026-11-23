@@ -1,4 +1,9 @@
-import { METER_INTERVAL_MS, METER_PROVIDERS, type MeterProvider, type MeterReading } from "../../../shared/meters";
+import {
+  METER_INTERVAL_MS,
+  METER_PROVIDERS,
+  type MeterProvider,
+  type MeterReading,
+} from "../../../shared/meters";
 import { MeterError, type MeterRead } from "./common";
 import { readCopilot } from "./copilot";
 import { readCursor } from "./cursor";
@@ -56,7 +61,12 @@ export class MeterService {
   snapshot(): MeterReading[] {
     const enabled = this.options.enabled();
     return METER_PROVIDERS.filter((provider) => enabled.includes(provider)).map(
-      (provider) => this.readings.get(provider) ?? { provider, windows: [], source: SOURCE[provider] },
+      (provider) =>
+        this.readings.get(provider) ?? {
+          provider,
+          windows: [],
+          source: SOURCE[provider],
+        },
     );
   }
 
@@ -70,7 +80,11 @@ export class MeterService {
 
   private async pass() {
     const enabled = this.options.enabled();
-    const due = METER_PROVIDERS.filter((provider) => enabled.includes(provider) && (this.due.get(provider) ?? 0) <= this.now());
+    const due = METER_PROVIDERS.filter(
+      (provider) =>
+        enabled.includes(provider) &&
+        (this.due.get(provider) ?? 0) <= this.now(),
+    );
     if (!due.length) return;
     await Promise.all(due.map((provider) => this.read(provider)));
     this.options.onChange?.();
@@ -92,14 +106,26 @@ export class MeterService {
         readAt: new Date(this.now()).toISOString(),
       });
     } catch (error) {
-      const failure = error instanceof MeterError ? error : new MeterError("unavailable", undefined, "read failed");
-      if (failure.retryAt !== undefined) this.due.set(provider, Math.max(failure.retryAt, this.now() + interval));
-      if (before?.error?.issue !== failure.issue) this.options.log?.(`${provider}: ${failure.issue}${failure.detail ? ` (${failure.detail})` : ""}`);
+      const failure =
+        error instanceof MeterError
+          ? error
+          : new MeterError("unavailable", undefined, "read failed");
+      if (failure.retryAt !== undefined)
+        this.due.set(
+          provider,
+          Math.max(failure.retryAt, this.now() + interval),
+        );
+      if (before?.error?.issue !== failure.issue)
+        this.options.log?.(
+          `${provider}: ${failure.issue}${failure.detail ? ` (${failure.detail})` : ""}`,
+        );
       this.readings.set(provider, {
         ...(before ?? { provider, windows: [], source: SOURCE[provider] }),
         error: {
           issue: failure.issue,
-          ...(failure.retryAt !== undefined ? { retryAt: new Date(failure.retryAt).toISOString() } : {}),
+          ...(failure.retryAt !== undefined
+            ? { retryAt: new Date(failure.retryAt).toISOString() }
+            : {}),
         },
       });
     }

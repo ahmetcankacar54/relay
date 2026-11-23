@@ -1,22 +1,50 @@
 import { Switch } from "@/components/ui/switch";
-import { Note, OptionSelect, SettingGroup, SettingRow } from "@/components/SettingRow";
+import {
+  Note,
+  OptionSelect,
+  SettingGroup,
+  SettingRow,
+} from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { notificationSettings } from "../../../shared/notifications";
-import type { LimitResetNotice, NotificationSettings } from "../../../shared/types";
+import type {
+  LimitResetNotice,
+  NotificationSettings,
+} from "../../../shared/types";
 import { RemoteNotifyRows } from "./RemoteNotifySettings";
 
 /** The two limit windows, each with its warning and its "ready again". */
 const LIMITS = [
-  ["limitFiveHour", "notification-five-hour", "notificationSettings.fiveHourLimit"],
+  [
+    "limitFiveHour",
+    "notification-five-hour",
+    "notificationSettings.fiveHourLimit",
+  ],
   ["limitWeekly", "notification-weekly", "notificationSettings.weeklyLimit"],
 ] as const;
 /** The notification types with a plain switch, in the group's order after the limits. */
 const TOGGLES = [
-  ["switches", "notificationSettings.switches", "notificationSettings.switchesDescription"],
-  ["signIns", "notificationSettings.signIns", "notificationSettings.signInsDescription"],
-  ["earlyStart", "notificationSettings.earlyStart", "notificationSettings.earlyStartDescription"],
-  ["updates", "notificationSettings.updates", "notificationSettings.updatesDescription"],
+  [
+    "switches",
+    "notificationSettings.switches",
+    "notificationSettings.switchesDescription",
+  ],
+  [
+    "signIns",
+    "notificationSettings.signIns",
+    "notificationSettings.signInsDescription",
+  ],
+  [
+    "earlyStart",
+    "notificationSettings.earlyStart",
+    "notificationSettings.earlyStartDescription",
+  ],
+  [
+    "updates",
+    "notificationSettings.updates",
+    "notificationSettings.updatesDescription",
+  ],
 ] as const;
 
 /**
@@ -31,11 +59,21 @@ export function NotificationGroup() {
   const disabled = !!busy || !!desktop?.busy;
   const current = notificationSettings(settings);
   const update = (patch: NotificationSettings) =>
-    void action("settings", () => api.updateSettings({ notifications: { ...current, ...patch } }));
+    void action("settings", () =>
+      api.updateSettings({ notifications: { ...current, ...patch } }),
+    );
   return (
-    <SettingGroup id="settings-notifications" title={t("notificationSettings.notifications")}>
+    <SettingGroup
+      id="settings-notifications"
+      title={t("notificationSettings.notifications")}
+    >
       {LIMITS.map(([key, id, label]) => (
-        <SettingRow key={key} label={t(label)} htmlFor={id} description={t("notificationSettings.limitDescription")}>
+        <SettingRow
+          key={key}
+          label={t(label)}
+          htmlFor={id}
+          description={t("notificationSettings.limitDescription")}
+        >
           <Switch
             id={id}
             checked={current[key]}
@@ -45,7 +83,9 @@ export function NotificationGroup() {
         </SettingRow>
       ))}
       {!settings.usageWarnings && (
-        <Note className="py-2">{t("notificationSettings.warningsNeedMarks")}</Note>
+        <Note className="py-2">
+          {t("notificationSettings.warningsNeedMarks")}
+        </Note>
       )}
       <SettingRow
         label={t("notificationSettings.readyAgain")}
@@ -65,7 +105,12 @@ export function NotificationGroup() {
         />
       </SettingRow>
       {TOGGLES.map(([key, label, description]) => (
-        <SettingRow key={key} label={t(label)} htmlFor={`notification-${key}`} description={t(description)}>
+        <SettingRow
+          key={key}
+          label={t(label)}
+          htmlFor={`notification-${key}`}
+          description={t(description)}
+        >
           <Switch
             id={`notification-${key}`}
             checked={current[key]}

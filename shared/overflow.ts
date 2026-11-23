@@ -9,13 +9,24 @@ import { responseCost } from "./model-prices";
  */
 
 /** Where an upstream's URL, auth header and model names come from. */
-export const OVERFLOW_PRESET_IDS = ["anthropic", "openrouter", "deepseek", "kimi", "kimi-cn", "glm", "glm-cn", "custom"] as const;
+export const OVERFLOW_PRESET_IDS = [
+  "anthropic",
+  "openrouter",
+  "deepseek",
+  "kimi",
+  "kimi-cn",
+  "glm",
+  "glm-cn",
+  "custom",
+] as const;
 export type ApiUpstreamPreset = (typeof OVERFLOW_PRESET_IDS)[number];
 /** How the key is sent: Anthropic's `x-api-key`, or `Authorization: Bearer`. */
 export type ApiUpstreamAuth = "x-api-key" | "bearer";
 /** The Claude model families a request is mapped by, and the id used for anything else. */
 export type OverflowFamily = "opus" | "sonnet" | "haiku";
-export type OverflowModelMap = Partial<Record<OverflowFamily | "default", string>>;
+export type OverflowModelMap = Partial<
+  Record<OverflowFamily | "default", string>
+>;
 
 /** USD per million tokens. Cache rates are optional: missing ones are charged at the input rate. */
 export interface OverflowRates {
@@ -82,7 +93,10 @@ export interface OverflowConfigureInput {
 }
 
 /** An upstream added (no id; a key is needed) or changed (a key given replaces the saved one). */
-export type OverflowUpstreamInput = Omit<ApiUpstream, "id" | "order"> & { id?: string; key?: string };
+export type OverflowUpstreamInput = Omit<ApiUpstream, "id" | "order"> & {
+  id?: string;
+  key?: string;
+};
 
 /** A one-token request's outcome from the page's Test button; never holds the key. */
 export interface OverflowTestResult {
@@ -97,10 +111,20 @@ export interface OverflowTestResult {
 /** Each preset's defaults. Model ids and URLs from the providers' Claude Code guides (2026-11). */
 export const OVERFLOW_PRESETS: Record<
   ApiUpstreamPreset,
-  { label: string; baseUrl: string; authStyle: ApiUpstreamAuth; modelMap: OverflowModelMap }
+  {
+    label: string;
+    baseUrl: string;
+    authStyle: ApiUpstreamAuth;
+    modelMap: OverflowModelMap;
+  }
 > = {
   // The same ids as Claude Code asks for: nothing to rewrite.
-  anthropic: { label: "Anthropic API", baseUrl: "https://api.anthropic.com", authStyle: "x-api-key", modelMap: {} },
+  anthropic: {
+    label: "Anthropic API",
+    baseUrl: "https://api.anthropic.com",
+    authStyle: "x-api-key",
+    modelMap: {},
+  },
   openrouter: {
     label: "OpenRouter",
     baseUrl: "https://openrouter.ai/api",
@@ -115,38 +139,72 @@ export const OVERFLOW_PRESETS: Record<
     label: "DeepSeek",
     baseUrl: "https://api.deepseek.com/anthropic",
     authStyle: "x-api-key",
-    modelMap: { opus: "deepseek-v4-pro", sonnet: "deepseek-flash", haiku: "deepseek-flash", default: "deepseek-flash" },
+    modelMap: {
+      opus: "deepseek-v4-pro",
+      sonnet: "deepseek-flash",
+      haiku: "deepseek-flash",
+      default: "deepseek-flash",
+    },
   },
   // K2 closes to new users from 2026-10-31 and retires at the end of 2026.
   kimi: {
     label: "Kimi",
     baseUrl: "https://api.moonshot.ai/anthropic",
     authStyle: "bearer",
-    modelMap: { opus: "kimi-k3.1-pro", sonnet: "kimi-k3.1-pro", haiku: "kimi-k3", default: "kimi-k3.1-pro" },
+    modelMap: {
+      opus: "kimi-k3.1-pro",
+      sonnet: "kimi-k3.1-pro",
+      haiku: "kimi-k3",
+      default: "kimi-k3.1-pro",
+    },
   },
   "kimi-cn": {
     label: "Kimi (China)",
     baseUrl: "https://api.moonshot.cn/anthropic",
     authStyle: "bearer",
-    modelMap: { opus: "kimi-k3.1-pro", sonnet: "kimi-k3.1-pro", haiku: "kimi-k3", default: "kimi-k3.1-pro" },
+    modelMap: {
+      opus: "kimi-k3.1-pro",
+      sonnet: "kimi-k3.1-pro",
+      haiku: "kimi-k3",
+      default: "kimi-k3.1-pro",
+    },
   },
   glm: {
     label: "Z.ai GLM",
     baseUrl: "https://api.z.ai/api/anthropic",
     authStyle: "bearer",
-    modelMap: { opus: "glm-5.4", sonnet: "glm-5.4", haiku: "glm-5.3-flash", default: "glm-5.4" },
+    modelMap: {
+      opus: "glm-5.4",
+      sonnet: "glm-5.4",
+      haiku: "glm-5.3-flash",
+      default: "glm-5.4",
+    },
   },
   "glm-cn": {
     label: "Zhipu GLM (China)",
     baseUrl: "https://open.bigmodel.cn/api/anthropic",
     authStyle: "bearer",
-    modelMap: { opus: "glm-5.4", sonnet: "glm-5.4", haiku: "glm-5.3-flash", default: "glm-5.4" },
+    modelMap: {
+      opus: "glm-5.4",
+      sonnet: "glm-5.4",
+      haiku: "glm-5.3-flash",
+      default: "glm-5.4",
+    },
   },
-  custom: { label: "Custom", baseUrl: "", authStyle: "x-api-key", modelMap: {} },
+  custom: {
+    label: "Custom",
+    baseUrl: "",
+    authStyle: "x-api-key",
+    modelMap: {},
+  },
 };
 
 /** A model id without the `[1m]`-style suffix Claude Code adds for long context, lowercased. */
-const bare = (model: string) => model.replace(/\[[^\]]*\]$/, "").trim().toLowerCase();
+const bare = (model: string) =>
+  model
+    .replace(/\[[^\]]*\]$/, "")
+    .trim()
+    .toLowerCase();
 
 /** The Claude family a requested model belongs to, by name. */
 export function overflowFamily(model: string): OverflowFamily | undefined {
@@ -158,9 +216,13 @@ export function overflowFamily(model: string): OverflowFamily | undefined {
 }
 
 /** The model id the upstream is asked for: its family's mapping, else its default, else the request's own. */
-export function overflowModel(upstream: Pick<ApiUpstream, "modelMap">, requested: string): string {
+export function overflowModel(
+  upstream: Pick<ApiUpstream, "modelMap">,
+  requested: string,
+): string {
   const family = overflowFamily(requested);
-  const mapped = (family && upstream.modelMap[family]) || upstream.modelMap.default;
+  const mapped =
+    (family && upstream.modelMap[family]) || upstream.modelMap.default;
   return mapped?.trim() || bare(requested);
 }
 
@@ -181,16 +243,28 @@ export function deepseekPeak(at: number): boolean {
   const date = new Date(at);
   const day = date.getUTCDay();
   const hour = date.getUTCHours();
-  return day >= 1 && day <= 5 && ((hour >= 1 && hour < 4) || (hour >= 6 && hour < 10));
+  return (
+    day >= 1 &&
+    day <= 5 &&
+    ((hour >= 1 && hour < 4) || (hour >= 6 && hour < 10))
+  );
 }
 
 /** The table price of an upstream model at a time, for presets Relay has a table for. */
-export function presetRates(preset: ApiUpstreamPreset, model: string, at: number): OverflowRates | undefined {
+export function presetRates(
+  preset: ApiUpstreamPreset,
+  model: string,
+  at: number,
+): OverflowRates | undefined {
   const id = bare(model);
   if (preset === "deepseek") {
     const base = DEEPSEEK[id];
     if (!base || !deepseekPeak(at)) return base;
-    return { cacheRead: base.cacheRead! * 2, input: base.input * 2, output: base.output * 2 };
+    return {
+      cacheRead: base.cacheRead! * 2,
+      input: base.input * 2,
+      output: base.output * 2,
+    };
   }
   if (preset === "glm" || preset === "glm-cn") return GLM[id];
   return undefined;
@@ -226,11 +300,14 @@ export function overflowCost(
   if (upstream.preset === "anthropic") {
     const listed = responseCost(model, {
       ...t,
-      ...(tokens.cacheWrite1h !== undefined ? { cacheWrite1h: tokens.cacheWrite1h } : {}),
+      ...(tokens.cacheWrite1h !== undefined
+        ? { cacheWrite1h: tokens.cacheWrite1h }
+        : {}),
     });
     if (listed !== undefined) return listed;
   }
-  const rates: OverflowRates | undefined = upstream.prices ?? presetRates(upstream.preset, model, at) ?? fetched;
+  const rates: OverflowRates | undefined =
+    upstream.prices ?? presetRates(upstream.preset, model, at) ?? fetched;
   if (!rates) return undefined;
   return (
     (t.input * rates.input +
@@ -250,7 +327,10 @@ export function keyHint(key: string): string {
 }
 
 /** When the local day `at` falls on (in `timeZone`) started and ends, in ms. */
-export function localDayBounds(at: number, timeZone: string): { start: number; end: number } {
+export function localDayBounds(
+  at: number,
+  timeZone: string,
+): { start: number; end: number } {
   const today = localDate(at, timeZone);
   const start = wallTime(today, "00:00", timeZone) ?? at - (at % 86_400_000);
   // Noon tomorrow in UTC terms always lands on tomorrow's local date, whatever the offset.
@@ -260,7 +340,11 @@ export function localDayBounds(at: number, timeZone: string): { start: number; e
 }
 
 /** Overflow spend in the local day `now` falls on, from the priced answers' times and costs. */
-export function spentToday(costs: readonly { at: number; cost: number }[], now: number, timeZone: string): number {
+export function spentToday(
+  costs: readonly { at: number; cost: number }[],
+  now: number,
+  timeZone: string,
+): number {
   const { start, end } = localDayBounds(now, timeZone);
   let sum = 0;
   for (const { at, cost } of costs) if (at >= start && at < end) sum += cost;

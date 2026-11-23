@@ -28,7 +28,8 @@ export class ClaudeSettingsUnreadable extends Error {
 
 type Json = Record<string, unknown>;
 
-const settingsFile = (claudeDir: string) => path.join(claudeDir, "settings.json");
+const settingsFile = (claudeDir: string) =>
+  path.join(claudeDir, "settings.json");
 
 function readSettings(claudeDir: string): Json {
   const file = settingsFile(claudeDir);
@@ -42,7 +43,8 @@ function readSettings(claudeDir: string): Json {
   if (!text.trim()) return {};
   try {
     const parsed: unknown = JSON.parse(text);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Json;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      return parsed as Json;
   } catch {
     // Reported below.
   }
@@ -57,7 +59,9 @@ function writeSettings(claudeDir: string, settings: Json): void {
   const file = settingsFile(claudeDir);
   fs.mkdirSync(claudeDir, { recursive: true });
   const temporary = `${file}.relay-${process.pid}-${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+  fs.writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`, {
+    mode: 0o600,
+  });
   fs.renameSync(temporary, file);
   if (process.platform !== "win32") fs.chmodSync(file, 0o600);
 }
@@ -69,10 +73,15 @@ function writeSettings(claudeDir: string, settings: Json): void {
  * On Windows the separators become forward slashes, since Claude Code runs the command in Git Bash,
  * which would eat backslashes.
  */
-export function statuslineCommand(executable: string[], platform: NodeJS.Platform = process.platform): string {
+export function statuslineCommand(
+  executable: string[],
+  platform: NodeJS.Platform = process.platform,
+): string {
   const parts = executable.map((part) => {
     const text = platform === "win32" ? part.replace(/\\/g, "/") : part;
-    return /^[\w@%+=:,./-]+$/.test(text) ? text : `"${text.replace(/(["\\$`])/g, "\\$1")}"`;
+    return /^[\w@%+=:,./-]+$/.test(text)
+      ? text
+      : `"${text.replace(/(["\\$`])/g, "\\$1")}"`;
   });
   return [...parts, "statusline"].join(" ");
 }
@@ -84,7 +93,9 @@ export function isRelayStatusline(value: unknown): boolean {
   return (
     type === "command" &&
     typeof command === "string" &&
-    /(^|[\s/\\"])relay(\.js)?"?\s+statusline(\s+--color)?\s*$/.test(command.trim())
+    /(^|[\s/\\"])relay(\.js)?"?\s+statusline(\s+--color)?\s*$/.test(
+      command.trim(),
+    )
   );
 }
 
@@ -115,7 +126,9 @@ export function installStatusline(
     writePrivateJson(previousFile, { statusLine: current });
   } else fs.rmSync(previousFile, { force: true });
   writeSettings(claudeDir, { ...settings, statusLine: next });
-  return current === undefined || isRelayStatusline(current) ? "installed" : "replaced";
+  return current === undefined || isRelayStatusline(current)
+    ? "installed"
+    : "replaced";
 }
 
 /** The status line Relay replaced, or undefined. */
@@ -137,7 +150,10 @@ export function uninstallStatusline(
   if (!isRelayStatusline(settings.statusLine)) return "not-installed";
   const previous = savedStatusline(previousFile);
   const { statusLine: _relay, ...rest } = settings;
-  writeSettings(claudeDir, previous === undefined ? rest : { ...rest, statusLine: previous });
+  writeSettings(
+    claudeDir,
+    previous === undefined ? rest : { ...rest, statusLine: previous },
+  );
   fs.rmSync(previousFile, { force: true });
   return previous === undefined ? "removed" : "restored";
 }

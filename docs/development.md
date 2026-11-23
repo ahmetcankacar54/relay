@@ -30,7 +30,9 @@ After `npm run build`, `npm run test:desktop` is the macOS integration test and
 fresh profile, answer over IPC, quit cleanly; `-- --packaged` for the packaged app).
 
 Code health: `npm run lint` (ESLint, `eslint.config.mjs`) and `npm run format:check`
-(Prettier; `npm run format` rewrites). `npm run test:e2e` starts `npm run dev:ui`
+(Prettier on the files a change adds since `origin/main`; older files are hand-formatted
+and left as they are, so fix a reported file with `npx prettier --write <file>`, not
+`npm run format`). `npm run test:e2e` starts `npm run dev:ui`
 and runs `e2e/preview.spec.ts` in Chromium (`npx playwright install chromium`
 once): an axe scan of the main pages that fails on serious or critical WCAG 2.1
 AA violations, and screenshots compared with `e2e/__snapshots__`. The baselines

@@ -28,14 +28,38 @@ export type RiskLevel = "R1" | "R2";
 
 /** The policy pages a risk cites; every one is on the external-link allow-list. */
 export const POLICY_LINKS = {
-  anthropicAup: { href: EXTERNAL_LINKS.anthropicAup, label: "featureRisk.linkAnthropicAup" },
-  claudeCodeLegal: { href: EXTERNAL_LINKS.claudeTerms, label: "featureRisk.linkClaudeCodeLegal" },
-  antigravityFaq: { href: EXTERNAL_LINKS.antigravityTerms, label: "featureRisk.linkAntigravityFaq" },
-  antigravityTerms: { href: EXTERNAL_LINKS.antigravityServiceTerms, label: "featureRisk.linkAntigravityTerms" },
-  openaiSignIn: { href: EXTERNAL_LINKS.openaiSignIn, label: "featureRisk.linkOpenaiSignIn" },
-  githubTerms: { href: EXTERNAL_LINKS.githubTerms, label: "featureRisk.linkGithubTerms" },
-  geminiCliFaq: { href: EXTERNAL_LINKS.geminiCliFaq, label: "featureRisk.linkGeminiCliFaq" },
-  cursorTerms: { href: EXTERNAL_LINKS.cursorTerms, label: "featureRisk.linkCursorTerms" },
+  anthropicAup: {
+    href: EXTERNAL_LINKS.anthropicAup,
+    label: "featureRisk.linkAnthropicAup",
+  },
+  claudeCodeLegal: {
+    href: EXTERNAL_LINKS.claudeTerms,
+    label: "featureRisk.linkClaudeCodeLegal",
+  },
+  antigravityFaq: {
+    href: EXTERNAL_LINKS.antigravityTerms,
+    label: "featureRisk.linkAntigravityFaq",
+  },
+  antigravityTerms: {
+    href: EXTERNAL_LINKS.antigravityServiceTerms,
+    label: "featureRisk.linkAntigravityTerms",
+  },
+  openaiSignIn: {
+    href: EXTERNAL_LINKS.openaiSignIn,
+    label: "featureRisk.linkOpenaiSignIn",
+  },
+  githubTerms: {
+    href: EXTERNAL_LINKS.githubTerms,
+    label: "featureRisk.linkGithubTerms",
+  },
+  geminiCliFaq: {
+    href: EXTERNAL_LINKS.geminiCliFaq,
+    label: "featureRisk.linkGeminiCliFaq",
+  },
+  cursorTerms: {
+    href: EXTERNAL_LINKS.cursorTerms,
+    label: "featureRisk.linkCursorTerms",
+  },
 } as const satisfies Record<string, { href: string; label: MessageId }>;
 export type PolicyLinkId = keyof typeof POLICY_LINKS;
 
@@ -167,7 +191,10 @@ export const FEATURE_RISKS: Readonly<Record<FeatureRiskId, FeatureRisk>> = {
 export type RiskAcknowledgements = Partial<Record<FeatureRiskId, number>>;
 
 /** True until the user has accepted this feature's current risk text. */
-export function needsRiskAck(settings: { riskAcknowledged?: RiskAcknowledgements }, id: FeatureRiskId): boolean {
+export function needsRiskAck(
+  settings: { riskAcknowledged?: RiskAcknowledgements },
+  id: FeatureRiskId,
+): boolean {
   const accepted = settings.riskAcknowledged?.[id];
   return accepted === undefined || accepted < FEATURE_RISKS[id].textVersion;
 }
@@ -177,11 +204,16 @@ export function pendingRisks(
   settings: { riskAcknowledged?: RiskAcknowledgements },
   ids: readonly FeatureRiskId[],
 ): FeatureRiskId[] {
-  return FEATURE_RISK_IDS.filter((id) => ids.includes(id) && needsRiskAck(settings, id));
+  return FEATURE_RISK_IDS.filter(
+    (id) => ids.includes(id) && needsRiskAck(settings, id),
+  );
 }
 
 /** The acknowledgements with `ids` accepted at their current text. */
-export function acknowledgeRisks(acks: RiskAcknowledgements | undefined, ids: readonly FeatureRiskId[]): RiskAcknowledgements {
+export function acknowledgeRisks(
+  acks: RiskAcknowledgements | undefined,
+  ids: readonly FeatureRiskId[],
+): RiskAcknowledgements {
   const next: RiskAcknowledgements = { ...acks };
   for (const id of ids) next[id] = FEATURE_RISKS[id].textVersion;
   return next;
@@ -193,8 +225,15 @@ interface PoolAccount {
 }
 
 /** The pool's accounts: every account the gateway may route to, by provider. */
-const poolProviders = (accounts: readonly PoolAccount[], excluded: readonly string[] = []) =>
-  new Set(accounts.filter((a) => !excluded.includes(a.id)).map((a) => a.provider ?? "claude"));
+const poolProviders = (
+  accounts: readonly PoolAccount[],
+  excluded: readonly string[] = [],
+) =>
+  new Set(
+    accounts
+      .filter((a) => !excluded.includes(a.id))
+      .map((a) => a.provider ?? "claude"),
+  );
 
 /**
  * What turning the gateway on risks. It answers Claude and Codex clients whatever the pool holds
@@ -203,13 +242,19 @@ const poolProviders = (accounts: readonly PoolAccount[], excluded: readonly stri
  * client still bound to it (omp passing as Claude Code).
  */
 export function gatewayRisks(
-  config: { host: string; excludedAccountIds?: readonly string[]; boundClients?: readonly ProxyClientId[] },
+  config: {
+    host: string;
+    excludedAccountIds?: readonly string[];
+    boundClients?: readonly ProxyClientId[];
+  },
   accounts: readonly PoolAccount[],
 ): FeatureRiskId[] {
   const risks: FeatureRiskId[] = ["gateway-claude", "gateway-codex"];
-  if (poolProviders(accounts, config.excludedAccountIds).has("antigravity")) risks.push("antigravity-gateway");
+  if (poolProviders(accounts, config.excludedAccountIds).has("antigravity"))
+    risks.push("antigravity-gateway");
   if (!LOOPBACK_HOSTS.has(config.host.trim())) risks.push("tailscale-bind");
-  for (const client of config.boundClients ?? []) risks.push(...clientRisks(client));
+  for (const client of config.boundClients ?? [])
+    risks.push(...clientRisks(client));
   return FEATURE_RISK_IDS.filter((id) => risks.includes(id));
 }
 
@@ -218,12 +263,17 @@ export function gatewayRisks(
  * is on, letting an Antigravity account into the pool.
  */
 export function proxyPatchRisks(
-  config: { enabled: boolean; host: string; excludedAccountIds?: readonly string[] },
+  config: {
+    enabled: boolean;
+    host: string;
+    excludedAccountIds?: readonly string[];
+  },
   patch: { host?: string; excludedAccountIds?: readonly string[] },
   accounts: readonly PoolAccount[],
 ): FeatureRiskId[] {
   const risks: FeatureRiskId[] = [];
-  if (patch.host !== undefined && !LOOPBACK_HOSTS.has(patch.host.trim())) risks.push("tailscale-bind");
+  if (patch.host !== undefined && !LOOPBACK_HOSTS.has(patch.host.trim()))
+    risks.push("tailscale-bind");
   if (
     config.enabled &&
     patch.excludedAccountIds !== undefined &&
@@ -242,24 +292,40 @@ export function clientRisks(id: ProxyClientId): FeatureRiskId[] {
 
 /** Adding an Antigravity account; while the gateway is on the account joins its pool as well. */
 export const antigravityAccountRisks = (gatewayOn: boolean): FeatureRiskId[] =>
-  gatewayOn ? ["antigravity-account", "antigravity-gateway"] : ["antigravity-account"];
+  gatewayOn
+    ? ["antigravity-account", "antigravity-gateway"]
+    : ["antigravity-account"];
 
 /** A planning change risks something only when it turns early start on. */
-export const planningRisks = (before: { autoStart: boolean }, patch: { autoStart?: boolean }): FeatureRiskId[] =>
+export const planningRisks = (
+  before: { autoStart: boolean },
+  patch: { autoStart?: boolean },
+): FeatureRiskId[] =>
   patch.autoStart === true && !before.autoStart ? ["early-start"] : [];
 
 /** A meter's risk: the provider's own terms on reading its usage from outside its tool. */
-export const meterRisk = (provider: MeterProvider): FeatureRiskId => `meter-${provider}`;
+export const meterRisk = (provider: MeterProvider): FeatureRiskId =>
+  `meter-${provider}`;
 
 /** The meters a settings change turns on (on in `after`, off in `before`), as their risks. */
-export const meterRisks = (before: readonly MeterProvider[] | undefined, after: readonly MeterProvider[] | undefined): FeatureRiskId[] =>
-  (after ?? []).filter((provider) => !before?.includes(provider)).map(meterRisk);
+export const meterRisks = (
+  before: readonly MeterProvider[] | undefined,
+  after: readonly MeterProvider[] | undefined,
+): FeatureRiskId[] =>
+  (after ?? [])
+    .filter((provider) => !before?.includes(provider))
+    .map(meterRisk);
 
 /** What is on right now, as the window sees it: early start, the accounts, the gateway and the meters. */
 export interface FeaturesInUse {
   earlyStart: boolean;
   accounts: readonly PoolAccount[];
-  gateway?: { on: boolean; host: string; excludedAccountIds?: readonly string[]; boundClients: readonly ProxyClientId[] };
+  gateway?: {
+    on: boolean;
+    host: string;
+    excludedAccountIds?: readonly string[];
+    boundClients: readonly ProxyClientId[];
+  };
   meters?: readonly MeterProvider[];
 }
 
@@ -272,8 +338,10 @@ export function enabledRisks(state: FeaturesInUse): FeatureRiskId[] {
   const risks: FeatureRiskId[] = [];
   if (state.earlyStart) risks.push("early-start");
   risks.push(...(state.meters ?? []).map(meterRisk));
-  if (state.accounts.some((a) => a.provider === "antigravity")) risks.push("antigravity-account");
-  if (state.gateway?.on) risks.push(...gatewayRisks(state.gateway, state.accounts));
+  if (state.accounts.some((a) => a.provider === "antigravity"))
+    risks.push("antigravity-account");
+  if (state.gateway?.on)
+    risks.push(...gatewayRisks(state.gateway, state.accounts));
   return FEATURE_RISK_IDS.filter((id) => risks.includes(id));
 }
 
@@ -294,28 +362,46 @@ export type TurnOffStep =
  * tailnet address or its Antigravity accounts; then early start and the meters; and last the
  * Antigravity accounts themselves, which are only off once they are removed.
  */
-export function turnOffSteps(pending: readonly FeatureRiskId[], state: FeaturesInUse): TurnOffStep[] {
+export function turnOffSteps(
+  pending: readonly FeatureRiskId[],
+  state: FeaturesInUse,
+): TurnOffStep[] {
   const steps: TurnOffStep[] = [];
   const gateway = state.gateway;
-  const antigravity = state.accounts.filter((a) => a.provider === "antigravity").map((a) => a.id);
+  const antigravity = state.accounts
+    .filter((a) => a.provider === "antigravity")
+    .map((a) => a.id);
   if (gateway?.on) {
     for (const client of gateway.boundClients)
-      if (clientRisks(client).some((id) => pending.includes(id))) steps.push({ kind: "unbind", client });
-    if (pending.includes("gateway-claude") || pending.includes("gateway-codex")) steps.push({ kind: "gateway-off" });
+      if (clientRisks(client).some((id) => pending.includes(id)))
+        steps.push({ kind: "unbind", client });
+    if (pending.includes("gateway-claude") || pending.includes("gateway-codex"))
+      steps.push({ kind: "gateway-off" });
     else {
-      if (pending.includes("tailscale-bind")) steps.push({ kind: "gateway-host", host: DEFAULT_PROXY_CONFIG.host });
+      if (pending.includes("tailscale-bind"))
+        steps.push({ kind: "gateway-host", host: DEFAULT_PROXY_CONFIG.host });
       if (pending.includes("antigravity-gateway")) {
         const excluded = gateway.excludedAccountIds ?? [];
-        steps.push({ kind: "exclude", accountIds: [...excluded, ...antigravity.filter((id) => !excluded.includes(id))] });
+        steps.push({
+          kind: "exclude",
+          accountIds: [
+            ...excluded,
+            ...antigravity.filter((id) => !excluded.includes(id)),
+          ],
+        });
       }
     }
   }
   if (pending.includes("early-start")) steps.push({ kind: "early-start-off" });
   const meters = state.meters ?? [];
   if (meters.some((provider) => pending.includes(meterRisk(provider))))
-    steps.push({ kind: "meters", keep: meters.filter((provider) => !pending.includes(meterRisk(provider))) });
+    steps.push({
+      kind: "meters",
+      keep: meters.filter((provider) => !pending.includes(meterRisk(provider))),
+    });
   if (pending.includes("antigravity-account"))
-    for (const accountId of antigravity) steps.push({ kind: "remove-account", accountId });
+    for (const accountId of antigravity)
+      steps.push({ kind: "remove-account", accountId });
   return steps;
 }
 

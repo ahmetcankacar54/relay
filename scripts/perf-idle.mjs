@@ -33,7 +33,8 @@ function option(name, fallback) {
   const at = process.argv.indexOf(`--${name}`);
   if (at < 0) return fallback;
   const value = process.argv[at + 1];
-  if (value === undefined || value.startsWith("--")) fail(`--${name} needs a value.`);
+  if (value === undefined || value.startsWith("--"))
+    fail(`--${name} needs a value.`);
   return value;
 }
 function number(name, fallback) {
@@ -47,15 +48,20 @@ function fail(message) {
 }
 
 const windowMode = option("window", "closed");
-if (!["open", "closed"].includes(windowMode)) fail("--window is open or closed.");
+if (!["open", "closed"].includes(windowMode))
+  fail("--window is open or closed.");
 // A window closed to the menu bar keeps its renderer a minute before freeing it: settle past that.
 const settle = number("settle", windowMode === "closed" ? 75 : 20);
 const duration = number("duration", 60);
 const interval = number("interval", 1);
-const budget = { cpu: number("budget-cpu", DEFAULT_BUDGET.cpu), rssMb: number("budget-rss-mb", DEFAULT_BUDGET.rssMb) };
+const budget = {
+  cpu: number("budget-cpu", DEFAULT_BUDGET.cpu),
+  rssMb: number("budget-rss-mb", DEFAULT_BUDGET.rssMb),
+};
 const keep = process.argv.includes("--keep");
 
-if (process.platform === "win32") fail("perf-idle samples processes with `ps`: macOS and Linux only.");
+if (process.platform === "win32")
+  fail("perf-idle samples processes with `ps`: macOS and Linux only.");
 if (!existsSync(main)) fail(`${main} is missing: run npm run build first.`);
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-perf-idle-"));
@@ -76,7 +82,10 @@ const env = {
 // Left over from a parent, it would make Electron a plain Node with no `app`.
 delete env.ELECTRON_RUN_AS_NODE;
 const output = await fs.open(path.join(root, "relay.log"), "w");
-const child = spawn(electron, [path.join(here, "perf-idle.cjs")], { env, stdio: ["ignore", output.fd, output.fd] });
+const child = spawn(electron, [path.join(here, "perf-idle.cjs")], {
+  env,
+  stdio: ["ignore", output.fd, output.fd],
+});
 let exited = false;
 child.once("exit", () => {
   exited = true;
@@ -90,23 +99,35 @@ function cpuSeconds(text) {
   return clock
     .split(":")
     .reverse()
-    .reduce((sum, part, i) => sum + Number(part) * 60 ** i, Number(days) * 86_400);
+    .reduce(
+      (sum, part, i) => sum + Number(part) * 60 ** i,
+      Number(days) * 86_400,
+    );
 }
 
 /** Every process on the system as pid, parent, RSS in KiB, CPU seconds and executable. */
 function processes() {
-  const text = execFileSync("ps", ["-axo", "pid=,ppid=,rss=,time=,comm="], { encoding: "utf8" });
+  const text = execFileSync("ps", ["-axo", "pid=,ppid=,rss=,time=,comm="], {
+    encoding: "utf8",
+  });
   return text
     .split("\n")
     .map((line) => /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line))
     .filter(Boolean)
-    .map(([, pid, ppid, rss, time, comm]) => ({ pid: +pid, ppid: +ppid, rssKb: +rss, cpu: cpuSeconds(time), comm }));
+    .map(([, pid, ppid, rss, time, comm]) => ({
+      pid: +pid,
+      ppid: +ppid,
+      rssKb: +rss,
+      cpu: cpuSeconds(time),
+      comm,
+    }));
 }
 
 /** The process `pid` and everything below it. */
 function tree(all, pid) {
   const children = new Map();
-  for (const p of all) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p]);
+  for (const p of all)
+    children.set(p.ppid, [...(children.get(p.ppid) ?? []), p]);
   const out = [];
   const stack = all.filter((p) => p.pid === pid);
   while (stack.length) {
@@ -124,11 +145,19 @@ function kind(p) {
   if (!kinds.has(p.pid)) {
     let args = "";
     try {
-      args = execFileSync("ps", ["-o", "args=", "-p", String(p.pid)], { encoding: "utf8" });
+      args = execFileSync("ps", ["-o", "args=", "-p", String(p.pid)], {
+        encoding: "utf8",
+      });
     } catch {}
     const type = /--type=(\S+)/.exec(args)?.[1];
-    const subtype = /--utility-sub-type=(\S+)/.exec(args)?.[1]?.split(".").pop();
-    kinds.set(p.pid, type ? (subtype ? `${type} (${subtype})` : type) : path.basename(p.comm));
+    const subtype = /--utility-sub-type=(\S+)/
+      .exec(args)?.[1]
+      ?.split(".")
+      .pop();
+    kinds.set(
+      p.pid,
+      type ? (subtype ? `${type} (${subtype})` : type) : path.basename(p.comm),
+    );
   }
   return kinds.get(p.pid);
 }
@@ -141,18 +170,31 @@ async function stop() {
   }
   await output.close();
   if (!keep)
-    await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(() => {});
+    await fs
+      .rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      })
+      .catch(() => {});
   else console.error(`Kept ${root}`);
 }
 
 try {
   const ready = path.join(root, "ready.json");
   for (let i = 0; i < 1200 && !existsSync(ready); i++) {
-    if (exited) throw new Error(`Relay exited before it was ready; see ${path.join(root, "relay.log")}`);
+    if (exited)
+      throw new Error(
+        `Relay exited before it was ready; see ${path.join(root, "relay.log")}`,
+      );
     await delay(100);
   }
-  if (!existsSync(ready)) throw new Error("Relay did not become ready within 120 s.");
-  console.error(`Relay is up (window ${windowMode}); settling ${settle} s, then sampling ${duration} s…`);
+  if (!existsSync(ready))
+    throw new Error("Relay did not become ready within 120 s.");
+  console.error(
+    `Relay is up (window ${windowMode}); settling ${settle} s, then sampling ${duration} s…`,
+  );
   await delay(settle * 1000);
 
   const start = Date.now();
@@ -164,7 +206,8 @@ try {
     const mine = tree(processes(), child.pid);
     for (const p of mine) {
       // A process started mid-window used all of its CPU time inside it.
-      if (!first.has(p.pid)) first.set(p.pid, totals.length ? { ...p, cpu: 0 } : p);
+      if (!first.has(p.pid))
+        first.set(p.pid, totals.length ? { ...p, cpu: 0 } : p);
       last.set(p.pid, { ...p, kind: kind(p) });
     }
     totals.push(mine.reduce((sum, p) => sum + p.rssKb, 0));
@@ -175,25 +218,49 @@ try {
 
   const byKind = new Map();
   for (const [pid, p] of last) {
-    const row = byKind.get(p.kind) ?? { kind: p.kind, count: 0, cpuSeconds: 0, rssMb: 0 };
+    const row = byKind.get(p.kind) ?? {
+      kind: p.kind,
+      count: 0,
+      cpuSeconds: 0,
+      rssMb: 0,
+    };
     row.count++;
     row.cpuSeconds += Math.max(0, p.cpu - first.get(pid).cpu);
     row.rssMb += p.rssKb / 1024;
     byKind.set(p.kind, row);
   }
   const rows = [...byKind.values()].sort((a, b) => b.rssMb - a.rssMb);
-  const cpuPercent = (rows.reduce((sum, r) => sum + r.cpuSeconds, 0) / wall) * 100;
-  const rssMb = { mean: totals.reduce((a, b) => a + b, 0) / totals.length / 1024, max: Math.max(...totals) / 1024 };
+  const cpuPercent =
+    (rows.reduce((sum, r) => sum + r.cpuSeconds, 0) / wall) * 100;
+  const rssMb = {
+    mean: totals.reduce((a, b) => a + b, 0) / totals.length / 1024,
+    max: Math.max(...totals) / 1024,
+  };
 
-  const started = readFileSync(path.join(root, "spawns.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  const started = readFileSync(path.join(root, "spawns.jsonl"), "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
   const during = started.filter((s) => s.at >= start && s.at <= end);
-  const count = (list) => Object.fromEntries([...list.reduce((m, s) => m.set(s.name, (m.get(s.name) ?? 0) + 1), new Map())]);
-  const keychain = { idle: during.filter((s) => s.name === "security").length, sinceLaunch: started.filter((s) => s.name === "security").length };
+  const count = (list) =>
+    Object.fromEntries([
+      ...list.reduce(
+        (m, s) => m.set(s.name, (m.get(s.name) ?? 0) + 1),
+        new Map(),
+      ),
+    ]);
+  const keychain = {
+    idle: during.filter((s) => s.name === "security").length,
+    sinceLaunch: started.filter((s) => s.name === "security").length,
+  };
   // How much of the sample the open window had focus: out of focus it holds the panda still and costs less.
   const focusLog = path.join(root, "focus.jsonl");
   let focusedShare;
   if (windowMode === "open" && existsSync(focusLog)) {
-    const changes = readFileSync(focusLog, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    const changes = readFileSync(focusLog, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l));
     let focused = changes.filter((c) => c.at <= start).at(-1)?.focused ?? false;
     let since = start;
     let total = 0;
@@ -207,13 +274,24 @@ try {
   }
 
   const fixed = (n, digits = 1) => n.toFixed(digits);
-  console.log(`\nRelay idle, window ${windowMode}: ${fixed(wall, 0)} s sampled every ${interval} s after ${settle} s\n`);
-  console.log(`${"process".padEnd(28)}${"count".padStart(6)}${"CPU %".padStart(9)}${"RSS MB".padStart(10)}`);
+  console.log(
+    `\nRelay idle, window ${windowMode}: ${fixed(wall, 0)} s sampled every ${interval} s after ${settle} s\n`,
+  );
+  console.log(
+    `${"process".padEnd(28)}${"count".padStart(6)}${"CPU %".padStart(9)}${"RSS MB".padStart(10)}`,
+  );
   for (const r of rows)
-    console.log(`${r.kind.padEnd(28)}${String(r.count).padStart(6)}${fixed((r.cpuSeconds / wall) * 100, 2).padStart(9)}${fixed(r.rssMb).padStart(10)}`);
-  console.log(`${"total".padEnd(28)}${String(last.size).padStart(6)}${fixed(cpuPercent, 2).padStart(9)}${fixed(rssMb.max).padStart(10)}  (RSS peak; mean ${fixed(rssMb.mean)})`);
-  console.log(`\nPrograms started while idle: ${JSON.stringify(count(during))}; Keychain tool: ${keychain.idle} (since launch: ${keychain.sinceLaunch})`);
-  if (focusedShare !== undefined) console.log(`The window had focus for ${focusedShare} % of the sample.`);
+    console.log(
+      `${r.kind.padEnd(28)}${String(r.count).padStart(6)}${fixed((r.cpuSeconds / wall) * 100, 2).padStart(9)}${fixed(r.rssMb).padStart(10)}`,
+    );
+  console.log(
+    `${"total".padEnd(28)}${String(last.size).padStart(6)}${fixed(cpuPercent, 2).padStart(9)}${fixed(rssMb.max).padStart(10)}  (RSS peak; mean ${fixed(rssMb.mean)})`,
+  );
+  console.log(
+    `\nPrograms started while idle: ${JSON.stringify(count(during))}; Keychain tool: ${keychain.idle} (since launch: ${keychain.sinceLaunch})`,
+  );
+  if (focusedShare !== undefined)
+    console.log(`The window had focus for ${focusedShare} % of the sample.`);
 
   const result = {
     platform: `${process.platform}-${process.arch}`,
@@ -223,7 +301,12 @@ try {
     sampledSeconds: Math.round(wall),
     cpuPercent: +fixed(cpuPercent, 2),
     rssMb: { mean: +fixed(rssMb.mean), max: +fixed(rssMb.max) },
-    processes: rows.map((r) => ({ kind: r.kind, count: r.count, cpuPercent: +fixed((r.cpuSeconds / wall) * 100, 2), rssMb: +fixed(r.rssMb) })),
+    processes: rows.map((r) => ({
+      kind: r.kind,
+      count: r.count,
+      cpuPercent: +fixed((r.cpuSeconds / wall) * 100, 2),
+      rssMb: +fixed(r.rssMb),
+    })),
     programsStartedWhileIdle: count(during),
     keychainCalls: keychain,
     budget,
@@ -231,8 +314,10 @@ try {
   console.log(`\n${JSON.stringify(result)}`);
 
   const over = [
-    cpuPercent > budget.cpu && `CPU ${fixed(cpuPercent, 2)} % is over the ${budget.cpu} % budget`,
-    rssMb.max > budget.rssMb && `RSS ${fixed(rssMb.max)} MB is over the ${budget.rssMb} MB budget`,
+    cpuPercent > budget.cpu &&
+      `CPU ${fixed(cpuPercent, 2)} % is over the ${budget.cpu} % budget`,
+    rssMb.max > budget.rssMb &&
+      `RSS ${fixed(rssMb.max)} MB is over the ${budget.rssMb} MB budget`,
     keychain.idle > 0 && `${keychain.idle} Keychain call(s) while idle`,
   ].filter(Boolean);
   if (over.length) {
