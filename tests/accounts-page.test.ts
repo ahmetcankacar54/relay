@@ -108,7 +108,7 @@ test("the accounts page lists accounts with their status and limits", () => {
   // One Durum column, then a column per limit; no column per sign-in.
   assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
   const [active, studio, work] = listRows(html);
-  assert.match(active, /data-slot="status-label" data-tone="ok"[^>]*>.*>Açık<\/span>/);
+  assert.match(active, /data-slot="status-label" data-tone="ok"[^>]*>.*>Kullanımda<\/span>/);
   assert.match(studio, /data-slot="status-label" data-tone="off" title="Claude uygulaması girişi yok"[^>]*>.*>Uygulama girişi yok<\/span>/);
   assert.match(work, />Uygulama girişi yok<\/span>/);
   assert.doesNotMatch(html, /Bağlı değil|Süresi doldu/);
@@ -150,7 +150,7 @@ test("the accounts list has one Durum column with a fix button only where someth
   assert.deepEqual(listHead(table([a], "en")), ["", "Account", "Status", "5 hours", "Week", "", ""]);
   const [okRow, critRow, offRow] = listRows(html);
   // An ok row shows its status and no inline button; only the ⋯ menu button is there.
-  assert.match(okRow, />Açık<\/span>/);
+  assert.match(okRow, />Kullanımda<\/span>/);
   assert.doesNotMatch(okRow, /data-size="xs"/);
   // A crit row says it in a few words, the full reason in the title, and offers the fix in one word.
   assert.match(critRow, /data-slot="status-label" data-tone="crit" title="Limit okuma girişi gerekli"[^>]*>.*>Giriş gerekli<\/span>/);
@@ -521,7 +521,7 @@ test("the page header shows the status and one primary action, with the rest in 
   assert.match(primaryButtons(waiting)[0], />Geç<\/button>$/);
   // No fix and the account in use: nothing to do.
   const active = headerOf(a, {}, { a: readNow(usage.a) });
-  assert.deepEqual(statusOf(active), ["ok", "Açık", "Açık"]);
+  assert.deepEqual(statusOf(active), ["ok", "Kullanımda", "Kullanımda"]);
   assert.equal(primaryButtons(active).length, 0);
   // The same status the list shows for the account.
   const listed = wrap(relayOf({}, expiredC), createElement(AccountsTable, { accounts: [c], open() {}, link() {} }));
