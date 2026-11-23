@@ -23,6 +23,7 @@
     "test:continuation": "node --import tsx scripts/continuation-lab.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:desktop": "node scripts/smoke.mjs",
+    "test:boot": "node scripts/smoke-boot.mjs",
     "perf:idle": "node scripts/perf-idle.mjs",
     "check:mac-signing": "node scripts/check-macos-signing.mjs",
     "dist:mac:local": "node scripts/stable-signing.mjs",

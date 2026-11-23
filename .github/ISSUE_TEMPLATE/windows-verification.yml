@@ -1,0 +1,72 @@
+name: Windows verification
+description: Results of the Windows checklist in docs/windows-verification.md.
+labels: ["windows", "verification"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Relay on Windows. Run the steps in [docs/windows-verification.md](https://github.com/ahmetcankacar54/relay/blob/main/docs/windows-verification.md), then fill this in.
+        Check logs and screenshots for email addresses, account names and tokens before you attach them.
+  - type: input
+    id: version
+    attributes:
+      label: Relay version tested
+      description: And the previous version you updated from in step 9.
+      placeholder: "0.29.0, updated from 0.28.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: From winver.
+      placeholder: "Windows 11 24H2 (26100.2314)"
+    validations:
+      required: true
+  - type: dropdown
+    id: machine
+    attributes:
+      label: Machine
+      options:
+        - Real PC
+        - Virtual machine (Hyper-V, VMware, Parallels…)
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude app version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Results
+      description: pass, fail or not run for each step; a short note for every fail.
+      value: |
+        1. Install:
+        2. First run:
+        3. Add the first account:
+        4. Add the second account:
+        5. Switch by hand:
+        6. Limits:
+        7. Gateway and a request through it:
+        8. Launch at login:
+        9. Update check:
+        10. Diagnostics export:
+        11. Uninstall and data reset:
+    validations:
+      required: true
+  - type: checkboxes
+    id: logs
+    attributes:
+      label: Logs
+      options:
+        - label: "%APPDATA%\\Relay\\logs\\main-errors.log stayed empty (or its new lines are attached below)."
+        - label: The diagnostics zip from step 10 is attached.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes, logs and screenshots
+      description: Optional. Remove personal details first.

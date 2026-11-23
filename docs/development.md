@@ -25,6 +25,9 @@ belongs in `dependencies`, because electron-builder copies those into the app.
 
 Development: `npm run dev` (Electron + Vite), `npm run dev:ui` (browser preview
 with sample data, `?demo=50` for 50 accounts), `npm test`, `npm run typecheck`.
+After `npm run build`, `npm run test:desktop` is the macOS integration test and
+`npm run test:boot` the boot smoke CI runs on Windows and Linux (start with a
+fresh profile, answer over IPC, quit cleanly; `-- --packaged` for the packaged app).
 
 Icon sources: `assets/icon-artwork.png` (Imagegen ribbon R artwork),
 `assets/icon.svg` (vector companion), `assets/relay-mark.svg` (standalone mark)
@@ -78,7 +81,8 @@ adapts the menu-bar icon to light and dark appearances.
 - macOS is the main platform. The Windows installer (`.exe`) switches Claude
   Desktop by hand, reads usage limits and manages accounts, but has no automatic
   switch, continuation, draft re-typing, Claude extension or terminal `claude`
-  carry-over, menu bar panel or widget; it is untested on a real machine.
+  carry-over, menu bar panel or widget; it is untested on a real machine
+  ([the checklist that would change that](windows-verification.md)).
 - The `relay` CLI runs on macOS only.
 
 ## Linux

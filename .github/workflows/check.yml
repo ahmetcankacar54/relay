@@ -31,6 +31,16 @@ jobs:
       - name: Desktop IPC and PTY integration
         if: runner.os == 'macOS'
         run: npm run test:desktop
+      # Ubuntu 24.04's AppArmor refuses the unprivileged user namespaces Chromium's sandbox
+      # uses; allowing them keeps the smoke on the sandbox Relay ships with, no --no-sandbox.
+      - name: Allow Chromium's sandbox
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Windows and Linux have no fixture for the integration test above; this proves Relay
+      # boots with a fresh profile, answers over IPC and quits cleanly (docs/windows-verification.md).
+      - name: Boot smoke
+        if: runner.os != 'macOS'
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot
       # electron-builder never signs anything under Contents/PlugIns, so the
       # widget extension keeps the signature it has in dist-electron. The build
       # signs only its executable, which leaves the bundle without a resource
@@ -51,3 +61,6 @@ jobs:
           # so pull requests would not see what pushes see. The identity is
           # ad hoc ("-") and the workflow holds no certificate or secret.
           CSC_FOR_PULL_REQUEST: "true"
+      - name: Boot smoke of the packaged app.asar
+        if: runner.os != 'macOS'
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot -- --packaged
