@@ -314,22 +314,25 @@ test("the snapshot is found in the app's data folder on each platform", (t) => {
   assert.equal(readStatuslineSnapshot({}, home, "linux"), undefined);
   write(path.join(home, ".config", "Relay"));
   assert.ok(readStatuslineSnapshot({}, home, "linux"));
-  write(path.join(home, "xdg", "Relay"));
-  assert.ok(
-    readStatuslineSnapshot(
-      { XDG_CONFIG_HOME: path.join(home, "xdg") },
-      home,
-      "linux",
-    ),
-  );
-  assert.equal(
-    readStatuslineSnapshot(
-      { XDG_CONFIG_HOME: path.join(home, "none") },
-      home,
-      "linux",
-    ),
-    undefined,
-  );
+  // XDG_CONFIG_HOME counts only as a POSIX absolute path; a Windows host's temp folder is not one.
+  if (process.platform !== "win32") {
+    write(path.join(home, "xdg", "Relay"));
+    assert.ok(
+      readStatuslineSnapshot(
+        { XDG_CONFIG_HOME: path.join(home, "xdg") },
+        home,
+        "linux",
+      ),
+    );
+    assert.equal(
+      readStatuslineSnapshot(
+        { XDG_CONFIG_HOME: path.join(home, "none") },
+        home,
+        "linux",
+      ),
+      undefined,
+    );
+  }
   write(path.join(home, "Roaming", "Relay"));
   assert.ok(
     readStatuslineSnapshot(

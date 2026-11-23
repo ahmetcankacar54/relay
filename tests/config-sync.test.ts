@@ -97,10 +97,12 @@ test("an MCP server added on account A appears on B; B's own servers and sign-in
   assert.equal(config.oauthAccount.accountUuid, "to-account");
   assert.equal(config.userID, undefined);
   assert.equal(fs.existsSync(path.join(dirs.to, ".credentials.json")), false);
-  assert.equal(
-    fs.statSync(path.join(dirs.to, ".claude.json")).mode & 0o777,
-    0o600,
-  );
+  // Windows has no owner-only file mode to check.
+  if (process.platform !== "win32")
+    assert.equal(
+      fs.statSync(path.join(dirs.to, ".claude.json")).mode & 0o777,
+      0o600,
+    );
   // A second switch finds nothing to carry.
   assert.equal((await sync(dirs, { mcpServers: true })).mcpServers, 0);
 });
