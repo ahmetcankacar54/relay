@@ -190,6 +190,15 @@ import {
 } from "../shared/proxy-types";
 import { ProxyServer } from "./core/proxy/proxy-server";
 import { GatewayRequestLog } from "./core/proxy/proxy-request-log";
+import { OpenRouterPrices, testOverflowUpstream } from "./core/proxy/overflow-upstream";
+import { OverflowKeys } from "./core/overflow-keys";
+import {
+  DEFAULT_OVERFLOW_CAP_USD,
+  spentToday,
+  type OverflowSettings,
+  type OverflowStatus,
+} from "../shared/overflow";
+import { randomUUID } from "node:crypto";
 import { calibrateLimits, type LimitCalibration } from "../shared/limit-calibration";
 import { REQUEST_LOG_SIZE } from "./core/proxy/proxy-stats";
 import {
@@ -197,6 +206,10 @@ import {
   generateProxyKey,
   poolAccounts,
   proxyConfigurePatch,
+  apiUpstreamSchema,
+  overflowConfigurePatch,
+  overflowSettingsSchema,
+  overflowUpstreamInput,
 } from "./core/proxy/proxy-status";
 import {
   PROXY_CLIENTS,
@@ -2677,13 +2690,14 @@ const proxySettings = (): ProxyConfig => {
   return gatewayHostAllowed(config.host) ? config : { ...config, host: DEFAULT_PROXY_CONFIG.host };
 };
 const saveProxySettings = (config: ProxyConfig) => {
-  const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, ...base } = config;
+  const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, overflow, ...base } = config;
   const extras: ProxyExtras = {
     ...(accountOrder ? { accountOrder } : {}),
     ...(excludedAccountIds ? { excludedAccountIds } : {}),
     ...(subagentOverflow ? { subagentOverflow } : {}),
     ...(affinityRevision !== undefined ? { affinityRevision } : {}),
     ...(clientBindings ? { clientBindings } : {}),
+    ...(overflow ? { overflow } : {}),
   };
   if (JSON.stringify(extras) !== JSON.stringify(proxyExtras())) {
     const temp = `${proxyExtrasFile()}.tmp`;
@@ -2724,6 +2738,23 @@ function settleProxyAffinity() {
 /** Where bound clients dial the gateway: the saved address and key (none before the first start). */
 const clientTarget = (config: ProxyConfig): ClientTarget | undefined =>
   config.apiKey ? { url: gatewayUrl(config.host, config.port), key: config.apiKey } : undefined;
+/** The overflow as the page shows it: today's spend in the planning day, and each key masked. */
+function overflowStatus(config: ProxyConfig): OverflowStatus | undefined {
+  const overflow = config.overflow;
+  if (!overflow) return undefined;
+  const spent = spentToday(gatewayRequests().overflowCosts(), Date.now(), service.store.state.settings.planning.timeZone);
+  const hints = overflowKeys()?.hints() ?? {};
+  return {
+    enabled: overflow.enabled,
+    trigger: overflow.trigger ?? "limited",
+    ...(overflow.dailyCapUsd !== undefined ? { dailyCapUsd: overflow.dailyCapUsd } : {}),
+    spentTodayUsd: spent,
+    capReached: overflow.dailyCapUsd !== undefined && spent >= overflow.dailyCapUsd,
+    upstreams: [...overflow.upstreams]
+      .sort((a, b) => a.order - b.order)
+      .map((upstream) => ({ ...upstream, ...(hints[upstream.id] ? { keyHint: hints[upstream.id] } : {}) })),
+  };
+}
 function proxyStatus(): ProxyStatus {
   const config = proxySettings();
   const state = proxyServer?.getState();
@@ -2749,6 +2780,7 @@ function proxyStatus(): ProxyStatus {
     tailscaleAddress: tailscaleAddress(),
     clients: clientStatuses(clientTarget(config), config),
     cooldownOf: (id) => proxyServer?.router.cooldownOf(id),
+    overflow: overflowStatus(config),
   });
 }
 /**
@@ -2788,6 +2820,22 @@ function renewForGateway(accountId: string): void {
     void usage?.refresh(accountId).catch(() => {});
   } catch {}
 }
+/** The overflow upstreams' sealed API keys; none until the vault is open. */
+let overflowKeyStore: OverflowKeys | undefined;
+function overflowKeys(): OverflowKeys | undefined {
+  const sealer = vaultSealer;
+  if (!overflowKeyStore && sealer)
+    overflowKeyStore = new OverflowKeys(
+      path.join(app.getPath("userData"), "desktop-vault"),
+      (text) => sealer.seal(text),
+      (data) => sealer.unseal(data),
+    );
+  return overflowKeyStore;
+}
+/** OpenRouter's published prices for its overflow answers, read at most daily, kept on disk. */
+let openRouterPriceCache: OpenRouterPrices | undefined;
+const openRouterPrices = () =>
+  (openRouterPriceCache ??= new OpenRouterPrices({ file: path.join(app.getPath("userData"), "openrouter-prices.json") }));
 /** Starts the gateway on the saved port and host; a first start also creates the client key. */
 async function startProxy(): Promise<void> {
   if (proxyServer) return;
@@ -2799,6 +2847,9 @@ async function startProxy(): Promise<void> {
   const credentials = new Map<string, { token: string; until: number }>();
   const server = new ProxyServer({
     config,
+    overflowKey: async (upstreamId) => overflowKeys()?.get(upstreamId),
+    overflowPrices: openRouterPrices(),
+    timeZone: () => service.store.state.settings.planning.timeZone,
     antigravityResolver: async (account) => {
       if (account.provider !== "antigravity" || !account.auth?.loggedIn) return undefined;
       const bridge = antigravityBridge(account.id);
@@ -2880,6 +2931,7 @@ async function applyProxyConfig(next: ProxyConfig): Promise<void> {
       affinityTtlSeconds: next.affinityTtlSeconds,
       apiKey: next.apiKey,
       subagentOverflow: next.subagentOverflow === true,
+      overflow: next.overflow,
     });
     return;
   }
@@ -3767,6 +3819,78 @@ function bindIPC() {
       return proxyStatus();
     }),
   );
+  // API-key overflow (W3-1): R0, an API key is billed per token and allowed for this use.
+  const noOverflow: OverflowSettings = { enabled: false, upstreams: [] };
+  /** Saves the overflow setup; a running gateway takes it at once, keeping its streams. */
+  const saveOverflow = async (next: OverflowSettings) => {
+    await applyProxyConfig({ ...proxySettings(), overflow: overflowSettingsSchema.parse(next) });
+    broadcastChanged();
+    return proxyStatus();
+  };
+  const upstreamId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+  handle("proxy-overflow-configure", (input) =>
+    serializeProxy(async () => {
+      const patch = overflowConfigurePatch.parse(input);
+      const next: OverflowSettings = { ...noOverflow, ...proxySettings().overflow };
+      if (patch.enabled !== undefined) next.enabled = patch.enabled;
+      if (patch.trigger) next.trigger = patch.trigger;
+      if (patch.dailyCapUsd === null) delete next.dailyCapUsd;
+      else if (patch.dailyCapUsd !== undefined) next.dailyCapUsd = patch.dailyCapUsd;
+      // Turned on with no cap ever chosen: the default one, so a first day cannot run away.
+      else if (patch.enabled && next.dailyCapUsd === undefined) next.dailyCapUsd = DEFAULT_OVERFLOW_CAP_USD;
+      if (patch.order) {
+        const rank = new Map(patch.order.map((id, index) => [id, index]));
+        next.upstreams = [...next.upstreams]
+          .sort((a, b) => (rank.get(a.id) ?? rank.size + a.order) - (rank.get(b.id) ?? rank.size + b.order))
+          .map((upstream, order) => ({ ...upstream, order }));
+      }
+      return saveOverflow(next);
+    }),
+  );
+  handle("proxy-overflow-save-upstream", (input) =>
+    serializeProxy(async () => {
+      const { key, id: given, ...fields } = overflowUpstreamInput.parse(input);
+      const keys = overflowKeys();
+      if (!keys) throw new Error(say("dataBackup.errorVaultNotReady"));
+      const current: OverflowSettings = { ...noOverflow, ...proxySettings().overflow };
+      const existing = given ? current.upstreams.find((u) => u.id === given) : undefined;
+      if (given && !existing) throw new Error("This overflow upstream no longer exists.");
+      if (!existing && !key) throw new Error("Enter this overflow upstream’s API key first.");
+      const upstream = apiUpstreamSchema.parse({
+        ...fields,
+        id: existing?.id ?? randomUUID(),
+        order: existing?.order ?? current.upstreams.length,
+      });
+      // The key is sealed before the upstream is saved: a saved upstream always has its key.
+      if (key) await keys.set(upstream.id, key);
+      const upstreams = existing
+        ? current.upstreams.map((u) => (u.id === upstream.id ? upstream : u))
+        : [...current.upstreams, upstream];
+      return saveOverflow({ ...current, upstreams });
+    }),
+  );
+  handle("proxy-overflow-remove-upstream", (input) =>
+    serializeProxy(async () => {
+      const id = upstreamId.parse(input);
+      const current = proxySettings().overflow;
+      if (!current) return proxyStatus();
+      await overflowKeys()?.remove(id);
+      const upstreams = current.upstreams
+        .filter((u) => u.id !== id)
+        .sort((a, b) => a.order - b.order)
+        .map((upstream, order) => ({ ...upstream, order }));
+      return saveOverflow({ ...current, upstreams, enabled: current.enabled && upstreams.length > 0 });
+    }),
+  );
+  // A one-token request with the saved key; the answer never holds the key.
+  handle("proxy-overflow-test", async (input) => {
+    const id = upstreamId.parse(input);
+    const upstream = proxySettings().overflow?.upstreams.find((u) => u.id === id);
+    if (!upstream) throw new Error("This overflow upstream no longer exists.");
+    const key = await overflowKeys()?.get(id);
+    if (!key) throw new Error("Enter this overflow upstream’s API key first.");
+    return testOverflowUpstream(upstream, key);
+  });
   handle("detect-providers", () =>
     detectProviders(service.store.state.accounts, {
       claudeDesktopRoot: desktop.root,

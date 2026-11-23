@@ -16,7 +16,9 @@ const text = (value: unknown, max: number) =>
   typeof value === "string" && value.length > 0 ? value.slice(0, max) : undefined;
 const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined;
-const PICK_REASONS: readonly ProxyPickReason[] = ["bound", "soonest-reset", "balanced", "priority", "only"];
+const PICK_REASONS: readonly ProxyPickReason[] = ["bound", "soonest-reset", "balanced", "priority", "only", "overflow"];
+/** Overflow answers' costs are kept this long: any time zone's current day fits inside it. */
+const SPEND_KEEP_MS = 2 * 86_400_000;
 const MOVE_REASONS: readonly ProxyMoveReason[] = ["limit", "cold", "drain", "rebalance"];
 /** Account ids, at most ten. */
 const ids = (value: unknown) =>
@@ -65,6 +67,7 @@ export function cleanEntry(raw: unknown): ProxyRequestLog | undefined {
     ["requestClass", 40],
     ["agentType", 40],
     ["error", 160],
+    ["upstream", 40],
   ];
   for (const [key, max] of strings) {
     const value = text(row[key], max);
@@ -103,6 +106,8 @@ export class GatewayRequestLog {
   private latest: ProxyRequestLog[] = [];
   /** Today's answered requests by class, for the local day in `day`. */
   private today: { day: string; byClass: Map<string, ProxyClassShare> } = { day: "", byClass: new Map() };
+  /** Overflow answers of the last two days that cost something, for the daily cap. */
+  private spend: { at: number; cost: number }[] = [];
 
   constructor(
     private readonly file: string,
@@ -124,6 +129,7 @@ export class GatewayRequestLog {
       if (entry.requestId && entry.accountId) this.byRequestId.set(entry.requestId, entry.accountId);
     this.latest = entries.slice(-(this.options.feedSize ?? 40));
     this.today = { day: this.dayOf(this.now()), byClass: new Map() };
+    this.spend = [];
     for (const entry of entries) this.count(entry);
     return this.latest.slice();
   }
@@ -134,14 +140,23 @@ export class GatewayRequestLog {
     return [...this.today.byClass.values()].map((share) => ({ ...share })).sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
   }
 
+  /** The times and costs of the overflow answers of the last two days, oldest first. */
+  overflowCosts(): { at: number; cost: number }[] {
+    const oldest = this.now() - SPEND_KEEP_MS;
+    this.spend = this.spend.filter((row) => row.at >= oldest);
+    return this.spend.slice();
+  }
+
   /** The local calendar day a time falls on. */
   private dayOf(at: number): string {
     const date = new Date(at);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
-  /** Adds an answered request to today's shares, when it is today's. */
+  /** Adds an answered request to today's shares, when it is today's, and an overflow cost to the spend. */
   private count(entry: ProxyRequestLog): void {
+    if (entry.upstream && entry.cost && entry.at >= this.now() - SPEND_KEEP_MS)
+      this.spend.push({ at: entry.at, cost: entry.cost });
     if (entry.status >= 400 || !entry.tokens) return;
     const day = this.dayOf(entry.at);
     if (day !== this.today.day) {

@@ -124,6 +124,7 @@ Every release carries a `SHA256SUMS.txt` and updates itself from GitHub Releases
 - A local, key-protected endpoint for Claude Code, Codex CLI and omp. Requests go to the account whose week ends first and that still has room, compared in real capacity (a Max 20× at 85 % still has more room than a fresh Pro).
 - Sessions stay on their account and its prompt cache; a busy account is drained at the start of a prompt, not in the middle.
 - Listens only on this Mac, or on your Tailscale network if you choose.
+- **Overflow to API keys.** When every subscription account is at its limit, Claude requests can go to an API key instead of failing: Anthropic's API, OpenRouter, DeepSeek, Kimi, GLM or any Anthropic-compatible URL, tried in your order. Each request's cost shows in the feed, and a daily cap in dollars stops overflow for the rest of the day. Keys are sealed like sign-ins and never shown in full. API keys are billed per token and meant for this use, so overflow carries none of the subscription risk. Codex requests never overflow.
 - Off until you turn it on. It is the part of Relay furthest from ordinary use; see [Terms & risk](#terms--risk).
 
 ### Menu bar, widget and CLI

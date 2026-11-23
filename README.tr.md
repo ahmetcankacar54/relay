@@ -124,6 +124,7 @@ Her sürümde bir `SHA256SUMS.txt` vardır; Relay kendini GitHub Releases'tan g�
 - Claude Code, Codex CLI ve omp için yerel, anahtarla korunan tek bir uç nokta. İstekler haftası önce biten ve hâlâ yeri olan hesaba gider; yer gerçek kapasiteyle karşılaştırılır (%85 dolu bir Max 20×'in yeni bir Pro'dan daha çok yeri vardır).
 - Oturumlar kendi hesabında ve istem önbelleğinde kalır; dolan bir hesap bir istemin ortasında değil başında boşaltılır.
 - Yalnızca bu Mac'i ya da seçersen Tailscale ağını dinler.
+- **API anahtarlarına taşma.** Tüm abonelik hesapları limitteyken Claude istekleri başarısız olmak yerine bir API anahtarına gidebilir: Anthropic API, OpenRouter, DeepSeek, Kimi, GLM ya da Anthropic uyumlu herhangi bir URL, senin sıranla. Her isteğin maliyeti akışta görünür; dolar cinsinden günlük tavan dolunca taşma o günün geri kalanında durur. Anahtarlar girişler gibi şifreli saklanır ve hiçbir zaman tamamı gösterilmez. API anahtarları token başına ücretlendirilir ve bu kullanım içindir; bu yüzden taşma abonelik riskini taşımaz. Codex istekleri hiç taşmaz.
 - Sen açana kadar kapalıdır. Relay'in olağan kullanımdan en uzak parçası budur; bkz. [Koşullar ve risk](#koşullar-ve-risk).
 
 ### Menü çubuğu, widget ve CLI

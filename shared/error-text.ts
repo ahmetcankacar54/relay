@@ -312,6 +312,8 @@ const BACKEND_ERRORS: ReadonlyArray<readonly [backend: string, id: MessageId]> =
   ["Bu profil Claude aboneliği ile giriş gerektiriyor.", "errors.thisProfileNeedsAClaudeSubscription"],
   ["The process has not closed yet. The transfer did not start.", "errors.theProcessHasNotClosedYet"],
   ["Sign in with this account first.", "errors.signInWithThisAccountFirst"],
+  ["This overflow upstream no longer exists.", "errors.overflowUpstreamGone"],
+  ["Enter this overflow upstream’s API key first.", "errors.overflowUpstreamNeedsKey"],
 ];
 const byText = new Map<string, MessageId>(BACKEND_ERRORS.map(([text, id]) => [text, id]));
 

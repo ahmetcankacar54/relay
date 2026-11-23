@@ -15,6 +15,7 @@ import { clientRisks, gatewayRisks, proxyPatchRisks } from "../../shared/feature
 import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
 import { GatewayHeader } from "./proxy/GatewayHeader";
 import { useCopy, useProxyStatus, useTab, type ProxyTab } from "./proxy/hooks";
+import { OverflowCard } from "./proxy/OverflowCard";
 import { PoolCard } from "./proxy/PoolCard";
 import { RequestFeed } from "./proxy/RequestFeed";
 import { RulesTab } from "./proxy/RulesTab";
@@ -217,7 +218,10 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
                 <ToolsTab status={status} disabled={disabled} copy={copy} onBind={bind} onUnbind={unbind} />
               </TabsContent>
               <TabsContent value="kurallar">
-                <RulesTab status={status} disabled={disabled} onConfigure={configure} />
+                <div className="grid gap-4">
+                  <RulesTab status={status} disabled={disabled} onConfigure={configure} />
+                  <OverflowCard status={status} disabled={disabled} onStatus={setStatus} />
+                </div>
               </TabsContent>
             </>
           )}

@@ -1,3 +1,5 @@
+import type { OverflowSettings } from "./overflow";
+
 export type ProxyStatus = "stopped" | "starting" | "running" | "error";
 
 export type RoutingStrategy = "soonest-reset" | "balanced" | "strict-priority";
@@ -31,6 +33,8 @@ export interface ProxyConfig {
    * so unbinding puts them back. `null` means the key was not there.
    */
   clientBindings?: Partial<Record<ProxyClientId, Record<string, string | null>>>;
+  /** API-key upstreams the gateway sends Claude requests to once every account is limited. */
+  overflow?: OverflowSettings;
 }
 
 /** The clients Relay can point at the gateway by writing their settings. */
@@ -64,8 +68,13 @@ export interface ProxyRequestLog {
   agentType?: string;
   /** The tokens the answer reported; `cacheWrite1h` is the 1-hour part of `cacheWrite`. */
   tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cacheWrite1h?: number };
-  /** What the answer would cost on the API, in USD, when its model has a price. */
+  /**
+   * What the answer would cost on the API, in USD, when its model has a price; for an overflow
+   * answer (`upstream` set) what it did cost.
+   */
   cost?: number;
+  /** The API-key upstream that answered (its label), when overflow took the request. */
+  upstream?: string;
   /** An error answer's own message, shortened. */
   error?: string;
   /** The session's prompt cache was written again: why, and about how many tokens. */
@@ -76,9 +85,10 @@ export interface ProxyRequestLog {
 
 /**
  * How the gateway chose an account: the session's own (`bound`), or for a new pick the routing
- * strategy's choice, or the one account left (`only`).
+ * strategy's choice, or the one account left (`only`); `overflow` when every account was limited
+ * and an API-key upstream answered instead.
  */
-export type ProxyPickReason = "bound" | "soonest-reset" | "balanced" | "priority" | "only";
+export type ProxyPickReason = "bound" | "soonest-reset" | "balanced" | "priority" | "only" | "overflow";
 /**
  * Why a session left its account on purpose:
  * - `limit`: its account (or the model it asks for) is out for a spent limit;

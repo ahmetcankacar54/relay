@@ -11,7 +11,8 @@ import type {
 } from "../../../shared/proxy-types";
 import type { LimitCalibration } from "../../../shared/limit-calibration";
 import { responseCost } from "../../../shared/model-prices";
-import { GATEWAY_HOST_ERROR, gatewayHostAllowed } from "../../../shared/proxy-url";
+import { GATEWAY_HOST_ERROR, LOOPBACK_HOSTS, gatewayHostAllowed } from "../../../shared/proxy-url";
+import { OVERFLOW_PRESET_IDS, type OverflowStatus } from "../../../shared/overflow";
 
 /** The prefix every client key starts with, so a key pasted somewhere is recognised as Relay's. */
 export const PROXY_KEY_PREFIX = "relay-sec-";
@@ -38,6 +39,74 @@ export const proxyConfigurePatch = z
   .partial();
 export type ProxyConfigurePatch = z.infer<typeof proxyConfigurePatch>;
 
+/**
+ * Where an overflow upstream may be: an https URL, or plain http on this computer only (a local
+ * proxy), since its API key travels with every request. No credentials, query or fragment.
+ */
+export function overflowUrlAllowed(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.username || url.password || url.search || url.hash) return false;
+  if (url.protocol === "https:") return true;
+  return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname.replace(/^\[|\]$/g, ""));
+}
+
+const overflowModelId = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[A-Za-z0-9._:/~@+[\]-]+$/);
+const overflowPrice = z.number().min(0).max(1_000);
+/** One API-key upstream as saved; the key is never part of it. */
+export const apiUpstreamSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+    label: z.string().trim().min(1).max(40),
+    preset: z.enum(OVERFLOW_PRESET_IDS),
+    baseUrl: z.string().trim().max(300).refine(overflowUrlAllowed, "Use an https:// URL (http:// only on this computer)"),
+    authStyle: z.enum(["x-api-key", "bearer"]),
+    modelMap: z
+      .object({ opus: overflowModelId, sonnet: overflowModelId, haiku: overflowModelId, default: overflowModelId })
+      .partial()
+      .strict(),
+    enabled: z.boolean(),
+    order: z.number().int().min(0).max(1_000),
+    prices: z.object({ input: overflowPrice, output: overflowPrice }).strict().optional(),
+  })
+  .strict();
+/** The overflow setup as proxy-pool.json keeps it. */
+export const overflowSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    trigger: z.enum(["limited", "unavailable"]).optional(),
+    dailyCapUsd: z.number().min(0.01).max(10_000).optional(),
+    upstreams: z.array(apiUpstreamSchema).max(20),
+  })
+  .strict();
+/** What the page may change about overflow as a whole; a null cap removes it. */
+export const overflowConfigurePatch = z
+  .object({
+    enabled: z.boolean(),
+    trigger: z.enum(["limited", "unavailable"]),
+    dailyCapUsd: z.number().min(0.01).max(10_000).nullable(),
+    /** Upstream ids, first tried first. */
+    order: z.array(z.string().max(64)).max(20),
+  })
+  .strict()
+  .partial();
+/** An upstream added (no id) or changed; a key is needed to add one and replaces the saved one. */
+export const overflowUpstreamInput = apiUpstreamSchema
+  .omit({ id: true, order: true })
+  .extend({
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
+    key: z.string().trim().min(8).max(512).regex(/^[\x21-\x7e]+$/).optional(),
+  })
+  .strict();
 /** What proxy-pool.json holds: the parts of the gateway's setup the registry does not. */
 export const proxyExtrasSchema = z.object({
   accountOrder: z.array(z.string()).max(200).optional(),
@@ -45,6 +114,8 @@ export const proxyExtrasSchema = z.object({
   /** Which default the registry's affinity lifetime was written under (shared/proxy-types.ts). */
   affinityRevision: z.number().int().min(0).max(1_000).optional(),
   subagentOverflow: z.boolean().optional(),
+  // A setup this build cannot read is left out, not the whole file: the pool's order stays.
+  overflow: overflowSettingsSchema.optional().catch(undefined),
   clientBindings: z
     .object({
       "claude-code": z.record(z.string(), z.string().nullable()).optional(),
@@ -177,6 +248,8 @@ export function buildProxyStatus(input: {
   nextPick?: ProxyStatus["nextPick"];
   /** Whether the gateway could use an account's sign-in when it last looked. */
   gatewaySignIn?: (accountId: string) => "missing" | "expired" | undefined;
+  /** The API-key overflow as the page shows it (keys masked). */
+  overflow?: OverflowStatus;
 }): ProxyStatus {
   const { config, metrics } = input;
   const excluded = new Set(config.excludedAccountIds ?? []);
@@ -261,5 +334,6 @@ export function buildProxyStatus(input: {
       : {}),
     ...(input.classShare?.length ? { classShare: input.classShare } : {}),
     ...(input.running && input.nextPick && Object.keys(input.nextPick).length ? { nextPick: input.nextPick } : {}),
+    ...(input.overflow ? { overflow: input.overflow } : {}),
   };
 }

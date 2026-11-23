@@ -14,6 +14,7 @@ import { resolveLocale } from "../shared/i18n/locales";
 import { acknowledgeRisks } from "../shared/feature-risk";
 import { remoteNotifyUrl } from "../shared/remote-notify";
 import { enabledMeters, type MeterReading } from "../shared/meters";
+import { OVERFLOW_PRESETS, keyHint, overflowModel, type OverflowSettings, type OverflowStatus } from "../shared/overflow";
 import type {
   Account,
   AuthFlow,
@@ -833,6 +834,7 @@ const previewProxy: {
   excluded: string[];
   bound: Partial<Record<ProxyClientId, boolean>>;
   subagentOverflow: boolean;
+  overflow: Omit<OverflowSettings, "upstreams"> & { upstreams: OverflowStatus["upstreams"] };
 } = {
   running: scenario === "proxy-waiting",
   port: 8317,
@@ -845,6 +847,42 @@ const previewProxy: {
   // `?scenario=proxy-waiting` also shows Claude Code bound, as the Overview's gateway line needs.
   bound: scenario === "proxy-waiting" ? { "claude-code": true } : {},
   subagentOverflow: false,
+  overflow: {
+    enabled: true,
+    trigger: "limited",
+    dailyCapUsd: 5,
+    upstreams: [
+      {
+        ...OVERFLOW_PRESETS.anthropic,
+        id: "preview-anthropic",
+        preset: "anthropic",
+        enabled: true,
+        order: 0,
+        keyHint: "sk-…a1b2",
+      },
+      {
+        ...OVERFLOW_PRESETS.deepseek,
+        id: "preview-deepseek",
+        preset: "deepseek",
+        enabled: false,
+        order: 1,
+        keyHint: "sk-…9f3c",
+      },
+    ],
+  },
+};
+/** The preview's overflow status: made-up spend while the gateway runs. */
+const previewOverflow = (): OverflowStatus => {
+  const { overflow } = previewProxy;
+  const spent = previewProxy.running ? 1.27 : 0;
+  return {
+    enabled: overflow.enabled,
+    trigger: overflow.trigger ?? "limited",
+    ...(overflow.dailyCapUsd !== undefined ? { dailyCapUsd: overflow.dailyCapUsd } : {}),
+    spentTodayUsd: spent,
+    capReached: overflow.dailyCapUsd !== undefined && spent >= overflow.dailyCapUsd,
+    upstreams: [...overflow.upstreams].sort((a, b) => a.order - b.order),
+  };
 };
 const minutesTo = (iso: string | null | undefined) =>
   iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 60_000)) : undefined;
@@ -870,6 +908,7 @@ const previewRecent = (): ProxyRequestLog[] => {
     { at: now - 80_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "main", ms: 5_100, tokens: { input: 3, cacheWrite: 41_000, output: 120 }, cost: 0.156, note: "cold-move", miss: { reason: "expired" as const, tokens: 40_800 } },
     { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true, client: "agent-sdk", requestClass: "auxiliary", ms: 940, tokens: { input: 1_800, output: 24 } },
     { at: now - 160_000, provider: "codex", model: "gpt-5-codex", status: 503, note: "no-account", client: "codex" },
+    { at: now - 240_000, provider: "claude", model: "claude-sonnet-5-5", status: 200, ...cc, requestClass: "main", ms: 4_300, tokens: { input: 8_200, output: 640 }, cost: 0.0228, upstream: "Anthropic API", pick: { reason: "overflow" as const } },
   ];
 };
 const previewProxyStatus = (): ProxyStatus => ({
@@ -921,6 +960,7 @@ const previewProxyStatus = (): ProxyStatus => ({
   }),
   recent: previewRecent(),
   ...(previewProxy.subagentOverflow ? { subagentOverflow: true } : {}),
+  overflow: previewOverflow(),
   ...(previewProxy.running && accounts.length
     ? {
         nextPick: {
@@ -989,6 +1029,39 @@ export const previewApi: RelayAPI = {
   proxyRegenerateKey: async () => {
     previewProxy.key = `relay-sec-preview-${Math.random().toString(36).slice(2).padEnd(28, "0")}`;
     return previewProxyStatus();
+  },
+  proxyOverflowConfigure: async (input) => {
+    const overflow = previewProxy.overflow;
+    if (input.enabled !== undefined) overflow.enabled = input.enabled;
+    if (input.trigger) overflow.trigger = input.trigger;
+    if (input.dailyCapUsd === null) delete overflow.dailyCapUsd;
+    else if (input.dailyCapUsd !== undefined) overflow.dailyCapUsd = input.dailyCapUsd;
+    if (input.order) {
+      const order = input.order;
+      overflow.upstreams = overflow.upstreams.map((u) => ({ ...u, order: order.includes(u.id) ? order.indexOf(u.id) : order.length + u.order }));
+    }
+    return previewProxyStatus();
+  },
+  proxyOverflowSaveUpstream: async ({ key, id, ...fields }) => {
+    const overflow = previewProxy.overflow;
+    const existing = overflow.upstreams.find((u) => u.id === id);
+    const saved = {
+      ...fields,
+      id: existing?.id ?? `preview-${Math.random().toString(36).slice(2, 10)}`,
+      order: existing?.order ?? overflow.upstreams.length,
+      ...(key ? { keyHint: keyHint(key) } : existing?.keyHint ? { keyHint: existing.keyHint } : {}),
+    };
+    overflow.upstreams = existing ? overflow.upstreams.map((u) => (u.id === saved.id ? saved : u)) : [...overflow.upstreams, saved];
+    return previewProxyStatus();
+  },
+  proxyOverflowRemoveUpstream: async (id) => {
+    previewProxy.overflow.upstreams = previewProxy.overflow.upstreams.filter((u) => u.id !== id);
+    return previewProxyStatus();
+  },
+  proxyOverflowTest: async (id) => {
+    const upstream = previewProxy.overflow.upstreams.find((u) => u.id === id);
+    const model = upstream ? overflowModel(upstream, "claude-haiku-5-5") : "claude-haiku-5-5";
+    return upstream?.preset === "anthropic" ? { ok: true, model, status: 200 } : { ok: false, model, status: 401, message: "Invalid API key" };
   },
   detectProviders: async () => [
     {

@@ -29,6 +29,7 @@ import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import type { LanguagePref, Locale } from "./i18n/locales";
 import type { FeatureRiskId, RiskAcknowledgements } from "./feature-risk";
 import type { MeterProvider, MeterReading } from "./meters";
+import type { OverflowConfigureInput, OverflowStatus, OverflowTestResult, OverflowUpstreamInput } from "./overflow";
 import type {
   BackupExportResult,
   BackupFileChoice,
@@ -458,6 +459,8 @@ export interface ProxyStatus {
   alarms?: ProxyLoopAlarm[];
   /** Today's gateway traffic by Claude Code's request class. */
   classShare?: ProxyClassShare[];
+  /** API-key upstreams that take Claude requests once every account is limited (keys masked). */
+  overflow?: OverflowStatus;
   /** The account a new session would get now, by provider, and why. */
   nextPick?: Partial<
     Record<
@@ -724,6 +727,14 @@ export interface RelayAPI {
   proxyBindClient(id: ProxyClientId): Promise<ProxyStatus>;
   /** Takes the gateway out of the client's settings and restores what was there before. */
   proxyUnbindClient(id: ProxyClientId): Promise<ProxyStatus>;
+  /** Turns API-key overflow on or off, sets when it is used, its daily cap and its upstreams' order. */
+  proxyOverflowConfigure(input: OverflowConfigureInput): Promise<ProxyStatus>;
+  /** Adds an upstream (a key is needed) or changes one; a key given replaces the sealed one. */
+  proxyOverflowSaveUpstream(input: OverflowUpstreamInput): Promise<ProxyStatus>;
+  /** Forgets an upstream and its sealed key. */
+  proxyOverflowRemoveUpstream(id: string): Promise<ProxyStatus>;
+  /** Sends a one-token request to a saved upstream with its saved key. */
+  proxyOverflowTest(id: string): Promise<OverflowTestResult>;
   /**
    * Puts text on the clipboard from main: the window's own clipboard API is refused in Relay's
    * windows. Write only; nothing is ever read back.

@@ -14,6 +14,8 @@ export interface RequestLogSink {
   /** The newest entries kept, newest last. */
   recent(): ProxyRequestLog[];
   record(entry: ProxyRequestLog): void;
+  /** The overflow answers of the last days that cost something, for the daily cap across restarts. */
+  overflowCosts?(): { at: number; cost: number }[];
 }
 
 /** Counters per account id; the keys are the registry's accounts, so the maps stay small. */

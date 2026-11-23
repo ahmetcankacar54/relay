@@ -126,6 +126,7 @@ Cada versión incluye un `SHA256SUMS.txt` y se actualiza sola desde GitHub Relea
 - Un endpoint local, protegido con clave, para Claude Code, Codex CLI y omp. Las solicitudes van a la cuenta cuya semana termina antes y que todavía tiene margen, comparado en capacidad real (un Max 20× al 85 % todavía tiene más margen que un Pro recién reiniciado).
 - Las sesiones se quedan en su cuenta y en su caché de prompts; una cuenta ocupada se vacía al inicio de un prompt, no a mitad.
 - Solo escucha en este Mac, o en tu red de Tailscale si así lo eliges.
+- **Desbordamiento a claves de API.** Cuando todas las cuentas de suscripción están en su límite, las solicitudes de Claude pueden ir a una clave de API en lugar de fallar: la API de Anthropic, OpenRouter, DeepSeek, Kimi, GLM o cualquier URL compatible con Anthropic, en el orden que elijas. El coste de cada solicitud aparece en el registro, y un tope diario en dólares detiene el desbordamiento el resto del día. Las claves se guardan cifradas como los inicios de sesión y nunca se muestran completas. Las claves de API se cobran por token y están pensadas para este uso, así que el desbordamiento no tiene el riesgo de las suscripciones. Las solicitudes de Codex nunca se desbordan.
 - Desactivada hasta que la actives. Es la parte de Relay más alejada del uso ordinario; consulta [Términos y riesgos](#términos-y-riesgos).
 
 ### Barra de menús, widget y CLI
