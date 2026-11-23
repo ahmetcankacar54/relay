@@ -12,7 +12,7 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { historyScopeNote } from "../src/features/SwitchPreferences";
 import { I18nContext } from "../src/data/i18n";
 import { i18nValue, testT } from "./i18n";
-import { DEFAULT_SETTINGS, type Account, type ExtensionStatus, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
 /** Static markup inside the app's tooltip provider: the pages' ⓘ tips need one, as in the shell. */
 const renderToStaticMarkup = (node: Parameters<typeof renderMarkup>[0]) => renderMarkup(createElement(TooltipProvider, null, node));

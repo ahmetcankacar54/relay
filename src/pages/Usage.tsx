@@ -100,8 +100,6 @@ function StatisticsContent({
   accounts,
   accountId,
   zone,
-  cost,
-  tokens,
 }: SectionProps) {
   const { t } = useI18n();
   const { view, loading } = state;

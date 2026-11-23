@@ -29,6 +29,15 @@ After `npm run build`, `npm run test:desktop` is the macOS integration test and
 `npm run test:boot` the boot smoke CI runs on Windows and Linux (start with a
 fresh profile, answer over IPC, quit cleanly; `-- --packaged` for the packaged app).
 
+Code health: `npm run lint` (ESLint, `eslint.config.mjs`) and `npm run format:check`
+(Prettier; `npm run format` rewrites). `npm run test:e2e` starts `npm run dev:ui`
+and runs `e2e/preview.spec.ts` in Chromium (`npx playwright install chromium`
+once): an axe scan of the main pages that fails on serious or critical WCAG 2.1
+AA violations, and screenshots compared with `e2e/__snapshots__`. The baselines
+are macOS renders, so the screenshots are compared on macOS only (CI's
+`macos-latest`; up to 2 % of pixels may differ). After a deliberate UI change,
+`npm run test:e2e -- --update-snapshots` on a Mac and commit the new PNGs.
+
 Main process layout: `electron/main.ts` is only the bootstrap (error handlers,
 app name, a pending data removal, the crash reporter, the single-instance lock,
 then `main/boot` once Electron is ready and `main/lifecycle`); esbuild bundles

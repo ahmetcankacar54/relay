@@ -1,12 +1,12 @@
 import test from "node:test";
-import { Settings, SwitchingPage } from "../src/pages/Settings";
+import { SwitchingPage } from "../src/pages/Settings";
 import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Usage, UsageStatisticsSection, WarningThreshold } from "../src/pages/Usage";
 import { SummaryTiles } from "../src/pages/usage/SummaryTiles";
 import { AccountBalance } from "../src/pages/usage/AccountBalance";
-import { costSummary, type CostSummary } from "../src/pages/usage/cost-summary";
+import { costSummary } from "../src/pages/usage/cost-summary";
 import type { TokenUsageView } from "../shared/token-usage-view";
 import { costGuides, DailyChart, guideLabel } from "../src/pages/usage/DailyChart";
 import { UsageHeatmap } from "../src/pages/usage/UsageHeatmap";

@@ -116,14 +116,6 @@ interface FakeNode {
   childNodes: FakeNode[];
   box: { left: number; top: number; width: number; height: number };
 }
-function findNode(node: FakeNode, matches: (node: FakeNode) => boolean): FakeNode | undefined {
-  if (matches(node)) return node;
-  for (const child of node.childNodes) {
-    const found = findNode(child, matches);
-    if (found) return found;
-  }
-  return undefined;
-}
 function drawnRig(node: FakeNode): Map<string, string> | undefined {
   if (node.tagName === "svg") return node.attributes;
   for (const child of node.childNodes) {

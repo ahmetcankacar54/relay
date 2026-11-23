@@ -14,7 +14,6 @@ import { FORMAT_LOCALE, type Locale } from "../../../shared/i18n/locales";
 import { macWording, usePlatform } from "@/data/platform";
 import { useRelay } from "@/data/relay-context";
 import { compactCount, moveWithinProvider, pickReasonLabel, quotaAtRisk, resetLabel, usd } from "@/lib/proxy-ui";
-import { cn } from "@/lib/utils";
 import type { ProxyAccountStatus, ProxyStatus } from "../../../shared/types";
 import { limitColumns, modelOnlyUsage } from "../../../shared/quota-windows";
 import type { Patch } from "./shared";

@@ -97,7 +97,7 @@ if (!skipTests) {
       "tests/update-signing.test.ts",
     ]);
     console.log("   ✅ Typecheck and core tests passed.");
-  } catch (error) {
+  } catch {
     console.error("❌ Tests failed. Fix issues before releasing.");
     process.exit(1);
   }

@@ -9,7 +9,6 @@ import {
   type ProxyLoopAlarm,
   type ProxyMetrics,
   type ProxyPick,
-  type ProxyPickReason,
   type ProxyState,
 } from "../../../shared/proxy-types";
 import {
@@ -42,7 +41,6 @@ import {
 } from "../../../shared/overflow";
 import { systemTimeZone } from "../../../shared/planning";
 import {
-  BadRequestError,
   parseRequestUrl,
   sendJsonError,
   type ForwardSpec,

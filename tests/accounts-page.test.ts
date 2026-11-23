@@ -86,12 +86,6 @@ test("planLabel and groupName describe an account", () => {
 
 /** The list's rows, in order: each starts at its `data-slot="list-row"`. */
 const listRows = (html: string) => html.split('data-slot="list-row"').slice(1);
-/** The list's column names, read from its header row. */
-const listHead = (html: string) => {
-  const from = html.indexOf('data-slot="list-head"');
-  const head = html.slice(from, html.indexOf("</div>", from));
-  return [...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map((m) => m[1]);
-};
 /** A reading taken a minute ago, so the account reads as fresh against the clock the list uses. */
 const readNow = (value: AccountUsage): AccountUsage => ({ ...value, checkedAt: new Date(Date.now() - 60_000).toISOString() });
 

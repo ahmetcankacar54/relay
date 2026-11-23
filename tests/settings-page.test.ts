@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mainSource } from "./helpers/main-source";
-import { act, createElement, Fragment } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";

@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 import { Store, settingsPatchSchema, settingsSchema } from "../electron/core/store";
 import {
   PROXY_KEY_PREFIX,
@@ -14,11 +13,6 @@ import {
   resetInMinutes,
 } from "../electron/core/proxy/proxy-status";
 import { ProxyStats } from "../electron/core/proxy/proxy-stats";
-import { ExtensionSwitcher } from "../electron/core/extension-switch";
-import { ExtensionVault } from "../electron/core/extension-vault";
-import { CookieVault } from "../electron/core/cookie-vault";
-import { createSealer } from "../electron/core/vault-crypto";
-import { extensionWorld, loginFor, signInFor } from "./extension-world";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage } from "../shared/types";
 import { DEFAULT_PROXY_CONFIG } from "../shared/proxy-types";
 

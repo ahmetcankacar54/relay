@@ -541,6 +541,7 @@ export class UsageCredentialRefresher {
           this.syncDirectory(profile);
         }
       } catch (error) {
+        // eslint-disable-next-line no-unsafe-finally -- a lock file left behind must surface, over the action's result
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
     }

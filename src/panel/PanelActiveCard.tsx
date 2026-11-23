@@ -9,9 +9,9 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
 import { keychainWords } from "@/data/platform";
-import { pendingFlow, usageWindowRows } from "@/data/selectors";
+import { pendingFlow } from "@/data/selectors";
 import { accountHealth, renewalIssue } from "@/lib/account-health";
-import { formatRelative, formatReset } from "@/lib/time";
+import { formatRelative } from "@/lib/time";
 import { accountPlan } from "../pages/accounts/accountLabels";
 
 export const panelEyebrow =

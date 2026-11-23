@@ -227,7 +227,7 @@ test("what changes between two sights asks for the reactions", () => {
   ({ reactions, seen } = sightReactions(seen, { ...base, active: "b", settings: "{1}" }));
   assert.deepEqual(reactions, []);
   // No active account in between is no switch.
-  ({ reactions, seen } = sightReactions(seen, { ...base, settings: "{1}" }));
+  ({ seen } = sightReactions(seen, { ...base, settings: "{1}" }));
   ({ reactions, seen } = sightReactions(seen, { ...base, active: "b", settings: "{1}" }));
   assert.deepEqual(reactions, []);
   // A refresh this window ran.

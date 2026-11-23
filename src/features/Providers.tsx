@@ -13,7 +13,7 @@ import { AccountDot } from "@/components/AccountDot";
 import { ProviderLogo } from "@/components/ProviderLogo";
 import { limitHeadline, limitOrigin } from "../../shared/quota-windows";
 import { freshUsage } from "../../shared/usage";
-import type { Account, AccountUsage } from "../../shared/types";
+import type { AccountUsage } from "../../shared/types";
 import { formatPercent } from "../../shared/percent";
 import type { Locale } from "../../shared/i18n/locales";
 import { accountPlan } from "../pages/accounts/accountLabels";

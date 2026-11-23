@@ -29,8 +29,6 @@ const settings: PlanningSettings = {
 const at = (clock: string) => wallTime("2026-10-14", clock, ZONE)!;
 const pro = planningAccount("pro", "pro");
 const max5 = planningAccount("max", "max5");
-const PRO = usageIdentity(pro)!;
-const MAX = usageIdentity(max5)!;
 const accounts = [pro, max5];
 // Samples at 09:00, 09:05 … 10:00 are the last hour; `to` lies just past 10:00.
 const FROM = at("09:00");

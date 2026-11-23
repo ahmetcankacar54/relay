@@ -41,7 +41,7 @@ export function ActiveAccountCard({
         <ListSkeleton rows={2} />
       </div>
     );
-  if (!active) return <Onboarding go={go} />;
+  if (!active) return <Onboarding />;
   const usage = relay.data?.usage[active.id];
   const running = !!desktop?.running;
   // Named as in the Accounts table and the account's page.
@@ -154,7 +154,7 @@ export function ActiveAccountCard({
   );
 }
 
-function Onboarding({ go }: { go: (to: Destination) => void }) {
+function Onboarding() {
   const relay = useRelay();
   const { t } = useI18n();
   const { accounts, hasUnclaimedDesktop } = relay;

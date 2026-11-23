@@ -4,6 +4,7 @@ import { draftJobPath } from "./draft-job";
 // The packaged app starts through package.json's "main". Relay's own Electron doubles as the
 // draft helper, so this one entry decides which of the two bundles this process runs. The names
 // are joined at runtime so the build leaves both bundles as they are.
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- the path is only known at runtime
 require(
   path.join(
     __dirname,

@@ -1,6 +1,5 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import net from "node:net";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";

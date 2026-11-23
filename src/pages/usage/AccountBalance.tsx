@@ -4,10 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageSection } from "@/components/PageSection";
 import { useI18n } from "@/data/i18n";
-import { windowTone, accountTone } from "@/lib/day-timeline";
+import { accountTone } from "@/lib/day-timeline";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { rowKey, rowName, toneIndex, type StatisticsRow } from "./format";
+import { rowKey, rowName, type StatisticsRow } from "./format";
 
 /** Plan badge; a Team plan also shows the capacity weight it is counted with. */
 function planBadge(row: StatisticsRow, accounts: Account[]) {

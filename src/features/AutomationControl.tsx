@@ -19,11 +19,7 @@ import { rankContinuationTargets, switchAtPercent } from "../../shared/continuat
 import { allowedHistoryPair } from "../../shared/history-policy";
 import { freshUsage, quotaWindows } from "../../shared/usage";
 import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
-import {
-  AUTOMATION_DOT,
-  automationModeCopy,
-  useAutomation,
-} from "./useAutomation";
+import { AUTOMATION_DOT, useAutomation } from "./useAutomation";
 
 /** "Şimdi <hesap>’e geç": opens the confirmed switch review for the target. */
 export function SwitchNowButton({
