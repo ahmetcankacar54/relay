@@ -245,7 +245,7 @@ import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
 import { LimitNotices, type LimitWindowKind } from "./core/limit-notice";
-import { formatPercent } from "../shared/percent";
+import { formatPercent, percentUsed } from "../shared/percent";
 import { FORMAT_LOCALE } from "../shared/i18n/locales";
 
 let window: BrowserWindow | null = null;
@@ -1039,8 +1039,9 @@ else {
         undefined,
         undefined,
         (account, value) => {
-          usageHistory.record(account, value);
+          // The notice first: a failed history write must not hold it back.
           limitNotices.observe(account, value);
+          usageHistory.record(account, value);
         },
         (account, credential, force, allowInteraction) =>
           service.transaction(() =>
@@ -2006,7 +2007,8 @@ let signInRenewal: SignInRenewal | undefined;
 function notifyLimitNear(account: Account, kind: LimitWindowKind, window: { usedPercent: number; resetsAt?: string }) {
   if (!Notification.isSupported()) return;
   const language = getAppLocale();
-  const percent = formatPercent(window.usedPercent, language);
+  // Rounded down, as every bar shows it: 99.6 reads 99, not 100.
+  const percent = formatPercent(percentUsed(window.usedPercent), language);
   const reset = window.resetsAt ? new Date(window.resetsAt) : undefined;
   const when =
     reset && Number.isFinite(reset.getTime())

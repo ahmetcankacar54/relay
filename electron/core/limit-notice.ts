@@ -9,35 +9,48 @@ export type LimitNoticeDeps = {
   notify: (account: Account, kind: LimitWindowKind, window: UsageWindow) => void;
 };
 
+/** How far under the threshold a window must fall before it can tell again: in practice, its reset. */
+export const REARM_MARGIN = 10;
+
 /**
  * Tells once when the account in use crosses the warning threshold in its 5-hour or weekly window.
  * Only a crossing counts: a reading already past the threshold when Relay starts, or when the user
- * switches to that account, says nothing, so a restart never repeats a notification. A window that
- * falls back under the threshold (its reset) can tell again.
+ * switches to that account, says nothing, so a restart never repeats a notification.
+ *
+ * Once told, a window tells again only after it falls well under the threshold (its reset). A
+ * gateway answer (a fraction) and a later poll (whole, sometimes older) can disagree by a point
+ * around the threshold; that must not read as a second crossing. Reset times are not compared:
+ * they drift by seconds between reads.
  */
 export class LimitNotices {
-  /** The last used percent per account and window. */
-  private last = new Map<string, number>();
+  /** Per account and window: whether a crossing would tell now. */
+  private armed = new Map<string, boolean>();
 
   constructor(private deps: LimitNoticeDeps) {}
 
   observe(account: Account, usage: AccountUsage) {
     const settings = this.deps.settings();
+    const threshold = settings.usageWarningPercent;
     const watched = settings.usageWarnings && this.deps.inUse() === account.id;
     const windows: [LimitWindowKind, UsageWindow | undefined][] = [
       ["five_hour", usage.fiveHour],
       ["seven_day", usage.sevenDay],
     ];
     for (const [kind, window] of windows) {
-      const key = `${account.id}:${kind}`;
-      const before = this.last.get(key);
       if (!window) continue;
-      this.last.set(key, window.usedPercent);
-      if (!watched || before === undefined) continue;
-      // A reset brings the window back under the threshold, which arms it again. Reset times are
-      // not compared: they drift by seconds between reads.
-      const threshold = settings.usageWarningPercent;
-      if (before < threshold && window.usedPercent >= threshold) this.deps.notify(account, kind, window);
+      const key = `${account.id}:${kind}`;
+      const armed = this.armed.get(key);
+      const used = window.usedPercent;
+      if (armed === undefined) {
+        // The first reading only arms: under the threshold it can tell later, past it it cannot.
+        this.armed.set(key, used < threshold);
+      } else if (used < threshold - REARM_MARGIN) {
+        this.armed.set(key, true);
+      } else if (armed && used >= threshold) {
+        // Disarmed whether told or not: an account crossing while not in use says nothing later.
+        this.armed.set(key, false);
+        if (watched) this.deps.notify(account, kind, window);
+      }
     }
   }
 }

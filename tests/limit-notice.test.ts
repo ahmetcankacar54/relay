@@ -53,6 +53,15 @@ test("a reset brings the window under the threshold and arms it again", () => {
   assert.deepEqual(told, ["a:five_hour:92", "a:five_hour:90"]);
 });
 
+test("a gateway fraction and an older poll around the threshold tell once, not twice", () => {
+  const { notices, told } = setup();
+  notices.observe(account("a"), reading("a", 85));
+  notices.observe(account("a"), reading("a", 90.2));
+  notices.observe(account("a"), reading("a", 89));
+  notices.observe(account("a"), reading("a", 91));
+  assert.deepEqual(told, ["a:five_hour:90.2"]);
+});
+
 test("accounts not in use, the switch turned off, and the chosen threshold", () => {
   const other = setup({ inUse: "b" });
   other.notices.observe(account("a"), reading("a", 50));

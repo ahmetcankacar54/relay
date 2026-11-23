@@ -12,7 +12,7 @@ ve de un vistazo cada límite de 5 horas y semanal, y deja que una pasarela loca
 [![Descargas](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=descargas&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#instalación)
-[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-compatible%20%C2%B7%20experimental-2f6feb?style=flat-square)](#plataformas)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20compatible%20%C2%B7%20Windows%20experimental-2f6feb?style=flat-square)](#plataformas)
 [![15 idiomas](https://img.shields.io/badge/idiomas-15-6b645e?style=flat-square)](#15-idiomas)
 [![MIT](https://img.shields.io/badge/licencia-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -164,7 +164,7 @@ macOS es la plataforma principal. La versión para Windows todavía no se ha pro
 ## Privacidad y seguridad
 
 - **Solo local.** Relay no tiene cuenta, ni servidor, ni **telemetría ni analíticas**. Sus datos están en `~/Library/Application Support/Relay` (macOS) o en `~/.config/Relay` (Linux).
-- **Con quién se comunica:** con los servicios que tus cuentas ya usan —`claude.ai`, `api.anthropic.com` (uso y perfil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity)—, con `api.github.com` para sus propias actualizaciones y, una sola vez al añadir una cuenta de Antigravity, con `github.com` para descargar un asistente de versión fija (CLIProxyAPI) cuyo SHA-256 se comprueba.
+- **Con quién se comunica:** con los servicios que tus cuentas ya usan —`claude.ai`, `api.anthropic.com` (uso y perfil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity)—, con `api.github.com` para sus propias actualizaciones y con `github.com` para descargar un asistente de versión fija (CLIProxyAPI, con su SHA-256 comprobado) la primera vez que Relay lo necesita para una cuenta de Antigravity, y de nuevo cuando una actualización fija una versión nueva.
 - **Las credenciales** nunca llegan a la interfaz. Las sesiones guardadas de la app de Claude se cifran con una clave guardada en el Llavero de macOS (Keychain), o en Secret Service o KWallet en Linux. Los archivos que contienen la clave de la pasarela se escriben para que solo tú puedas leerlos.
 - **Los archivos de la app de Claude** solo se modifican mientras está cerrada, tras una copia de seguridad cifrada y un registro de escritura.
 - **App reforzada:** ventanas de renderizado en sandbox, sin herramientas de desarrollo en las versiones publicadas, solo las propias páginas de Relay pueden llamar a la app, y una política de seguridad de contenido estricta.

@@ -12,7 +12,7 @@ Claude Desktop을 계정 사이에서 전환하고, 모든 계정에서 Claude C
 [![다운로드](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%EB%8B%A4%EC%9A%B4%EB%A1%9C%EB%93%9C&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#설치)
-[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-%EC%A7%80%EC%9B%90%20%C2%B7%20%EC%8B%A4%ED%97%98%EC%A0%81-2f6feb?style=flat-square)](#플랫폼)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20%EC%A7%80%EC%9B%90%20%C2%B7%20Windows%20%EC%8B%A4%ED%97%98%EC%A0%81-2f6feb?style=flat-square)](#플랫폼)
 [![15개 언어](https://img.shields.io/badge/%EC%96%B8%EC%96%B4-15-6b645e?style=flat-square)](#15개-언어)
 [![MIT](https://img.shields.io/badge/%EB%9D%BC%EC%9D%B4%EC%84%A0%EC%8A%A4-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -164,7 +164,7 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 ## 개인정보 보호 및 보안
 
 - **로컬 전용.** Relay에는 계정도, 서버도, **원격 측정(telemetry)이나 분석도 없습니다**. 데이터는 `~/Library/Application Support/Relay`(macOS) 또는 `~/.config/Relay`(Linux)에 저장됩니다.
-- **통신 대상:** 계정이 이미 사용하는 서비스 — `claude.ai`, `api.anthropic.com`(사용량과 프로필), `chatgpt.com` / `api.openai.com`(Codex), `cloudcode-pa.googleapis.com`(Antigravity) —, 자체 업데이트를 위한 `api.github.com`, 그리고 Antigravity 계정을 추가할 때 한 번, 버전이 고정되고 SHA-256으로 검증되는 보조 도구(CLIProxyAPI)를 내려받기 위한 `github.com`.
+- **통신 대상:** 계정이 이미 사용하는 서비스 — `claude.ai`, `api.anthropic.com`(사용량과 프로필), `chatgpt.com` / `api.openai.com`(Codex), `cloudcode-pa.googleapis.com`(Antigravity) —, 자체 업데이트를 위한 `api.github.com`, 그리고 버전이 고정되고 SHA-256으로 검증되는 보조 도구(CLIProxyAPI)를 Antigravity 계정에 처음 필요할 때와 업데이트가 새 버전을 고정할 때 내려받기 위한 `github.com`.
 - **자격 증명**은 UI에 전달되지 않습니다. 저장된 Claude 앱 로그인은 macOS 키체인(Linux에서는 Secret Service 또는 KWallet)에 보관된 키로 암호화됩니다. 게이트웨이 키가 들어 있는 파일은 본인만 읽을 수 있도록 기록됩니다.
 - **Claude 앱의 파일**은 앱이 닫혀 있을 때만, 암호화된 백업과 쓰기 저널을 남긴 뒤에 변경합니다.
 - **강화된 앱:** 샌드박스로 격리된 렌더러 창, 릴리스에는 개발자 도구 없음, Relay 자체 페이지만 앱 내부를 호출 가능, 엄격한 콘텐츠 보안 정책.

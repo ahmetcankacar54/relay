@@ -12,7 +12,7 @@ Claude Desktop をアカウント間で切り替え、どのアカウントで�
 [![ダウンロード](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#インストール)
-[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-%E5%AF%BE%E5%BF%9C%20%C2%B7%20%E8%A9%A6%E9%A8%93%E7%9A%84-2f6feb?style=flat-square)](#プラットフォーム)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20%E5%AF%BE%E5%BF%9C%20%C2%B7%20Windows%20%E8%A9%A6%E9%A8%93%E7%9A%84-2f6feb?style=flat-square)](#プラットフォーム)
 [![15の言語](https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-15-6b645e?style=flat-square)](#15の言語)
 [![MIT](https://img.shields.io/badge/%E3%83%A9%E3%82%A4%E3%82%BB%E3%83%B3%E3%82%B9-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -164,7 +164,7 @@ macOS がメインのプラットフォームです。Windows 版はまだ実機
 ## プライバシーとセキュリティ
 
 - **ローカルのみ。** Relay にはアカウントもサーバーもなく、**テレメトリーや分析も一切ありません**。データは `~/Library/Application Support/Relay`（macOS）または `~/.config/Relay`（Linux）に保存されます。
-- **通信先:** アカウントがすでに使っているサービス — `claude.ai`、`api.anthropic.com`（使用量とプロフィール）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）—、Relay 自身の更新のための `api.github.com`、そして Antigravity アカウントを追加したときに一度だけ、バージョン固定で SHA-256 を検証する補助ツール（CLIProxyAPI）をダウンロードするための `github.com` です。
+- **通信先:** アカウントがすでに使っているサービス — `claude.ai`、`api.anthropic.com`（使用量とプロフィール）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）—、Relay 自身の更新のための `api.github.com`、そしてバージョン固定で SHA-256 を検証する補助ツール（CLIProxyAPI）を、Antigravity アカウントのために初めて必要になったときと、アップデートで新しいバージョンが固定されたときにダウンロードするための `github.com` です。
 - **認証情報** が UI に渡ることはありません。保存された Claude アプリのサインインは、macOS の Keychain（Linux では Secret Service または KWallet）に保管された鍵で暗号化されます。ゲートウェイのキーを含むファイルは、本人だけが読める権限で書き込まれます。
 - **Claude アプリのファイル** は、アプリが閉じている間に、暗号化バックアップと書き込みジャーナルを取った後でのみ変更されます。
 - **堅牢化されたアプリ:** レンダラーウィンドウはサンドボックス化され、リリース版には開発者ツールがなく、アプリを呼び出せるのは Relay 自身のページだけで、厳格なコンテンツセキュリティポリシーが適用されています。

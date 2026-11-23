@@ -12,7 +12,7 @@ see every 5-hour and weekly limit at a glance, and let a local gateway spread th
 [![Downloads](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#install)
-[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-supported%20%C2%B7%20experimental-2f6feb?style=flat-square)](#platforms)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20supported%20%C2%B7%20Windows%20experimental-2f6feb?style=flat-square)](#platforms)
 [![15 languages](https://img.shields.io/badge/languages-15-6b645e?style=flat-square)](#15-languages)
 [![MIT](https://img.shields.io/badge/license-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -162,7 +162,7 @@ macOS is the main platform. The Windows build has not been tested on a real mach
 ## Privacy & security
 
 - **Local only.** Relay has no account, no server and **no telemetry or analytics**. Its data lives in `~/Library/Application Support/Relay` (macOS) or `~/.config/Relay` (Linux).
-- **Who it talks to:** the services your accounts already use — `claude.ai`, `api.anthropic.com` (usage and profile), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) — `api.github.com` for its own updates, and `github.com` once, when you add an Antigravity account, to download a pinned helper (CLIProxyAPI) whose SHA-256 is checked.
+- **Who it talks to:** the services your accounts already use — `claude.ai`, `api.anthropic.com` (usage and profile), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) — `api.github.com` for its own updates, and `github.com` to download a pinned helper (CLIProxyAPI, its SHA-256 checked) when Relay first needs it for an Antigravity account, and again after an update pins a new version.
 - **Credentials** never reach the UI. Saved Claude app sign-ins are encrypted with a key kept in the macOS Keychain (Secret Service or KWallet on Linux). Files that hold the gateway key are written readable by you only.
 - **The Claude app's files** are changed only while it is closed, after an encrypted backup and a write journal.
 - **Hardened app:** sandboxed renderer windows, no developer tools in releases, only Relay's own pages can call into the app, and a strict content security policy.

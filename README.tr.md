@@ -12,7 +12,7 @@ her 5 saatlik ve haftalık limiti tek bakışta gör, işi yerel bir ağ geçidi
 [![İndirme](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=indirme&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#kurulum)
-[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-destekleniyor%20%C2%B7%20deneysel-2f6feb?style=flat-square)](#platformlar)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20destekleniyor%20%C2%B7%20Windows%20deneysel-2f6feb?style=flat-square)](#platformlar)
 [![15 dil](https://img.shields.io/badge/dil-15-6b645e?style=flat-square)](#15-dil)
 [![MIT](https://img.shields.io/badge/lisans-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -162,7 +162,7 @@ Ana platform macOS'tur. Windows sürümü henüz gerçek bir makinede denenmedi;
 ## Gizlilik ve güvenlik
 
 - **Yalnızca yerel.** Relay'in hesabı, sunucusu ve **telemetrisi ya da analitiği yoktur**. Verileri `~/Library/Application Support/Relay` (macOS) ya da `~/.config/Relay` (Linux) içindedir.
-- **Konuştuğu yerler:** hesaplarının zaten kullandığı servisler — `claude.ai`, `api.anthropic.com` (kullanım ve profil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) —, kendi güncellemeleri için `api.github.com` ve bir Antigravity hesabı eklediğinde bir kez, sürümü sabit ve SHA-256'sı denetlenen yardımcı aracı (CLIProxyAPI) indirmek için `github.com`.
+- **Konuştuğu yerler:** hesaplarının zaten kullandığı servisler — `claude.ai`, `api.anthropic.com` (kullanım ve profil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) —, kendi güncellemeleri için `api.github.com` ve sürümü sabit, SHA-256'sı denetlenen yardımcı aracı (CLIProxyAPI) bir Antigravity hesabı için ilk gerektiğinde ve bir güncelleme yeni bir sürüm sabitlediğinde indirmek için `github.com`.
 - **Kimlik bilgileri** arayüze hiç ulaşmaz. Kayıtlı Claude uygulaması girişleri macOS Anahtar Zinciri'nde (Linux'ta Secret Service ya da KWallet) tutulan bir anahtarla şifrelenir. Ağ geçidi anahtarını içeren dosyalar yalnızca senin okuyabileceğin şekilde yazılır.
 - **Claude uygulamasının dosyaları** yalnızca uygulama kapalıyken, şifreli bir yedek ve yazma günlüğünden sonra değiştirilir.
 - **Sağlamlaştırılmış uygulama:** korumalı alanda çalışan pencereler, sürümlerde geliştirici araçları yok, uygulamaya yalnızca Relay'in kendi sayfaları erişebilir ve sıkı bir içerik güvenliği politikası.
@@ -179,7 +179,7 @@ Relay resmi değil ve yaptığı işlerin bir kısmı, Anthropic'in üçüncü t
 - **Risk nerede?** Claude uygulamasını geçirmek ve limitleri okumak olağan kullanıma en yakın kısımdır. Ağ geçidi bundan daha uzaktır; omp'yi bir Claude hesabıyla kullanmak ise en uzağıdır. Ağ geçidi sen açana kadar kapalıdır; bu riski almak istemiyorsan kapalı bırak.
 - **İş hesapları.** Team veya Enterprise koltukları şirketinin Anthropic ile yaptığı sözleşmeye de tabidir. Eklemeden önce yöneticine sor ve yalnızca sana ait hesapları kullan.
 
-**Google Antigravity.** Google'ın [Antigravity SSS'si](https://antigravity.google/docs/faq), Antigravity'ye üçüncü taraf yazılımla erişmenin koşullarını çiğnediğini ve hesabın askıya alınmasına yol açabileceğini, tüketici planlarında otomatik hesap rotasyonunun desteklenmediğini söylüyor; Google Şubat 2026'da bu yüzden hesapları askıya aldı. Relay bu anlamda üçüncü taraf yazılımdır: Antigravity'ye giriş yapar ve limitlerini okur, ağ geçidi de istekleri Antigravity hesaplarından geçirebilir. Bu yüzden Relay'deki bir Antigravity hesabı en yüksek riski taşır. Relay, Antigravity uygulamasını yalnızca sen istediğinde değiştirir. Codex hesapları OpenAI'nin koşullarına tabidir.
+**Google Antigravity.** Google'ın [Antigravity SSS'si](https://antigravity.google/docs/faq), Antigravity'ye üçüncü taraf yazılımla erişmenin koşullarını çiğnediğini ve hesabın askıya alınmasına yol açabileceğini, tüketici planlarında otomatik hesap rotasyonunun desteklenmediğini söylüyor; Google Şubat 2026'da bu yüzden hesapları askıya aldı. Relay bu anlamda üçüncü taraf yazılımdır: Antigravity'ye giriş yapar ve limitlerini okur, ağ geçidi de istekleri Antigravity hesaplarından geçirebilir. Bu yüzden Relay'deki bir Antigravity hesabı en yüksek riski taşır. Relay, Antigravity uygulamasında hesabı yalnızca sen istediğinde değiştirir. Codex hesapları OpenAI'nin koşullarına tabidir.
 
 ## SSS
 
