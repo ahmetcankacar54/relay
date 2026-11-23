@@ -1,5 +1,6 @@
 import {
   app,
+  crashReporter,
   BrowserWindow,
   clipboard,
   dialog,
@@ -12,7 +13,13 @@ import {
   systemPreferences,
 } from "electron";
 import { themeSource } from "./core/appearance";
-import { appMenuTemplate } from "./app-menu";
+import { appMenuTemplate, bugReportUrl, DOCUMENTATION_URL } from "./app-menu";
+import { launchedAtLogin, setLaunchAtLogin, type LoginItemHost } from "./core/login-item";
+import {
+  buildDiagnosticsBundle,
+  newestCrashDumps,
+  settingsSummary,
+} from "./core/diagnostics-bundle";
 import { getAppLocale, say, setAppLocale } from "./i18n";
 import { LOCALES, resolveLocale, type LanguagePref } from "../shared/i18n/locales";
 import { tFor } from "../shared/i18n/translate";
@@ -796,6 +803,8 @@ app.on("web-contents-created", (_event, contents) =>
   contents.on("will-attach-webview", (event) => event.preventDefault()),
 );
 app.setName("Relay");
+// Crashes leave a minidump in the crash dump folder for a bug report; nothing is ever sent.
+crashReporter.start({ uploadToServer: false });
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", (_event, argv) => {
@@ -1513,7 +1522,15 @@ else {
       startTokenScan();
       bindIPC();
       initialized = true;
-      createWindow();
+      void applyLaunchAtLogin();
+      // A login launch stays in the tray; the window opens when the user asks for it.
+      const loginLaunch = launchedAtLogin(
+        process.argv,
+        process.platform,
+        process.platform === "darwin" && app.getLoginItemSettings().wasOpenedAtLogin,
+      );
+      if (!loginLaunch) createWindow();
+      else if (process.platform === "darwin") app.dock?.hide();
       // A relay:// link Relay was opened with: macOS hands it over before ready,
       // Windows and Linux on the command line.
       const launchLink =
@@ -2838,9 +2855,98 @@ function applyAppMenu() {
         closeToTray: () => closeToTray(),
         quit: () => app.quit(),
         closeWindow: () => closeFocusedWindow(),
+        openDocumentation: () => void shell.openExternal(DOCUMENTATION_URL),
+        reportBug: () =>
+          void shell.openExternal(
+            bugReportUrl(app.getVersion(), process.platform, process.getSystemVersion()),
+          ),
+        exportDiagnostics: () =>
+          void exportDiagnostics().catch((error: unknown) => {
+            recordMainError("export-diagnostics", error);
+            dialog.showErrorBox(say("electronMain.diagnosticsWereNotExported"), redact(error));
+          }),
       }),
     ),
   );
+}
+/** The Electron side of the login item; the rules live in core/login-item.ts. */
+function loginItemHost(): LoginItemHost {
+  return {
+    platform: process.platform,
+    env: process.env,
+    home: os.homedir(),
+    execPath: process.execPath,
+    getLoginItemSettings: (options) => app.getLoginItemSettings(options),
+    setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
+  };
+}
+/**
+ * Brings the system's login item in line with the saved "Open at login". A development run would
+ * register the bare Electron binary, so only the packaged app touches it. Never throws.
+ */
+async function applyLaunchAtLogin() {
+  if (!app.isPackaged) return;
+  try {
+    await setLaunchAtLogin(service.store.state.settings.launchAtLogin === true, loginItemHost());
+  } catch (error) {
+    recordMainError("launch-at-login", error);
+  }
+}
+/** The logs a diagnostics zip copies, each redacted; a missing one is left out. */
+function diagnosticsFiles() {
+  const userData = app.getPath("userData");
+  return [
+    path.join(app.getPath("logs"), "main-errors.log"),
+    ...["usage-issues.json", "draft-events.json", "fleet-events.json"].map((name) =>
+      path.join(userData, name),
+    ),
+  ];
+}
+/**
+ * Help → Export diagnostics, and Settings → Advanced: the redacted zip for a bug report, saved
+ * where the user picks and shown in Finder or Explorer. False when the dialog was cancelled.
+ * Names, emails and tokens never leave: every file goes through `redactDiagnostics`.
+ */
+async function exportDiagnostics() {
+  const at = new Date();
+  const options: Electron.SaveDialogOptions = {
+    defaultPath: path.join(
+      app.getPath("downloads"),
+      `relay-diagnostics-${at.toISOString().slice(0, 10)}.zip`,
+    ),
+    filters: [{ name: "ZIP", extensions: ["zip"] }],
+  };
+  const { canceled, filePath } =
+    window && !window.isDestroyed()
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options);
+  if (canceled || !filePath) return false;
+  const { accounts, settings } = service.store.state;
+  const zip = await buildDiagnosticsBundle({
+    files: diagnosticsFiles(),
+    names: accounts.flatMap((account) => [account.name, account.auth?.orgName ?? ""]),
+    home: os.homedir(),
+    at,
+    summary: {
+      createdAt: at.toISOString(),
+      relay: app.getVersion(),
+      packaged: app.isPackaged,
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      os: {
+        platform: process.platform,
+        arch: process.arch,
+        version: process.getSystemVersion(),
+        release: os.release(),
+      },
+      locale: { app: getAppLocale(), system: app.getLocale() },
+      settings: settingsSummary(settings, accounts),
+      crashDumps: await newestCrashDumps(app.getPath("crashDumps")),
+    },
+  });
+  await fsp.writeFile(filePath, zip, { mode: 0o600 });
+  shell.showItemInFolder(filePath);
+  return true;
 }
 /** An open-file dialog over the main window while it is there, else on its own. */
 function openDialog(options: Electron.OpenDialogOptions) {
@@ -2980,6 +3086,8 @@ function bindIPC() {
     const failure = await shell.openPath(folder);
     if (failure) throw new Error(failure);
   });
+  // Takes no argument: main picks the files and the save dialog picks the place.
+  handle("export-diagnostics", () => exportDiagnostics());
   // How Relay starts Claude (HTTP/3).
   handle("claude-launch", () => switchDiagnostics?.current ?? { quicOff: false });
   // Relay's own updates.
@@ -3452,10 +3560,12 @@ function bindIPC() {
         throw new Error("Select existing Relay accounts once each.");
     }
     const retype = draftRetype();
+    const launchAtLogin = service.store.state.settings.launchAtLogin;
     service.store.update((s) => {
       Object.assign(s.settings, patch);
     });
     nativeTheme.themeSource = themeSource(service.store.state.settings);
+    if (service.store.state.settings.launchAtLogin !== launchAtLogin) void applyLaunchAtLogin();
     usage.tick();
     void autoSwitch.tick();
     // Turned off, the drafts still pending go to Copy now, not at the next switch.

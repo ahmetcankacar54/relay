@@ -28,7 +28,7 @@ interface Row {
   action?: ReactNode;
 }
 
-/** Where the steps the user settled by hand are kept: "mode", "extension", "hidden". */
+/** Where the steps the user settled by hand are kept: "mode", "extension", "login", "hidden". */
 const STORAGE_KEY = "relay.setup.v1";
 
 function loadSeen(): Set<string> {
@@ -168,6 +168,32 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
             {t("setupChecklist.setUp")}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => settle("extension")}>
+            {t("setupChecklist.skip")}
+          </Button>
+        </span>
+      ),
+    },
+    login: {
+      title: t("setupChecklist.openRelayAtLogin"),
+      status: met("login")
+        ? t("setupChecklist.on")
+        : seen.has("login")
+          ? t("setupChecklist.skipped")
+          : t("setupChecklist.optional"),
+      reason: t("setupChecklist.planningAndSwitchingRunOnlyWhile"),
+      action: (
+        <span className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={relay.desktopBusy}
+            onClick={() =>
+              void relay.action("settings", () => relay.api.updateSettings({ launchAtLogin: true }))
+            }
+          >
+            {t("setupChecklist.turnOn")}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => settle("login")}>
             {t("setupChecklist.skip")}
           </Button>
         </span>

@@ -204,6 +204,7 @@ export const settingsSchema = z
     claudeExtension: extensionSettingSchema.optional(),
     // Missing means "follow"; no .default() so a patch keeps the stored choice.
     terminalCli: z.enum(TERMINAL_MODES).optional(),
+    launchAtLogin: z.boolean().optional(),
     // A registry from before the risk notes has accepted none of them.
     riskAcknowledged: z.partialRecord(z.enum(FEATURE_RISK_IDS), z.number().int().min(1)).default({}),
   })

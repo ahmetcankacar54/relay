@@ -4,14 +4,47 @@ import { tFor } from "../shared/i18n/translate";
 
 const separator: MenuItemConstructorOptions = { type: "separator" };
 
+/** Relay's README on GitHub, which Help → Documentation opens. */
+export const DOCUMENTATION_URL = "https://github.com/ahmetcankacar54/relay#readme";
+
+/** The issue form's names for each platform (`.github/ISSUE_TEMPLATE/bug_report.yml`, field `platform`). */
+const FORM_PLATFORM: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: "macOS",
+  win32: "Windows",
+  linux: "Linux",
+};
+
+/**
+ * The bug report form with the Relay version, the platform and the system version ("macOS
+ * 15.5") filled in; GitHub prefills an issue form field from the query parameter named by its id.
+ */
+export function bugReportUrl(version: string, platform: NodeJS.Platform, osVersion: string) {
+  const name = FORM_PLATFORM[platform];
+  const query = new URLSearchParams({
+    template: "bug_report.yml",
+    version,
+    os: name ? `${name} ${osVersion}` : osVersion,
+  });
+  if (name) query.set("platform", name);
+  return `https://github.com/ahmetcankacar54/relay/issues/new?${query}`;
+}
+
 /**
  * The application menu, in the app's language. Cmd+Q closes the window to the menu bar and
- * Alt+Cmd+Q quits (there is no stock quit role); Cmd+W closes the focused window. Pure, so main
+ * Alt+Cmd+Q quits (there is no stock quit role); Cmd+W closes the focused window. Help opens the
+ * documentation and the bug report form, and exports the diagnostics zip. Pure, so main
  * rebuilds it whenever the language changes and the tests read it in both languages.
  */
 export function appMenuTemplate(
   language: Locale,
-  actions: { closeToTray(): void; quit(): void; closeWindow(): void },
+  actions: {
+    closeToTray(): void;
+    quit(): void;
+    closeWindow(): void;
+    openDocumentation(): void;
+    reportBug(): void;
+    exportDiagnostics(): void;
+  },
   platform: NodeJS.Platform = process.platform,
 ): MenuItemConstructorOptions[] {
   const t = tFor(language);
@@ -75,6 +108,16 @@ export function appMenuTemplate(
           accelerator: "CmdOrCtrl+W",
           click: () => actions.closeWindow(),
         },
+      ],
+    },
+    {
+      label: t("appMenu.help"),
+      role: "help",
+      submenu: [
+        { label: t("appMenu.documentation"), click: () => actions.openDocumentation() },
+        { label: t("appMenu.reportABug"), click: () => actions.reportBug() },
+        separator,
+        { label: t("appMenu.exportDiagnostics"), click: () => actions.exportDiagnostics() },
       ],
     },
   ];

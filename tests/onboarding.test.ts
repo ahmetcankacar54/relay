@@ -333,13 +333,13 @@ test("a CLI too old to read limits is looked at again, so an update is noticed",
   assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
 });
 
-test("the setup list needs two connected accounts and a choice of when to switch; the extension is optional", () => {
+test("the setup list needs two connected accounts and a choice of when to switch; the extension and open at login are optional", () => {
   const ready = desktop({ organizations: [ORG] });
   const settings = { autoSwitchMode: "off" as const, claudeExtension: { mode: "guide" as const } };
   const keys = (s?: ReturnType<typeof setupState>) => s?.steps.map((x) => `${x.key}:${x.met}${x.optional ? "?" : ""}`);
   assert.equal(setupState({ desktop: ready, accounts: [], settings }), undefined);
   const none = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: [], settings });
-  assert.deepEqual(keys(none), ["desktop:true", "code:true", "first:false", "second:false", "mode:false", "extension:false?"]);
+  assert.deepEqual(keys(none), ["desktop:true", "code:true", "first:false", "second:false", "mode:false", "extension:false?", "login:false?"]);
   assert.equal(none?.ready, false);
   // An account without a saved Claude app sign-in does not count.
   const loose = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: [account("a"), account("b", false)], settings });
@@ -349,16 +349,19 @@ test("the setup list needs two connected accounts and a choice of when to switch
   const chosen = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings: { ...settings, autoSwitchMode: "after-exit" } });
   assert.equal(chosen?.ready, true);
   assert.equal(chosen?.complete, false);
-  const skipped = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings, seen: new Set(["mode", "extension"]) });
+  const skipped = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings, seen: new Set(["mode", "extension", "login"]) });
   assert.equal(skipped?.complete, true);
+  // Open at login stays open until it is on or skipped.
+  const loginOpen = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings, seen: new Set(["mode", "extension"]) });
+  assert.equal(loginOpen?.complete, false);
   // Continue at quota counts as a choice; Linux has the extension step too, Windows does not.
   const linux = setupState({ desktop: ready, diagnostics: diagnostics({ platform: "linux" }), accounts: two, settings, quota: true });
-  assert.deepEqual(keys(linux)?.at(-1), "extension:false?");
+  assert.deepEqual(keys(linux)?.at(-2), "extension:false?");
   assert.equal(linux?.ready, true);
-  const windows = setupState({ desktop: ready, diagnostics: diagnostics({ platform: "win32" }), accounts: two, settings, quota: true });
-  assert.deepEqual(keys(windows)?.at(-1), "mode:true");
+  const windows = setupState({ desktop: ready, diagnostics: diagnostics({ platform: "win32" }), accounts: two, settings: { ...settings, launchAtLogin: true }, quota: true });
+  assert.deepEqual(keys(windows)?.slice(-2), ["mode:true", "login:true?"]);
   assert.equal(windows?.complete, true);
   // The extension that follows the account is met.
   const follows = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings: { ...settings, claudeExtension: { mode: "restart" } } });
-  assert.deepEqual(keys(follows)?.at(-1), "extension:true?");
+  assert.deepEqual(keys(follows)?.at(-2), "extension:true?");
 });

@@ -38,6 +38,13 @@ export const showDiagnostics = ({
 }: Pick<ReturnType<typeof useRelay>, "api" | "action">) =>
   action("diagnostics", () => api.showDiagnostics());
 
+/** Saves the redacted diagnostics zip where the user picks; main builds it, the page passes no path. */
+export const exportDiagnostics = ({
+  api,
+  action,
+}: Pick<ReturnType<typeof useRelay>, "api" | "action">) =>
+  action("export-diagnostics", () => api.exportDiagnostics());
+
 /**
  * How Relay starts Claude: without HTTP/3. The choice lives outside the registry, so this row
  * reads it itself, again after each Relay change (Relay turns HTTP/3 off itself after a stuck
@@ -318,6 +325,18 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               >
                 <Switch id="privacy-blur" checked={privacyBlur} onCheckedChange={setPrivacyBlur} />
               </SettingRow>
+              <SettingRow
+                label={t("settings.openAtLogin")}
+                htmlFor="launch-at-login"
+                description={t("settings.relayStartsHiddenWhenYouLog")}
+              >
+                <Switch
+                  id="launch-at-login"
+                  checked={settings.launchAtLogin === true}
+                  disabled={disabled}
+                  onCheckedChange={(launchAtLogin) => update({ launchAtLogin })}
+                />
+              </SettingRow>
               <RefreshIntervalRow />
             </SettingGroup>
             {/* The menu bar title and the switch window are macOS-only; other platforms keep the R icon. */}
@@ -454,6 +473,18 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   onClick={() => void showDiagnostics({ api, action })}
                 >
                   {mac ? t("settings.showInFinder") : t("settings.showInFolder")}
+                </Button>
+              </SettingRow>
+              <SettingRow
+                label={t("settings.diagnosticsForABugReport")}
+                description={t("settings.oneZipOfRelaysLogsEmail")}
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void exportDiagnostics({ api, action })}
+                >
+                  {t("settings.export")}
                 </Button>
               </SettingRow>
             </SettingGroup>

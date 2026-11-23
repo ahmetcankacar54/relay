@@ -22,7 +22,7 @@ test("Cmd+Q closes the window to the menu bar and Alt+Cmd+Q quits Relay", () => 
   // The template itself is tested in tests/app-menu.test.ts; main hands it these actions.
   assert.match(
     main,
-    /appMenuTemplate\(getAppLocale\(\), \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
+    /appMenuTemplate\(getAppLocale\(\), \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*openDocumentation: /,
   );
 });
 

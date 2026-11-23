@@ -33,6 +33,7 @@ const api: RelayAPI = {
   cancelTerminalLink: (id, attempt) =>
     ipcRenderer.invoke("relay:terminal-link-cancel", id, attempt),
   showDiagnostics: () => ipcRenderer.invoke("relay:show-diagnostics"),
+  exportDiagnostics: () => ipcRenderer.invoke("relay:export-diagnostics"),
   claudeLaunch: () => ipcRenderer.invoke("relay:claude-launch"),
   setClaudeLaunch: (patch) => ipcRenderer.invoke("relay:set-claude-launch", patch),
   checkUpdate: () => ipcRenderer.invoke("relay:update-check"),

@@ -1090,6 +1090,7 @@ export const previewApi: RelayAPI = {
   setLanguage: async () => {},
   getLanguage: async () => ({ pref: "system" as const, locale: resolveLocale("system", navigator.languages) }),
   showDiagnostics: desktopOnly,
+  exportDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,
   checkUpdate: async () => {

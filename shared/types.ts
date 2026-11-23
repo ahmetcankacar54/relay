@@ -606,6 +606,11 @@ export interface RelayAPI {
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
   /**
+   * Saves a zip of Relay's logs, with emails, account names and tokens removed, where the user
+   * picks in a save dialog, then shows it; false when the dialog was cancelled. Takes no path.
+   */
+  exportDiagnostics(): Promise<boolean>;
+  /**
    * How Relay starts Claude: `quicOff`, without HTTP/3, which Relay also turns on itself after a
    * stuck start.
    */
@@ -821,6 +826,8 @@ export interface RelaySettings {
   claudeExtension?: ExtensionSetting;
   /** What Relay does with the terminal's Claude Code sign-in at a switch; missing means "follow". */
   terminalCli?: TerminalMode;
+  /** Start Relay hidden at login (Settings → General); missing means off. */
+  launchAtLogin?: boolean;
   /**
    * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
    * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
@@ -934,6 +941,7 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   autoSwitchMode: "off",
   autoSwitchAccounts: [],
   historyPolicyVersion: 2,
+  launchAtLogin: false,
   riskAcknowledged: {},
 };
 export type AutoSwitchReason =

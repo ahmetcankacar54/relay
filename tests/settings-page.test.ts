@@ -4,7 +4,7 @@ import { act, createElement, Fragment } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
-import { PlanningPage, PrivacyNotes, Settings, SwitchingPage } from "../src/pages/Settings";
+import { exportDiagnostics, PlanningPage, PrivacyNotes, Settings, SwitchingPage } from "../src/pages/Settings";
 import { SETTINGS_TABS } from "../src/app/routes";
 import { TooltipProvider } from "../src/components/ui/tooltip";
 
@@ -85,6 +85,52 @@ test("the system group offers the diagnostics files, and say which ones to send"
   assert.match(handler.slice(0, 600), /"draft-events\.json"/);
   const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
   assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
+});
+
+test("Advanced exports the redacted diagnostics zip through main, which takes no path", async () => {
+  const calls: string[] = [];
+  const relay = relayFor();
+  relay.api = { exportDiagnostics: async () => void calls.push("export") } as unknown as Relay["api"];
+  relay.action = (async (name: string, fn: () => Promise<unknown>) => {
+    calls.push(name);
+    await fn();
+    return true;
+  }) as Relay["action"];
+  const html = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: i18nValue("en") },
+      createElement(RelayContext.Provider, { value: relay }, createElement(AllSettings)),
+    ),
+  );
+  assert.match(
+    html,
+    /Diagnostics for a bug report<\/label><p[^>]*>Saves one zip of Relay’s logs\. Email addresses, account names and tokens are removed\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Export…<\/button>/,
+  );
+  await exportDiagnostics(relay);
+  assert.deepEqual(calls, ["export-diagnostics", "export"]);
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(main, /handle\("export-diagnostics", \(\) => exportDiagnostics\(\)\);/);
+  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
+  assert.match(preload, /exportDiagnostics: \(\) => ipcRenderer\.invoke\("relay:export-diagnostics"\)/);
+});
+
+test("General offers Open at login, off until turned on", () => {
+  const render = (launchAtLogin?: boolean) => {
+    const relay = relayFor();
+    relay.settings = { ...settings, launchAtLogin };
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: i18nValue("en") },
+        createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "genel" })),
+      ),
+    );
+  };
+  const row = (html: string) => /Open at login<\/label>[\s\S]*?id="launch-at-login"[^>]*>/.exec(html)?.[0] ?? "";
+  assert.match(row(render()), /Relay starts in the background when you log in, so planning and switching keep running\./);
+  assert.match(row(render()), /aria-checked="false"/);
+  assert.match(row(render(true)), /aria-checked="true"/);
 });
 
 test("Settings has two tabs, general and advanced; switching, planning and the gateway are pages", () => {
