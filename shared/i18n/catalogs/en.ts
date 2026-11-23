@@ -1644,6 +1644,8 @@ export const en = {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay needs Keychain access to read the limits.",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay needs keyring access (KWallet or Secret Service) to read limits.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay needs keyring access (KWallet or Secret Service) to read the limits.",
+  "poolCard.antigravityRisk": "Google's Antigravity FAQ says third-party software must not use an Antigravity sign-in, and Google has suspended accounts for it. Keep Antigravity accounts out of the pool unless you accept that risk.",
+  "poolCard.antigravityTermsLink": "Google's terms",
   "poolCard.aLimitWindowIsSpentIt": "A limit window is spent; it is used again when it resets. Its sessions moved to another account.",
   "poolCard.aNewSessionNow": "A new session now → ",
   "poolCard.aSession": "A {scopedLabel} session → ",

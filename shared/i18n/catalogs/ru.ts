@@ -1649,6 +1649,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay нужен доступ к Связке ключей для чтения лимитов.",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay нужен доступ к хранилищу ключей (KWallet или Secret Service) для чтения лимитов.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay нужен доступ к хранилищу ключей (KWallet или Secret Service) для чтения лимитов.",
+  "poolCard.antigravityRisk": "В FAQ Antigravity от Google сказано, что сторонние программы не должны использовать вход в Antigravity, и Google уже блокировал за это аккаунты. Не добавляйте аккаунты Antigravity в пул, если не готовы к этому риску.",
+  "poolCard.antigravityTermsLink": "Условия Google",
   "poolCard.aLimitWindowIsSpentIt": "Период лимита исчерпан; аккаунт снова используется после обновления. Его сеансы перенесены на другой аккаунт.",
   "poolCard.aNewSessionNow": "Новый сеанс сейчас → ",
   "poolCard.aSession": "Сеанс {scopedLabel} → ",

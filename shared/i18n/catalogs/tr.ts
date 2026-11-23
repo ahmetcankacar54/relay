@@ -1642,6 +1642,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · limitleri okumak için Anahtarlık erişimi gerekiyor.",
   "platform.relayNeedsKeyringAccessKwalletOr": "Limitleri okumak için anahtar deposu (KWallet ya da Secret Service) erişimi gerekiyor.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · limitleri okumak için anahtar deposu (KWallet ya da Secret Service) erişimi gerekiyor.",
+  "poolCard.antigravityRisk": "Google'ın Antigravity SSS'si, üçüncü taraf yazılımların Antigravity oturumunu kullanmasını yasaklıyor ve Google bu yüzden hesapları askıya aldı. Bu riski kabul etmiyorsan Antigravity hesaplarını havuzun dışında tut.",
+  "poolCard.antigravityTermsLink": "Google'ın koşulları",
   "poolCard.aLimitWindowIsSpentIt": "Bir limit dönemi doldu; sıfırlanınca yeniden kullanılır. Oturumları başka hesaba geçti.",
   "poolCard.aNewSessionNow": "Yeni oturum şimdi → ",
   "poolCard.aSession": "{scopedLabel} oturumu → ",

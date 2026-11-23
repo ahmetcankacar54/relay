@@ -1648,6 +1648,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay necesita acceso al Llavero para leer los límites.",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay necesita acceso al depósito de claves (KWallet o Secret Service) para leer los límites.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay necesita acceso al depósito de claves (KWallet o Secret Service) para leer los límites.",
+  "poolCard.antigravityRisk": "Las preguntas frecuentes de Antigravity de Google dicen que el software de terceros no debe usar un inicio de sesión de Antigravity, y Google ha suspendido cuentas por ello. Deja las cuentas de Antigravity fuera del grupo si no aceptas ese riesgo.",
+  "poolCard.antigravityTermsLink": "Términos de Google",
   "poolCard.aLimitWindowIsSpentIt": "Un periodo del límite está agotado; se vuelve a usar cuando se reinicie. Sus sesiones pasaron a otra cuenta.",
   "poolCard.aNewSessionNow": "Una sesión nueva ahora → ",
   "poolCard.aSession": "Una sesión de {scopedLabel} → ",

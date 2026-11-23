@@ -12,7 +12,7 @@ ve de un vistazo cada límite de 5 horas y semanal, y deja que una pasarela loca
 [![Descargas](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=descargas&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#instalación)
-[![Windows · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20Linux-compatible-2f6feb?style=flat-square)](#plataformas)
+[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-compatible%20%C2%B7%20experimental-2f6feb?style=flat-square)](#plataformas)
 [![15 idiomas](https://img.shields.io/badge/idiomas-15-6b645e?style=flat-square)](#15-idiomas)
 [![MIT](https://img.shields.io/badge/licencia-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -50,7 +50,7 @@ Relay es gratuito, de código abierto (MIT), funciona por completo en tu Mac y n
 | Plataforma | Descarga | Notas |
 | --- | --- | --- |
 | **macOS 13+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | La plataforma principal: panel de la barra de menús, widget, cambio automático. |
-| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Cambio manual, límites, cuentas, pasarela. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Cambio manual, límites, cuentas, pasarela. Experimental: aún no probado en una máquina real. |
 | **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Funciona con el Claude Desktop oficial para Linux. |
 | **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … consulta la [guía de la CLI](cli/README.md). |
 
@@ -164,7 +164,7 @@ macOS es la plataforma principal. La versión para Windows todavía no se ha pro
 ## Privacidad y seguridad
 
 - **Solo local.** Relay no tiene cuenta, ni servidor, ni **telemetría ni analíticas**. Sus datos están en `~/Library/Application Support/Relay` (macOS) o en `~/.config/Relay` (Linux).
-- **Con quién se comunica:** con los servicios que tus cuentas ya usan —`claude.ai`, `api.anthropic.com` (uso y perfil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity)— y con `api.github.com` para sus propias actualizaciones.
+- **Con quién se comunica:** con los servicios que tus cuentas ya usan —`claude.ai`, `api.anthropic.com` (uso y perfil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity)—, con `api.github.com` para sus propias actualizaciones y, una sola vez al añadir una cuenta de Antigravity, con `github.com` para descargar un asistente de versión fija (CLIProxyAPI) cuyo SHA-256 se comprueba.
 - **Las credenciales** nunca llegan a la interfaz. Las sesiones guardadas de la app de Claude se cifran con una clave guardada en el Llavero de macOS (Keychain), o en Secret Service o KWallet en Linux. Los archivos que contienen la clave de la pasarela se escriben para que solo tú puedas leerlos.
 - **Los archivos de la app de Claude** solo se modifican mientras está cerrada, tras una copia de seguridad cifrada y un registro de escritura.
 - **App reforzada:** ventanas de renderizado en sandbox, sin herramientas de desarrollo en las versiones publicadas, solo las propias páginas de Relay pueden llamar a la app, y una política de seguridad de contenido estricta.
@@ -181,7 +181,7 @@ Relay no es oficial, y parte de lo que hace no es la forma en que Anthropic quie
 - **Dónde está el riesgo.** Cambiar la app de Claude y leer los límites es lo más cercano al uso ordinario. La pasarela está más lejos, y omp a través de una cuenta de Claude es lo más lejano. La pasarela está desactivada hasta que la actives; déjala desactivada si prefieres no asumir ese riesgo.
 - **Cuentas de trabajo.** Un puesto Team o Enterprise también se rige por el acuerdo de tu empresa con Anthropic. Pregunta a tu administrador antes de añadirlo, y usa solo cuentas que sean tuyas.
 
-Las cuentas de Codex y Antigravity se rigen del mismo modo por los términos de OpenAI y de Google.
+**Google Antigravity.** Las [preguntas frecuentes de Antigravity](https://antigravity.google/docs/faq) de Google dicen que acceder a Antigravity con software de terceros infringe sus términos y puede llevar a la suspensión de la cuenta, y que la rotación automática de cuentas no se admite en los planes de consumo; Google suspendió cuentas por ello en febrero de 2026. Relay es software de terceros en ese sentido: inicia sesión en Antigravity y lee sus límites, y su pasarela puede enviar solicitudes a través de cuentas de Antigravity. Por eso una cuenta de Antigravity en Relay conlleva el mayor riesgo. Relay cambia la app de Antigravity solo cuando tú lo pides. Las cuentas de Codex se rigen por los términos de OpenAI.
 
 ## Preguntas frecuentes
 

@@ -1646,6 +1646,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · 한도를 읽으려면 Relay에 키체인 접근 권한이 필요해요.",
   "platform.relayNeedsKeyringAccessKwalletOr": "한도를 읽으려면 Relay에 키링(KWallet 또는 Secret Service) 접근 권한이 필요해요.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · 한도를 읽으려면 Relay에 키링(KWallet 또는 Secret Service) 접근 권한이 필요해요.",
+  "poolCard.antigravityRisk": "Google의 Antigravity FAQ는 서드파티 소프트웨어가 Antigravity 로그인을 사용하면 안 된다고 하며, Google은 이 때문에 계정을 정지한 적이 있습니다. 이 위험을 감수하지 않으려면 Antigravity 계정을 풀에 넣지 마세요.",
+  "poolCard.antigravityTermsLink": "Google 약관",
   "poolCard.aLimitWindowIsSpentIt": "한도 주기가 소진됐어요. 초기화되면 다시 사용돼요. 세션은 다른 계정으로 옮겨졌어요.",
   "poolCard.aNewSessionNow": "지금 새 세션 → ",
   "poolCard.aSession": "{scopedLabel} 세션 → ",

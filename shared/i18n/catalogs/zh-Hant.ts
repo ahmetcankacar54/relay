@@ -1649,6 +1649,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay 需要鑰匙圈存取權才能讀取額度。",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay 需要金鑰圈存取權（KWallet 或 Secret Service）才能讀取額度。",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay 需要金鑰圈存取權（KWallet 或 Secret Service）才能讀取額度。",
+  "poolCard.antigravityRisk": "Google 的 Antigravity 常見問題指出，第三方軟體不得使用 Antigravity 登入，Google 已因此停用過帳號。如果你不接受這項風險，請不要把 Antigravity 帳號放入帳號池。",
+  "poolCard.antigravityTermsLink": "Google 的條款",
   "poolCard.aLimitWindowIsSpentIt": "有個額度週期已用完；重設後會再次使用。其工作階段已移到另一個帳號。",
   "poolCard.aNewSessionNow": "現在的新工作階段 → ",
   "poolCard.aSession": "{scopedLabel} 工作階段 → ",

@@ -1647,6 +1647,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · 上限を読み取るには、Relay にキーチェーンへのアクセスが必要です。",
   "platform.relayNeedsKeyringAccessKwalletOr": "上限を読み取るには、Relay にキーリング（KWallet または Secret Service）へのアクセスが必要です。",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · 上限を読み取るには、Relay にキーリング（KWallet または Secret Service）へのアクセスが必要です。",
+  "poolCard.antigravityRisk": "Google の Antigravity FAQ では、サードパーティ製ソフトウェアが Antigravity のサインインを使うことは禁止されており、Google はこれを理由にアカウントを停止しています。このリスクを受け入れない場合は、Antigravity アカウントをプールに入れないでください。",
+  "poolCard.antigravityTermsLink": "Google の規約",
   "poolCard.aLimitWindowIsSpentIt": "上限の期間を使い切りました。リセットされると再び使われます。そのセッションは別のアカウントに移りました。",
   "poolCard.aNewSessionNow": "今の新しいセッション → ",
   "poolCard.aSession": "{scopedLabel} のセッション → ",

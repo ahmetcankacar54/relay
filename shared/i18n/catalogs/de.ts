@@ -1650,6 +1650,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay braucht Schlüsselbund-Zugriff, um die Limits zu lesen.",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay braucht Schlüsselring-Zugriff (KWallet oder Secret Service), um Limits zu lesen.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay braucht Schlüsselring-Zugriff (KWallet oder Secret Service), um die Limits zu lesen.",
+  "poolCard.antigravityRisk": "Laut Googles Antigravity-FAQ darf Drittanbieter-Software keine Antigravity-Anmeldung nutzen, und Google hat deswegen Konten gesperrt. Lass Antigravity-Konten aus dem Pool, wenn du dieses Risiko nicht eingehen willst.",
+  "poolCard.antigravityTermsLink": "Googles Bedingungen",
   "poolCard.aLimitWindowIsSpentIt": "Ein Limit-Zeitraum ist aufgebraucht; er wird nach dem Reset wieder genutzt. Seine Sitzungen sind zu einem anderen Konto gewechselt.",
   "poolCard.aNewSessionNow": "Eine neue Sitzung jetzt → ",
   "poolCard.aSession": "Eine {scopedLabel}-Sitzung → ",

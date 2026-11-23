@@ -7,6 +7,8 @@ export const EXTERNAL_LINKS = {
   cliSetup: "https://docs.anthropic.com/en/docs/claude-code/setup",
   /** Anthropic's rules for Claude sign-ins in other tools, linked from the gateway's note. */
   claudeTerms: "https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use",
+  /** Google's FAQ on Antigravity sign-ins in other software, linked from the pool's Antigravity note. */
+  antigravityTerms: "https://antigravity.google/docs/faq",
   /** System Settings › Privacy & Security › Full Disk Access, on macOS. */
   fullDiskAccess: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
 } as const;

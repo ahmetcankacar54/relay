@@ -150,6 +150,15 @@ test("the Live tab lists the pool in order with both limit windows, and the late
   assert.match(html, /Önbellek[\s\S]*?%40/);
   // Signed-out accounts in the pool are named above the tabs.
   assert.match(html, /data-slot="proxy-attention"[\s\S]*?Google Ultra: giriş yok/);
+  // Google forbids Antigravity sign-ins in other software: the Antigravity group says so, with Google's page;
+  // the other providers carry no such note.
+  assert.match(html, /data-provider="antigravity"[\s\S]*?data-slot="antigravity-risk">Google&#x27;ın Antigravity SSS&#x27;si[\s\S]*?href="https:\/\/antigravity\.google\/docs\/faq"/);
+  assert.equal(html.match(/data-slot="antigravity-risk"/g)?.length, 1);
+});
+
+test("without Antigravity accounts the pool shows no Antigravity note", () => {
+  const html = tab(relayFor(status({ accounts: status().accounts.filter((a) => a.provider !== "antigravity") })), "canli");
+  assert.doesNotMatch(html, /data-slot="antigravity-risk"/);
 });
 
 test("an empty pool invites adding an account", () => {

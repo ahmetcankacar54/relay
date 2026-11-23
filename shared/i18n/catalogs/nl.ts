@@ -1648,6 +1648,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay heeft toegang tot de sleutelhanger nodig om de limieten te lezen.",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay heeft toegang tot de sleutelbos (KWallet of Secret Service) nodig om limieten te lezen.",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay heeft toegang tot de sleutelbos (KWallet of Secret Service) nodig om de limieten te lezen.",
+  "poolCard.antigravityRisk": "Volgens de Antigravity-FAQ van Google mag software van derden geen Antigravity-aanmelding gebruiken, en Google heeft daarom accounts geschorst. Houd Antigravity-accounts buiten de pool als je dat risico niet wilt nemen.",
+  "poolCard.antigravityTermsLink": "Voorwaarden van Google",
   "poolCard.aLimitWindowIsSpentIt": "Een limietperiode is op; die wordt weer gebruikt als hij reset. De sessies ervan zijn naar een ander account verplaatst.",
   "poolCard.aNewSessionNow": "Een nieuwe sessie nu → ",
   "poolCard.aSession": "Een {scopedLabel}-sessie → ",

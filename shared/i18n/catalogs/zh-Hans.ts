@@ -1648,6 +1648,8 @@ export default {
   "platform.relayNeedsKeychainAccessToRead2": "{name} · Relay 需要钥匙串访问权限来读取限额。",
   "platform.relayNeedsKeyringAccessKwalletOr": "Relay 需要密钥环访问权限（KWallet 或 Secret Service）来读取限额。",
   "platform.relayNeedsKeyringAccessKwalletOr2": "{name} · Relay 需要密钥环访问权限（KWallet 或 Secret Service）来读取限额。",
+  "poolCard.antigravityRisk": "Google 的 Antigravity 常见问题指出，第三方软件不得使用 Antigravity 登录，Google 已因此停用过账号。如果你不接受这一风险，请不要把 Antigravity 账号放入账号池。",
+  "poolCard.antigravityTermsLink": "Google 的条款",
   "poolCard.aLimitWindowIsSpentIt": "有一个限额周期已用完；重置后会再次使用。它的会话已移到另一个账号。",
   "poolCard.aNewSessionNow": "现在的新会话 → ",
   "poolCard.aSession": "{scopedLabel} 会话 → ",

@@ -12,7 +12,7 @@ Claude Desktop을 계정 사이에서 전환하고, 모든 계정에서 Claude C
 [![다운로드](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%EB%8B%A4%EC%9A%B4%EB%A1%9C%EB%93%9C&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#설치)
-[![Windows · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20Linux-%EC%A7%80%EC%9B%90-2f6feb?style=flat-square)](#플랫폼)
+[![Linux · Windows](https://img.shields.io/badge/Linux%20%C2%B7%20Windows-%EC%A7%80%EC%9B%90%20%C2%B7%20%EC%8B%A4%ED%97%98%EC%A0%81-2f6feb?style=flat-square)](#플랫폼)
 [![15개 언어](https://img.shields.io/badge/%EC%96%B8%EC%96%B4-15-6b645e?style=flat-square)](#15개-언어)
 [![MIT](https://img.shields.io/badge/%EB%9D%BC%EC%9D%B4%EC%84%A0%EC%8A%A4-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -50,7 +50,7 @@ Relay는 무료 오픈 소스(MIT)이며, 전적으로 사용자의 Mac에서 �
 | 플랫폼 | 다운로드 | 참고 |
 | --- | --- | --- |
 | **macOS 13+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | 주요 플랫폼: 메뉴 막대 패널, 위젯, 자동 전환. |
-| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 수동 전환, 한도, 계정, 게이트웨이. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 수동 전환, 한도, 계정, 게이트웨이. 실험적: 아직 실제 컴퓨터에서 테스트되지 않았습니다. |
 | **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Linux용 공식 Claude Desktop과 함께 작동합니다. |
 | **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … [CLI 가이드](cli/README.md)를 참고하세요. |
 
@@ -164,7 +164,7 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 ## 개인정보 보호 및 보안
 
 - **로컬 전용.** Relay에는 계정도, 서버도, **원격 측정(telemetry)이나 분석도 없습니다**. 데이터는 `~/Library/Application Support/Relay`(macOS) 또는 `~/.config/Relay`(Linux)에 저장됩니다.
-- **통신 대상:** 계정이 이미 사용하는 서비스 — `claude.ai`, `api.anthropic.com`(사용량과 프로필), `chatgpt.com` / `api.openai.com`(Codex), `cloudcode-pa.googleapis.com`(Antigravity) — 그리고 자체 업데이트를 위한 `api.github.com`.
+- **통신 대상:** 계정이 이미 사용하는 서비스 — `claude.ai`, `api.anthropic.com`(사용량과 프로필), `chatgpt.com` / `api.openai.com`(Codex), `cloudcode-pa.googleapis.com`(Antigravity) —, 자체 업데이트를 위한 `api.github.com`, 그리고 Antigravity 계정을 추가할 때 한 번, 버전이 고정되고 SHA-256으로 검증되는 보조 도구(CLIProxyAPI)를 내려받기 위한 `github.com`.
 - **자격 증명**은 UI에 전달되지 않습니다. 저장된 Claude 앱 로그인은 macOS 키체인(Linux에서는 Secret Service 또는 KWallet)에 보관된 키로 암호화됩니다. 게이트웨이 키가 들어 있는 파일은 본인만 읽을 수 있도록 기록됩니다.
 - **Claude 앱의 파일**은 앱이 닫혀 있을 때만, 암호화된 백업과 쓰기 저널을 남긴 뒤에 변경합니다.
 - **강화된 앱:** 샌드박스로 격리된 렌더러 창, 릴리스에는 개발자 도구 없음, Relay 자체 페이지만 앱 내부를 호출 가능, 엄격한 콘텐츠 보안 정책.
@@ -181,7 +181,7 @@ Relay는 비공식 도구이며, Relay가 하는 일 중 일부는 Anthropic이 
 - **위험의 정도.** Claude 앱 전환과 한도 읽기는 일반적인 사용에 가장 가깝습니다. 게이트웨이는 그보다 멀고, Claude 계정을 통한 omp 사용이 가장 멉니다. 게이트웨이는 직접 켜기 전까지 꺼져 있으며, 이 위험을 감수하고 싶지 않다면 꺼 둔 채로 두세요.
 - **업무 계정.** Team 또는 Enterprise 시트에는 회사와 Anthropic 사이의 계약도 적용됩니다. 추가하기 전에 관리자에게 문의하고, 본인 소유의 계정만 사용하세요.
 
-Codex와 Antigravity 계정에도 같은 방식으로 OpenAI와 Google의 약관이 적용됩니다.
+**Google Antigravity.** Google의 [Antigravity FAQ](https://antigravity.google/docs/faq)는 서드파티 소프트웨어로 Antigravity에 접근하는 것은 약관 위반이며 계정 정지로 이어질 수 있고, 개인용 요금제에서는 자동 계정 순환이 지원되지 않는다고 말합니다. Google은 2026년 2월 이 때문에 계정을 정지했습니다. Relay는 이 의미에서 서드파티 소프트웨어입니다. Antigravity에 로그인하고 한도를 읽으며, 게이트웨이는 Antigravity 계정으로 요청을 보낼 수 있습니다. 그래서 Relay에 추가한 Antigravity 계정의 위험이 가장 큽니다. Relay는 사용자가 요청할 때만 Antigravity 앱을 전환합니다. Codex 계정에는 OpenAI의 약관이 적용됩니다.
 
 ## FAQ
 
