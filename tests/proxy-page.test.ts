@@ -10,6 +10,7 @@ import { I18nContext, type Language } from "../src/data/i18n";
 import { i18nValue, testT } from "./i18n";
 import { antigravitySnippet, claudeCodeSnippet, codexSnippet, gatewayUrl, proxyCurlSnippet, quotaTone, resetLabel } from "../src/lib/proxy-ui";
 import { DEFAULT_SETTINGS, type Account, type ProxyStatus, type Snapshot } from "../shared/types";
+import { FEATURE_RISK_IDS, acknowledgeRisks } from "../shared/feature-risk";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const KEY = "relay-sec-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
@@ -38,7 +39,8 @@ const status = (over: Partial<ProxyStatus> = {}): ProxyStatus => ({
 const accounts = [account("c1", "Claude Max"), account("c2", "Claude Pro", "claude"), account("x1", "Codex Pro", "codex"), account("g1", "Google Ultra", "antigravity")];
 
 function relayFor(proxy: ProxyStatus | undefined, api: object = {}, known: Account[] = accounts): Relay {
-  const settings = { ...DEFAULT_SETTINGS };
+  // Every risk already accepted: the consent dialog has its own test (risk-consent.test.ts).
+  const settings = { ...DEFAULT_SETTINGS, riskAcknowledged: acknowledgeRisks({}, FEATURE_RISK_IDS) };
   return {
     api: { claudeLaunch: async () => ({ quicOff: false }), ...api },
     preview: false, error: "", notice: "", accounts: known, active: undefined, settings, busy: "",

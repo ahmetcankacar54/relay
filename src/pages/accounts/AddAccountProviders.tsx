@@ -10,6 +10,7 @@ import type {
   AntigravityOAuthStart,
 } from "../../../shared/types";
 import { ProviderBadge } from "@/components/ProviderBadge";
+import { useRiskConsent } from "@/components/RiskConsent";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import { errorMessage } from "@/data/error-message";
 import { cn } from "@/lib/utils";
 import { macWording, usePlatform } from "@/data/platform";
 import { providerPlan } from "./accountLabels";
+import { antigravityAccountRisks } from "../../../shared/feature-risk";
 
 /** The providers an account can be added for, in the order the cards show them. */
 export const ONBOARDING_PROVIDERS = ["claude", "codex", "antigravity"] as const;
@@ -450,7 +452,8 @@ export function AntigravityOAuthForm({
   close: () => void;
 }) {
   const { t } = useI18n();
-  const { api, action, busy } = useRelay();
+  const { api, action, busy, settings } = useRelay();
+  const consent = useRiskConsent();
   const [pending, setPending] = useState<AntigravityOAuthStart>();
   const [oauthError, setOauthError] = useState<string>();
   // Where the browser ended up, pasted when it could not reach Relay by itself.
@@ -505,13 +508,18 @@ export function AntigravityOAuthForm({
   }, [pending, api, onResult]);
   const start = () => {
     setOauthError(undefined);
-    void action("antigravity-oauth", async () => {
-      const started = await api.startAntigravityOAuth({
-        name: form.name.trim(), kind: form.kind,
-        ...(form.kind === "work" && form.group.trim() ? { group: form.group.trim() } : {}),
-      });
-      setPending(started);
-    });
+    // Google's terms forbid its sign-ins in other software: nothing starts before that is accepted.
+    void consent.ask(antigravityAccountRisks(settings.proxy?.enabled === true)).then(
+      (accepted) =>
+        accepted &&
+        action("antigravity-oauth", async () => {
+          const started = await api.startAntigravityOAuth({
+            name: form.name.trim(), kind: form.kind,
+            ...(form.kind === "work" && form.group.trim() ? { group: form.group.trim() } : {}),
+          });
+          setPending(started);
+        }),
+    );
   };
   return (
     <div data-slot="antigravity-oauth" className="grid gap-3">
@@ -571,6 +579,7 @@ export function AntigravityOAuthForm({
           {t("addAccountProviders.connectWithGoogle")}
         </Button>
       </div>
+      {consent.dialog}
     </div>
   );
 }

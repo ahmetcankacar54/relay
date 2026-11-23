@@ -219,12 +219,15 @@ test("the Today card waits for one connected account, automation for two", () =>
   assert.deepEqual(overviewCards([account("a"), account("b")]), { today: true, automation: true });
 });
 
-test("only the two first-run pages, Anthropic's and Google's terms and the Full Disk Access pane may open outside Relay", () => {
+test("only the two first-run pages, the providers' terms and the Full Disk Access pane may open outside Relay", () => {
   assert.deepEqual(EXTERNAL_LINKS, {
     claudeDownload: "https://claude.ai/download",
     cliSetup: "https://docs.anthropic.com/en/docs/claude-code/setup",
     claudeTerms: "https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use",
     antigravityTerms: "https://antigravity.google/docs/faq",
+    anthropicAup: "https://www.anthropic.com/legal/aup",
+    antigravityServiceTerms: "https://antigravity.google/terms",
+    openaiSignIn: "https://help.openai.com/en/articles/20001542",
     fullDiskAccess: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
   });
   assert.equal(isExternalLink("https://claude.ai/download"), true);

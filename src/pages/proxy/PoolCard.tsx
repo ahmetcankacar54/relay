@@ -2,9 +2,8 @@ import { Fragment } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { intentHash } from "@/app/routes";
 import { AccountCard, AccountLimits } from "@/components/AccountCard";
-import { ExternalLink } from "@/components/ExternalLink";
 import { ListCard, ListGroup, ListNote, ListSection } from "@/components/ListCard";
-import { EXTERNAL_LINKS } from "../../../shared/external-links";
+import { RiskNote } from "@/components/RiskConsent";
 import { PageSection } from "@/components/PageSection";
 import { Private } from "@/components/Private";
 import { StatusDot } from "@/components/StatusDot";
@@ -163,8 +162,7 @@ export function PoolCard({
                   {/* Google forbids Antigravity sign-ins in other software outright: say so where they join the pool. */}
                   {provider === "antigravity" && (
                     <ListNote className="text-xs text-muted-foreground">
-                      <span data-slot="antigravity-risk">{t("poolCard.antigravityRisk")}</span>{" "}
-                      <ExternalLink href={EXTERNAL_LINKS.antigravityTerms}>{t("poolCard.antigravityTermsLink")}</ExternalLink>
+                      <RiskNote id="antigravity-gateway" slot="antigravity-risk" />
                     </ListNote>
                   )}
                   {own.map((account, index) => {

@@ -126,8 +126,8 @@ test("a schema 3 registry with a browser profile opens without it and is written
   old.accounts[0].browser = { app: "brave", profile: "Default", name: "Work" };
   writeRaw(dir, old);
   const store = new Store(dir);
-  assert.equal(STATE_SCHEMA, 7);
-  assert.equal(raw(dir).schema, 7);
+  assert.equal(STATE_SCHEMA, 8);
+  assert.equal(raw(dir).schema, 8);
   assert.equal("browser" in raw(dir).accounts[0], false);
   assert.equal("browser" in store.state.accounts[0], false);
   // The rest of the account is as it was.

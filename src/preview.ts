@@ -11,6 +11,7 @@ import type { TerminalStatus } from "../shared/terminal-identity";
 import { localDate, localSlot } from "../shared/planning";
 import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
 import { resolveLocale } from "../shared/i18n/locales";
+import { acknowledgeRisks } from "../shared/feature-risk";
 import type {
   Account,
   AuthFlow,
@@ -1161,6 +1162,10 @@ export const previewApi: RelayAPI = {
               reason: "quota-available",
               sourceId: desktop.activeProfileId,
             };
+    return structuredClone(state.settings);
+  },
+  acknowledgeRisk: async (ids) => {
+    state.settings.riskAcknowledged = acknowledgeRisks(state.settings.riskAcknowledged, ids);
     return structuredClone(state.settings);
   },
   refreshUsage: async (id) => structuredClone(state.usage[id]),

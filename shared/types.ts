@@ -27,6 +27,7 @@ import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import type { LanguagePref, Locale } from "./i18n/locales";
+import type { FeatureRiskId, RiskAcknowledgements } from "./feature-risk";
 import {
   DEFAULT_PROXY_CONFIG,
   type ProxyClassShare,
@@ -651,7 +652,9 @@ export interface RelayAPI {
   /** Menu bar panel only: main reports each time the panel is shown or hidden. */
   onPanelVisibility(callback: (shown: boolean) => void): () => void;
   quit(): Promise<void>;
-  updateSettings(input: Partial<Omit<RelaySettings, "proxy">>): Promise<RelaySettings>;
+  updateSettings(input: Partial<Omit<RelaySettings, "proxy" | "riskAcknowledged">>): Promise<RelaySettings>;
+  /** Records that the user read and accepted these features' risk texts; main refuses them until then. */
+  acknowledgeRisk(ids: FeatureRiskId[]): Promise<RelaySettings>;
   /** The Proxy Gateway's live state: whether it runs, its client key, counters and routing. */
   proxyStatus(): Promise<ProxyStatus>;
   /** Starts or stops the gateway and saves the choice. Rejects when it cannot start (port in use). */
@@ -818,6 +821,11 @@ export interface RelaySettings {
   claudeExtension?: ExtensionSetting;
   /** What Relay does with the terminal's Claude Code sign-in at a switch; missing means "follow". */
   terminalCli?: TerminalMode;
+  /**
+   * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
+   * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
+   */
+  riskAcknowledged: RiskAcknowledgements;
 }
 export type PrankLevel = "sometimes" | "rarely" | "off";
 export interface PlanningHours {
@@ -926,6 +934,7 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   autoSwitchMode: "off",
   autoSwitchAccounts: [],
   historyPolicyVersion: 2,
+  riskAcknowledged: {},
 };
 export type AutoSwitchReason =
   | "ledger-unavailable"

@@ -18,6 +18,7 @@ import {
   PROFILE_FOLDER,
 } from "../../shared/browser-extension";
 import { defaultPlanning } from "../../shared/planning";
+import { FEATURE_RISK_IDS } from "../../shared/feature-risk";
 
 export const accountPlanningSchema = z
   .object({
@@ -203,6 +204,8 @@ export const settingsSchema = z
     claudeExtension: extensionSettingSchema.optional(),
     // Missing means "follow"; no .default() so a patch keeps the stored choice.
     terminalCli: z.enum(TERMINAL_MODES).optional(),
+    // A registry from before the risk notes has accepted none of them.
+    riskAcknowledged: z.partialRecord(z.enum(FEATURE_RISK_IDS), z.number().int().min(1)).default({}),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
@@ -217,8 +220,9 @@ export const settingsPatchSchema = settingsSchema
     autoSwitchAccounts: settingsSchema.shape.autoSwitchAccounts.removeDefault(),
   })
   // The gateway's settings change through its own calls, which restart it when needed;
-  // planning changes only through `update-planning`, which validates and re-plans.
-  .omit({ proxy: true, planning: true })
+  // planning changes only through `update-planning`, which validates and re-plans; a risk is
+  // accepted only through `acknowledge-risk`.
+  .omit({ proxy: true, planning: true, riskAcknowledged: true })
   .partial();
 // A new install starts with DEFAULT_SETTINGS' "same-group". A saved registry that never
 // wrote the mode shared across all accounts, and keeps doing so.
@@ -233,8 +237,9 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
  * only swapped the extension's hints) are read as "guide" until the user picks them again.
  * 6 added the terminal's Claude Code setting. 7 added the Proxy Gateway's settings and an
  * account's provider; 0.18.0 and 0.18.1 wrote them under 6, which 0.17 builds cannot read.
+ * 8 added the W1 settings: accepted risk notes, notification choices and launch at login.
  */
-export const STATE_SCHEMA = 7;
+export const STATE_SCHEMA = 8;
 const stateSchema = z.object({
   version: z.literal(1),
   schema: z.number().int().min(1).optional(),

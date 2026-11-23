@@ -75,6 +75,7 @@ const api: RelayAPI = {
     return () => ipcRenderer.removeListener("relay:changed", listener);
   },
   updateSettings: (input) => ipcRenderer.invoke("relay:update-settings", input),
+  acknowledgeRisk: (ids) => ipcRenderer.invoke("relay:acknowledge-risk", ids),
   proxyStatus: () => ipcRenderer.invoke("relay:proxy-status"),
   proxyToggle: (enabled) => ipcRenderer.invoke("relay:proxy-toggle", enabled),
   proxyConfigure: (input) => ipcRenderer.invoke("relay:proxy-configure", input),

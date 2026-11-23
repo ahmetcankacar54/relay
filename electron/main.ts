@@ -163,6 +163,7 @@ import {
   AFFINITY_REVISION,
   currentAffinityTtl,
   DEFAULT_PROXY_CONFIG,
+  type ProxyClientId,
   type ProxyConfig,
   type ProxyLoopAlarm,
 } from "../shared/proxy-types";
@@ -186,6 +187,18 @@ import {
   type ClientTarget,
 } from "./core/proxy/proxy-clients";
 import { gatewayHostAllowed, gatewayUrl } from "../shared/proxy-url";
+import {
+  FEATURE_RISK_IDS,
+  FEATURE_RISKS,
+  acknowledgeRisks,
+  antigravityAccountRisks,
+  clientRisks,
+  gatewayRisks,
+  planningRisks,
+  proxyPatchRisks,
+  requireRiskAck,
+  type FeatureRiskId,
+} from "../shared/feature-risk";
 import { redact } from "./core/redact";
 import { listenOAuthCallback, type CallbackServer } from "./core/oauth-callback-server";
 import { proxyExtrasSchema, type ProxyExtras } from "./core/proxy/proxy-status";
@@ -2876,6 +2889,19 @@ function bindIPC() {
     });
   const id = z.uuid();
   const key = z.string().min(1).max(100);
+  /** Refuses a risky feature until the user has accepted its risk text in the window (or the CLI's --yes). */
+  const requireRisk = (ids: FeatureRiskId[]) =>
+    requireRiskAck(service.store.state.settings, ids, (pending) =>
+      say("featureRisk.acceptFirst", { features: pending.map((risk) => say(FEATURE_RISKS[risk].title)).join(", ") }),
+    );
+  handle("acknowledge-risk", (input) => {
+    const ids = z.array(z.enum(FEATURE_RISK_IDS)).min(1).max(FEATURE_RISK_IDS.length).parse(input);
+    service.store.update((s) => {
+      s.settings.riskAcknowledged = acknowledgeRisks(s.settings.riskAcknowledged, ids);
+    });
+    broadcastChanged();
+    return service.store.state.settings;
+  });
   handle("inspect-continuation", () => continuation.inspect());
   handle("arm-continuation", async (targetId, policy) => {
     const targetAccountId = z
@@ -3103,6 +3129,8 @@ function bindIPC() {
     serializeProxy(async () => {
       const on = z.boolean().parse(enabled);
       const config = proxySettings();
+      const boundClients = Object.keys(config.clientBindings ?? {}) as ProxyClientId[];
+      if (on) requireRisk(gatewayRisks({ ...config, boundClients }, service.store.state.accounts));
       saveProxySettings({ ...config, enabled: on });
       if (on) {
         try {
@@ -3124,6 +3152,7 @@ function bindIPC() {
   handle("proxy-configure", (input) =>
     serializeProxy(async () => {
       const patch = proxyConfigurePatch.parse(input);
+      requireRisk(proxyPatchRisks(proxySettings(), patch, service.store.state.accounts));
       await applyProxyConfig({ ...proxySettings(), ...patch });
       broadcastChanged();
       return proxyStatus();
@@ -3142,6 +3171,7 @@ function bindIPC() {
   handle("proxy-bind-client", (input) =>
     serializeProxy(async () => {
       const clientId = z.enum(["claude-code", "codex", "omp"]).parse(input);
+      requireRisk(clientRisks(clientId));
       let config = proxySettings();
       if (!config.apiKey) {
         config = { ...config, apiKey: generateProxyKey() };
@@ -3193,6 +3223,7 @@ function bindIPC() {
     if (pendingAntigravityOAuth.size || antigravityStarting)
       throw new Error(say("electronMain.finishThePendingAntigravitySignIn"));
     const input = createAccountSchema.parse({ ...raw, provider: "antigravity" });
+    requireRisk(antigravityAccountRisks(proxySettings().enabled));
     antigravityStarting = true;
     const account = (() => {
       try {
@@ -3437,6 +3468,7 @@ function bindIPC() {
         "Finish the Desktop operation before changing preferences.",
       );
     const patch = planningPatchSchema.parse(input);
+    requireRisk(planningRisks(service.store.state.settings.planning, patch));
     const next = planningSchema.parse({
       ...service.store.state.settings.planning,
       ...patch,
@@ -3572,9 +3604,11 @@ function bindIPC() {
     };
   };
   handle("lost-found-collection", () => lostFoundCollection(lostFoundSource()));
-  handle("create-account", (input) =>
-    service.store.create(createAccountSchema.parse(input)),
-  );
+  handle("create-account", (input) => {
+    const account = createAccountSchema.parse(input);
+    if (account.provider === "antigravity") requireRisk(antigravityAccountRisks(proxySettings().enabled));
+    return service.store.create(account);
+  });
   handle("update-account", (accountId, input) => {
     const updated = service.store.edit(id.parse(accountId), createAccountSchema.parse(input));
     void tray?.update();

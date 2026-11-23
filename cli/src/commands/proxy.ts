@@ -3,6 +3,7 @@ import type { Command } from "../command";
 import { openContext, type CliContext } from "../context";
 import { colorEnabled, paint, printJson } from "../output";
 import { CliError, EXIT } from "../io";
+import { requireRiskConsent } from "../risk";
 import { acquireProfileLock } from "../../../electron/core/profile-lock";
 import { diagnoseCli } from "../../../electron/core/cli-diagnostics";
 import { ProxyServer } from "../../../electron/core/proxy/proxy-server";
@@ -11,6 +12,7 @@ import { UsageError, readCredential } from "../../../electron/core/usage-credent
 import { UsageCredentialRefresher, anthropicUnreachable } from "../../../electron/core/usage-refresh";
 import { DEFAULT_PROXY_CONFIG } from "../../../shared/proxy-types";
 import { clientHost, gatewayHostAllowed, LOOPBACK_HOSTS } from "../../../shared/proxy-url";
+import { gatewayRisks } from "../../../shared/feature-risk";
 import { generateProxyKey } from "../../../electron/core/proxy/proxy-status";
 import { readCodexCredential } from "../../../electron/core/provider-credentials";
 import { readsUsage } from "../../../shared/cli-version";
@@ -177,6 +179,16 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
     }
     return EXIT.ok;
   }
+
+  // The same risks the app asks about before its gateway starts; this gateway has no
+  // Antigravity helper, so only Claude, Codex and the tailnet apply.
+  requireRiskConsent(
+    io,
+    t,
+    ctx.store.state.settings,
+    gatewayRisks({ host }, ctx.store.state.accounts.filter((a) => a.provider !== "antigravity")),
+    parsed.flags.yes === true,
+  );
 
   // start: always with a client key, so no other local process can spend the accounts.
   const key = savedKey ?? generateProxyKey();
