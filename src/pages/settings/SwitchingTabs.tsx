@@ -188,6 +188,7 @@ export function SwitchingTab() {
           <SettingRow
             label={t("switchingTabs.markAccountsNearTheirLimit")}
             htmlFor="usage-warnings"
+            description={t("switchingTabs.alsoNotifiesInUse")}
           >
             <Switch
               id="usage-warnings"

@@ -244,6 +244,9 @@ import {
 import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
+import { LimitNotices, type LimitWindowKind } from "./core/limit-notice";
+import { formatPercent } from "../shared/percent";
+import { FORMAT_LOCALE } from "../shared/i18n/locales";
 
 let window: BrowserWindow | null = null;
 /**
@@ -419,6 +422,12 @@ let widgetActiveId: string | undefined;
 let languagePref: LanguagePref = "system";
 let keeper: WindowKeeper;
 let observedDesktop: DesktopState | undefined;
+/** A notification when the account in use crosses the warning threshold; the switch "Mark accounts near their limit" turns it off. */
+const limitNotices = new LimitNotices({
+  settings: () => service.store.state.settings,
+  inUse: () => observedDesktop?.activeProfileId,
+  notify: notifyLimitNear,
+});
 let initialized = false;
 let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
@@ -1029,7 +1038,10 @@ else {
         readUsageCredential,
         undefined,
         undefined,
-        (account, value) => usageHistory.record(account, value),
+        (account, value) => {
+          usageHistory.record(account, value);
+          limitNotices.observe(account, value);
+        },
         (account, credential, force, allowInteraction) =>
           service.transaction(() =>
             usageCredentialRefresher.refresh(
@@ -1990,6 +2002,23 @@ function notifySignInEnding(account: Account, endsAt?: string) {
   notice.show();
 }
 let signInRenewal: SignInRenewal | undefined;
+/** Says that the account in use passed the warning threshold, and when that window resets; a click opens Overview. */
+function notifyLimitNear(account: Account, kind: LimitWindowKind, window: { usedPercent: number; resetsAt?: string }) {
+  if (!Notification.isSupported()) return;
+  const language = getAppLocale();
+  const percent = formatPercent(window.usedPercent, language);
+  const reset = window.resetsAt ? new Date(window.resetsAt) : undefined;
+  const when =
+    reset && Number.isFinite(reset.getTime())
+      ? reset.toLocaleString(FORMAT_LOCALE[language], kind === "five_hour" ? { hour: "2-digit", minute: "2-digit" } : { weekday: "long", hour: "2-digit", minute: "2-digit" })
+      : undefined;
+  const notice = new Notification({
+    title: say(kind === "five_hour" ? "electronMain.fiveHourLimitNear" : "electronMain.weeklyLimitNear", { accountName: account.name, percent }),
+    body: when ? say("electronMain.limitResetsAt", { when }) : "",
+  });
+  notice.on("click", () => openPage("genel"));
+  notice.show();
+}
 /** Says that an account's saved Claude sign-in ended; a click opens the account. */
 function notifySignInEnded(account: Account) {
   if (!Notification.isSupported()) return;
