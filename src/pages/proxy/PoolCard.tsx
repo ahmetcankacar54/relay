@@ -2,7 +2,9 @@ import { Fragment } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { intentHash } from "@/app/routes";
 import { AccountCard, AccountLimits } from "@/components/AccountCard";
-import { ListCard, ListGroup, ListSection } from "@/components/ListCard";
+import { ExternalLink } from "@/components/ExternalLink";
+import { ListCard, ListGroup, ListNote, ListSection } from "@/components/ListCard";
+import { EXTERNAL_LINKS } from "../../../shared/external-links";
 import { PageSection } from "@/components/PageSection";
 import { Private } from "@/components/Private";
 import { StatusDot } from "@/components/StatusDot";
@@ -158,6 +160,13 @@ export function PoolCard({
               <Fragment key={provider}>
                 <ListGroup provider={provider} name={POOL_PROVIDER_NAMES[provider]} count={own.length} />
                 <ListSection id={`pool-${provider}`} label={POOL_PROVIDER_NAMES[provider]}>
+                  {/* Google forbids Antigravity sign-ins in other software outright: say so where they join the pool. */}
+                  {provider === "antigravity" && (
+                    <ListNote className="text-xs text-muted-foreground">
+                      <span data-slot="antigravity-risk">{t("poolCard.antigravityRisk")}</span>{" "}
+                      <ExternalLink href={EXTERNAL_LINKS.antigravityTerms}>{t("poolCard.antigravityTermsLink")}</ExternalLink>
+                    </ListNote>
+                  )}
                   {own.map((account, index) => {
                     const quiet = !account.inPool;
                     const cache = account.tokens ? account.tokens.cacheRead : undefined;

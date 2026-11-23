@@ -12,7 +12,7 @@
 [![下载量](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%E4%B8%8B%E8%BD%BD&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#安装)
-[![Windows · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20Linux-%E6%94%AF%E6%8C%81-2f6feb?style=flat-square)](#平台)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20%E6%94%AF%E6%8C%81%20%C2%B7%20Windows%20%E5%AE%9E%E9%AA%8C%E6%80%A7-2f6feb?style=flat-square)](#平台)
 [![15 种语言](https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-15-6b645e?style=flat-square)](#15-种语言)
 [![MIT](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -50,7 +50,7 @@ Relay 免费、开源（MIT），完全在你的 Mac 上运行，除了你本来
 | 平台 | 下载 | 说明 |
 | --- | --- | --- |
 | **macOS 13+**（Apple silicon） | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | 主要平台：菜单栏面板、小组件、自动切换。 |
-| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手动切换、限额、账号、网关。 |
+| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手动切换、限额、账号、网关。实验性：尚未在真实机器上测试。 |
 | **Linux**（x64） | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | 配合官方 Claude Desktop for Linux 使用。 |
 | **CLI**（macOS） | `npm i -g @ahmetcankacar/relay` | `relay switch`、`relay usage`、`relay run` … 见 [CLI 指南](cli/README.md)。 |
 
@@ -164,7 +164,7 @@ macOS 是主要平台。Windows 版本尚未在真机上测试过；欢迎反馈
 ## 隐私与安全
 
 - **仅在本地运行。** Relay 没有账号体系、没有服务器，**也没有遥测或分析**。它的数据保存在 `~/Library/Application Support/Relay`（macOS）或 `~/.config/Relay`（Linux）。
-- **它会连接的地方：** 你的账号本来就在使用的服务——`claude.ai`、`api.anthropic.com`（用量和个人资料）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）——以及用于自身更新的 `api.github.com`。
+- **它会连接的地方：** 你的账号本来就在使用的服务——`claude.ai`、`api.anthropic.com`（用量和个人资料）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）——用于自身更新的 `api.github.com`，以及 `github.com`：在 Relay 首次为 Antigravity 账号需要时，以及更新固定了新版本时，下载一个固定版本、经 SHA-256 校验的辅助工具（CLIProxyAPI）。
 - **凭据** 永远不会到达界面。已保存的 Claude 应用登录使用保存在 macOS 钥匙串（Keychain）中的密钥加密（Linux 上为 Secret Service 或 KWallet）。保存网关密钥的文件写入时设为仅你本人可读。
 - **Claude 应用的文件** 只会在应用关闭时修改，且事先会做加密备份并记录写入日志。
 - **加固的应用：** 渲染窗口运行在沙盒中，发布版本不含开发者工具，只有 Relay 自己的页面能调用应用，并启用严格的内容安全策略。
@@ -181,7 +181,7 @@ Relay 不是官方工具，它的部分做法并不是 Anthropic 希望第三方
 - **风险在哪里。** 切换 Claude 应用和读取限额最接近常规使用。网关离常规使用更远，而通过 Claude 账号使用 omp 是最远的。网关在你开启之前一直关闭；如果你不想承担这种风险，请保持关闭。
 - **工作账号。** Team 或 Enterprise 席位还受你公司与 Anthropic 之间协议的约束。添加之前请先询问你的管理员，并且只使用属于你自己的账号。
 
-Codex 和 Antigravity 账号同样分别受 OpenAI 和 Google 条款的约束。
+**Google Antigravity。** Google 的 [Antigravity 常见问题](https://antigravity.google/docs/faq) 指出，使用第三方软件访问 Antigravity 违反其条款，可能导致账号被停用，并且个人方案不支持自动轮换账号；Google 曾在 2026 年 2 月因此停用账号。从这个意义上说，Relay 就是第三方软件：它会登录 Antigravity 并读取其限额，其网关也可以通过 Antigravity 账号发送请求。因此，Relay 中的 Antigravity 账号风险最高。只有在你要求时，Relay 才会切换 Antigravity 应用。Codex 账号受 OpenAI 条款约束。
 
 ## 常见问题
 

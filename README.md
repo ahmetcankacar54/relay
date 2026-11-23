@@ -12,7 +12,7 @@ see every 5-hour and weekly limit at a glance, and let a local gateway spread th
 [![Downloads](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#install)
-[![Windows · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20Linux-supported-2f6feb?style=flat-square)](#platforms)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20supported%20%C2%B7%20Windows%20experimental-2f6feb?style=flat-square)](#platforms)
 [![15 languages](https://img.shields.io/badge/languages-15-6b645e?style=flat-square)](#15-languages)
 [![MIT](https://img.shields.io/badge/license-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -48,7 +48,7 @@ Relay is free, open source (MIT), runs entirely on your Mac, and sends nothing t
 | Platform | Download | Notes |
 | --- | --- | --- |
 | **macOS 13+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | The main platform: menu-bar panel, widget, automatic switching. |
-| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Switching by hand, limits, accounts, gateway. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Switching by hand, limits, accounts, gateway. Experimental: not yet tested on a real machine. |
 | **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Works with the official Claude Desktop for Linux. |
 | **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … see the [CLI guide](cli/README.md). |
 
@@ -162,7 +162,7 @@ macOS is the main platform. The Windows build has not been tested on a real mach
 ## Privacy & security
 
 - **Local only.** Relay has no account, no server and **no telemetry or analytics**. Its data lives in `~/Library/Application Support/Relay` (macOS) or `~/.config/Relay` (Linux).
-- **Who it talks to:** the services your accounts already use — `claude.ai`, `api.anthropic.com` (usage and profile), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) — and `api.github.com` for its own updates.
+- **Who it talks to:** the services your accounts already use — `claude.ai`, `api.anthropic.com` (usage and profile), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) — `api.github.com` for its own updates, and `github.com` to download a pinned helper (CLIProxyAPI, its SHA-256 checked) when Relay first needs it for an Antigravity account, and again after an update pins a new version.
 - **Credentials** never reach the UI. Saved Claude app sign-ins are encrypted with a key kept in the macOS Keychain (Secret Service or KWallet on Linux). Files that hold the gateway key are written readable by you only.
 - **The Claude app's files** are changed only while it is closed, after an encrypted backup and a write journal.
 - **Hardened app:** sandboxed renderer windows, no developer tools in releases, only Relay's own pages can call into the app, and a strict content security policy.
@@ -179,7 +179,7 @@ Relay is unofficial, and some of what it does is not how Anthropic wants third-p
 - **Where the risk sits.** Switching the Claude app and reading limits stay closest to ordinary use. The gateway is further from it, and omp through a Claude account is the furthest. The gateway is off until you turn it on; leave it off if you would rather not take that risk.
 - **Work accounts.** A Team or Enterprise seat is also governed by your company's agreement with Anthropic. Ask your admin before you add one, and use only accounts that are yours.
 
-Codex and Antigravity accounts are governed by OpenAI's and Google's terms in the same way.
+**Google Antigravity.** Google's [Antigravity FAQ](https://antigravity.google/docs/faq) says that using third-party software to access Antigravity breaks its terms and can get an account suspended, and that automated account rotation is not supported on consumer plans; Google suspended accounts for this in February 2026. Relay is third-party software in that sense: it signs in to Antigravity and reads its limits, and its gateway can send requests through Antigravity accounts. An Antigravity account in Relay therefore carries the highest risk of all. Relay switches the Antigravity app only when you ask it to. Codex accounts are governed by OpenAI's terms.
 
 ## FAQ
 

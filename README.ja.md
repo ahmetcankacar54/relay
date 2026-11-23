@@ -12,7 +12,7 @@ Claude Desktop をアカウント間で切り替え、どのアカウントで�
 [![ダウンロード](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#インストール)
-[![Windows · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20Linux-%E5%AF%BE%E5%BF%9C-2f6feb?style=flat-square)](#プラットフォーム)
+[![Linux · Windows](https://img.shields.io/badge/-Linux%20%E5%AF%BE%E5%BF%9C%20%C2%B7%20Windows%20%E8%A9%A6%E9%A8%93%E7%9A%84-2f6feb?style=flat-square)](#プラットフォーム)
 [![15の言語](https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-15-6b645e?style=flat-square)](#15の言語)
 [![MIT](https://img.shields.io/badge/%E3%83%A9%E3%82%A4%E3%82%BB%E3%83%B3%E3%82%B9-MIT-6b645e?style=flat-square)](LICENSE)
 
@@ -50,7 +50,7 @@ Relay は無料のオープンソース（MIT）で、すべて Mac 上で動作
 | プラットフォーム | ダウンロード | 備考 |
 | --- | --- | --- |
 | **macOS 13+**（Apple silicon） | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | メインのプラットフォームです。メニューバーのパネル、ウィジェット、自動切り替え。 |
-| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手動での切り替え、上限、アカウント、ゲートウェイ。 |
+| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手動での切り替え、上限、アカウント、ゲートウェイ。試験的：実機ではまだテストされていません。 |
 | **Linux**（x64） | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Linux 版の公式 Claude Desktop で動作します。 |
 | **CLI**（macOS） | `npm i -g @ahmetcankacar/relay` | `relay switch`、`relay usage`、`relay run` … 詳しくは [CLI ガイド](cli/README.md)（英語）をご覧ください。 |
 
@@ -164,7 +164,7 @@ macOS がメインのプラットフォームです。Windows 版はまだ実機
 ## プライバシーとセキュリティ
 
 - **ローカルのみ。** Relay にはアカウントもサーバーもなく、**テレメトリーや分析も一切ありません**。データは `~/Library/Application Support/Relay`（macOS）または `~/.config/Relay`（Linux）に保存されます。
-- **通信先:** アカウントがすでに使っているサービス — `claude.ai`、`api.anthropic.com`（使用量とプロフィール）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）— と、Relay 自身の更新のための `api.github.com` です。
+- **通信先:** アカウントがすでに使っているサービス — `claude.ai`、`api.anthropic.com`（使用量とプロフィール）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）—、Relay 自身の更新のための `api.github.com`、そしてバージョン固定で SHA-256 を検証する補助ツール（CLIProxyAPI）を、Antigravity アカウントのために初めて必要になったときと、アップデートで新しいバージョンが固定されたときにダウンロードするための `github.com` です。
 - **認証情報** が UI に渡ることはありません。保存された Claude アプリのサインインは、macOS の Keychain（Linux では Secret Service または KWallet）に保管された鍵で暗号化されます。ゲートウェイのキーを含むファイルは、本人だけが読める権限で書き込まれます。
 - **Claude アプリのファイル** は、アプリが閉じている間に、暗号化バックアップと書き込みジャーナルを取った後でのみ変更されます。
 - **堅牢化されたアプリ:** レンダラーウィンドウはサンドボックス化され、リリース版には開発者ツールがなく、アプリを呼び出せるのは Relay 自身のページだけで、厳格なコンテンツセキュリティポリシーが適用されています。
@@ -181,7 +181,7 @@ Relay は非公式のツールであり、その動作の一部は、Anthropic �
 - **リスクの所在。** Claude アプリの切り替えと上限の読み取りは、通常の使い方に最も近い部分です。ゲートウェイはそこから離れており、Claude アカウント経由で omp を使うことが最も離れています。ゲートウェイはオンにするまでオフのままです。このリスクを負いたくない場合は、オフのままにしてください。
 - **仕事用アカウント。** Team または Enterprise のシートには、あなたの会社と Anthropic との契約も適用されます。追加する前に管理者に確認し、自分のアカウントだけを使ってください。
 
-Codex と Antigravity のアカウントにも、同様に OpenAI と Google の規約が適用されます。
+**Google Antigravity。** Google の [Antigravity FAQ](https://antigravity.google/docs/faq) は、サードパーティ製ソフトウェアで Antigravity にアクセスすることは規約違反であり、アカウントの停止につながる可能性があること、また個人向けプランではアカウントの自動ローテーションはサポートされないことを述べています。Google は 2026 年 2 月にこれを理由にアカウントを停止しました。Relay はこの意味でサードパーティ製ソフトウェアです。Antigravity にサインインして上限を読み取り、ゲートウェイは Antigravity アカウントを通じてリクエストを送ることができます。そのため、Relay に追加した Antigravity アカウントのリスクが最も高くなります。Relay が Antigravity アプリを切り替えるのは、あなたが指示したときだけです。Codex アカウントには OpenAI の規約が適用されます。
 
 ## よくある質問
 
