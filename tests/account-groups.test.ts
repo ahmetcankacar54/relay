@@ -101,6 +101,11 @@ test("the stored view falls back to defaults for missing or broken values", () =
   assert.deepEqual(readAccountsView(() => {
     throw new Error("no storage");
   }), { groupBy: "provider", sort: "default", collapsed: [] });
+  // A closed work group from an older view is dropped: work groups under a provider have no heading now.
+  assert.deepEqual(
+    stored({ "relay.accounts.collapsed": "[\"provider:claude\", \"provider:claude/group:work:a\", \"group:work:a\"]" }).collapsed,
+    ["provider:claude", "group:work:a"],
+  );
 });
 
 const relayFor = (accounts: Account[]): Relay =>
@@ -156,4 +161,13 @@ test("without provider groups each row carries its provider's mark", () => {
   const html = render(list, { groupBy: "none" });
   assert.doesNotMatch(html, /data-slot="list-group"/);
   assert.match(html, /data-slot="list-row"[\s\S]*?data-slot="provider-logo" data-provider="codex"/);
+});
+
+test("a chosen order runs across a provider's work groups, since no heading separates them", () => {
+  // Two work groups: by name, "Alpha" (group b) comes before "Zulu" (group a) though group a sorts first.
+  const list = [of("claude", "z", "work:a", { name: "Zulu" }), of("claude", "a", "work:b", { name: "Alpha" })];
+  const ids = (html: string) => [...html.matchAll(/data-account="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(ids(render(list, { sort: "name" })), ["a", "z"]);
+  // In the default order the groups keep their own order.
+  assert.deepEqual(ids(render(list, {})), ["z", "a"]);
 });

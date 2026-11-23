@@ -57,7 +57,8 @@ function workGroups(accounts: Account[], language: string, t: T): { key: WorkGro
     .sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) === 1 ? a.label.localeCompare(b.label, language) : 0));
 }
 
-function sortLeaf(
+/** One run of accounts in the chosen order (default keeps the given order). */
+export function sortLeaf(
   accounts: Account[],
   sort: AccountSort,
   usage: Record<string, AccountUsage | undefined>,
@@ -137,7 +138,10 @@ export function readAccountsView(get: (key: string) => string | null): AccountsV
     const sort = get(ACCOUNTS_VIEW_KEYS.sort);
     if (sort && SORTS.includes(sort)) view.sort = sort as AccountSort;
     const collapsed: unknown = JSON.parse(get(ACCOUNTS_VIEW_KEYS.collapsed) ?? "[]");
-    if (Array.isArray(collapsed)) view.collapsed = collapsed.filter((k): k is string => typeof k === "string");
+    // Work groups under a provider have no heading of their own any more (their cards flow together),
+    // so a closed one from an older view is dropped instead of kept for ever.
+    if (Array.isArray(collapsed))
+      view.collapsed = collapsed.filter((k): k is string => typeof k === "string" && !/^provider:[^/]+\/group:/.test(k));
   } catch {
     // No window (a static render), unreadable storage or a broken value: the defaults.
   }

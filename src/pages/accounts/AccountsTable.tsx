@@ -40,7 +40,7 @@ import { fullLimitNote } from "@/lib/account-row";
 import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
 import { accountPlan, accountProvider, planTitle } from "./accountLabels";
-import { groupAccounts, sectionCount, type AccountGroupBy, type AccountSection, type AccountSort } from "./accountGroups";
+import { groupAccounts, sectionCount, sortLeaf, type AccountGroupBy, type AccountSection, type AccountSort } from "./accountGroups";
 import { isClaudeAccount } from "@/lib/account-health";
 import { limitColumns } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
@@ -469,7 +469,17 @@ export function AccountsTable({
       </Fragment>
     );
   };
-  // A section is its header, then its rows (or its work groups) indented below it.
+  // A provider's work groups as one run of cards, each with its group's name. Grouped, they keep the
+  // groups' order (personal first); in a chosen order the run is sorted as one, or it would look unsorted
+  // with no heading between the groups.
+  const flatGroups = (s: AccountSection) => {
+    const groupOf = new Map<string, string>();
+    for (const c of s.children) for (const a of c.accounts) groupOf.set(a.id, c.label);
+    const all = s.children.flatMap((c) => c.accounts);
+    const ordered = sort === "default" ? all : sortLeaf(all, sort, data?.usage ?? {}, now, language);
+    return ordered.map((account) => ({ account, group: groupOf.get(account.id) }));
+  };
+  // A section is its header, then its cards.
   const section = (s: AccountSection) => {
     const id = `accounts-${s.key}`;
     const shown = !collapsed.includes(s.key);
@@ -490,7 +500,7 @@ export function AccountsTable({
          */}
         <ListSection id={id} level={s.level} label={s.label} hidden={!shown}>
           {s.accounts.map((a) => row(a))}
-          {s.children.flatMap((c) => [...c.accounts.map((a) => row(a, c.label)), ...c.children.flatMap((g) => g.accounts.map((a) => row(a, g.label)))])}
+          {flatGroups(s).map(({ account, group }) => row(account, group))}
         </ListSection>
       </Fragment>
     );

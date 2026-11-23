@@ -141,7 +141,10 @@ export function Accounts() {
   const toggleSection = (key: string) =>
     setView("collapsed", view.collapsed.includes(key) ? view.collapsed.filter((k) => k !== key) : [...view.collapsed, key]);
   const mac = macWording(usePlatform());
-  const viewLabel = `${t("accounts.groupBy")} · ${t("accounts.sort")}`;
+  // The button says the current grouping and order, so a screen reader hears what the dot shows.
+  const groupByLabel = { provider: t("common.provider"), workGroup: t("accounts.workGroup"), none: t("accounts.none") }[view.groupBy];
+  const sortLabel = { default: t("accounts.default"), name: t("accounts.name"), usage: t("accounts.n5HourUse"), reset: t("accounts.nextReset") }[view.sort];
+  const viewLabel = `${t("accounts.groupBy")}: ${groupByLabel} · ${t("accounts.sort")}: ${sortLabel}`;
   const [adding, setAdding] = useState(false);
   const [addProvider, setAddProvider] = useState<AddProvider>();
   const [linking, setLinking] = useState(false);
