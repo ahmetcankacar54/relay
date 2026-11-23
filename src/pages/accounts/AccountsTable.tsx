@@ -44,8 +44,8 @@ import { isClaudeAccount } from "@/lib/account-health";
 import { limitColumns } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
 import { AccountDot } from "@/components/AccountDot";
-import { LimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, narrowHidden } from "@/components/ListCard";
+import { LimitLine, NoLimitLine } from "@/components/LimitLine";
+import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, midHidden, narrowHidden } from "@/components/ListCard";
 import { ProviderLogo } from "@/components/ProviderLogo";
 import { StatusLabel } from "@/components/StatusLabel";
 import { relayProviders } from "@/features/Providers";
@@ -419,7 +419,7 @@ export function AccountsTable({
           showReset={false}
         />
       ) : (
-        <span className="text-xs text-muted-foreground">—</span>
+        <NoLimitLine />
       );
     const stop = (e: MouseEvent) => e.stopPropagation();
     return (
@@ -432,7 +432,7 @@ export function AccountsTable({
               {a.name}
             </ListOpen>
             {plan && (
-              <span className={cn("shrink-0 text-2xs text-muted-foreground", narrowHidden)} title={planTitle(a, plan, t)}>
+              <span className={cn("shrink-0 text-2xs text-muted-foreground", midHidden)} title={planTitle(a, plan, t)}>
                 {plan.short}
               </span>
             )}
@@ -441,15 +441,15 @@ export function AccountsTable({
           <StatusLabel status={status} />
           {cell(five, t("common.n5Hours"))}
           <div className={narrowHidden}>{cell(week, t("common.week"))}</div>
-          <div className="flex justify-end" onClick={stop}>
+          <div className="flex min-w-0 justify-end" onClick={stop}>
             {a.provider === "antigravity" && !step ? (
               <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
             ) : step ? (
-              <Button size="xs" variant="outline" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
+              <Button size="xs" variant="outline" className="block min-w-0 max-w-full truncate leading-6" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
                 {step === refresh ? t("accountsTable.refresh") : shortFix(step.key, t) ?? step.label}
               </Button>
             ) : switchTo ? (
-              <Button size="xs" aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
+              <Button size="xs" className="block min-w-0 max-w-full truncate leading-6" title={t("common.switch")} aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
                 {t("common.switch")}
               </Button>
             ) : null}

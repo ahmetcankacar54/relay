@@ -26,7 +26,7 @@ import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 
 const RULER = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 const rowClass =
-  "grid grid-cols-[84px_minmax(0,1fr)] items-center text-xs @xl:grid-cols-[128px_minmax(0,1fr)]";
+  "grid grid-cols-[7rem_minmax(0,1fr)] items-center text-xs @xl:grid-cols-[9rem_minmax(0,1fr)]";
 const noteClass = "text-xs text-muted-foreground";
 /** The lane block's name shows only when the block is this wide (% of the day). */
 const NAMED_WIDTH = 8;

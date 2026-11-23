@@ -1,7 +1,8 @@
 import { Fragment, useState } from "react";
 import { AccountDot } from "@/components/AccountDot";
-import { LimitLine } from "@/components/LimitLine";
-import { ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, ListSkeleton, narrowHidden } from "@/components/ListCard";
+import { LimitLine, limitCell, NoLimitLine } from "@/components/LimitLine";
+import { boardNarrow, boardWide, ListCard, ListGroup, ListHead, ListNote, ListOpen, ListRow, ListSection, ListSkeleton } from "@/components/ListCard";
+import { cn } from "@/lib/utils";
 import { PageSection } from "@/components/PageSection";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -95,8 +96,13 @@ export function AccountsBoard({ now }: { now: number }) {
         faded={faded}
       />
     ) : (
-      <span className="text-xs text-muted-foreground">—</span>
+      <NoLimitLine />
     );
+  const otherBadge = (other: { text: string; full: boolean }) => (
+    <span data-slot="other-limit" title={other.text} className="inline-flex min-w-0 max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
+      <span className={other.full ? "truncate text-crit" : "truncate text-foreground"}>{other.text}</span>
+    </span>
+  );
   const row = (a: Account) => {
     const u = usage[a.id];
     const { five, week, pooled } = limitColumns(u, now);
@@ -106,22 +112,26 @@ export function AccountsBoard({ now }: { now: number }) {
       <Fragment key={a.id}>
         <ListRow columns="board" onOpen={() => (window.location.hash = accountHash(a.id))} data={{ "data-account": a.id }}>
           <AccountDot color={a.color} />
-          <div className="flex min-w-0 items-baseline gap-1.5">
+          {/*
+           * The name has the first line to itself; "in use" and, in a card too narrow for its own column,
+           * the model limit sit quietly under it, so neither squeezes the name.
+           */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-muted-foreground [&>[data-list-nav]]:basis-full [&>[data-list-nav]]:text-foreground">
             <ListOpen onOpen={() => (window.location.hash = accountHash(a.id))} title={a.name}>
               {a.name}
             </ListOpen>
-            {inUse.has(a.id) && <span className="shrink-0 text-2xs text-muted-foreground">{t("accountsBoard.inUse")}</span>}
-          </div>
-          {line(five, t("common.n5Hours"), pooled, faded)}
-          {line(week, t("common.week"), pooled, faded)}
-          <span className={narrowHidden}>
+            {inUse.has(a.id) && <span className="shrink-0">{t("accountsBoard.inUse")}</span>}
             {other && (
-              <span data-slot="other-limit" className="inline-flex max-w-full items-center rounded-sm bg-secondary px-1.5 py-0.5 text-2xs font-semibold">
-                <span className={other.full ? "truncate text-crit" : "truncate"}>{other.text}</span>
+              <span className={cn("flex min-w-0 flex-1 basis-0 items-center gap-1.5", boardNarrow)}>
+                {inUse.has(a.id) && <span aria-hidden="true">·</span>}
+                {otherBadge(other)}
               </span>
             )}
-          </span>
-          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          </div>
+          <div className={limitCell}>{line(five, t("common.n5Hours"), pooled, faded)}</div>
+          <div className={limitCell}>{line(week, t("common.week"), pooled, faded)}</div>
+          <span className={cn("flex min-w-0", boardWide)}>{other && otherBadge(other)}</span>
+          <div className="flex min-w-0 justify-end" onClick={(e) => e.stopPropagation()}>
             {a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
           </div>
         </ListRow>
@@ -149,7 +159,7 @@ export function AccountsBoard({ now }: { now: number }) {
           <span>{t("common.account")}</span>
           <span>{t("common.n5Hours")}</span>
           <span>{t("common.week")}</span>
-          <span className={narrowHidden}>{t("accountsBoard.modelLimit")}</span>
+          <span className={cn("truncate", boardWide)}>{t("accountsBoard.modelLimit")}</span>
           <span />
         </ListHead>
         {groups.map(({ provider, own }) => (

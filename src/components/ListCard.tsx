@@ -16,19 +16,33 @@ import type { AccountProvider } from "../../shared/types";
  * one level (provider → work group).
  */
 
+/*
+ * Column sizing. A row inside a section is indented (`ps-9`, `ps-14`) while the header is not, so only
+ * the name column may flex: every column after it is a fixed size or a share of the card (`cqw`), the
+ * same in the header and in each row, and so they line up from the right edge whatever the indent.
+ * A `minmax(0, 16rem)` name beside `1fr` columns would take its 16rem first and squeeze the limits until
+ * their text ran into each other.
+ *
+ * Breakpoints are the card's width (a container): below 42rem (`@max-2xl`) a list keeps only what
+ * fits a 720 px window, below 48rem (`@max-3xl`) and 56rem (`@max-4xl`) some lists move a column into
+ * the row's second line.
+ */
 const grid = cva("grid items-center gap-x-3 pe-4", {
   variants: {
     columns: {
-      /** Dot, name, status, 5 hours, week, action, menu. */
+      /** Dot, name, status, 5 hours, week, action, menu (its 2rem button). */
       accounts:
-        "grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,12rem)_4.5rem_4.5rem_7rem_1.5rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,9rem)_4.5rem_7rem_1.5rem]",
-      /** Dot, name, 5 hours, week, a model's or pool's own limit, action. */
+        "grid-cols-[0.5rem_minmax(0,1fr)_clamp(7rem,18cqw,12rem)_4.5rem_4.5rem_7rem_2rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_clamp(6.5rem,20cqw,9rem)_4.5rem_7rem_2rem]",
+      /**
+       * Dot, name, 5 hours, week, a model's or pool's own limit, action. Below 56rem the model limit
+       * moves under the name (`boardWide` / `boardNarrow`).
+       */
       board:
-        "grid-cols-[0.5rem_minmax(0,16rem)_minmax(0,1fr)_minmax(0,1fr)_7rem_7rem] @max-2xl:grid-cols-[0.5rem_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_7rem]",
-      /** Switch, name, plan, first start, status. */
-      plan: "grid-cols-[2rem_minmax(0,1fr)_10rem_10rem_minmax(0,10rem)] @max-2xl:grid-cols-[2rem_minmax(0,1fr)_10rem_10rem]",
+        "grid-cols-[0.5rem_minmax(0,1fr)_clamp(8rem,18cqw,11rem)_clamp(8rem,18cqw,11rem)_clamp(6.5rem,13cqw,9rem)_6rem] @max-4xl:grid-cols-[0.5rem_minmax(0,1fr)_clamp(6.5rem,20cqw,10rem)_clamp(6.5rem,20cqw,10rem)_6rem]",
+      /** Switch, name, plan, first start, status. Below 48rem the status moves to the second line. */
+      plan: "grid-cols-[2rem_minmax(0,1fr)_9.5rem_10.5rem_clamp(7rem,16cqw,11rem)] @max-3xl:grid-cols-[2rem_minmax(0,1fr)_9.5rem_10.5rem]",
       /** Order, name, 5 hours, week, in the pool. */
-      pool: "grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_2.5rem] @max-2xl:grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem]",
+      pool: "grid-cols-[1.75rem_minmax(0,1fr)_clamp(7rem,18cqw,10rem)_clamp(7rem,18cqw,10rem)_2.75rem] @max-2xl:grid-cols-[1.75rem_minmax(0,1fr)_clamp(7rem,24cqw,9rem)_2.75rem]",
       /** Mark, name, state, action. */
       steps: "grid-cols-[1rem_minmax(0,1fr)_auto_auto]",
     },
@@ -37,6 +51,14 @@ const grid = cva("grid items-center gap-x-3 pe-4", {
 
 /** A column that a narrow list leaves out (its header cell and each row's). */
 export const narrowHidden = "@max-2xl:hidden";
+/** A detail a list shows only from 48rem (the plan's column, the account's plan beside its name). */
+export const midHidden = "@max-3xl:hidden";
+/** A column the plan list shows only from 48rem; below, the same thing sits in the row's second line. */
+export const planWide = "@max-3xl:hidden";
+export const planNarrow = "@3xl:hidden";
+/** The board's model-limit column, from 56rem; below, the same badge sits under the account's name. */
+export const boardWide = "@max-4xl:hidden";
+export const boardNarrow = "@4xl:hidden";
 
 export type ListColumns = NonNullable<Parameters<typeof grid>[0]>["columns"];
 
@@ -106,7 +128,7 @@ export function ListCard({ children, label, slot }: { children: ReactNode; label
 /** The column names, small and quiet. */
 export function ListHead({ columns, children }: { columns: ListColumns; children: ReactNode }) {
   return (
-    <div data-slot="list-head" aria-hidden="true" className={cn(grid({ columns }), "ps-4 h-8 border-b text-2xs text-muted-foreground")}>
+    <div data-slot="list-head" aria-hidden="true" className={cn(grid({ columns }), "ps-4 h-8 border-b text-2xs text-muted-foreground [&>*]:min-w-0 [&>*]:truncate")}>
       {children}
     </div>
   );
@@ -270,7 +292,7 @@ export function ListOpen({ onOpen, children, title }: { onOpen: () => void; chil
         e.stopPropagation();
         onOpen();
       }}
-      className="min-w-0 truncate rounded-xs text-start text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="min-w-0 max-w-full truncate rounded-xs text-start text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       title={title}
     >
       {children}

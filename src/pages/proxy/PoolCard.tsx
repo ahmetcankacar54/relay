@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { intentHash } from "@/app/routes";
 import { AccountDot } from "@/components/AccountDot";
-import { LimitLine } from "@/components/LimitLine";
+import { LimitLine, limitCell, NoLimitLine } from "@/components/LimitLine";
 import { ListCard, ListGroup, ListHead, ListRow, ListSection, narrowHidden } from "@/components/ListCard";
 import { PageSection } from "@/components/PageSection";
 import { Private } from "@/components/Private";
@@ -160,7 +160,7 @@ export function PoolCard({
               <span>{t("common.account")}</span>
               <span>{t("common.n5Hours")}</span>
               <span className={narrowHidden}>{t("common.week")}</span>
-              <span className="text-right">{t("poolCard.inPool")}</span>
+              <span className="text-end">{t("poolCard.inPool")}</span>
             </ListHead>
             {groups.map(({ provider, own }) => (
               <Fragment key={provider}>
@@ -216,7 +216,7 @@ export function PoolCard({
                           t={t}
                         />
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <NoLimitLine />
                       );
                     const unread = !five && !week;
                     return (
@@ -286,9 +286,9 @@ export function PoolCard({
                               : t("poolCard.notReadable")}
                           </span>
                         ) : (
-                          <div className={cn("min-w-0", quiet && "opacity-60")}>{cell(five, t("common.n5Hours"))}</div>
+                          <div className={cn(limitCell, quiet && "opacity-60")}>{cell(five, t("common.n5Hours"))}</div>
                         )}
-                        <div className={cn("min-w-0", narrowHidden, quiet && "opacity-60")}>{unread ? null : cell(week, t("common.week"))}</div>
+                        <div className={cn(limitCell, narrowHidden, quiet && "opacity-60")}>{unread ? null : cell(week, t("common.week"))}</div>
                         <Switch
                           className="justify-self-end"
                           checked={account.inPool}
