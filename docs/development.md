@@ -109,6 +109,46 @@ macOS only:
 - The menu bar panel, the panda and usage in the menu bar title, and the widget.
 - The `relay` CLI.
 
+## Resource use
+
+`npm run perf:idle` (`node scripts/perf-idle.mjs`, after `npm run build`) starts
+the built app from `dist-electron` with a fresh profile in a temp folder and a
+temp `HOME`, so it sees no Claude app, no Claude Code sign-in and none of your
+accounts. It closes the main window to the menu bar (`--window open` keeps it
+open, brings it in front with focus and says how much of the sample it kept
+focus), waits 75 s (`--settle`; a closed window frees its renderer after a
+minute), then samples every Relay process for 60 s (`--duration`) with `ps`:
+main, renderers, the GPU and network helpers, and anything they started.
+
+- **CPU** is the CPU time all of them used over the window divided by its
+  length, not `ps`'s decaying `%cpu`.
+- **Memory** is the sum of their RSS, sampled every second (`--interval`); the
+  peak and the mean are printed. Shared framework pages count once per process,
+  so the sum is an upper bound.
+- **Programs started** are logged by `scripts/perf-idle.cjs`, which wraps
+  `child_process` before Relay loads. Every Keychain call (`/usr/bin/security`,
+  and the vault key's tool) goes to a fake that only logs it, so the real
+  Keychain is never asked. An idle Relay must make none.
+
+It prints a table per process kind and one JSON line, and exits 1 over budget
+(`--budget-cpu 1`, `--budget-rss-mb 550` by default) or after any Keychain
+call while idle.
+
+Measured on an Apple silicon Mac (macOS 26, 2026-11-23, window closed): 0.1 %
+CPU; 394 MB RSS on average, 435 MB at most (main 139 MB, menu bar panel 86 MB,
+GPU 64 MB, network 39 MB); no Keychain call while idle (4 at launch: three for
+Relay's own vault key, one direct `/usr/bin/security` lookup); two `ps` calls
+every 4 s, the process list Relay checks for the Claude app. With the window
+open and focused on the first-run page: 2.3 % CPU over 3 min (`--settle 30
+--duration 180`) and 666 MB at most. The panda's idle motions play now and
+then (`src/mascot/idle-motion.ts`: a blink every 8 to 14 s, the tail, wave,
+look and nod together every 1.5 to 2.5 min), since a moving SVG part repaints
+the window every frame: when they looped, the same page took 17 %. Out of focus
+or hidden, the panda holds still. The empty profile reads no limits: with
+accounts, each usage read (every `usageRefreshMinutes`) also reads that
+account's Claude Code sign-in through `/usr/bin/security`, the tool Claude Code
+itself trusts, so macOS shows no prompt for it.
+
 ## Releasing
 
 A release has signed macOS DMGs for Apple silicon and Intel, a Windows installer,

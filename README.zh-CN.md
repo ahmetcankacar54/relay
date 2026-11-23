@@ -161,6 +161,8 @@ English、Türkçe、Deutsch、Français、Español、Português (Brasil)、Ital
 
 macOS 是主要平台。Windows 版本尚未在真机上测试过；欢迎反馈。
 
+**资源占用：**在菜单栏中空闲时，Relay 的所有进程合计占用约 0.1% 的 CPU、约 395 MB 内存（最多 435 MB）；窗口在前台打开时约占 2% 的 CPU；且不会弹出钥匙串授权提示（Apple 芯片 Mac；[测量方法](docs/development.md#resource-use)）。
+
 ## 隐私与安全
 
 - **仅在本地运行。** Relay 没有账号体系、没有服务器，**也没有遥测或分析**。它的数据保存在 `~/Library/Application Support/Relay`（macOS）或 `~/.config/Relay`（Linux）。

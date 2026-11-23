@@ -1001,9 +1001,20 @@ export interface AutoSwitchState {
   switchedAt?: string;
   retryAt?: string;
 }
+/**
+ * Where a limit figure came from: the provider's own usage endpoint (Claude's OAuth usage,
+ * Codex's wham, Antigravity's quota API), claude.ai read through the Claude app's sign-in, the
+ * rate-limit headers of an answer through the gateway, or Relay's own estimate (a window whose
+ * reset passed after the read reads as empty).
+ */
+export type LimitSource = "official" | "app-session" | "gateway" | "estimate";
 export interface UsageWindow {
   usedPercent: number;
   resetsAt?: string;
+  /** Where this figure came from; absent on readings made before the field existed. */
+  source?: LimitSource;
+  /** When this figure was read or reported; absent before the field existed. */
+  readAt?: string;
 }
 export type UsageIssue =
   | "connect-cli"
@@ -1034,6 +1045,10 @@ export interface ModelWindow {
    * (`antigravity_gemini_5h`). Undefined for a window of unknown length.
    */
   period?: "five_hour" | "seven_day";
+  /** Where this figure came from, as `UsageWindow.source`. */
+  source?: LimitSource;
+  /** When this figure was read or reported, as `UsageWindow.readAt`. */
+  readAt?: string;
 }
 export interface AccountUsage {
   accountId: string;

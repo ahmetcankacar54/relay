@@ -90,7 +90,7 @@ test("each state's look uses only the props and parts its pose has, and every po
   }
   // A trick's poses too: rawr stands.
   assert.ok(CARD_LEDGE[trickLook(CARD_LOOKS.idle, "rawr").pose] !== undefined);
-  // Only blink loops: the card adds no other infinite motion.
+  // Only the occasional blink: the card adds no other idle motion.
   for (const look of looks) for (const motion of look.motion) assert.equal(motion, "blink");
   assert.deepEqual(
     Object.fromEntries(Object.entries(CARD_LOOKS).map(([state, look]) => [state, `${look.pose} ${look.expression} ${look.props.join(" ")}`.trim()])),
@@ -309,13 +309,17 @@ function keyframes(source: string) {
   return blocks;
 }
 
-test("card-panda.css moves only without Reduce motion, runs every reaction once and loops only the idle breath and blink", () => {
+test("card-panda.css moves only without Reduce motion, runs every reaction once and loops nothing", () => {
   const motion = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
   assert.ok(motion.length > 0);
   const outside = css.replace(motion, "").replace(/\/\*[\s\S]*?\*\//g, "");
   assert.doesNotMatch(outside, /animation\s*:|transition\s*:|:hover/);
   const loops = [...motion.matchAll(/\{([^}]*)\}/g)].flatMap(([, rule]) => animations(rule)).filter((one) => /\binfinite\b/.test(one));
-  assert.deepEqual(loops.map((one) => one.split(" ")[0]).sort(), ["card-panda-blink", "card-panda-breathe"]);
+  // A loop repaints the window every frame: the idle breath plays three times, the blink once a play.
+  assert.deepEqual(loops, []);
+  assert.match(motion, /\.card-panda \.panda\[data-pose="peek"\] \[data-part="head"\] \{\s*animation: card-panda-breathe 4\.6s linear 3;/);
+  assert.match(motion, /\.card-panda \.panda\[data-motion~="blink"\] \[data-part="eyes"\] \{\s*animation: card-panda-blink 0\.23s linear 1;/);
+  assert.match(motion, /\.card-panda \.panda\[data-resting~="blink"\] \[data-part="eyes"\] \{\s*animation: none;/);
   // Every reaction's and every change's animations last as long as the clock in card-panda.ts gives them.
   const timed: [string, string, number][] = [
     ...Object.entries(REACTIONS).map(([kind, { ms }]): [string, string, number] => [kind, `[data-reaction="${kind}"]`, ms]),

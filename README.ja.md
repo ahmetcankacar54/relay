@@ -161,6 +161,8 @@ English、Türkçe、Deutsch、Français、Español、Português (Brasil)、Ital
 
 macOS がメインのプラットフォームです。Windows 版はまだ実機でテストされていません。報告を歓迎します。
 
+**リソース使用量:** メニューバーで待機中の Relay は、全プロセス合計で CPU 約 0.1%、メモリ約 395 MB（最大 435 MB）を使います。ウィンドウを前面に開いていても CPU は約 2% で、Keychain の許可ダイアログも出しません（Apple シリコン Mac、[測定方法](docs/development.md#resource-use)）。
+
 ## プライバシーとセキュリティ
 
 - **ローカルのみ。** Relay にはアカウントもサーバーもなく、**テレメトリーや分析も一切ありません**。データは `~/Library/Application Support/Relay`（macOS）または `~/.config/Relay`（Linux）に保存されます。

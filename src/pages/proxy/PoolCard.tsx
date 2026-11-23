@@ -172,16 +172,17 @@ export function PoolCard({
                     const usage = relay.data?.usage[account.id];
                     // An Antigravity account's limits are its pools: each column the fullest of its length.
                     const pools = modelOnlyUsage(usage) ? limitColumns(usage, now) : undefined;
+                    // The gateway's figures are the usage's own windows, so they keep those windows' source and age.
                     const five = pools
                       ? pools.five
                       : account.fiveHourPercent === undefined
                         ? undefined
-                        : { usedPercent: account.fiveHourPercent, resetsAt: resetAt(account.fiveHourResetMinutes, now) };
+                        : { usedPercent: account.fiveHourPercent, resetsAt: resetAt(account.fiveHourResetMinutes, now), source: usage?.fiveHour?.source, readAt: usage?.fiveHour?.readAt };
                     const week = pools
                       ? pools.week
                       : account.weeklyPercent === undefined
                         ? undefined
-                        : { usedPercent: account.weeklyPercent, resetsAt: resetAt(account.weeklyResetMinutes, now) };
+                        : { usedPercent: account.weeklyPercent, resetsAt: resetAt(account.weeklyResetMinutes, now), source: usage?.sevenDay?.source, readAt: usage?.sevenDay?.readAt };
                     const clock = account.fullAt
                       ? new Date(account.fullAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
                       : undefined;
@@ -267,7 +268,7 @@ export function PoolCard({
                           unread ? (
                             unreadNote
                           ) : (
-                            <AccountLimits five={five} week={week} pooled={!!pools} now={now} t={t} />
+                            <AccountLimits five={five} week={week} pooled={!!pools} usage={usage} now={now} t={t} />
                           )
                         }
                         menu={

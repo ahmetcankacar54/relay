@@ -27,22 +27,27 @@
   display: inline;
 }
 
-/* Light motions; parts turn around their pivots (transform-origin from the generator). */
+/*
+ * Light motions; parts turn around their pivots (transform-origin from the generator). Blink, tail, wave,
+ * look and nod play a few times and end at rest: the panda's clock (src/mascot/idle-motion.ts) names them in
+ * data-resting between two plays, which stops them, and plays them again from the start when it clears.
+ * Walk, chew and breathe loop while their scene lasts.
+ */
 @media (prefers-reduced-motion: no-preference) {
   .panda[data-motion~="blink"] [data-part="eyes"] {
-    animation: panda-blink 5s infinite;
+    animation: panda-blink 0.4s 1;
   }
   .panda[data-motion~="tail"] [data-part="tail"] {
-    animation: panda-tail 3.2s ease-in-out infinite alternate;
+    animation: panda-tail 6.4s ease-in-out 1;
   }
   .panda[data-motion~="wave"] [data-part="arm-left"] {
-    animation: panda-wave 4s ease-in-out infinite;
+    animation: panda-wave 1.8s ease-in-out 2;
   }
   .panda[data-motion~="look"] [data-part="head"] {
-    animation: panda-look 7s ease-in-out infinite;
+    animation: panda-look 4.9s ease-in-out 1;
   }
   .panda[data-motion~="nod"] [data-part="head"] {
-    animation: panda-nod 3s ease-in-out infinite;
+    animation: panda-nod 0.9s ease-in-out 2;
   }
   .panda[data-motion~="walk"] [data-part="leg-front"] {
     animation: panda-step 0.5s ease-in-out infinite alternate;
@@ -58,6 +63,14 @@
   }
   .panda[data-motion~="breathe"] [data-part="body"] {
     animation: panda-breathe 3.2s ease-in-out infinite;
+  }
+  /* Between two plays: still, so the window has nothing to paint. Tricks come later and still play. */
+  .panda[data-resting~="blink"] [data-part="eyes"],
+  .panda[data-resting~="tail"] [data-part="tail"],
+  .panda[data-resting~="wave"] [data-part="arm-left"],
+  .panda[data-resting~="look"] [data-part="head"],
+  .panda[data-resting~="nod"] [data-part="head"] {
+    animation: none;
   }
 
   /*
@@ -95,29 +108,35 @@
     animation: panda-paw-wave 1.2s ease-in-out 1;
   }
 }
+/* One blink: shut in 0.15 s, open again in 0.25 s. */
 @keyframes panda-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
+  0%, 100% { transform: scaleY(1); }
+  37.5% { transform: scaleY(0.1); }
 }
+/* One swing each way from rest and back to it: -4 to 5 degrees, 3.2 s from side to side. */
 @keyframes panda-tail {
-  from { transform: rotate(-4deg); }
-  to { transform: rotate(5deg); }
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-4deg); }
+  75% { transform: rotate(5deg); }
 }
-/* Positive angles swing the viewer's-left arm outwards and up. */
+/*
+ * Positive angles swing the viewer's-left arm outwards and up. Wave, look and nod are only their moves (the
+ * rest between two is the clock's): a keyframe that holds still still repaints every frame while it runs.
+ */
 @keyframes panda-wave {
-  0%, 55%, 100% { transform: rotate(0deg); }
-  65%, 85% { transform: rotate(80deg); }
-  75% { transform: rotate(60deg); }
+  0%, 100% { transform: rotate(0deg); }
+  22.222%, 66.667% { transform: rotate(80deg); }
+  44.444% { transform: rotate(60deg); }
 }
 @keyframes panda-look {
-  0%, 30%, 100% { transform: rotate(0deg); }
-  40%, 55% { transform: rotate(-6deg); }
-  70%, 85% { transform: rotate(6deg); }
+  0%, 100% { transform: rotate(0deg); }
+  14.286%, 35.714% { transform: rotate(-6deg); }
+  57.143%, 78.571% { transform: rotate(6deg); }
 }
 @keyframes panda-nod {
-  0%, 70%, 100% { transform: rotate(0deg); }
-  80% { transform: rotate(5deg); }
-  90% { transform: rotate(-2deg); }
+  0%, 100% { transform: rotate(0deg); }
+  33.333% { transform: rotate(5deg); }
+  66.667% { transform: rotate(-2deg); }
 }
 @keyframes panda-step {
   from { transform: rotate(-12deg); }

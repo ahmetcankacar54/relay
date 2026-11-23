@@ -108,7 +108,7 @@ export function AccountsBoard({ now }: { now: number }) {
               </>
             )
           }
-          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} usage={u} now={now} t={t} />}
           action={a.provider === "antigravity" && <AntigravityAction account={a} onAsk={setAsk} />}
         />
         {a.provider === "antigravity" && promptOn(a.id) && (

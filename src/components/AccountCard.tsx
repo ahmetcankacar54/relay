@@ -4,6 +4,8 @@ import { LimitLine, NoLimitLine } from "@/components/LimitLine";
 import { ListOpen } from "@/components/ListCard";
 import { cn } from "@/lib/utils";
 import type { T } from "@/data/i18n";
+import type { AccountUsage, LimitSource } from "../../shared/types";
+import { limitOrigin } from "../../shared/quota-windows";
 
 /*
  * An account as a card, the way usage trackers show one: its name and plan on top with its status (or
@@ -114,17 +116,19 @@ export function AccountTag({ children, title }: { children: ReactNode; title?: s
   );
 }
 
-type Window = { usedPercent: number; resetsAt?: string; label?: string } | undefined;
+type Window = { usedPercent: number; resetsAt?: string; label?: string; source?: LimitSource; readAt?: string } | undefined;
 
 /**
  * The card's two limits, labelled "5 hours" and "Week". A pooled provider (Antigravity) names its pool
- * in the tooltip, not the label, so the figures keep their room.
+ * in the tooltip, not the label, so the figures keep their room. Each tooltip ends with where the
+ * figure came from and how old it is (`limitOrigin`); `usage` fills that in for an untagged window.
  */
 export function AccountLimits({
   five,
   week,
   pooled,
   faded,
+  usage,
   now,
   t,
 }: {
@@ -132,6 +136,7 @@ export function AccountLimits({
   week: Window;
   pooled?: boolean;
   faded?: boolean;
+  usage?: Pick<AccountUsage, "source" | "checkedAt">;
   now: number;
   t: T;
 }) {
@@ -147,6 +152,7 @@ export function AccountLimits({
         now={now}
         t={t}
         faded={faded}
+        origin={limitOrigin(window, usage, now)}
       />
     ) : (
       <NoLimitLine label={label} />

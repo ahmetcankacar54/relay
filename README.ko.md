@@ -161,6 +161,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 주요 플랫폼은 macOS입니다. Windows 빌드는 아직 실제 컴퓨터에서 테스트하지 않았습니다. 사용 후기를 환영합니다.
 
+**리소스 사용량:** 메뉴 막대에서 대기 중일 때 Relay는 모든 프로세스를 합쳐 CPU 약 0.1%, 메모리 약 395MB(최대 435MB)를 사용하고, 창을 앞에 열어 두어도 CPU는 약 2%이며, 키체인 권한 요청 창을 띄우지 않습니다(Apple 실리콘 Mac, [측정 방법](docs/development.md#resource-use)).
+
 ## 개인정보 보호 및 보안
 
 - **로컬 전용.** Relay에는 계정도, 서버도, **원격 측정(telemetry)이나 분석도 없습니다**. 데이터는 `~/Library/Application Support/Relay`(macOS) 또는 `~/.config/Relay`(Linux)에 저장됩니다.

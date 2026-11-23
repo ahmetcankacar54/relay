@@ -357,6 +357,8 @@ const state: Snapshot = {
             checkedAt: new Date(
               Date.now() - (i === 2 ? 50 : 1) * 60_000,
             ).toISOString(),
+            // Read through each account's own sign-in: the limit rows' tooltips say "Official API".
+            source: "cli",
             fiveHour: {
               usedPercent: [94, 22, 63, 100][i % 4],
               resetsAt: new Date(Date.now() + 110 * 60_000).toISOString(),

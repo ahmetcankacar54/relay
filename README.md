@@ -159,6 +159,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 macOS is the main platform. The Windows build has not been tested on a real machine yet; reports are welcome.
 
+**Resource use:** idle in the menu bar, Relay takes about 0.1 % CPU and about 395 MB of memory across all its processes (435 MB at most), about 2 % CPU with its window open in front, and shows no Keychain prompt (Apple silicon Mac; [how it is measured](docs/development.md#resource-use)).
+
 ## Privacy & security
 
 - **Local only.** Relay has no account, no server and **no telemetry or analytics**. Its data lives in `~/Library/Application Support/Relay` (macOS) or `~/.config/Relay` (Linux).

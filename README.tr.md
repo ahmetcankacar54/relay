@@ -159,6 +159,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 Ana platform macOS'tur. Windows sürümü henüz gerçek bir makinede denenmedi; geri bildirimler memnuniyetle karşılanır.
 
+**Kaynak kullanımı:** menü çubuğunda boşta beklerken Relay, tüm süreçleriyle birlikte yaklaşık %0,1 CPU ve yaklaşık 395 MB bellek kullanır (en fazla 435 MB); penceresi önde açıkken yaklaşık %2 CPU kullanır ve Anahtar Zinciri izni sormaz (Apple silicon Mac; [nasıl ölçüldüğü](docs/development.md#resource-use)).
+
 ## Gizlilik ve güvenlik
 
 - **Yalnızca yerel.** Relay'in hesabı, sunucusu ve **telemetrisi ya da analitiği yoktur**. Verileri `~/Library/Application Support/Relay` (macOS) ya da `~/.config/Relay` (Linux) içindedir.

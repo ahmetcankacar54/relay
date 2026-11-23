@@ -1,4 +1,3 @@
-import type { Account, AccountUsage, AuthFlow, DesktopState, ModelWindow, RelaySettings, Snapshot } from "../../shared/types";
 import { freshUsage, quotaWindows } from "../../shared/usage";
 import { modelOnlyUsage, spentModelWindows } from "../../shared/quota-windows";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
@@ -132,6 +131,9 @@ export interface UsageWindowRow {
   period?: WindowPeriod;
   /** A model's own limit (Fable, Opus, an Antigravity model), listed after the account's two. */
   model?: boolean;
+  /** Where the figure came from and when (`UsageWindow.source`, `.readAt`), when known. */
+  source?: LimitSource;
+  readAt?: string;
 }
 
 /**
@@ -181,6 +183,8 @@ export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
       resetsAt: w.resetsAt,
       period: periodOf(w),
       model: true,
+      ...(w.source ? { source: w.source } : {}),
+      ...(w.readAt ? { readAt: w.readAt } : {}),
     });
   return rows;
 }

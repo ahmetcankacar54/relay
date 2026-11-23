@@ -161,6 +161,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 macOS es la plataforma principal. La versión para Windows todavía no se ha probado en una máquina real; los informes son bienvenidos.
 
+**Uso de recursos:** en reposo en la barra de menús, Relay usa alrededor del 0,1 % de CPU y unos 395 MB de memoria entre todos sus procesos (435 MB como máximo), alrededor del 2 % de CPU con su ventana abierta en primer plano, y no muestra ningún aviso del Llavero (Mac con Apple silicon; [cómo se mide](docs/development.md#resource-use)).
+
 ## Privacidad y seguridad
 
 - **Solo local.** Relay no tiene cuenta, ni servidor, ni **telemetría ni analíticas**. Sus datos están en `~/Library/Application Support/Relay` (macOS) o en `~/.config/Relay` (Linux).

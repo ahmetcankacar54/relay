@@ -1,4 +1,4 @@
-import type { AccountUsage, ModelWindow, UsageWindow } from "./types";
+import type { AccountUsage, LimitSource, ModelWindow, UsageWindow } from "./types";
 
 /**
  * Quota windows the provider reported. Team and Enterprise seats can omit the
@@ -56,7 +56,16 @@ export interface LimitHeadline {
   resetsAt?: string;
   /** A model's own limit: only requests for that model stop when it is spent. */
   model: boolean;
+  /** Where the figure came from and when (`UsageWindow.source`, `.readAt`), when known. */
+  source?: LimitSource;
+  readAt?: string;
 }
+
+/** A window's source and read time, only the ones it has, so untagged windows keep their shape. */
+const originOf = (w: Pick<UsageWindow, "source" | "readAt">) => ({
+  ...(w.source ? { source: w.source } : {}),
+  ...(w.readAt ? { readAt: w.readAt } : {}),
+});
 
 /**
  * The limit that stops the account first, as its one figure. For Claude and Codex the fuller of the
@@ -69,10 +78,10 @@ export function limitHeadline(
   now: number,
 ): LimitHeadline | undefined {
   const candidates: LimitHeadline[] = modelOnlyUsage(u)
-    ? (u?.modelWindows ?? []).map((w) => ({ key: w.key, label: w.label, usedPercent: usedAt(w, now), resetsAt: w.resetsAt, model: true }))
+    ? (u?.modelWindows ?? []).map((w) => ({ key: w.key, label: w.label, usedPercent: usedAt(w, now), resetsAt: w.resetsAt, model: true, ...originOf(w) }))
     : [
-        ...(u?.fiveHour ? [{ key: "five_hour", usedPercent: usedAt(u.fiveHour, now), resetsAt: u.fiveHour.resetsAt, model: false }] : []),
-        ...(u?.sevenDay ? [{ key: "seven_day", usedPercent: usedAt(u.sevenDay, now), resetsAt: u.sevenDay.resetsAt, model: false }] : []),
+        ...(u?.fiveHour ? [{ key: "five_hour", usedPercent: usedAt(u.fiveHour, now), resetsAt: u.fiveHour.resetsAt, model: false, ...originOf(u.fiveHour) }] : []),
+        ...(u?.sevenDay ? [{ key: "seven_day", usedPercent: usedAt(u.sevenDay, now), resetsAt: u.sevenDay.resetsAt, model: false, ...originOf(u.sevenDay) }] : []),
       ];
   const resetMs = (h: LimitHeadline) => {
     const ms = Date.parse(h.resetsAt ?? "");
@@ -95,7 +104,7 @@ export function fullestByPeriod(
     const used = usedAt(w, now);
     const seen = out[w.period];
     if (!seen || used > seen.usedPercent)
-      out[w.period] = { key: w.key, label: w.label, usedPercent: used, ...(w.resetsAt ? { resetsAt: w.resetsAt } : {}), model: true };
+      out[w.period] = { key: w.key, label: w.label, usedPercent: used, ...(w.resetsAt ? { resetsAt: w.resetsAt } : {}), model: true, ...originOf(w) };
   }
   return out;
 }
@@ -105,6 +114,8 @@ export interface ColumnWindow {
   usedPercent: number;
   resetsAt?: string;
   label?: string;
+  source?: LimitSource;
+  readAt?: string;
 }
 
 /**
@@ -123,4 +134,32 @@ export function limitColumns(
     week: byPeriod.seven_day,
     pooled: true,
   };
+}
+
+/** Where a shown limit figure came from (`LimitSource`) and when it was read. */
+export interface LimitOrigin {
+  source: LimitSource;
+  readAt?: string;
+}
+
+/**
+ * Where a limit row's figure came from, for its tooltip. A window whose reset passed after it was
+ * read shows as empty: that is Relay's estimate, not a reading. A window read before windows were
+ * tagged takes its source from the account's sign-in (`AccountUsage.source`). Undefined when
+ * nothing says where it came from.
+ */
+export function limitOrigin(
+  window: Pick<UsageWindow, "resetsAt" | "source" | "readAt"> | undefined,
+  usage: Pick<AccountUsage, "source" | "checkedAt"> | undefined,
+  now: number,
+): LimitOrigin | undefined {
+  if (!window) return;
+  const readAt = window.readAt ?? usage?.checkedAt;
+  const reset = Date.parse(window.resetsAt ?? "");
+  const source: LimitSource | undefined =
+    Number.isFinite(reset) && reset <= now
+      ? "estimate"
+      : (window.source ?? (usage?.source === "desktop" ? "app-session" : usage?.source === "cli" ? "official" : undefined));
+  if (!source) return;
+  return { source, ...(readAt ? { readAt } : {}) };
 }

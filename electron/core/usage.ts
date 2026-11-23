@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountUsage,
+  LimitSource,
   ModelWindow,
   UsageIssue,
   UsageWindow,
@@ -303,6 +304,21 @@ function identityKey(a: Account) {
     a.desktop?.orgId,
   ]);
 }
+/**
+ * A reading's windows, each marked with where it came from and when, so a limit row can say so
+ * after a gateway answer has replaced some of them and not others.
+ */
+function tagged(
+  limits: Pick<AccountUsage, "fiveHour" | "sevenDay" | "otherLimitReached" | "modelWindows">,
+  origin: { source: LimitSource; readAt: string },
+): Pick<AccountUsage, "fiveHour" | "sevenDay" | "otherLimitReached" | "modelWindows"> {
+  return {
+    ...limits,
+    ...(limits.fiveHour ? { fiveHour: { ...limits.fiveHour, ...origin } } : {}),
+    ...(limits.sevenDay ? { sevenDay: { ...limits.sevenDay, ...origin } } : {}),
+    ...(limits.modelWindows ? { modelWindows: limits.modelWindows.map((w) => ({ ...w, ...origin })) } : {}),
+  };
+}
 export class UsageManager {
   private identities = new Map<string, string>();
   private cache = new Map<string, AccountUsage>();
@@ -421,8 +437,8 @@ export class UsageManager {
       stale: false,
       checkedAt: at,
       liveAt: at,
-      ...(live.fiveHour ? { fiveHour: { ...live.fiveHour } } : {}),
-      ...(live.sevenDay ? { sevenDay: { ...live.sevenDay } } : {}),
+      ...(live.fiveHour ? { fiveHour: { ...live.fiveHour, source: "gateway", readAt: at } } : {}),
+      ...(live.sevenDay ? { sevenDay: { ...live.sevenDay, source: "gateway", readAt: at } } : {}),
     };
     // A model's own window as the answer reported it replaces the read one of that model.
     if (live.models?.length) {
@@ -430,7 +446,7 @@ export class UsageManager {
       for (const reported of live.models) {
         const key = `${reported.weekly ? "seven_day" : "five_hour"}_${reported.model}`;
         const known = windows.find((w) => w.key === key) ?? windows.find((w) => w.model === reported.model && w.key.startsWith(reported.weekly ? "seven_day" : "five_hour"));
-        const patch = { usedPercent: reported.usedPercent, ...(reported.resetsAt ? { resetsAt: reported.resetsAt } : {}) };
+        const patch = { usedPercent: reported.usedPercent, ...(reported.resetsAt ? { resetsAt: reported.resetsAt } : {}), source: "gateway" as const, readAt: at };
         if (known) Object.assign(known, patch);
         else windows.push({ key, label: reported.model.charAt(0).toUpperCase() + reported.model.slice(1), model: reported.model, ...patch });
       }
@@ -812,15 +828,16 @@ export class UsageManager {
     this.failures.delete(account.id);
     this.serverRetryUntil.delete(account.id);
     this.polledAt.set(account.id, this.now());
+    const checkedAt = new Date(this.now()).toISOString();
     this.cache.set(account.id, {
       accountId: account.id,
       status: "ready",
       stale: false,
-      checkedAt: new Date(this.now()).toISOString(),
+      checkedAt,
       source,
       ...(renewalRequired ? { connectionRenewalRequired: true } : {}),
       ...signIn,
-      ...limits,
+      ...tagged(limits, { source: source === "desktop" ? "app-session" : "official", readAt: checkedAt }),
     });
     // History is optional: failed local persistence must not turn a verified
     // live quota response into an authentication/usage error.
