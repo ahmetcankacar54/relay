@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security problem
     url: https://github.com/ahmetcankacar54/relay/blob/main/SECURITY.md
     about: Please report vulnerabilities privately, as SECURITY.md explains, not in a public issue.
+  - name: Ask a question
+    url: https://github.com/ahmetcankacar54/relay/discussions/categories/q-a
+    about: Setting up, switching, limits, the planner or the CLI. Ask in Discussions → Q&A.
