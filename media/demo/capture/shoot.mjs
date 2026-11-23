@@ -1,10 +1,10 @@
 // Captures states of the Relay browser preview (http://127.0.0.1:5173) for the film.
-// Usage: node capture/shoot.mjs <jobs.json>
+// Usage: npm install (once, in media/demo), then node capture/shoot.mjs <jobs.json>
 // A job: {url, out, width, height, dpr, dark, wait, eval, after, hover, boxes, selector, pad, clip, transparent, init, clock}
 // `hover`, `selector` and each value of `boxes` name an element: a CSS selector, or "text:Label" for the
 // innermost element whose text is exactly Label ("text:Label@2" for the third). Boxes go to <out>.json in CSS px.
 import { readFileSync, writeFileSync } from "node:fs";
-import puppeteer from "/Users/ahmetcan/.npm/_npx/059f4a4c7b2129c7/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js";
+import puppeteer from "puppeteer-core";
 
 // Every state is shot at Monday 23 November 2026, 16:47 local time (the film's "4:47 PM").
 const CLOCK = `(() => {

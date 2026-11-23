@@ -1,9 +1,9 @@
 // Renders Relay's real switch window (switch.html → src/switch/SwitchStage.tsx) frame by frame.
 // The Electron bridge is stood in by a scene feed; the CSS animations are stepped with the Web
 // Animations API, 30 frames a second, so every frame is the app's own drawing at that instant.
-// Usage: node capture/switch.mjs <outDir> [dpr]
+// Usage: npm install (once, in media/demo), then node capture/switch.mjs <outDir> [dpr]
 import { mkdirSync } from "node:fs";
-import puppeteer from "/Users/ahmetcan/.npm/_npx/059f4a4c7b2129c7/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js";
+import puppeteer from "puppeteer-core";
 
 const outDir = process.argv[2];
 const dpr = Number(process.argv[3] ?? 4);
