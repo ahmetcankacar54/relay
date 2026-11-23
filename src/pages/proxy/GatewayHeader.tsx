@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
+import { ExternalLink } from "@/components/ExternalLink";
 import { Note } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useI18n, type T } from "@/data/i18n";
 import { agoLabel, gatewayUrl, maskKey } from "@/lib/proxy-ui";
+import { EXTERNAL_LINKS } from "../../../shared/external-links";
 import type { ProxyAccountStatus, ProxyStatus } from "../../../shared/types";
 import { FORMAT_LOCALE } from "../../../shared/i18n/locales";
 import { CopyChip } from "./CopyChip";
@@ -120,6 +122,10 @@ export function GatewayHeader({
             <RefreshCw />
           </Button>
         </div>
+      </div>
+      <div data-slot="gateway-terms" className="flex flex-wrap items-baseline gap-x-2 border-t pt-2">
+        <Note>{t("gatewayHeader.termsNote")}</Note>
+        <ExternalLink href={EXTERNAL_LINKS.claudeTerms}>{t("gatewayHeader.termsLink")}</ExternalLink>
       </div>
       {status?.error && !running && (
         <p role="alert" className="border-t pt-2 text-xs text-crit">

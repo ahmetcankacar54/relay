@@ -16,9 +16,9 @@ see every 5-hour and weekly limit at a glance, and let a local gateway spread th
 [![15 languages](https://img.shields.io/badge/languages-15-6b645e?style=flat-square)](#15-languages)
 [![MIT](https://img.shields.io/badge/license-MIT-6b645e?style=flat-square)](LICENSE)
 
-**English** · [Türkçe](README.tr.md)
+**English** · [Türkçe](README.tr.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md)
 
-[Download](#install) · [Features](#features) · [Privacy](#privacy--security) · [FAQ](#faq) · [CLI](cli/README.md)
+[Download](#install) · [Features](#features) · [Privacy](#privacy--security) · [Terms & risk](#terms--risk) · [FAQ](#faq) · [CLI](cli/README.md)
 
 <br>
 
@@ -39,7 +39,7 @@ Relay fixes that, from the menu bar:
 - **Your Code history follows you.** Claude Code conversations and projects are merged across the accounts you choose, so the same conversation is there after every switch, with its permission mode.
 - **Every limit, every account.** 5-hour, weekly and per-model (Opus, Fable) limits with reset times, for Claude, OpenAI Codex and Google Antigravity accounts, refreshed in the background.
 - **A plan for your day.** Relay staggers each account's 5-hour windows across your work hours so the next account is ready before the current one runs out.
-- **A gateway that spends the right account.** Point Claude Code, Codex CLI or omp at one local address; each request goes to the account with room, keeping sessions and caches on their account.
+- **A gateway that spends the right account.** Point Claude Code, Codex CLI or omp at one local address; each request goes to the account with room, keeping sessions and caches on their account. It is off by default; read [Terms & risk](#terms--risk) before you turn it on.
 
 Relay is free, open source (MIT), runs entirely on your Mac, and sends nothing to anyone but the services you already use.
 
@@ -124,6 +124,7 @@ Every release carries a `SHA256SUMS.txt` and updates itself from GitHub Releases
 - A local, key-protected endpoint for Claude Code, Codex CLI and omp. Requests go to the account whose week ends first and that still has room, compared in real capacity (a Max 20× at 85 % still has more room than a fresh Pro).
 - Sessions stay on their account and its prompt cache; a busy account is drained at the start of a prompt, not in the middle.
 - Listens only on this Mac, or on your Tailscale network if you choose.
+- Off until you turn it on. It is the part of Relay furthest from ordinary use; see [Terms & risk](#terms--risk).
 
 ### Menu bar, widget and CLI
 
@@ -168,12 +169,24 @@ macOS is the main platform. The Windows build has not been tested on a real mach
 
 Found a problem? Please report it privately — see [SECURITY.md](SECURITY.md).
 
+## Terms & risk
+
+Relay is unofficial, and some of what it does is not how Anthropic wants third-party tools to use Claude sign-ins. Please read this before you rely on it.
+
+- **What Anthropic's terms say.** The [Claude Code legal and compliance page](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use) says subscription sign-ins (Free, Pro, Max, Ultra) are for ordinary use of Claude Code and Anthropic's own apps; that third-party tools should not store, route or intermediate those sign-ins; and that advertised limits assume ordinary, individual use. Anthropic says it may enforce this without notice.
+- **What Relay does.** Relay keeps your accounts' sign-ins on your computer, encrypted, so it can switch the Claude app and read limits. The gateway goes further: it sends Claude Code requests to your accounts with those sign-ins, and when omp is connected, omp's requests reach Claude in the same shape as Claude Code's.
+- **What can happen.** Anthropic can block such requests, or limit or suspend an account that uses them. Relay cannot prevent that, and you use it at your own risk (see the [license](LICENSE)).
+- **Where the risk sits.** Switching the Claude app and reading limits stay closest to ordinary use. The gateway is further from it, and omp through a Claude account is the furthest. The gateway is off until you turn it on; leave it off if you would rather not take that risk.
+- **Work accounts.** A Team or Enterprise seat is also governed by your company's agreement with Anthropic. Ask your admin before you add one, and use only accounts that are yours.
+
+Codex and Antigravity accounts are governed by OpenAI's and Google's terms in the same way.
+
 ## FAQ
 
 <details>
 <summary><b>Does Relay pool or extend my quota?</b></summary>
 
-No. Each account keeps its own limits; Relay only switches which account the Claude app (or a request through the gateway) uses, and helps you use each one's time well. Use only accounts you are allowed to use.
+No. Each account keeps its own limits; Relay only switches which account the Claude app (or a request through the gateway) uses, and helps you use each one's time well. Use only accounts you are allowed to use, and read [Terms & risk](#terms--risk) first.
 </details>
 
 <details>

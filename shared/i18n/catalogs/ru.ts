@@ -1133,6 +1133,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "создаётся при первом запуске",
   "gatewayHeader.regenerateKey": "Пересоздать ключ",
   "gatewayHeader.showKey": "Показать ключ",
+  "gatewayHeader.termsLink": "Условия Anthropic",
+  "gatewayHeader.termsNote": "Relay — неофициальное приложение. Условия Anthropic не разрешают сторонним инструментам передавать входы по подписке Claude, и Anthropic может ограничить или заблокировать аккаунт, который использует шлюз.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "Старый ключ сразу перестанет работать. {clients} получат новый сами; в другие инструменты его нужно ввести вручную.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "Старый ключ сразу перестанет работать. Новый нужно будет ввести в ваших инструментах.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Включить или выключить шлюз",

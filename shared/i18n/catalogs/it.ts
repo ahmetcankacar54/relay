@@ -1133,6 +1133,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "creata al primo avvio",
   "gatewayHeader.regenerateKey": "Rigenera chiave",
   "gatewayHeader.showKey": "Mostra chiave",
+  "gatewayHeader.termsLink": "Termini di Anthropic",
+  "gatewayHeader.termsNote": "Relay non è ufficiale. I termini di Anthropic non consentono a strumenti di terze parti di instradare gli accessi degli abbonamenti Claude, e Anthropic può limitare o sospendere un account che usa il gateway.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "La vecchia chiave smette subito di funzionare. {clients} ricevono quella nuova da soli; negli altri strumenti va inserita a mano.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "La vecchia chiave smette subito di funzionare. Dovrai inserire quella nuova nei tuoi strumenti.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Attiva o disattiva il gateway",

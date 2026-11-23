@@ -1128,6 +1128,8 @@ export const en = {
   "gatewayHeader.madeOnFirstStart": "made on first start",
   "gatewayHeader.regenerateKey": "Regenerate key",
   "gatewayHeader.showKey": "Show key",
+  "gatewayHeader.termsLink": "Anthropic's terms",
+  "gatewayHeader.termsNote": "Relay is unofficial. Anthropic's terms do not allow third-party tools to route Claude subscription sign-ins, and Anthropic may limit or suspend an account that uses the gateway.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "The old key stops working at once. {clients} get the new one by themselves; other tools need it entered by hand.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "The old key stops working at once. You will need to enter the new one in your tools.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Turn the gateway on or off",

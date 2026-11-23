@@ -1132,6 +1132,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "se crea en el primer inicio",
   "gatewayHeader.regenerateKey": "Regenerar clave",
   "gatewayHeader.showKey": "Mostrar clave",
+  "gatewayHeader.termsLink": "Condiciones de Anthropic",
+  "gatewayHeader.termsNote": "Relay no es oficial. Las condiciones de Anthropic no permiten que herramientas de terceros enruten los inicios de sesión de suscripciones de Claude, y Anthropic puede limitar o suspender una cuenta que use la pasarela.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "La clave anterior deja de funcionar al instante. {clients} reciben la nueva por sí solos; otras herramientas necesitan que la introduzcas a mano.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "La clave anterior deja de funcionar al instante. Tendrás que introducir la nueva en tus herramientas.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Activar o desactivar la pasarela",

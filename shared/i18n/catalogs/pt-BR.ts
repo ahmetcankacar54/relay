@@ -1133,6 +1133,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "criada na primeira abertura",
   "gatewayHeader.regenerateKey": "Gerar a chave de novo",
   "gatewayHeader.showKey": "Mostrar chave",
+  "gatewayHeader.termsLink": "Termos da Anthropic",
+  "gatewayHeader.termsNote": "O Relay não é oficial. Os termos da Anthropic não permitem que ferramentas de terceiros encaminhem logins de assinaturas do Claude, e a Anthropic pode limitar ou suspender uma conta que use o gateway.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "A chave antiga para de funcionar na hora. {clients} recebem a nova sozinhos; outras ferramentas precisam dela digitada à mão.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "A chave antiga para de funcionar na hora. Você vai precisar informar a nova nas suas ferramentas.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Ativar ou desativar o gateway",

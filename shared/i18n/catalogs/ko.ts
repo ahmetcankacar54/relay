@@ -1130,6 +1130,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "처음 시작할 때 생성됨",
   "gatewayHeader.regenerateKey": "키 다시 생성",
   "gatewayHeader.showKey": "키 보기",
+  "gatewayHeader.termsLink": "Anthropic 약관",
+  "gatewayHeader.termsNote": "Relay는 비공식 도구입니다. Anthropic 약관은 타사 도구가 Claude 구독 로그인을 중계하는 것을 허용하지 않으며, Anthropic은 게이트웨이를 사용하는 계정을 제한하거나 정지할 수 있습니다.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "이전 키는 즉시 작동을 멈춰요. {clients}은(는) 새 키를 자동으로 받지만, 다른 도구에는 직접 입력해야 해요.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "이전 키는 즉시 작동을 멈춰요. 사용하는 도구에 새 키를 입력해야 해요.",
   "gatewayHeader.turnTheGatewayOnOrOff": "게이트웨이 켜기 또는 끄기",

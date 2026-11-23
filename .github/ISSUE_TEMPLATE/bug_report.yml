@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in Relay does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Security problems go through a private report instead; see SECURITY.md.
+        Check logs and screenshots for email addresses, account names and tokens before you attach them.
+  - type: input
+    id: version
+    attributes:
+      label: Relay version
+      placeholder: "0.26.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - relay CLI
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system version
+      placeholder: "macOS 15.5, Windows 11 24H2, Ubuntu 24.04…"
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Switching the Claude app
+        - Claude Code history
+        - Limits and usage
+        - Planner
+        - Gateway
+        - Menu bar, widget or tray
+        - Install or updates
+        - Translations
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Remove personal details first.
