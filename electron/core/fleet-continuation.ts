@@ -197,9 +197,8 @@ function sourceQuota(
 }
 
 /**
- * Best eligible target: the open window resetting soonest among accounts with
- * quota for half an hour at the tempo (`rate`, Pro units per hour), else by
- * plan capacity × smallest remaining quota.
+ * Best eligible target: in the strategy's order among accounts with quota for half an hour at
+ * the tempo (`rate`, Pro units per hour), else by plan capacity × smallest remaining quota.
  */
 export function chooseTarget(
   source: Account,
@@ -222,7 +221,7 @@ export function chooseTarget(
   );
   return rankContinuationTargets(
     eligible.map((account) => ({ account, usage: usage[account.id] })),
-    { now, rate },
+    { now, rate, strategy: settings.autoSwitchStrategy },
   )[0]?.account;
 }
 

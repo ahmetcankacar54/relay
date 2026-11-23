@@ -4,6 +4,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { notificationSettings } from "../../../shared/notifications";
 import type { LimitResetNotice, NotificationSettings } from "../../../shared/types";
+import { RemoteNotifyRows } from "./RemoteNotifySettings";
 
 /** The two limit windows, each with its warning and its "ready again". */
 const LIMITS = [
@@ -73,6 +74,7 @@ export function NotificationGroup() {
           />
         </SettingRow>
       ))}
+      <RemoteNotifyRows />
     </SettingGroup>
   );
 }

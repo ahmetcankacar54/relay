@@ -35,6 +35,7 @@ import { accountPlan, groupName, providerLabel } from "../accountLabels";
 import { ConnectionList, ConnectionRow } from "./Connections";
 import { ExtensionConnection } from "./ExtensionConnection";
 import { TerminalConnection } from "./TerminalConnection";
+import { SwitchThresholdCard } from "./SwitchThreshold";
 import type { T } from "../../../../shared/i18n/translate";
 
 /**
@@ -414,6 +415,8 @@ export function AccountDetailBody({
               ))}
             </dl>
           </Card>
+          {/* Only a Claude account is switched to automatically; Codex and Antigravity feed the gateway. */}
+          {claude && <SwitchThresholdCard account={a} />}
           {a.desktop && (
             <Card padded>
               <Disclosure

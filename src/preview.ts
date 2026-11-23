@@ -12,6 +12,7 @@ import { localDate, localSlot } from "../shared/planning";
 import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
 import { resolveLocale } from "../shared/i18n/locales";
 import { acknowledgeRisks } from "../shared/feature-risk";
+import { remoteNotifyUrl } from "../shared/remote-notify";
 import type {
   Account,
   AuthFlow,
@@ -1052,6 +1053,16 @@ export const previewApi: RelayAPI = {
     account.planning = input;
     return structuredClone(account);
   },
+  setAccountSwitchAt: async (id, percent) => {
+    const account = accounts.find((a) => a.id === id);
+    if (!account) throw new Error("Account not found.");
+    if (percent === undefined) delete account.switchAtPercent;
+    else account.switchAtPercent = percent;
+    return structuredClone(account);
+  },
+  // The browser preview posts nothing: a valid URL reads as delivered, as the app would say.
+  testRemoteNotify: async ({ url }) =>
+    remoteNotifyUrl(url) ? { ok: true, status: 200 } : { ok: false, reason: url.trim() ? "invalid-url" : "off" },
   extensionStatus: async () => structuredClone(previewExtension),
   linkExtension: async () => structuredClone(previewExtension),
   checkExtension: async () => {

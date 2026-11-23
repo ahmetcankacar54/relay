@@ -105,7 +105,8 @@ import {
   planningSchema,
   settingsPatchSchema,
 } from "./core/store";
-import { accountPlanningSchema } from "./core/store";
+import { accountPlanningSchema, accountSchema } from "./core/store";
+import { REMOTE_NOTIFY_URL_MAX } from "../shared/remote-notify";
 import { platformBrowserSystem } from "./core/browser-system";
 import { levelExtensionStorage } from "./core/extension-storage";
 import {
@@ -304,6 +305,7 @@ import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
 import { LimitNotices, type LimitWindowKind } from "./core/limit-notice";
+import { RemoteNotifier } from "./core/remote-notify";
 import { notificationSettings } from "../shared/notifications";
 import { formatPercent, percentUsed } from "../shared/percent";
 import { FORMAT_LOCALE } from "../shared/i18n/locales";
@@ -501,6 +503,15 @@ const limitNotices = new LimitNotices({
   notify: notifyLimitNear,
   ready: notifyLimitReady,
   file: () => path.join(app.getPath("userData"), "limit-notices.json"),
+});
+/**
+ * The remote notifications (Settings → General → Notifications): the same events, posted to the
+ * saved ntfy topic or webhook. A failed post is recorded redacted, without the URL.
+ */
+const remoteNotifier = new RemoteNotifier({
+  settings: () => service.store.state.settings,
+  version: () => app.getVersion(),
+  log: (line) => recordMainError("remote-notify", line),
 });
 /** Whether a notification type is on in Settings → General → Notifications. */
 const notifies = (kind: "switches" | "signIns" | "earlyStart" | "updates") =>
@@ -1380,6 +1391,7 @@ else {
           continuation.snapshot().reason === "continuation-state-unreadable",
         pendingAuth: () => pendingAuth(),
         changed: broadcastChanged,
+        switched: remoteAutoSwitched,
       });
       /** Reopen one stopped conversation on the target, verify it and send once. */
       const continueConversation = async (
@@ -2171,22 +2183,21 @@ async function renewSignInQuietly(account: Account): Promise<RenewalResult> {
 }
 /** Says that an account's Claude Code sign-in ends soon (or ended) and Relay could not renew it. */
 function notifySignInEnding(account: Account, endsAt?: string) {
-  if (!Notification.isSupported() || !notifies("signIns")) return;
   const end = endsAt ? Date.parse(endsAt) : NaN;
   const days = Number.isFinite(end) && end > Date.now() ? Math.max(1, Math.ceil((end - Date.now()) / 86_400_000)) : 0;
-  const notice = new Notification({
-    title: days
-      ? say("electronMain.claudeCodeSignInEndsIn", { accountName: account.name, days })
-      : say("electronMain.claudeCodeSignInEnded", { accountName: account.name }),
-    body: say("electronMain.signInToThisAccountAgain"),
-  });
+  const title = days
+    ? say("electronMain.claudeCodeSignInEndsIn", { accountName: account.name, days })
+    : say("electronMain.claudeCodeSignInEnded", { accountName: account.name });
+  const body = say("electronMain.signInToThisAccountAgain");
+  remoteNotifier.notify({ event: "sign-in-ending", accountName: account.name, title, message: body });
+  if (!Notification.isSupported() || !notifies("signIns")) return;
+  const notice = new Notification({ title, body });
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
 }
 let signInRenewal: SignInRenewal | undefined;
 /** Says that the account in use passed the warning threshold, and when that window resets; a click opens Overview. */
 function notifyLimitNear(account: Account, kind: LimitWindowKind, window: { usedPercent: number; resetsAt?: string }) {
-  if (!Notification.isSupported()) return;
   const language = getAppLocale();
   // Rounded down, as every bar shows it: 99.6 reads 99, not 100.
   const percent = formatPercent(percentUsed(window.usedPercent), language);
@@ -2195,30 +2206,39 @@ function notifyLimitNear(account: Account, kind: LimitWindowKind, window: { used
     reset && Number.isFinite(reset.getTime())
       ? reset.toLocaleString(FORMAT_LOCALE[language], kind === "five_hour" ? { hour: "2-digit", minute: "2-digit" } : { weekday: "long", hour: "2-digit", minute: "2-digit" })
       : undefined;
-  const notice = new Notification({
-    title: say(kind === "five_hour" ? "electronMain.fiveHourLimitNear" : "electronMain.weeklyLimitNear", { accountName: account.name, percent }),
-    body: when ? say("electronMain.limitResetsAt", { when }) : "",
+  const title = say(kind === "five_hour" ? "electronMain.fiveHourLimitNear" : "electronMain.weeklyLimitNear", { accountName: account.name, percent });
+  const body = when ? say("electronMain.limitResetsAt", { when }) : "";
+  remoteNotifier.notify({
+    event: "limit-near",
+    accountName: account.name,
+    window: kind,
+    usedPercent: window.usedPercent,
+    resetsAt: window.resetsAt,
+    title,
+    message: body,
   });
+  if (!Notification.isSupported()) return;
+  const notice = new Notification({ title, body });
   notice.on("click", () => openPage("genel"));
   notice.show();
 }
 /** Says that a window which reached the warning threshold has reset; a click opens Overview. */
 function notifyLimitReady(account: Account, kind: LimitWindowKind) {
+  const title = say("electronMain.accountReadyAgain", { accountName: account.name });
+  const body = say(kind === "five_hour" ? "electronMain.fiveHourLimitReset" : "electronMain.weeklyLimitReset");
+  remoteNotifier.notify({ event: "limit-ready", accountName: account.name, window: kind, title, message: body });
   if (!Notification.isSupported()) return;
-  const notice = new Notification({
-    title: say("electronMain.accountReadyAgain", { accountName: account.name }),
-    body: say(kind === "five_hour" ? "electronMain.fiveHourLimitReset" : "electronMain.weeklyLimitReset"),
-  });
+  const notice = new Notification({ title, body });
   notice.on("click", () => openPage("genel"));
   notice.show();
 }
 /** Says that an account's saved Claude sign-in ended; a click opens the account. */
 function notifySignInEnded(account: Account) {
+  const title = say("electronMain.claudeSignInEnded");
+  const body = say("electronMain.theSavedSignInOfNo", { accountName: account.name });
+  remoteNotifier.notify({ event: "sign-in-ended", accountName: account.name, title, message: body });
   if (!Notification.isSupported() || !notifies("signIns")) return;
-  const notice = new Notification({
-    title: say("electronMain.claudeSignInEnded"),
-    body: say("electronMain.theSavedSignInOfNo", { accountName: account.name }),
-  });
+  const notice = new Notification({ title, body });
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
 }
@@ -2319,14 +2339,27 @@ function notifyFleet(
   last: NonNullable<FleetContinuationState["last"]>,
   reason?: string,
 ) {
+  const target = service.store.state.accounts.find((a) => a.id === last.targetId);
+  const name = target?.name ?? say("electronMain.another");
+  const title = say("electronMain.automaticSwitch");
+  const body = fleetNotice(last, name, getAppLocale(), reason);
+  if (target) remoteNotifier.notify({ event: "auto-switch", accountName: target.name, title, message: body });
   if (!Notification.isSupported() || !notifies("switches")) return;
-  const name =
-    service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
-    say("electronMain.another");
-  new Notification({
+  new Notification({ title, body }).show();
+}
+/**
+ * After preparing on quit put the Claude app on another account: posted remotely only, as the
+ * window's automation card already says it and Relay never showed a notification for it.
+ */
+function remoteAutoSwitched(targetId: string) {
+  const target = service.store.state.accounts.find((a) => a.id === targetId);
+  if (!target) return;
+  remoteNotifier.notify({
+    event: "auto-switch",
+    accountName: target.name,
     title: say("electronMain.automaticSwitch"),
-    body: fleetNotice(last, name, getAppLocale(), reason),
-  }).show();
+    message: say("electronMain.theClaudeAppSwitchedTo", { name: target.name }),
+  });
 }
 /** After a draft restore: how many drafts were typed back, and how many wait in the panel. */
 function notifyDrafts(summary: { restored: number; left: number }) {
@@ -3592,6 +3625,37 @@ function bindIPC() {
     keeper.resume();
     void keeper.tick();
     return service.store.account(account.id);
+  });
+  // An account's own switch line: the ranking, the suggestion and preparing on quit read it next.
+  handle("account-switch-at", (accountId, input) => {
+    if (desktop.isBusy || desktopLock.busy)
+      throw new Error(
+        "Finish the Desktop operation before changing preferences.",
+      );
+    const account = service.store.account(id.parse(accountId));
+    const percent = accountSchema.shape.switchAtPercent.parse(input ?? undefined);
+    service.store.update((s) => {
+      const saved = s.accounts.find((a) => a.id === account.id)!;
+      if (percent === undefined) delete saved.switchAtPercent;
+      else saved.switchAtPercent = percent;
+    });
+    broadcastChanged();
+    return service.store.account(account.id);
+  });
+  // A sample event to the URL in the form, saved or not; the answer never holds the URL.
+  handle("test-remote-notify", (input) => {
+    const target = z
+      .object({ url: z.string().max(REMOTE_NOTIFY_URL_MAX), kind: z.enum(["ntfy", "webhook"]) })
+      .strict()
+      .parse(input);
+    return remoteNotifier.test(target, {
+      accountName: say("electronMain.remoteTestAccount"),
+      window: "five_hour",
+      usedPercent: 90,
+      resetsAt: new Date(Date.now() + 2 * 3_600_000).toISOString(),
+      title: say("electronMain.remoteTestTitle"),
+      message: say("electronMain.remoteTestBody"),
+    });
   });
   handle("extension-status", () => desktop.extensionStatus());
   // The panel's extension offer follows a sync at once. Not a check: the settings card checks

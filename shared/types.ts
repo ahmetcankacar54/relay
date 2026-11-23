@@ -71,6 +71,11 @@ export interface Account {
   provider?: AccountProvider;
   cooldownUntil?: string;
   planning?: AccountPlanning;
+  /**
+   * The used percent at which automatic switching leaves this account and stops choosing it
+   * (shared/continuation-target-ranking.ts `switchAtPercent`); missing means the global line.
+   */
+  switchAtPercent?: number;
 
   desktop?: {
     accountUuid: string;
@@ -580,6 +585,13 @@ export interface RelayAPI {
     accountId: string,
     input: AccountPlanning,
   ): Promise<Account>;
+  /** Sets or clears (undefined) an account's own switch line, 50–100; returns the saved account. */
+  setAccountSwitchAt(accountId: string, percent: number | undefined): Promise<Account>;
+  /**
+   * Posts a sample "test" event to the given ntfy topic or webhook, without saving it: whether it
+   * arrived, the HTTP status, and a redacted reason when it did not.
+   */
+  testRemoteNotify(input: { url: string; kind: RemoteNotifyKind }): Promise<RemoteNotifyResult>;
   /** The Claude browser extension's setting, what Relay found and saved, and the last result; undefined outside macOS. */
   extensionStatus(): Promise<ExtensionStatus | undefined>;
   /** Runs the extension step for the account Desktop is on, without changing Claude. */
@@ -875,6 +887,10 @@ export interface RelaySettings {
    * switched to (Settings → Switching; electron/core/config-sync.ts); missing means all off.
    */
   configSync?: ConfigSyncSettings;
+  /** How automatic switching, the suggestion and the panel rank targets; missing means "best". */
+  autoSwitchStrategy?: AutoSwitchStrategy;
+  /** Relay's events posted to an ntfy topic or a webhook; missing, or without a URL, is off. */
+  remoteNotify?: RemoteNotifySettings;
   /**
    * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
    * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
@@ -905,6 +921,30 @@ export type ShortcutAction = "openPanel" | "switchToSuggested";
 export type ShortcutSettings = Partial<Record<ShortcutAction, string>>;
 /** A shortcut as registered: off, working, or held by another app (or the other action). */
 export type ShortcutState = "off" | "on" | "taken";
+/**
+ * How the next account is chosen among those that hold half an hour at the tempo. "best" uses
+ * first what an upcoming five-hour reset would waste, else the most capacity; "weekly-first" the
+ * one whose weekly period resets soonest; "consume-first" the most used, keeping the others fresh.
+ */
+export type AutoSwitchStrategy = "best" | "weekly-first" | "consume-first";
+export type RemoteNotifyKind = "ntfy" | "webhook";
+/** Which events are posted: limit warnings, "ready again", automatic switches, ending sign-ins. */
+export interface RemoteNotifyEvents {
+  limit: boolean;
+  reset: boolean;
+  autoSwitch: boolean;
+  signIn: boolean;
+}
+export interface RemoteNotifySettings {
+  /** https, or http to this computer (a self-hosted ntfy); missing means off. */
+  url?: string;
+  kind: RemoteNotifyKind;
+  events: RemoteNotifyEvents;
+}
+/** A post's outcome; `error` is redacted and never names the URL. */
+export type RemoteNotifyResult =
+  | { ok: true; status: number }
+  | { ok: false; reason: "off" | "invalid-url" | "failed"; status?: number; error?: string };
 /** Whom the "ready again" notice is for: nobody, the account open in the Claude app, or every account. */
 export type LimitResetNotice = "off" | "in-use" | "all";
 /**
@@ -1035,6 +1075,7 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   historyPolicyVersion: 2,
   launchAtLogin: false,
   updateChannel: "stable",
+  autoSwitchStrategy: "best",
   configSync: DEFAULT_CONFIG_SYNC,
   riskAcknowledged: {},
 };

@@ -15,7 +15,7 @@ import {
   type AutomationStatus,
 } from "../../shared/automation-status";
 import { desktopCliMismatch } from "../../shared/account-state";
-import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
+import { rankContinuationTargets, switchAtPercent } from "../../shared/continuation-target-ranking";
 import { allowedHistoryPair } from "../../shared/history-policy";
 import { freshUsage, quotaWindows } from "../../shared/usage";
 import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
@@ -139,14 +139,14 @@ export function afterExitChips({
       freshUsage(usage[a.id], now) &&
       (!a.cooldownUntil || Date.parse(a.cooldownUntil) <= now) &&
       (!source || allowedHistoryPair(source, a, settings)) &&
-      !!windows?.every((w) => w.usedPercent < 90)
+      !!windows?.every((w) => w.usedPercent < switchAtPercent(a, 90))
     );
   };
   const next =
     (targetId !== activeId && accounts.find((a) => a.id === targetId)?.id) ||
     rankContinuationTargets(
       accounts.filter(usable).map((account) => ({ account, usage: usage[account.id] })),
-      { now },
+      { now, strategy: settings.autoSwitchStrategy },
     )[0]?.account.id;
   return accounts.map((account) => ({
     account,

@@ -20,6 +20,9 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:dismiss-sidebar-gap", id),
   updateAccountPlanning: (id, input) =>
     ipcRenderer.invoke("relay:account-planning", id, input),
+  setAccountSwitchAt: (id, percent) =>
+    ipcRenderer.invoke("relay:account-switch-at", id, percent ?? null),
+  testRemoteNotify: (input) => ipcRenderer.invoke("relay:test-remote-notify", input),
   extensionStatus: () => ipcRenderer.invoke("relay:extension-status"),
   syncExtension: () => ipcRenderer.invoke("relay:extension-sync"),
   openClaudeWeb: () => ipcRenderer.invoke("relay:extension-web"),

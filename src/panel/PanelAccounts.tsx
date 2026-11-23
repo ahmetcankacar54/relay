@@ -52,6 +52,7 @@ export function panelRows(relay: Relay, now: number): OverviewRow[] {
     now,
     tempoRateNow(relay.data, relay.settings, now),
     windowAccounts(relay.data),
+    relay.settings.autoSwitchStrategy,
   ).map((row) =>
     relay.suggestion
       ? { ...row, recommended: row.account.id === relay.suggestion.id }
