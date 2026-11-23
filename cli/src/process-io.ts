@@ -1,6 +1,7 @@
 import readline from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import type { CliIO } from "./io";
+import { readStdin } from "./statusline";
 
 /**
  * The terminal as a CliIO. A write to a terminal that hung up (EIO) or a closed pipe (EPIPE)
@@ -28,6 +29,7 @@ export function processIO(streams: {
     stdout: (line) => write(streams.stdout, line),
     stderr: (line) => write(streams.stderr, line),
     isTTY: streams.isTTY,
+    readInput: () => readStdin(streams.stdin),
     prompt: (question) =>
       new Promise((resolve) => {
         const rl = readline.createInterface({ input: streams.stdin, output: streams.stdout });

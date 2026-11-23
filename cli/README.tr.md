@@ -9,8 +9,8 @@ Relay, resmî Claude masaüstü uygulamasını terminalden kayıtlı hesaplar ar
 3. Code sekmesinin geçmişini hesaplar arasında taşır;
 4. Claude'u yeniden açar.
 
-Ayrıca her hesabın limitlerinin ne kadarının kullanıldığını gösterebilir ve Claude Code'u
-istediğiniz hesapla çalıştırabilir.
+Ayrıca her hesabın limitlerinin ne kadarının kullanıldığını gösterebilir, hesabı ve limitlerini
+Claude Code'un durum satırına koyabilir ve Claude Code'u istediğiniz hesapla çalıştırabilir.
 
 Relay resmî değildir; Anthropic ile bağlantılı değildir ve Anthropic tarafından onaylanmamıştır.
 Claude Desktop'un yerel dosyalarını değiştirdiği için bir Claude Desktop güncellemesi onu
@@ -27,9 +27,12 @@ bozabilir.
 
 ## Gerekenler
 
-- macOS
+- macOS, Linux ya da Windows. Claude Desktop hesaplarını kaydetmek ve geçmek (`add`, `switch`,
+  `recover`, `history sync`, `reset-vault`) yalnız macOS'ta çalışır: CLI kasayı macOS Keychain
+  üzerinden açar. Başka sistemlerde bu komutlar bunu söyler ve hesapları Relay.app geçirir;
+  diğer tüm komutlar çalışır.
 - Node.js 22.12 veya üstü
-- Claude Desktop (`/Applications/Claude.app` ya da `~/Applications/Claude.app`)
+- Geçiş için Claude Desktop (`/Applications/Claude.app` ya da `~/Applications/Claude.app`)
 - Limitler ve `relay run` için Claude Code CLI 2.1.296 veya üstü
 
 ## Kurulum
@@ -111,6 +114,35 @@ relay tokens --days 30
 Hesap başına günlük token kullanımını gösterir. Bu kaydı Relay.app, uygulama açıkken tutar; CLI
 yalnız okur. `≈` işaretli değerler limit ölçümlerinden tahmin edilmiştir.
 
+## Claude Code durum satırı
+
+```bash
+relay statusline install
+```
+
+Claude Code bundan sonra istem satırının altında şöyle bir satır gösterir:
+
+```text
+İş · 5 sa %42 · hafta %18 · 14:30'da yenilenir
+```
+
+- **Hesap**, bu Claude Code oturumunun çalıştığı hesaptır: ağ geçidinin oturum için kullandığı hesap
+  ("ağ geçidiyle" yazar), `relay run`'ın hesabı ya da terminaldeki `claude`'un giriş yaptığı hesap.
+- **Yüzdeler**, Claude Code bildiriyorsa ondan, yoksa Relay.app'in son okumasından gelir. Saat,
+  5 saatlik dönemin yenileneceği zamandır.
+- **Veriyi Relay.app yazar** (veri klasöründeki `statusline.json`) ve her limit okumasında
+  yeniler. Komut yalnız bu dosyayı ve Claude Code'un kendi dosyalarını okur; ağa ya da Keychain'e
+  hiç gitmez ve birkaç on milisaniyede yanıt verir. Dosya 15 dakikadan eskiyse satır
+  ne kadar eski olduğunu söyler. Etiketler Relay.app'in dilindedir.
+- `--color` yüzdeleri doluluğa göre renklendirir.
+
+`relay statusline install`, `~/.claude/settings.json` içindeki `statusLine` ayarını yazar ve diğer
+ayarlara dokunmaz. Bu relay'i tam yoluyla (önce Node, sonra başlatıcısı) yazar, çünkü Claude Code
+komutu PATH'inde npm klasörü olmayabilecek bir kabukta çalıştırır. Önceden bir durum satırınız
+varsa saklanır; `relay statusline uninstall` onu geri getirir. Relay.app'te de aynı anahtar var:
+Ayarlar → Gelişmiş → Claude Code durum satırında Relay. Bulduğu `relay`'in yolunu yazar; relay
+kurulu değilken kapalı kalır ve kurulum komutunu gösterir.
+
 ## Komutlar
 
 | Komut | Ne yapar |
@@ -131,6 +163,8 @@ yalnız okur. `≈` işaretli değerler limit ölçümlerinden tahmin edilmişti
 | `relay run <ad> [-- <claude seçenekleri>]` | Claude Code'u `<ad>` hesabıyla çalıştır. |
 | `relay tokens [--days 7\|30\|90] [--account <ad>] [--json]` | Relay.app'in tuttuğu günlük token kullanımı. |
 | `relay doctor [--json]` | Kurulumu denetle. |
+| `relay statusline [--color]` | Claude Code'un istem satırının altındaki satır (Claude Code'un JSON'unu stdin'den okur). |
+| `relay statusline install` / `uninstall` | Relay'i Claude Code'un durum satırına ekle ya da çıkar. |
 | `relay reset-vault [--yes]` | Keychain anahtarı kaybolduysa kasayı baştan başlat. |
 
 Hesap adlarında büyük/küçük harf fark etmez. `İ`, `I` ve `ı` aynı harf sayılır. Adın ya da hesap
@@ -152,12 +186,16 @@ Bu seçenekler her komutta çalışır:
 | 2 | Yanlış kullanım, ya da bilinmeyen veya belirsiz bir hesap adı |
 | 3 | Meşgul ya da engelli: başka bir Relay geçiş yapıyor, yarım bir giriş var, ya da bir geçiş geri alınmalı |
 | 4 | Onay gerekiyor: terminal yok ve `--yes` verilmedi |
-| 5 | Ortam sorunu: macOS değil, eski bir Relay.app, okunamayan Keychain öğesi, sandbox ya da Otomasyon izni yok |
+| 5 | Ortam sorunu: macOS dışında bir geçiş komutu, eski bir Relay.app, okunamayan Keychain öğesi, sandbox ya da Otomasyon izni yok |
 
 ## Relay.app ile birlikte
 
-CLI ve Relay.app aynı veri klasörünü (`~/Library/Application Support/Relay`) ve aynı hesap
-listesini kullanır.
+CLI ve Relay.app aynı veri klasörünü ve aynı hesap listesini kullanır:
+- macOS: `~/Library/Application Support/Relay`
+- Linux: `$XDG_CONFIG_HOME/Relay`, yoksa `~/.config/Relay`
+- Windows: `%APPDATA%\Relay`
+
+`RELAY_HOME` CLI'yi başka bir klasöre yönlendirir.
 
 - Relay.app 0.12 veya üstü olmalıdır. Güncelledikten sonra uygulamayı bir kez açın; kasasını CLI'nin
   okuduğu biçime taşır.

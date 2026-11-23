@@ -15,6 +15,7 @@ const LINES: [string, MessageId][] = [
   ["relay run <name> [-- …]", "help.runClaudeCodeAs"],
   ["relay tokens", "help.dailyTokenUsageRecordedByRelay"],
   ["relay proxy [start|status|env]", "help.localGatewayThatSpreadsRequestsOver"],
+  ["relay statusline [install|uninstall]", "help.accountAndLimitsInClaudeCode"],
   ["relay doctor", "help.checkTheSetup"],
   ["relay reset-vault", "help.startTheSignInVaultOver"],
 ];

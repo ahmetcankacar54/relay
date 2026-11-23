@@ -83,7 +83,25 @@ adapts the menu-bar icon to light and dark appearances.
   switch, continuation, draft re-typing, Claude extension or terminal `claude`
   carry-over, menu bar panel or widget; it is untested on a real machine
   ([the checklist that would change that](windows-verification.md)).
-- The `relay` CLI runs on macOS only.
+- The `relay` CLI installs on macOS, Linux and Windows. Reading commands
+  (`status`, `list`, `usage`, `tokens`, `history`, `run`, `connect`, `proxy`,
+  `doctor`, `statusline`) work everywhere; saving and switching Claude app
+  accounts (`add`, `switch`, `recover`, `history sync`, `reset-vault`) open the
+  vault through the macOS Keychain and say "macOS only" elsewhere.
+- `relay statusline` puts the account in use, its 5-hour and weekly use and the
+  next renewal in Claude Code's status line. Relay writes
+  `<userData>/statusline.json` on every limit read, gateway answer and token
+  tick; the command reads only that file, Claude Code's stdin and
+  `.claude.json`, from a bundle of its own (`cli/dist/relay-statusline.js`), so
+  it answers in a few tens of milliseconds. `relay statusline install` (or
+  Settings → Advanced) sets `statusLine` in `~/.claude/settings.json` to an
+  absolute command (the CLI writes Node and its own launcher; the app writes
+  the `relay` that `electron/core/relay-cli-path.ts` finds on PATH, in the
+  usual npm/Homebrew/Volta/pnpm/nvm folders, else through `$SHELL -ilc` with a
+  2 s deadline) and keeps any earlier one in
+  `<userData>/claude-statusline-previous.json` until `uninstall` puts it back.
+  Without an installed relay the Settings switch stays off and offers
+  `npm i -g @ahmetcankacar/relay` to copy.
 
 ## Linux
 
@@ -111,7 +129,7 @@ macOS only:
 - Switch and continue at quota, and re-typing drafts into Claude: both need
   macOS Accessibility.
 - The menu bar panel, the panda and usage in the menu bar title, and the widget.
-- The `relay` CLI.
+- Saving and switching Claude app accounts from the `relay` CLI.
 
 ## Resource use
 

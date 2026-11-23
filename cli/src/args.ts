@@ -30,6 +30,7 @@ const OPTIONS = {
   port: { type: "string" },
   host: { type: "string" },
   provider: { type: "string" },
+  color: { type: "boolean" },
 } as const;
 
 const GLOBAL = ["yes", "lang", "no-color", "help", "version"];
@@ -50,6 +51,7 @@ export const COMMAND_FLAGS: Record<string, string[]> = {
   tokens: ["json", "days", "account"],
   doctor: ["json"],
   proxy: ["json", "port", "host"],
+  statusline: ["color"],
   "reset-vault": [],
   help: [],
   __worker: [],

@@ -30,6 +30,7 @@ import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { routeHash, settingsTab, SETTINGS_TABS, type SettingsTab } from "@/app/routes";
 import { ExperimentalSwitchRows, RefreshIntervalRow, SwitchingTab } from "./settings/SwitchingTabs";
+import { ClaudeStatuslineRow } from "./settings/StatuslineRow";
 import { PlanningScreen } from "./Planning";
 import { macWording, usePlatform } from "@/data/platform";
 
@@ -481,6 +482,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   </Button>
                 </span>
               </SettingRow>
+              <ClaudeStatuslineRow api={api} action={action} t={t} />
               <SettingRow
                 label={t("settings.diagnosticsFiles")}
                 description={t("settings.sendOnlyDraftEventsJsonAnd")}

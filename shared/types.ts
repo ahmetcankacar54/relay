@@ -712,6 +712,13 @@ export interface RelayAPI {
    * which reads limits through the app and renews Claude Code sign-ins; `ask` asks macOS now.
    */
   claudeAppAccess(ask?: boolean): Promise<{ supported: boolean; allowed: boolean }>;
+  /**
+   * Whether Claude Code's status line runs `relay statusline` (`installed`), whether another one
+   * is set (`other`), and where the relay CLI is installed (`cli`; missing when it is not, and then
+   * `enable: true` changes nothing). `enable` adds Relay's or takes it out, putting back the one it
+   * replaced.
+   */
+  claudeStatusline(enable?: boolean): Promise<{ installed: boolean; other: boolean; cli?: string }>;
   /** Renews the account's Claude Code sign-in now, in the background, from its claude.ai session. */
   renewSignInNow(
     accountId: string,

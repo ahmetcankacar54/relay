@@ -149,6 +149,17 @@ import type { UsageSample } from "../shared/usage-statistics";
 import { attribute } from "./core/token-attribution";
 import { TokenLedger, tokenTickDelay } from "./core/token-ledger";
 import { WidgetFile } from "./core/widget-file";
+import { buildStatuslineSnapshot, writeStatuslineFile } from "./core/statusline-file";
+import {
+  ClaudeSettingsUnreadable,
+  STATUSLINE_PREVIOUS_FILE,
+  installStatusline,
+  statuslineCommand,
+  statuslineSetup,
+  uninstallStatusline,
+} from "./core/claude-statusline";
+import { findRelayCli } from "./core/relay-cli-path";
+import { DEFAULT_TERMINAL_MODE } from "../shared/terminal-identity";
 import { loadWidgetCenter } from "./core/widget-center";
 import { localDate, planningIdentity, wallTime } from "../shared/planning";
 import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
@@ -652,6 +663,7 @@ function scheduleTokenTick() {
 }
 /** Today's numbers for the widget and the menu bar title, from the ledger as it stands; never disturbs Relay. */
 function writeWidget(force = false) {
+  scheduleStatusline();
   widgetActiveId = observedDesktop?.activeProfileId;
   if (!tokenLedger || !widgetFile) return;
   try {
@@ -699,6 +711,40 @@ function writeWidget(force = false) {
   } catch {
     // A widget file that cannot be written leaves the widget saying Relay is not current.
   }
+}
+/** A burst of changes (gateway answers, limit reads) writes the status line snapshot once. */
+const STATUSLINE_WRITE_DELAY_MS = 1_000;
+let statuslineTimer: ReturnType<typeof setTimeout> | undefined;
+/**
+ * Writes `<userData>/statusline.json` soon, for `relay statusline` in Claude Code: every limit read,
+ * gateway answer, switch and token tick asks for it, so the file is never older than a token tick
+ * while Relay runs. Never throws; an unwritten file only shows its age in the status line.
+ */
+function scheduleStatusline() {
+  if (statuslineTimer) return;
+  statuslineTimer = setTimeout(() => {
+    statuslineTimer = undefined;
+    try {
+      const { accounts, settings } = service.store.state;
+      writeStatuslineFile(
+        app.getPath("userData"),
+        buildStatuslineSnapshot({
+          accounts,
+          usage: usage?.snapshot() ?? {},
+          desktopAccountId: observedDesktop?.activeProfileId,
+          terminalMode: settings.terminalCli ?? DEFAULT_TERMINAL_MODE,
+          gatewaySessions: proxyServer?.sessionCache.list(),
+          profiles: path.join(service.store.root, "profiles"),
+          language: getAppLocale(),
+          zone: settings.planning.timeZone,
+          now: Date.now(),
+        }),
+      );
+    } catch {
+      // The status line says how old the last snapshot is.
+    }
+  }, STATUSLINE_WRITE_DELAY_MS);
+  statuslineTimer.unref();
 }
 /** The keeper's tempo now, as the panel ranks accounts with it; undefined without one. */
 function widgetTempoRate(now: number) {
@@ -1077,6 +1123,7 @@ else {
           // The notice first: a failed history write must not hold it back.
           limitNotices.observe(account, value);
           usageHistory.record(account, value);
+          scheduleStatusline();
         },
         (account, credential, force, allowInteraction) =>
           service.transaction(() =>
@@ -2684,7 +2731,11 @@ async function startProxy(): Promise<void> {
     // An expired or unreadable token: the usage reader renews it when it can (never prompts).
     onCredentialMissing: (accountId) => renewForGateway(accountId),
     // Every answer says how full the account's windows are: newer than the last read.
-    onLiveLimits: (accountId, live) => usage?.observe(accountId, live),
+    onLiveLimits: (accountId, live) => {
+      usage?.observe(accountId, live);
+      // The status line names the account the gateway just used for the session.
+      scheduleStatusline();
+    },
     onLoopAlarm: (alarm) => notifyLoopAlarm(alarm),
     requestLog: gatewayRequests(),
     // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
@@ -2706,6 +2757,7 @@ async function startProxy(): Promise<void> {
   }
   proxyServer = server;
   proxyError = undefined;
+  scheduleStatusline();
   // Quitting put the bound clients' own settings back: they point at the gateway again.
   await rebindClients(proxySettings()).catch(() => {});
 }
@@ -2713,6 +2765,7 @@ async function stopProxy(): Promise<void> {
   const server = proxyServer;
   proxyServer = undefined;
   await server?.stop().catch(() => {});
+  scheduleStatusline();
 }
 /**
  * Saves `next`. A running gateway takes a new routing strategy, session time or client key at
@@ -3694,6 +3747,24 @@ function bindIPC() {
       z.boolean().optional().parse(allowPrompt),
     ),
   );
+  // Relay in Claude Code's status line (`relay statusline`), as `relay statusline install|uninstall`
+  // sets it; `enable` turns it on or off, then the state comes back with where relay is installed.
+  // Without an installed relay it is never turned on: Claude Code would run a missing command.
+  handle("claude-statusline", async (raw) => {
+    const enable = z.boolean().optional().parse(raw);
+    const claudeDir = path.join(os.homedir(), ".claude");
+    const previous = path.join(app.getPath("userData"), STATUSLINE_PREVIOUS_FILE);
+    const cli = await findRelayCli();
+    try {
+      if (enable === true && cli) installStatusline(claudeDir, previous, statuslineCommand([cli]));
+      if (enable === false) uninstallStatusline(claudeDir, previous);
+      return { ...statuslineSetup(claudeDir), ...(cli ? { cli } : {}) };
+    } catch (error) {
+      if (error instanceof ClaudeSettingsUnreadable)
+        throw new Error(say("statusline.settingsUnreadable", { file: error.file }));
+      throw error;
+    }
+  });
   handle("claude-app-access", async (raw) => {
     const ask = z.boolean().optional().parse(raw) ?? false;
     if (process.platform !== "darwin" || !desktopUsageReader) return { supported: false, allowed: false };

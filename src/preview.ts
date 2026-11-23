@@ -412,6 +412,8 @@ const state: Snapshot = {
 };
 /** The menu bar title's items, kept in memory so Settings can be tried in the preview. */
 let previewMenuBar: MenuBarItem[] = [...DEFAULT_MENU_BAR_ITEMS];
+/** Whether the preview's Claude Code status line shows Relay. */
+let previewStatusline = false;
 const desktopOnly = async (): Promise<never> => {
   throw new Error(
     "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",
@@ -1175,6 +1177,10 @@ export const previewApi: RelayAPI = {
   },
   refreshUsage: async (id) => structuredClone(state.usage[id]),
   claudeAppAccess: async () => ({ supported: true, allowed: false }),
+  claudeStatusline: async (enable) => {
+    if (enable !== undefined) previewStatusline = enable;
+    return { installed: previewStatusline, other: false, cli: "/opt/homebrew/bin/relay" };
+  },
   renewSignInNow: async () => ({ result: "unavailable" as const, detail: "preview" }),
   desktopSnapshot: async () => ({
     ...structuredClone(desktop),

@@ -96,6 +96,7 @@ const api: RelayAPI = {
   refreshUsage: (id, allowPrompt) =>
     ipcRenderer.invoke("relay:refresh-usage", id, allowPrompt),
   claudeAppAccess: (ask) => ipcRenderer.invoke("relay:claude-app-access", ask),
+  claudeStatusline: (enable) => ipcRenderer.invoke("relay:claude-statusline", enable),
   renewSignInNow: (id) => ipcRenderer.invoke("relay:renew-sign-in-now", id),
   desktopSnapshot: () => ipcRenderer.invoke("relay:desktop-snapshot"),
   usageStatistics: (input) =>
