@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 
 export { accountColor };
 
-const dot = cva("shrink-0 rounded-full", {
+// inline-block: a sized span draws nothing when its parent is not a flex or grid box.
+const dot = cva("inline-block shrink-0 rounded-full", {
   variants: { size: { sm: "size-2", md: "size-2.5" } },
   defaultVariants: { size: "sm" },
 });

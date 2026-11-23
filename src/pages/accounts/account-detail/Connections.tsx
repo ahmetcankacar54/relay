@@ -83,7 +83,7 @@ export function ConnectionRow({
   return (
     <div
       data-slot="connection"
-      className="col-span-full grid grid-cols-subgrid gap-y-2 border-t py-3.5 last:pb-0"
+      className="col-span-full grid grid-cols-subgrid gap-y-2 border-t py-3.5 first:border-t-0 first:pt-0 last:pb-0"
     >
       <span
         aria-hidden="true"

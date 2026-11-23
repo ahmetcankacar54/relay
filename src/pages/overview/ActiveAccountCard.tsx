@@ -74,12 +74,13 @@ export function ActiveAccountCard({
       <span className="truncate text-base font-semibold">{active.name}</span>
       <ProviderBadge provider={active.provider} detail={plan?.label} title={plan ? planTitle(active, plan, t) : undefined} />
       {/* Which sign-in it is, quietly: two accounts may share a name. */}
+      {/* It gives way (basis 0) instead of pushing the status onto a line of its own. */}
       {identity && (
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 basis-0 truncate text-xs text-muted-foreground">
           <Private>{identity}</Private>
         </span>
       )}
-      <span className="ml-auto">
+      <span className="ml-auto shrink-0">
         <StatusLabel status={status} />
       </span>
     </div>

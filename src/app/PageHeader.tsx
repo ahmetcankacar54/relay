@@ -27,7 +27,8 @@ export function PageHeader({
       data-slot="toolbar"
       className="sticky top-0 z-20 flex min-h-13 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-transparent bg-background/85 px-5 py-2 backdrop-blur-xl transition-colors select-none [-webkit-app-region:drag] group-data-scrolled/main:border-border"
     >
-      <div className="flex min-w-0 items-center gap-2.5">
+      {/* A long description truncates (basis 16rem) instead of pushing the actions onto a row of their own. */}
+      <div className="flex min-w-0 flex-1 basis-64 items-center gap-2.5">
         {back && <div className="-ml-2 shrink-0 [-webkit-app-region:no-drag]">{back}</div>}
         {leading}
         <div className="min-w-0">
