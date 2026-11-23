@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import {
   NoEligibleAccountError,
   NoProviderAccountError,
@@ -8,7 +9,6 @@ import {
 import { ProxySessionCache } from "../electron/core/proxy/proxy-session-cache";
 import { proxyExtrasSchema } from "../electron/core/proxy/proxy-status";
 import { proxyConfigSchema } from "../electron/core/store";
-import { readFileSync } from "node:fs";
 import {
   AFFINITY_REVISION,
   currentAffinityTtl,
@@ -308,7 +308,7 @@ test("the move is recorded beside the registry, which stays readable by older ve
   assert.throws(() =>
     proxyConfigSchema.parse({ enabled: true, port: 8317, host: "127.0.0.1", affinityRevision: 1 }),
   );
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   // Saving the settings keeps the revision, or the next start would move a chosen lifetime again.
   assert.match(main, /const \{ accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, overflow, \.\.\.base \} = config;/);
   assert.match(main, /affinityRevision !== undefined \? \{ affinityRevision \} : \{\}/);

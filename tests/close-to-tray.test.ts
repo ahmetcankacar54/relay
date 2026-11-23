@@ -1,12 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mainSource } from "./helpers/main-source";
 
 // main.ts imports Electron, so these read its source, as the other main tests do.
-const main = readFileSync(
-  new URL("../electron/main.ts", import.meta.url),
-  "utf8",
-);
+const main = mainSource();
 /** One top-level function, from its signature to the closing brace at column 0. */
 function topLevel(name: string) {
   const start = main.indexOf(`function ${name}(`);

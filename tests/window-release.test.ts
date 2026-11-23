@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mainSource } from "./helpers/main-source";
 import { WINDOW_RELEASE_MS, WindowRelease } from "../electron/window-release";
 
 function harness(state: { hidden: boolean; busy: boolean }) {
@@ -75,10 +75,7 @@ test("arming twice keeps one timer", () => {
 });
 
 test("only closing to the menu bar arms the release; showing the window clears it", () => {
-  const main = readFileSync(
-    new URL("../electron/main.ts", import.meta.url),
-    "utf8",
-  );
+  const main = mainSource();
   // Cmd+H, minimize and occlusion also emit "hide" on macOS, so no hide listener arms it.
   assert.doesNotMatch(main, /\.on\("hide", \(\) => windowRelease\.arm\(\)\)/);
   assert.match(
@@ -111,10 +108,7 @@ test("only closing to the menu bar arms the release; showing the window clears i
 });
 
 test("a page opened from the panel on a freed window loads on that page", () => {
-  const main = readFileSync(
-    new URL("../electron/main.ts", import.meta.url),
-    "utf8",
-  );
+  const main = mainSource();
   const start = main.indexOf("function openPage(");
   const handler = main.slice(start, main.indexOf("function showWindow(", start));
   assert.match(handler, /const fresh = !window;\s*showWindow\(intentHash\(target, want\)\);/);

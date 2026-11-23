@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -265,11 +266,8 @@ test("the repeat filter drops what a run that did nothing says again, and nothin
 });
 
 test("main logs draft events to draft-events.json in the user data folder", () => {
-  const main = fs.readFileSync(
-    new URL("../electron/main.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(main, /from "\.\/core\/draft-diagnostics"/);
+  const main = mainSource();
+  assert.match(main, /from "\.{1,2}\/(?:\.\.\/)*core\/draft-diagnostics"/);
   assert.match(
     main,
     /path\.join\(app\.getPath\("userData"\), "draft-events\.json"\)/,

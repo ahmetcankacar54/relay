@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
@@ -414,7 +414,7 @@ test("turning a meter on needs its risk accepted, in main and in the window", ()
   );
 
   // Main checks the patch before it saves it, and reads only meters whose risk is accepted.
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const handler = /handle\("update-settings"[\s\S]*?(?=\n  handle\()/.exec(main)?.[0] ?? "";
   assert.match(handler, /requireRisk\(meterRisks\([\s\S]*?service\.store\.update/);
   assert.match(main, /enabledMeters\(settings\)\.filter\(\(provider\) => !needsRiskAck\(settings, meterRisk\(provider\)\)\)/);

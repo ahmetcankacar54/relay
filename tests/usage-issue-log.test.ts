@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -231,11 +232,8 @@ test("onIssue sees the account and the issue, never a credential, and a throwing
 });
 
 test("main logs usage issues to usage-issues.json in the user data folder", () => {
-  const main = fs.readFileSync(
-    new URL("../electron/main.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(main, /from "\.\/core\/usage-issue-log"/);
+  const main = mainSource();
+  assert.match(main, /from "\.{1,2}\/(?:\.\.\/)*core\/usage-issue-log"/);
   assert.match(
     main,
     /path\.join\(app\.getPath\("userData"\), "usage-issues\.json"\)/,

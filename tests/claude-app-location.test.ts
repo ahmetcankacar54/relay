@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import { claudeCandidates, resolveClaudeExecutable } from "../electron/core/desktop-host-node";
 
@@ -31,7 +32,7 @@ test("Settings and the setup checklist offer Choose location, and main keeps the
   assert.match(settings, /chooseClaudeApp\(\{ api, action \}\)/);
   const checklist = readFileSync(new URL("../src/pages/overview/SetupChecklist.tsx", import.meta.url), "utf8");
   assert.match(checklist, /action: <ClaudeAppActions \/>/);
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /handle\("pick-claude-app"/);
   assert.match(main, /s\.claudeApp = result\.filePaths\[0\]/);
   assert.match(main, /desktopHost\(vault\.sealer, \(\) => service\.store\.state\.claudeApp\)/);

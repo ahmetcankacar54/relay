@@ -15,7 +15,7 @@ before(() => {
 test("the bundle has no Electron, node-pty, renderer or app-entry input", () => {
   const inputs = Object.keys(JSON.parse(fs.readFileSync(path.join(cli, "dist", "meta.json"), "utf8")).inputs);
   assert.ok(inputs.length > 10);
-  const bad = inputs.filter((p) => /node_modules\/(electron|node-pty)\/|^electron\/main\.ts$|^electron\/core\/desktop-host\.ts$|^src\//.test(p));
+  const bad = inputs.filter((p) => /node_modules\/(electron|node-pty)\/|^electron\/main(?:\.ts$|\/)|^electron\/core\/desktop-host\.ts$|^src\//.test(p));
   assert.deepEqual(bad, []);
 });
 

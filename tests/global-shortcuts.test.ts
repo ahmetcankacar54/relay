@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import fs from "node:fs";
 import path from "node:path";
 import { createElement } from "react";
@@ -245,7 +246,7 @@ test("while Settings records, the keys are let go; a change meanwhile is registe
 });
 
 test("main wires the shortcuts: the panel or the window, the menu bar's confirmation, and unregistering at quit", () => {
-  const main = fs.readFileSync(path.join(import.meta.dirname, "../electron/main.ts"), "utf8");
+  const main = mainSource();
   // Recording pauses them through a trusted, validated call that resumes by itself if left on.
   const pauseHandler = main.slice(main.indexOf('handle("pause-shortcuts"'), main.indexOf("// Separate Claude windows"));
   assert.match(pauseHandler, /z\.boolean\(\)\.parse\(paused\)/);
@@ -253,7 +254,8 @@ test("main wires the shortcuts: the panel or the window, the menu bar's confirma
   assert.match(pauseHandler, /setTimeout\(/);
   const recorder = fs.readFileSync(path.join(import.meta.dirname, "../src/pages/settings/ShortcutSettings.tsx"), "utf8");
   assert.match(recorder, /api\.pauseShortcuts\(true\)[\s\S]*return \(\) => void api\.pauseShortcuts\(false\)/);
-  const switchFn = main.slice(main.indexOf("async function switchFromShortcut"), main.indexOf("/** Accounts the extension notice"));
+  const switchStart = main.indexOf("async function switchFromShortcut");
+  const switchFn = main.slice(switchStart, main.indexOf("\n}\n", switchStart));
   assert.match(switchFn, /await traySwitch\(target\.id\)/);
   assert.doesNotMatch(switchFn, /desktop\.switchTo/);
   const openFn = main.slice(main.indexOf("function openFromShortcut"), main.indexOf("/** A shortcut's switch question"));

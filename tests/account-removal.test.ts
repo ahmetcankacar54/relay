@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -230,7 +231,7 @@ test("the usage cache forgets a removed account, and a read still running ends q
 });
 
 test("the app removes an account through one IPC handler under the Desktop lock", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   const start = main.indexOf('handle("remove-account",');
   assert.ok(start >= 0);
   const handler = main.slice(start, main.indexOf('handle("check-auth",', start));

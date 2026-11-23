@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainModule, mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import {
   buildTokenUsageView,
@@ -341,7 +342,7 @@ const read = (file: string) =>
   readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 
 test("main serves relay:token-usage with a validated input, after up to a second of ticks when stale", () => {
-  const main = read("electron/main.ts");
+  const main = mainSource();
   const start = main.indexOf('handle("token-usage"');
   assert.ok(start >= 0, "token-usage handler");
   const handler = main.slice(start, main.indexOf("\n  });", start));
@@ -367,7 +368,7 @@ test("main serves relay:token-usage with a validated input, after up to a second
 });
 
 test("main ticks every 2 seconds while a pass is unfinished and every 5 minutes otherwise, never overlapping", () => {
-  const main = read("electron/main.ts");
+  const main = mainSource();
   // The ledger owns "complete"; main keeps no latch of its own.
   assert.doesNotMatch(main, /tokenFirstScanDone/);
   assert.match(main, /tokenLastTick = await tokenLedger\.tick\(\)/);
@@ -390,10 +391,13 @@ test("main ticks every 2 seconds while a pass is unfinished and every 5 minutes 
 });
 
 test("main stops the token scan when Relay quits", () => {
-  const main = read("electron/main.ts");
-  const quit = main.slice(main.indexOf('app.on("will-quit"'));
-  assert.match(quit, /tokenScanStopped = true/);
-  assert.match(quit, /if \(tokenTimer\) clearTimeout\(tokenTimer\)/);
+  const lifecycle = mainModule("lifecycle");
+  assert.match(lifecycle.slice(lifecycle.indexOf('app.on("will-quit"')), /stopTokenScan\(\);/);
+  const tokens = mainModule("tokens-widget");
+  const stop = tokens.slice(tokens.indexOf("export function stopTokenScan"));
+  assert.match(stop, /tokenScanStopped = true/);
+  assert.match(stop, /if \(tokenTimer\) clearTimeout\(tokenTimer\)/);
+  assert.match(stop, /if \(widgetMidnight\) clearTimeout\(widgetMidnight\)/);
 });
 
 const slot = (cost: number, input = 0) => ({

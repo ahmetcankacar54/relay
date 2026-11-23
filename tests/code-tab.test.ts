@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mainSource } from "./helpers/main-source";
 import { CODE_TAB_LINK, openCodeTab, type CodeTabDeps } from "../electron/core/code-tab";
 
 function world(booted: (t: number) => boolean | undefined, running = true) {
@@ -34,7 +34,7 @@ test("a Claude whose log cannot tell gets a short grace; one that never boots ge
 });
 
 test("the main process opens only the fixed Code link through its own channel", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const start = main.indexOf('handle("open-code-tab"');
   const handler = main.slice(start, main.indexOf("handle(", start + 10));
   assert.match(handler, /manualDesktopLock/);

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 
 // switch-window.ts imports Electron, so these read its source, as the other main tests do.
@@ -48,7 +49,7 @@ test("a fresh window starts its load from the beginning", () => {
 });
 
 test("only an unpackaged Relay lets the smoke test start a scene", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(
     main,
     /if \(!app\.isPackaged\)\s*Object\.assign\(globalThis, \{\s*relaySmokeSwitchScene: \(view: SwitchSceneView\) =>\s*switchWindow\?\.show\(view\),/,

@@ -29,6 +29,18 @@ After `npm run build`, `npm run test:desktop` is the macOS integration test and
 `npm run test:boot` the boot smoke CI runs on Windows and Linux (start with a
 fresh profile, answer over IPC, quit cleanly; `-- --packaged` for the packaged app).
 
+Main process layout: `electron/main.ts` is only the bootstrap (error handlers,
+app name, a pending data removal, the crash reporter, the single-instance lock,
+then `main/boot` once Electron is ready and `main/lifecycle`); esbuild bundles
+the rest from `electron/main/`. `state.ts` holds the singletons startup makes,
+read as live imports and written only through its `set.*` setters. Beside it
+sit one module per domain (windows, notifications, gateway, tokens-widget,
+backup…), `boot/` with one file per startup step in the order they run, and
+`ipc/` with one `register…Ipc` function per group of channels. No module
+imports `main.ts` or calls `app` at import time; `tests/main-split.test.ts`
+checks this, and tests that read main's source go through
+`tests/helpers/main-source.ts`, whose list must name every new module.
+
 Icon sources: `assets/icon-artwork.png` (Imagegen ribbon R artwork),
 `assets/icon.svg` (vector companion), `assets/relay-mark.svg` (standalone mark)
 and `assets/trayTemplate.svg` (menu-bar silhouette). Run `npm run icons` to

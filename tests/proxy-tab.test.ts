@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -133,7 +134,7 @@ test("a reset reads as time left, in both languages", () => {
 });
 
 test("main, the preload and the desktop snapshot carry the gateway; quitting stops it", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
   for (const name of ["proxy-status", "proxy-toggle", "proxy-configure", "proxy-regenerate-key", "proxy-bind-client", "proxy-unbind-client"]) {
     assert.match(main, new RegExp(`handle\\("${name}"`), name);

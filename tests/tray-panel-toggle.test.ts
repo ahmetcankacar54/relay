@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import {
   INITIAL_PANEL_LOAD,
@@ -194,7 +195,7 @@ test("a panel macOS put on no Space gets a new window that opens for the same cl
 
   const source = readFileSync(new URL("../electron/tray-panel.ts", import.meta.url), "utf8");
   assert.match(source, /win\.showInactive\(\);\s*win\.focus\(\);\s*if \(this\.offSpace\(win\)\) return this\.rebuild\(win, trayBounds\);/);
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /onActiveSpace: loadWindowSpace\(__dirname\)/);
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.ok(pkg.build.asarUnpack.includes("dist-electron/window-space.node"));

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import net from "node:net";
 import fs from "node:fs";
 import { callbackHtml, listenOAuthCallback } from "../electron/core/oauth-callback-server";
@@ -105,7 +106,7 @@ test("the page follows the system appearance and closes itself", () => {
 });
 
 test("main listens on Google's port before it asks for the sign-in address, and only falls back to the forwarder", () => {
-  const main = fs.readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /const ANTIGRAVITY_CALLBACK_PORT = 51121;/);
   assert.match(main, /const callback = await listenOAuthCallback\(\{[\s\S]*?await bridge\.submitCallback\(expected, address\);[\s\S]*?showWindow\(\);[\s\S]*?const \{ state, url \} = await bridge\.beginOAuth\(\{ forwarder: !callback \}\);/);
   const bridge = fs.readFileSync(new URL("../electron/core/antigravity-bridge.ts", import.meta.url), "utf8");

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -164,7 +165,7 @@ test("main refuses a risky feature without its acceptance and words the refusal 
 });
 
 test("main gates every risky switch, and only acknowledge-risk records an acceptance", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
   // A handler's source: from its name to the next handler.
   const handler = (name: string) => new RegExp(`handle\\("${name}"[\\s\\S]*?(?=\\n  handle\\()`).exec(main)?.[0] ?? "";

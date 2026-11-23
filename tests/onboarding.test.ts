@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -84,7 +85,7 @@ test("reading limits needs a newer CLI, the one the usage refresher enforces", (
   assert.equal(readsUsage("1.9.999"), false);
   assert.equal(readsUsage("unknown"), false);
   // The refresher in main reads the same constant, not a number of its own.
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /readsUsage\(diagnostics\.version/);
   assert.doesNotMatch(main, /< 296/);
 });
@@ -241,7 +242,7 @@ test("only the two first-run pages, the providers' terms and the Full Disk Acces
 });
 
 test("the main window opens allow-listed links in the browser and nothing else", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const opener = /window\.webContents\.setWindowOpenHandler\(([\s\S]*?)\n {2}\}\);/.exec(main)?.[1] ?? "";
   assert.match(opener, /isExternalLink\(url\)/);
   assert.match(opener, /shell\.openExternal\(url\)/);
@@ -254,7 +255,7 @@ test("openPage carries the add intent to the main window", () => {
   assert.deepEqual(PAGE_INTENTS, ["ekle"]);
   assert.equal(intentHash("hesaplar", "ekle"), "#/hesaplar?ekle");
   assert.equal(intentHash("genel"), "#/genel");
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const ipcStart = main.indexOf('handle("open-page",');
   const ipcHandler = main.slice(ipcStart, main.indexOf('handle("quit"', ipcStart));
   assert.match(ipcHandler, /z\.enum\(PAGE_INTENTS\)\.optional\(\)\.parse\(intent\)/);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mainSource } from "./helpers/main-source";
 import { localizeError } from "../src/messages";
 import "./i18n";
 
@@ -86,7 +86,7 @@ test("the errors main's IPC handlers throw read in both languages", () => {
 });
 
 test("every error main.ts throws with a fixed message has both languages", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const thrown = [
     ...main.matchAll(/new Error\(\s*"([^"]+)",?\s*\)/g),
   ].map((m) => m[1]);

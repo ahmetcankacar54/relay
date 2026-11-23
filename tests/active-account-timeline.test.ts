@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { bootSource } from "./helpers/main-source";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
@@ -586,11 +587,8 @@ test("the timeline sees Desktop through the manager: open, switch and close", as
 });
 
 test("main builds the timeline in the user data folder and feeds it from Desktop", () => {
-  const main = fs.readFileSync(
-    new URL("../electron/main.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(main, /from "\.\/core\/active-account-timeline"/);
+  const main = bootSource();
+  assert.match(main, /from "\.{1,2}\/(?:\.\.\/)*core\/active-account-timeline"/);
   assert.match(
     main,
     /new ActiveAccountTimeline\(\s*path\.join\(app\.getPath\("userData"\), "active-account-timeline\.json"\),?\s*\)/,
