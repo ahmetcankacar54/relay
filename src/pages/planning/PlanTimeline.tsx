@@ -72,12 +72,22 @@ function Stat({
       </strong>
       {/* Who warms up when: visible, and still the title for a pointer resting on the value. */}
       {valueTitle && <small className="text-2xs text-muted-foreground">{valueTitle}</small>}
-      {note && (
-        <span className={noteClass} title={noteTitle}>
-          {note}
-        </span>
+      {/*
+       * The comparison (the even spread) as its own block under a rule, so its early-start line reads as
+       * the other option's, not as this plan's said twice.
+       */}
+      {noteTitle ? (
+        <div data-slot="stat-compare" className="mt-1.5 grid gap-0.5 border-s-2 ps-2">
+          {note && (
+            <span className={noteClass} title={noteTitle}>
+              {note}
+            </span>
+          )}
+          <small className="text-2xs text-muted-foreground">{noteTitle}</small>
+        </div>
+      ) : (
+        note && <span className={noteClass}>{note}</span>
       )}
-      {noteTitle && <small className="text-2xs text-muted-foreground">{noteTitle}</small>}
       {chips}
     </div>
   );

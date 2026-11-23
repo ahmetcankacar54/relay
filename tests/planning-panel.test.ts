@@ -392,7 +392,7 @@ function renderScenarioSheet(...args: Parameters<typeof scenarioProps>) {
  */
 function planStat(html: string) {
   const stat = html.match(
-    /data-slot="plan-stat"[^>]*>.*?<strong class="([^"]*)" title="([^"]*)">([^<]*)<\/strong><small class="[^"]*">([^<]*)<\/small><span class="[^"]*" title="([^"]*)">([^<]*)<\/span><small class="[^"]*">([^<]*)<\/small>/,
+    /data-slot="plan-stat"[^>]*>.*?<strong class="([^"]*)" title="([^"]*)">([^<]*)<\/strong><small class="[^"]*">([^<]*)<\/small><div data-slot="stat-compare"[^>]*><span class="[^"]*" title="([^"]*)">([^<]*)<\/span><small class="[^"]*">([^<]*)<\/small><\/div>/,
   );
   if (!stat) return undefined;
   const [, valueClass, planWarmUps, value, planLine, evenWarmUps, note, evenLine] = stat;
