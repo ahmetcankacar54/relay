@@ -23,6 +23,7 @@ import { MenuBarTitleRows } from "./settings/MenuBarItems";
 import { NotificationGroup } from "./settings/NotificationSettings";
 import { DataGroups } from "./settings/DataSettings";
 import { ShortcutGroup } from "./settings/ShortcutSettings";
+import { MeterGroup } from "./settings/MeterSettings";
 import { Disclosure } from "@/components/Disclosure";
 import { localizeError } from "../../shared/error-text";
 import { updateShown, updateTitle } from "@/lib/update-text";
@@ -359,6 +360,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             </SettingGroup>
             <NotificationGroup />
             <ShortcutGroup />
+            <MeterGroup />
             {/* The menu bar title and the switch window are macOS-only; other platforms keep the R icon. */}
             {data?.diagnostics.platform === "darwin" && (
               <SettingGroup id="settings-menu-bar" title={t("settings.menuBar")}>

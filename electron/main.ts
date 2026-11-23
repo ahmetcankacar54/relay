@@ -215,6 +215,9 @@ import {
   antigravityAccountRisks,
   clientRisks,
   gatewayRisks,
+  meterRisk,
+  meterRisks,
+  needsRiskAck,
   planningRisks,
   proxyPatchRisks,
   requireRiskAck,
@@ -306,6 +309,8 @@ import { WindowRelease } from "./window-release";
 import { pageCrashAction, systemShuttingDown } from "./main-lifecycle";
 import { LimitNotices, type LimitWindowKind } from "./core/limit-notice";
 import { RemoteNotifier } from "./core/remote-notify";
+import { MeterService } from "./core/meters";
+import { enabledMeters } from "../shared/meters";
 import { notificationSettings } from "../shared/notifications";
 import { formatPercent, percentUsed } from "../shared/percent";
 import { FORMAT_LOCALE } from "../shared/i18n/locales";
@@ -512,6 +517,18 @@ const remoteNotifier = new RemoteNotifier({
   settings: () => service.store.state.settings,
   version: () => app.getVersion(),
   log: (line) => recordMainError("remote-notify", line),
+});
+/**
+ * The other tools' usage meters (Settings → Other tools): only those turned on and whose risk is
+ * accepted, so a list restored from a backup without the answer reads nothing until it is given.
+ */
+const meters = new MeterService({
+  enabled: () => {
+    const settings = service.store.state.settings;
+    return enabledMeters(settings).filter((provider) => !needsRiskAck(settings, meterRisk(provider)));
+  },
+  onChange: () => broadcastChanged(),
+  log: (line) => recordMainError("meters", line),
 });
 /** Whether a notification type is on in Settings → General → Notifications. */
 const notifies = (kind: "switches" | "signIns" | "earlyStart" | "updates") =>
@@ -1777,6 +1794,7 @@ else {
         logDraftEvent,
       );
       globalShortcuts.apply(service.store.state.settings.shortcuts);
+      meters.start();
       void service
         .reconcileAuth()
         // A profile saved in the wrong workspace of its own account, before Relay could tell.
@@ -3989,6 +4007,7 @@ function bindIPC() {
         "Finish the Desktop operation before changing preferences.",
       );
     const patch = settingsPatchSchema.parse(input);
+    if (patch.meters) requireRisk(meterRisks(service.store.state.settings.meters, patch.meters));
     for (const selected of [
       patch.desktopHistoryAccounts,
       patch.autoSwitchAccounts,
@@ -4017,6 +4036,8 @@ function bindIPC() {
     if ((service.store.state.settings.updateChannel ?? "stable") !== updateChannel)
       void appUpdates?.channelChanged();
     usage.tick();
+    // A meter just turned on is read now; the others wait for their interval.
+    if (patch.meters) void meters.tick();
     void autoSwitch.tick();
     // Turned off, the drafts still pending go to Copy now, not at the next switch.
     if (draftRetype() !== retype) void draftRestore.retypeChanged();
@@ -4114,6 +4135,7 @@ function bindIPC() {
       update: appUpdates?.state(),
       shortcuts: globalShortcuts?.status(),
       antigravity: await antigravityApp(),
+      meters: meters.snapshot(),
       usage: displayUsage(),
       continuation: continuation.snapshot(),
       fleet: fleet.snapshot(),
@@ -4472,6 +4494,7 @@ app.on("will-quit", () => {
   for (const bridge of antigravityBridges.values()) bridge.stop();
   appUpdates?.stop();
   globalShortcuts?.dispose();
+  meters.stop();
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);
   tokenScanStopped = true;

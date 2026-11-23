@@ -24,6 +24,7 @@ import {
   type FeaturesInUse,
 } from "../../shared/feature-risk";
 import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
+import { enabledMeters } from "../../shared/meters";
 import type { Account, ProxyStatus, RelaySettings } from "../../shared/types";
 
 /**
@@ -207,8 +208,8 @@ export function useRiskConsent() {
 }
 
 /**
- * What is on now, from what the main window knows: the saved settings, the accounts, and the
- * gateway's live state (its bound clients and pool) once it has been read.
+ * What is on now, from what the main window knows: the saved settings (early start, the meters),
+ * the accounts, and the gateway's live state (its bound clients and pool) once it has been read.
  */
 export function featuresInUse(settings: RelaySettings, accounts: readonly Account[], status?: ProxyStatus): FeaturesInUse {
   return {
@@ -220,6 +221,7 @@ export function featuresInUse(settings: RelaySettings, accounts: readonly Accoun
       excludedAccountIds: status?.accounts.filter((a) => !a.inPool).map((a) => a.id),
       boundClients: (status?.clients ?? []).filter((c) => c.bound).map((c) => c.id),
     },
+    meters: enabledMeters(settings),
   };
 }
 
@@ -255,6 +257,7 @@ export function ExistingRiskConsent() {
         else if (step.kind === "gateway-host") await api.proxyConfigure({ host: step.host });
         else if (step.kind === "exclude") await api.proxyConfigure({ excludedAccountIds: step.accountIds });
         else if (step.kind === "early-start-off") await api.updatePlanning({ autoStart: false });
+        else if (step.kind === "meters") await api.updateSettings({ meters: step.keep });
         else await api.removeAccount(step.accountId);
       }
     })

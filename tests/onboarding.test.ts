@@ -228,6 +228,9 @@ test("only the two first-run pages, the providers' terms and the Full Disk Acces
     anthropicAup: "https://www.anthropic.com/legal/aup",
     antigravityServiceTerms: "https://antigravity.google/terms",
     openaiSignIn: "https://help.openai.com/en/articles/20001542",
+    githubTerms: "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
+    geminiCliFaq: "https://geminicli.com/docs/resources/faq/",
+    cursorTerms: "https://cursor.com/terms-of-service",
     fullDiskAccess: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
   });
   assert.equal(isExternalLink("https://claude.ai/download"), true);

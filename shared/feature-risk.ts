@@ -1,4 +1,5 @@
 import { EXTERNAL_LINKS } from "./external-links";
+import type { MeterProvider } from "./meters";
 import type { MessageId } from "./i18n/translate";
 import { DEFAULT_PROXY_CONFIG, type ProxyClientId } from "./proxy-types";
 import { LOOPBACK_HOSTS } from "./proxy-url";
@@ -9,6 +10,9 @@ import { LOOPBACK_HOSTS } from "./proxy-url";
  * and the CLI asks for `--yes`.
  */
 export const FEATURE_RISK_IDS = [
+  "meter-copilot",
+  "meter-gemini-cli",
+  "meter-cursor",
   "early-start",
   "gateway-codex",
   "gateway-claude",
@@ -29,12 +33,16 @@ export const POLICY_LINKS = {
   antigravityFaq: { href: EXTERNAL_LINKS.antigravityTerms, label: "featureRisk.linkAntigravityFaq" },
   antigravityTerms: { href: EXTERNAL_LINKS.antigravityServiceTerms, label: "featureRisk.linkAntigravityTerms" },
   openaiSignIn: { href: EXTERNAL_LINKS.openaiSignIn, label: "featureRisk.linkOpenaiSignIn" },
+  githubTerms: { href: EXTERNAL_LINKS.githubTerms, label: "featureRisk.linkGithubTerms" },
+  geminiCliFaq: { href: EXTERNAL_LINKS.geminiCliFaq, label: "featureRisk.linkGeminiCliFaq" },
+  cursorTerms: { href: EXTERNAL_LINKS.cursorTerms, label: "featureRisk.linkCursorTerms" },
 } as const satisfies Record<string, { href: string; label: MessageId }>;
 export type PolicyLinkId = keyof typeof POLICY_LINKS;
 
 /**
  * The risk ladder, lowest first (the 2026-11-23 audit, section 3). Switching your own Claude app
- * accounts and reading limits are on it for scale; they ask nothing.
+ * accounts and reading limits are on it for scale; reading Claude's limits asks nothing, reading
+ * another tool's (a meter) asks, since those tools' terms say more about it.
  */
 export const RISK_LADDER: readonly MessageId[] = [
   "featureRisk.ladderSwitching",
@@ -63,6 +71,33 @@ export interface FeatureRisk {
 }
 
 export const FEATURE_RISKS: Readonly<Record<FeatureRiskId, FeatureRisk>> = {
+  "meter-copilot": {
+    id: "meter-copilot",
+    level: "R1",
+    rung: 2,
+    links: ["githubTerms"],
+    title: "featureRisk.meterCopilotTitle",
+    body: "featureRisk.meterCopilotBody",
+    textVersion: 1,
+  },
+  "meter-gemini-cli": {
+    id: "meter-gemini-cli",
+    level: "R1",
+    rung: 2,
+    links: ["geminiCliFaq"],
+    title: "featureRisk.meterGeminiCliTitle",
+    body: "featureRisk.meterGeminiCliBody",
+    textVersion: 1,
+  },
+  "meter-cursor": {
+    id: "meter-cursor",
+    level: "R1",
+    rung: 2,
+    links: ["cursorTerms"],
+    title: "featureRisk.meterCursorTitle",
+    body: "featureRisk.meterCursorBody",
+    textVersion: 1,
+  },
   "early-start": {
     id: "early-start",
     level: "R1",
@@ -213,11 +248,19 @@ export const antigravityAccountRisks = (gatewayOn: boolean): FeatureRiskId[] =>
 export const planningRisks = (before: { autoStart: boolean }, patch: { autoStart?: boolean }): FeatureRiskId[] =>
   patch.autoStart === true && !before.autoStart ? ["early-start"] : [];
 
-/** What is on right now, as the window sees it: early start, the accounts, and the gateway. */
+/** A meter's risk: the provider's own terms on reading its usage from outside its tool. */
+export const meterRisk = (provider: MeterProvider): FeatureRiskId => `meter-${provider}`;
+
+/** The meters a settings change turns on (on in `after`, off in `before`), as their risks. */
+export const meterRisks = (before: readonly MeterProvider[] | undefined, after: readonly MeterProvider[] | undefined): FeatureRiskId[] =>
+  (after ?? []).filter((provider) => !before?.includes(provider)).map(meterRisk);
+
+/** What is on right now, as the window sees it: early start, the accounts, the gateway and the meters. */
 export interface FeaturesInUse {
   earlyStart: boolean;
   accounts: readonly PoolAccount[];
   gateway?: { on: boolean; host: string; excludedAccountIds?: readonly string[]; boundClients: readonly ProxyClientId[] };
+  meters?: readonly MeterProvider[];
 }
 
 /**
@@ -228,6 +271,7 @@ export interface FeaturesInUse {
 export function enabledRisks(state: FeaturesInUse): FeatureRiskId[] {
   const risks: FeatureRiskId[] = [];
   if (state.earlyStart) risks.push("early-start");
+  risks.push(...(state.meters ?? []).map(meterRisk));
   if (state.accounts.some((a) => a.provider === "antigravity")) risks.push("antigravity-account");
   if (state.gateway?.on) risks.push(...gatewayRisks(state.gateway, state.accounts));
   return FEATURE_RISK_IDS.filter((id) => risks.includes(id));
@@ -240,13 +284,15 @@ export type TurnOffStep =
   | { kind: "gateway-host"; host: string }
   | { kind: "exclude"; accountIds: string[] }
   | { kind: "early-start-off" }
-  | { kind: "remove-account"; accountId: string };
+  | { kind: "remove-account"; accountId: string }
+  /** The meters to keep on: the others are turned off in one settings change. */
+  | { kind: "meters"; keep: MeterProvider[] };
 
 /**
  * How to turn the `pending` features off, in order: clients first (so they go back to their own
  * sign-in), then the gateway as a whole when its Claude or Codex risk was declined, or only its
- * tailnet address or its Antigravity accounts; then early start; and last the Antigravity
- * accounts themselves, which are only off once they are removed.
+ * tailnet address or its Antigravity accounts; then early start and the meters; and last the
+ * Antigravity accounts themselves, which are only off once they are removed.
  */
 export function turnOffSteps(pending: readonly FeatureRiskId[], state: FeaturesInUse): TurnOffStep[] {
   const steps: TurnOffStep[] = [];
@@ -265,6 +311,9 @@ export function turnOffSteps(pending: readonly FeatureRiskId[], state: FeaturesI
     }
   }
   if (pending.includes("early-start")) steps.push({ kind: "early-start-off" });
+  const meters = state.meters ?? [];
+  if (meters.some((provider) => pending.includes(meterRisk(provider))))
+    steps.push({ kind: "meters", keep: meters.filter((provider) => !pending.includes(meterRisk(provider))) });
   if (pending.includes("antigravity-account"))
     for (const accountId of antigravity) steps.push({ kind: "remove-account", accountId });
   return steps;

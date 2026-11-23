@@ -13,6 +13,7 @@ import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
 import { resolveLocale } from "../shared/i18n/locales";
 import { acknowledgeRisks } from "../shared/feature-risk";
 import { remoteNotifyUrl } from "../shared/remote-notify";
+import { enabledMeters, type MeterReading } from "../shared/meters";
 import type {
   Account,
   AuthFlow,
@@ -338,8 +339,53 @@ function previewTokenLedger(): LedgerSnapshot {
     progress: { scannedBytes: 1, totalBytes: 1, complete: true },
   };
 }
+/**
+ * The other tools' meters: Copilot and Cursor are on (their risk accepted), Gemini CLI is off so
+ * turning it on in Settings → Other tools shows the consent. Its sample is a Workspace account
+ * whose last read failed, so the row also shows a reading with an error beside it.
+ */
+const PREVIEW_METERS: MeterReading[] = [
+  {
+    provider: "copilot",
+    label: "individual · alto",
+    source: "unofficial",
+    readAt: minutes(-4),
+    windows: [
+      { name: "premium", kind: "monthly", unit: "premium requests", usedPercent: 62, used: 186, limit: 300, resetsAt: minutes(12 * 24 * 60) },
+      { name: "chat", kind: "monthly", unit: "requests", usedPercent: 8, resetsAt: minutes(12 * 24 * 60) },
+    ],
+  },
+  {
+    provider: "cursor",
+    label: "pro",
+    source: "unofficial",
+    readAt: minutes(-9),
+    windows: [
+      { name: "included", kind: "monthly", unit: "$", usedPercent: 91, used: 18.2, limit: 20, resetsAt: minutes(5 * 24 * 60) },
+      { name: "auto", kind: "monthly", unit: "$", usedPercent: 40, resetsAt: minutes(5 * 24 * 60) },
+      { name: "api", kind: "monthly", unit: "$", usedPercent: 51, resetsAt: minutes(5 * 24 * 60) },
+    ],
+  },
+  {
+    provider: "gemini-cli",
+    label: "Standard",
+    source: "unofficial",
+    readAt: minutes(-25),
+    error: { issue: "unavailable" },
+    windows: [
+      { name: "pro", kind: "daily", unit: "requests", usedPercent: 34, resetsAt: minutes(7 * 60) },
+      { name: "flash", kind: "daily", unit: "requests", usedPercent: 12, resetsAt: minutes(7 * 60) },
+    ],
+  },
+];
+const previewMeters = (settings: { meters?: readonly MeterReading["provider"][] }) =>
+  enabledMeters(settings).flatMap((provider) => PREVIEW_METERS.filter((m) => m.provider === provider));
 const state: Snapshot = {
-  settings: structuredClone(DEFAULT_SETTINGS),
+  settings: {
+    ...structuredClone(DEFAULT_SETTINGS),
+    meters: ["copilot", "cursor"],
+    riskAcknowledged: acknowledgeRisks({}, ["meter-copilot", "meter-cursor"]),
+  },
   usage: Object.fromEntries(
     accounts.map((a, i) => [
       a.id,
@@ -1290,7 +1336,7 @@ export const previewApi: RelayAPI = {
     }),
   lostFoundCollection: async () =>
     lostFoundCollection(previewLostFoundSource()),
-  snapshot: async () => structuredClone(state),
+  snapshot: async () => structuredClone({ ...state, meters: previewMeters(state.settings) }),
   createAccount: async (input) => {
     if (scenario !== "unlinked-no-code" && scenario !== "mixed-connections")
       return desktopOnly();

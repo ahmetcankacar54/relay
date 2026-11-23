@@ -28,6 +28,7 @@ export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import type { LanguagePref, Locale } from "./i18n/locales";
 import type { FeatureRiskId, RiskAcknowledgements } from "./feature-risk";
+import type { MeterProvider, MeterReading } from "./meters";
 import type {
   BackupExportResult,
   BackupFileChoice,
@@ -194,6 +195,8 @@ export interface Snapshot {
   shortcuts?: Record<ShortcutAction, ShortcutState>;
   /** Google's Antigravity app on this computer and which Relay account it is signed in with. */
   antigravity?: AntigravityAppState;
+  /** The usage meters turned on in Settings → Other tools (shared/meters.ts), read-only, without tokens. */
+  meters?: MeterReading[];
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   /** Sign-ins being made for the terminal, one per account at most. */
@@ -891,6 +894,11 @@ export interface RelaySettings {
   autoSwitchStrategy?: AutoSwitchStrategy;
   /** Relay's events posted to an ntfy topic or a webhook; missing, or without a URL, is off. */
   remoteNotify?: RemoteNotifySettings;
+  /**
+   * The other tools whose usage Relay reads (Settings → Other tools; shared/meters.ts), each on
+   * only after its risk was accepted; missing means none.
+   */
+  meters?: MeterProvider[];
   /**
    * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
    * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
