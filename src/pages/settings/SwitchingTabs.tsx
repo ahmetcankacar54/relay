@@ -18,6 +18,7 @@ import {
 } from "../../features/SwitchPreferences";
 import { ExtensionPreference } from "../../features/ExtensionPreference";
 import { TerminalPreference } from "../../features/TerminalPreference";
+import { ConfigSyncPreference } from "../../features/ConfigSyncPreference";
 import { copyDraftAction, dismissDraftAction, draftReason } from "../../panel/PanelDrafts";
 import { ContinuationSettings } from "../../features/ContinuationSettings";
 import { AutomationSettings } from "../../features/AutomationControl";
@@ -180,6 +181,7 @@ export function SwitchingTab() {
             )}
           </Card>
         </PageSection>
+        <ConfigSyncPreference settings={settings} update={update} disabled={disabled} t={t} />
         <PageSection
           title={t("switchingTabs.nearTheLimit")}
           info={t("switchingTabs.relayMarksAccountsNearTheirLimit")}

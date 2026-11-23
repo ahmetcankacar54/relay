@@ -51,6 +51,7 @@ import {
 } from "./draft-transfer";
 import { safeMessage, shortId } from "./draft-diagnostics";
 import { pruneSwitchBackups } from "./backup-prune";
+import { syncProfileConfig } from "./config-sync";
 import type { CapturedDraft } from "./drafts";
 import { removeLegacyDraftBackups } from "./draft-storage";
 import {
@@ -860,6 +861,8 @@ export class DesktopManager {
       await assertClosedSwitch();
       await this.assertCurrentSaved();
       const saved = await this.readLogin(target.desktop.accountUuid);
+      /** The Claude app account the switch left, once the swap is written. */
+      let left: string | undefined;
       const change = async () => {
         await assertClosedSwitch();
         const current = await this.saveCurrent();
@@ -893,6 +896,7 @@ export class DesktopManager {
           closedOnly: options.closedOnly,
           canProceed: options.canProceed,
         });
+        if (current && current !== saved.accountUuid) left = current;
         // Still inside `change`, so a restart relaunches Claude only once the helper is gone.
         if (current && current !== saved.accountUuid)
           await this.carryDrafts(current, saved.accountUuid, target, carried);
@@ -910,6 +914,8 @@ export class DesktopManager {
           options.answerQuitGuard,
         );
       switched = target;
+      // After Claude is back, still inside the lock: profile files never need Claude closed.
+      if (left) await this.configSyncStep(left, target);
       if (!options.closedOnly) this.verifySignInLater(target);
     }).finally(() => {
       try {
@@ -1494,6 +1500,39 @@ export class DesktopManager {
   }
   private get terminalMode() {
     return this.store.state.settings.terminalCli ?? DEFAULT_TERMINAL_MODE;
+  }
+  /**
+   * Carries the chosen Claude Code setup (Settings → Switching) from the profile of the account
+   * the switch left into the one of `target` (see config-sync.ts). Never throws, so it can never
+   * fail a switch that already happened. Logs counts and short ids only, never names or contents.
+   */
+  private async configSyncStep(leftUuid: string, target: Account) {
+    try {
+      const choice = this.store.state.settings.configSync;
+      if (!choice || !Object.values(choice).some(Boolean)) return;
+      const from = this.store.state.accounts.find(
+        (a) => a.id !== target.id && a.desktop?.accountUuid === leftUuid,
+      );
+      if (!from) return;
+      const result = await syncProfileConfig({
+        from: this.store.profile(from.id),
+        to: this.store.profile(target.id),
+        choice,
+        backups: path.join(this.store.root, "config-sync-backups"),
+        now: this.now,
+      });
+      this.diagnose("config-sync", {
+        to: shortId(target.desktop?.accountUuid ?? target.id),
+        mcpServers: result.mcpServers,
+        entries: result.entries,
+        settings: result.settings,
+        claudeMd: result.claudeMd,
+        backedUp: !!result.backup,
+        ...(result.failed.length ? { failed: result.failed } : {}),
+      });
+    } catch {
+      // The switch is done; a profile left as it was is all that is lost.
+    }
   }
   /**
    * Keeps the terminal's Claude Code sign-in with `target` (see TerminalSwitcher). Never throws,

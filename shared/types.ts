@@ -871,11 +871,32 @@ export interface RelaySettings {
    */
   shortcuts?: ShortcutSettings;
   /**
+   * What a switch carries from the account being left into the Claude Code profile of the one
+   * switched to (Settings → Switching; electron/core/config-sync.ts); missing means all off.
+   */
+  configSync?: ConfigSyncSettings;
+  /**
    * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
    * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
    */
   riskAcknowledged: RiskAcknowledgements;
 }
+/** One choice per item a switch keeps the same across the accounts' Claude Code profiles. */
+export interface ConfigSyncSettings {
+  /** User MCP servers (`mcpServers` in the profile's `.claude.json`), merged by name. */
+  mcpServers: boolean;
+  /** The `skills/` and `agents/` folders' entries, by name. */
+  skills: boolean;
+  /** settings.json's permissions, env (without secrets), hooks, statusLine and model. */
+  settings: boolean;
+  claudeMd: boolean;
+}
+export const DEFAULT_CONFIG_SYNC: ConfigSyncSettings = {
+  mcpServers: false,
+  skills: false,
+  settings: false,
+  claudeMd: false,
+};
 export type PrankLevel = "sometimes" | "rarely" | "off";
 /** "beta" also takes GitHub pre-releases; going back to "stable" never installs an older version. */
 export type UpdateChannel = "stable" | "beta";
@@ -1014,6 +1035,7 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   historyPolicyVersion: 2,
   launchAtLogin: false,
   updateChannel: "stable",
+  configSync: DEFAULT_CONFIG_SYNC,
   riskAcknowledged: {},
 };
 export type AutoSwitchReason =
