@@ -28,6 +28,13 @@ export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import type { LanguagePref, Locale } from "./i18n/locales";
 import type { FeatureRiskId, RiskAcknowledgements } from "./feature-risk";
+import type {
+  BackupExportResult,
+  BackupFileChoice,
+  BackupImportMode,
+  BackupImportResult,
+  BackupSummary,
+} from "./backup";
 import {
   DEFAULT_PROXY_CONFIG,
   type ProxyClassShare,
@@ -612,6 +619,21 @@ export interface RelayAPI {
    * picks in a save dialog, then shows it; false when the dialog was cancelled. Takes no path.
    */
   exportDiagnostics(): Promise<boolean>;
+  /**
+   * Seals the accounts, settings and, with `includeSignIns`, the saved sign-ins into a backup file
+   * with the passphrase, saved where the user picks; undefined when the dialog was cancelled.
+   */
+  exportBackup(input: { passphrase: string; includeSignIns: boolean }): Promise<BackupExportResult | undefined>;
+  /** Import, first step: an open dialog for a backup file, checked before a passphrase is asked. */
+  chooseBackup(): Promise<BackupFileChoice | undefined>;
+  /** Import, second step: opens the picked file with its passphrase and tells what it holds. */
+  openBackup(passphrase: string): Promise<BackupSummary>;
+  /** Import, last step: merges the opened backup in, or replaces what is here with it. */
+  importBackup(mode: BackupImportMode): Promise<BackupImportResult>;
+  /** Forgets the picked or opened backup. */
+  cancelBackup(): Promise<void>;
+  /** Removes all of Relay's data and relaunches it in its first-run state. */
+  resetData(): Promise<void>;
   /**
    * How Relay starts Claude: `quicOff`, without HTTP/3, which Relay also turns on itself after a
    * stuck start.

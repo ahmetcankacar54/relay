@@ -21,6 +21,7 @@ import type {
 } from "../../shared/types";
 import { MenuBarTitleRows } from "./settings/MenuBarItems";
 import { NotificationGroup } from "./settings/NotificationSettings";
+import { DataGroups } from "./settings/DataSettings";
 import { ShortcutGroup } from "./settings/ShortcutSettings";
 import { Disclosure } from "@/components/Disclosure";
 import { localizeError } from "../../shared/error-text";
@@ -512,6 +513,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
               <ClaudeAppAccessRow api={api} t={t} />
             </SettingGroup>
+            <DataGroups />
             <SettingGroup id="settings-experimental" title={t("settings.experimental")}>
               <p className="py-2 text-xs text-muted-foreground">
                 {t("settings.experimentalFeaturesCanBreakWithAn")}

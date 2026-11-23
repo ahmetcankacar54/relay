@@ -260,6 +260,32 @@ import { UsageCredentialRefresher, anthropicUnreachable } from "./core/usage-ref
 import { ProcessLock } from "./core/process-lock";
 import { prepareVault } from "./core/vault-migration";
 import {
+  BackupError,
+  claudeCodeSignIns,
+  collectBackup,
+  importBackup,
+  openBackup,
+  readBackupHeader,
+  sealBackup,
+  summarizeBackup,
+  MAX_BACKUP_BYTES,
+  type BackupContext,
+  type OpenedBackup,
+} from "./core/backup";
+import { beginReset, finishPendingReset } from "./core/data-reset";
+import { securityKeychain } from "./core/terminal-identity";
+import { credentialService } from "./core/usage-credentials";
+import { VAULT_KEY_ACCOUNT, VAULT_KEY_SERVICE } from "./core/vault-key";
+import {
+  BACKUP_EXTENSION,
+  MIN_BACKUP_PASSPHRASE,
+  type BackupExportResult,
+  type BackupFileChoice,
+  type BackupImportMode,
+  type BackupImportResult,
+  type BackupSummary,
+} from "../shared/backup";
+import {
   acquireProfileLock,
   anyExclusiveProfileLock,
 } from "./core/profile-lock";
@@ -314,6 +340,13 @@ const windowRelease = new WindowRelease({
 });
 let service: Service;
 let desktop: DesktopManager;
+/** This computer's vault key, once ready: account backups unseal and seal sign-ins with it. */
+let vaultSealer: Sealer | undefined;
+/**
+ * The backup picked for import, kept in memory between the dialog's steps: the file, then once the
+ * passphrase opened it, the payload and its key. The passphrase itself is never kept.
+ */
+let pendingBackup: { file: Buffer; opened?: OpenedBackup } | undefined;
 /** Saves a Claude app sign-in by itself once the user has signed in and opened Code. */
 let autoCapture: AutoCapture | undefined;
 let switchDiagnostics: SwitchDiagnostics | undefined;
@@ -862,6 +895,17 @@ app.on("web-contents-created", (_event, contents) =>
   contents.on("will-attach-webview", (event) => event.preventDefault()),
 );
 app.setName("Relay");
+// A data removal the user confirmed finishes here, before the crash reporter or Chromium opens the
+// folder (core/data-reset.ts). The log folder is outside it on macOS.
+{
+  let logs: string[] = [];
+  try {
+    logs = [app.getPath("logs")];
+  } catch {
+    // No log folder yet: nothing there to remove.
+  }
+  finishPendingReset(app.getPath("userData"), logs);
+}
 // Crashes leave a minidump in the crash dump folder for a bug report; nothing is ever sent.
 crashReporter.start({ uploadToServer: false });
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -970,6 +1014,7 @@ else {
                   ? "No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay."
                   : "System encryption is unavailable, so Claude app sign-ins cannot be saved.",
             };
+      vaultSealer = vault.sealer;
       if (process.platform === "darwin")
         antigravitySwitcher = new AntigravitySwitcher(
           macAntigravityPorts(antigravityDataDir()),
@@ -3078,6 +3123,176 @@ function openDialog(options: Electron.OpenDialogOptions) {
     ? dialog.showOpenDialog(window, options)
     : dialog.showOpenDialog(options);
 }
+/** Where backups read and put back secrets on this computer; refused until the vault is ready. */
+function backupContext(): BackupContext {
+  if (!vaultSealer) throw new Error(say("dataBackup.errorVaultNotReady"));
+  return {
+    host: { data: service.store.root, sealer: vaultSealer, claudeCode: claudeCodeSignIns() },
+    relayVersion: app.getVersion(),
+    platform: process.platform,
+    now: Date.now,
+  };
+}
+/** A backup's refusal in the app's language; any other error as it came. */
+function backupFailure(error: unknown): unknown {
+  if (!(error instanceof BackupError)) return error;
+  switch (error.reason) {
+    case "not-a-backup":
+      return new Error(say("dataBackup.errorNotABackup"));
+    case "newer-format":
+      return new Error(say("dataBackup.errorNewerFormat"));
+    case "wrong-passphrase":
+      return new Error(say("dataBackup.errorWrongPassphrase"));
+    case "damaged":
+      return new Error(say("dataBackup.errorDamaged"));
+    case "too-large":
+      return new Error(say("dataBackup.errorTooLarge"));
+    case "short-passphrase":
+      return new Error(say("dataBackup.errorShortPassphrase", { count: MIN_BACKUP_PASSPHRASE }));
+  }
+}
+/**
+ * Settings → Advanced → Back up: the accounts, settings and, when chosen, the saved sign-ins,
+ * sealed with the passphrase into a file the user places, then shown. Undefined when the dialog
+ * was cancelled. The passphrase only derives the key; it is never stored.
+ */
+async function exportBackup(passphrase: string, includeSignIns: boolean): Promise<BackupExportResult | undefined> {
+  const context = backupContext();
+  if ([...passphrase].length < MIN_BACKUP_PASSPHRASE) throw backupFailure(new BackupError("short-passphrase"));
+  const options: Electron.SaveDialogOptions = {
+    defaultPath: path.join(
+      app.getPath("documents"),
+      `relay-${new Date().toISOString().slice(0, 10)}.${BACKUP_EXTENSION}`,
+    ),
+    filters: [{ name: "Relay", extensions: [BACKUP_EXTENSION] }],
+  };
+  const { canceled, filePath } =
+    window && !window.isDestroyed()
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options);
+  if (canceled || !filePath) return undefined;
+  const { settings, accounts } = service.store.state;
+  const payload = await collectBackup({ settings, accounts, gateway: proxySettings() }, includeSignIns, context);
+  const file = await sealBackup(payload, passphrase).catch((error: unknown) => {
+    throw backupFailure(error);
+  });
+  await fsp.writeFile(filePath, file, { mode: 0o600 });
+  shell.showItemInFolder(filePath);
+  return {
+    accounts: payload.accounts.length,
+    signIns: summarizeBackup(payload, []).accounts.filter((account) => account.signIn).length,
+  };
+}
+/** Import, first step: the file, checked before any passphrase is asked. Undefined when cancelled. */
+async function chooseBackup(): Promise<BackupFileChoice | undefined> {
+  const { canceled, filePaths } = await openDialog({
+    properties: ["openFile"],
+    filters: [{ name: "Relay", extensions: [BACKUP_EXTENSION] }],
+  });
+  const picked = filePaths[0];
+  if (canceled || !picked) return undefined;
+  const stat = await fsp.stat(picked);
+  if (!stat.isFile()) throw backupFailure(new BackupError("not-a-backup"));
+  if (stat.size > MAX_BACKUP_BYTES) throw backupFailure(new BackupError("too-large"));
+  const file = await fsp.readFile(picked);
+  try {
+    readBackupHeader(file);
+  } catch (error) {
+    throw backupFailure(error);
+  }
+  pendingBackup = { file };
+  return { name: path.basename(picked) };
+}
+/** Import, second step: opens the picked file with the passphrase and answers what it holds. */
+async function readBackup(passphrase: string): Promise<BackupSummary> {
+  const pending = pendingBackup;
+  if (!pending) throw new Error(say("dataBackup.errorNoFile"));
+  try {
+    pending.opened = await openBackup(pending.file, passphrase);
+  } catch (error) {
+    throw backupFailure(error);
+  }
+  return summarizeBackup(pending.opened.payload, service.store.state.accounts);
+}
+/**
+ * Import, last step, under the Desktop lock: brings the opened backup in (core/backup.ts), then
+ * applies a replace's gateway settings through the gateway's own path and lets go of the accounts
+ * a replace took out of the list.
+ */
+async function applyBackup(mode: BackupImportMode): Promise<BackupImportResult> {
+  const opened = pendingBackup?.opened;
+  if (!opened) throw new Error(say("dataBackup.errorNoFile"));
+  const context = backupContext();
+  const before = service.store.state.accounts.map((account) => account.id);
+  const { result, gateway } = await manualDesktopLock(() =>
+    service.transaction(() => importBackup(opened, mode, service.store, proxySettings(), context)),
+  ).catch((error: unknown) => {
+    throw backupFailure(error);
+  });
+  pendingBackup = undefined;
+  const kept = new Set(service.store.state.accounts.map((account) => account.id));
+  for (const id of before.filter((id) => !kept.has(id))) {
+    antigravityBridges.get(id)?.stop();
+    antigravityBridges.delete(id);
+    usage.forget(id);
+  }
+  if (gateway)
+    await serializeProxy(() => applyProxyConfig({ ...proxySettings(), ...gateway })).catch((error: unknown) =>
+      recordMainError("backup-gateway", error),
+    );
+  void addTokenRoots();
+  keeper.resume();
+  void keeper.tick();
+  void tray?.update();
+  broadcastChanged();
+  return result;
+}
+/**
+ * Settings → Advanced → Remove Relay's data, the running half (core/data-reset.ts): refused during
+ * a Desktop operation, a running terminal, a sign-in or with separate Claude windows open; then the
+ * gateway stops, its clients get their own settings back, the login item and Relay's Keychain items
+ * go, and Relay relaunches to empty its folder before anything opens it.
+ */
+async function resetData(): Promise<void> {
+  if (await desktopWindows?.anyOpen()) throw new Error(say("dataReset.busyWindows"));
+  const tool = app.isPackaged ? undefined : process.env.RELAY_SECURITY_TOOL;
+  await manualDesktopLock(() =>
+    beginReset({
+      root: app.getPath("userData"),
+      busy: () =>
+        service.runner.list().some((run) => run.status === "running")
+          ? say("dataReset.busyTerminals")
+          : pendingAuth()
+            ? say("dataReset.busySignIn")
+            : undefined,
+      stopGateway: () => serializeProxy(stopProxy),
+      unbindClients: () =>
+        serializeProxy(async () => {
+          const bindings = proxySettings().clientBindings ?? {};
+          for (const id of PROXY_CLIENTS) {
+            const saved = bindings[id];
+            if (saved) await unbindClient(id, saved);
+          }
+          saveProxySettings({ ...proxySettings(), enabled: false, clientBindings: {} });
+        }),
+      removeLoginItem: async () => {
+        if (app.isPackaged) await setLaunchAtLogin(false, loginItemHost());
+      },
+      // Elsewhere the profiles' sign-ins are files in the folder and the vault key is the system's.
+      removeSecrets: async () => {
+        if (process.platform !== "darwin") return;
+        for (const account of service.store.state.accounts)
+          await securityKeychain(undefined, tool, credentialService(service.store.profile(account.id))).remove();
+        await securityKeychain(VAULT_KEY_ACCOUNT, tool, VAULT_KEY_SERVICE).remove();
+      },
+      relaunch: () => {
+        quitting = true;
+        app.relaunch();
+        app.quit();
+      },
+    }),
+  );
+}
 /**
  * Cmd+W. The main window closes as its close button does: it hides and Relay stays in the menu
  * bar. The menu bar panel hides; other windows are left alone.
@@ -3212,6 +3427,32 @@ function bindIPC() {
   });
   // Takes no argument: main picks the files and the save dialog picks the place.
   handle("export-diagnostics", () => exportDiagnostics());
+  // Account backups: the page passes the passphrase and choices, never a path; dialogs pick files.
+  handle("backup-export", (input) => {
+    const { passphrase, includeSignIns } = z
+      .object({ passphrase: z.string().min(MIN_BACKUP_PASSPHRASE).max(1024), includeSignIns: z.boolean() })
+      .strict()
+      .parse(input);
+    return exportBackup(passphrase, includeSignIns);
+  });
+  handle("backup-choose", () => chooseBackup());
+  handle("backup-open", (passphrase) => readBackup(z.string().min(1).max(1024).parse(passphrase)));
+  handle("backup-import", (input) => {
+    const mode = z.enum(["merge", "replace"]).parse(input);
+    // Antigravity accounts the import adds are on the risk ladder: accepted first, as when added by hand.
+    const here = new Set(service.store.state.accounts.map((account) => account.id));
+    if (
+      pendingBackup?.opened?.payload.accounts.some(
+        (account) => account.provider === "antigravity" && (mode === "replace" || !here.has(account.id)),
+      )
+    )
+      requireRisk(antigravityAccountRisks(proxySettings().enabled));
+    return applyBackup(mode);
+  });
+  handle("backup-cancel", () => {
+    pendingBackup = undefined;
+  });
+  handle("reset-data", () => resetData());
   // How Relay starts Claude (HTTP/3).
   handle("claude-launch", () => switchDiagnostics?.current ?? { quicOff: false });
   // Relay's own updates.

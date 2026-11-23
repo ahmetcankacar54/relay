@@ -1095,6 +1095,35 @@ export const previewApi: RelayAPI = {
   getLanguage: async () => ({ pref: "system" as const, locale: resolveLocale("system", navigator.languages) }),
   showDiagnostics: desktopOnly,
   exportDiagnostics: desktopOnly,
+  // The backup dialog runs through in the preview; nothing is written or read.
+  exportBackup: async ({ includeSignIns }) => ({
+    accounts: state.accounts.length,
+    signIns: includeSignIns ? state.accounts.length : 0,
+  }),
+  chooseBackup: async () => ({ name: "relay-2026-11-23.relaybackup" }),
+  openBackup: async () => ({
+    createdAt: new Date().toISOString(),
+    relayVersion: "0.29.0",
+    platform: "darwin",
+    signIns: true,
+    currentAccounts: state.accounts.length,
+    accounts: state.accounts.map((account) => ({
+      name: account.name,
+      provider: account.provider ?? "claude",
+      signIn: true,
+      present: true,
+    })),
+  }),
+  importBackup: async (mode) => ({
+    mode,
+    added: mode === "replace" ? state.accounts.length : 0,
+    skipped: mode === "merge" ? state.accounts.length : 0,
+    signIns: mode === "replace" ? state.accounts.length : 0,
+    signInsFailed: 0,
+    ...(mode === "replace" ? { before: "before-import-2026-11-23.relaybackup" } : {}),
+  }),
+  cancelBackup: async () => {},
+  resetData: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,
   checkUpdate: async () => {
