@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  ANTIGRAVITY_READ_MS,
   ANTIGRAVITY_SUMMARY_AGENT,
   parseAntigravityQuota,
   parseAntigravitySummary,
@@ -227,6 +228,93 @@ test("a Codex account's limits are read through its provider, and its plan follo
   assert.equal(usage.status, "ready");
   assert.equal(usage.sevenDay?.usedPercent, 76);
   assert.equal(s.account(codex.id).auth?.subscription, "plus");
+});
+
+test("an Antigravity pool that resets is read again at once, also while failed reads back off", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "relay-provider-usage-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const s = new Store(root);
+  const agy = s.create({ name: "Antigravity", kind: "personal", provider: "antigravity" });
+  s.update((state) => {
+    state.accounts[0].auth = { loggedIn: true, email: "dev@example.com", checkedAt: new Date(NOW).toISOString() };
+  });
+  let now = NOW;
+  const at = (ms: number) => new Date(NOW + ms).toISOString();
+  // The headline is the roomiest pool's week, six days off; Claude & GPT's five hours end in 30 minutes.
+  const spent = {
+    fiveHour: undefined,
+    sevenDay: { usedPercent: 13, resetsAt: at(6 * 86_400_000) },
+    modelWindows: [
+      { key: "antigravity_gemini_weekly", label: "Gemini", usedPercent: 13, resetsAt: at(6 * 86_400_000), period: "seven_day" as const },
+      { key: "antigravity_3p_5h", label: "Claude & GPT", usedPercent: 100, resetsAt: at(30 * 60_000), period: "five_hour" as const },
+    ],
+  };
+  const answers: Array<() => any> = [() => ({ limits: spent })];
+  let reads = 0;
+  const manager = new UsageManager(
+    s,
+    async () => assert.fail("no Claude credential for an Antigravity account"),
+    async () => assert.fail("no Claude request for an Antigravity account"),
+    () => now,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    async () => {
+      reads++;
+      const next = answers.shift();
+      if (!next) throw new UsageError("unavailable", undefined, "antigravity quota: no answer: TimeoutError");
+      return next();
+    },
+  );
+  await manager.refresh(agy.id);
+  assert.equal(manager.snapshot()[agy.id].stale, false);
+  // Four failed reads in a row (6, 8, 12 and 20 minutes in): the next waits until 36 minutes.
+  for (const minute of [6, 8, 12, 20]) {
+    now = NOW + minute * 60_000;
+    await manager.refresh(agy.id);
+  }
+  assert.equal(reads, 5);
+  // Before the reset nothing is owed: the tick waits for the backoff.
+  now = NOW + 30 * 60_000 - 1_000;
+  manager.tick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 5);
+  // The pool reset: the reading is old, and one read goes out now.
+  now = NOW + 30 * 60_000 + 1_000;
+  assert.equal(manager.snapshot()[agy.id].stale, true);
+  answers.push(() => ({ limits: { ...spent, modelWindows: [spent.modelWindows[0], { ...spent.modelWindows[1], usedPercent: 0, resetsAt: at(5 * 3_600_000) }] } }));
+  manager.tick();
+  await new Promise((resolve) => setImmediate(resolve));
+  await manager.refresh(agy.id);
+  assert.equal(reads, 6);
+  const fresh = manager.snapshot()[agy.id];
+  assert.equal(fresh.stale, false);
+  assert.equal(fresh.modelWindows?.[1].usedPercent, 0);
+  // Owed once per reset: the next ticks keep to the poll's pace.
+  manager.tick();
+  manager.tick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 6);
+});
+
+test("an Antigravity read stops asking once it has taken a minute", async () => {
+  let now = NOW;
+  const asked: string[] = [];
+  await assert.rejects(
+    readAntigravityUsage(
+      async ({ url }) => {
+        asked.push(url);
+        now += ANTIGRAVITY_READ_MS / 2;
+        throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+      },
+      undefined,
+      () => now,
+    ),
+    (e: any) => e.issue === "unavailable",
+  );
+  assert.equal(asked.length, 2);
 });
 
 test("on macOS the plan is read at startup from the profile file, without the Claude CLI", async (t) => {

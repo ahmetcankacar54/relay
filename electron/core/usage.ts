@@ -329,6 +329,8 @@ export class UsageManager {
   private failures = new Map<string, number>();
   /** When each account's last read through its own sign-in finished: the poll's schedule. */
   private polledAt = new Map<string, number>();
+  /** When each account's last read started, failed ones too: a reset after it is owed one read. */
+  private attemptedAt = new Map<string, number>();
   /** The last sample the gateway's windows gave history, per account. */
   private liveSamples = new Map<string, { at: number; key: string }>();
   private active = 0;
@@ -406,6 +408,7 @@ export class UsageManager {
       this.serverRetryUntil,
       this.failures,
       this.polledAt,
+      this.attemptedAt,
       this.liveSamples,
     ])
       map.delete(id);
@@ -499,10 +502,25 @@ export class UsageManager {
       (this.now() - Date.parse(u.checkedAt) >= 35 * 60_000 ||
         [u.fiveHour, u.sevenDay].some(
           (w) => w?.resetsAt && Date.parse(w.resetsAt) <= this.now(),
-        ))
+        ) ||
+        // A model window or an Antigravity pool that reset since the last read: its figure is
+        // old now, even when the headline window still holds.
+        this.resetSince(u, this.polledAt.get(account.id) ?? Date.parse(u.checkedAt), true))
     )
       u.stale = true;
     return u;
+  }
+  /**
+   * Whether a window of the reading reset after `since` and by now: the reading no longer tells
+   * how full that window is. `modelsOnly` looks at the model windows alone.
+   */
+  private resetSince(u: AccountUsage, since: number, modelsOnly = false): boolean {
+    if (!Number.isFinite(since)) return false;
+    const now = this.now();
+    return [...(modelsOnly ? [] : [u.fiveHour, u.sevenDay]), ...(u.modelWindows ?? [])].some((w) => {
+      const reset = Date.parse(w?.resetsAt ?? "");
+      return Number.isFinite(reset) && reset > since && reset <= now;
+    });
   }
   start() {
     if (!this.timer) {
@@ -523,6 +541,18 @@ export class UsageManager {
       // The gateway's windows keep `checkedAt` fresh; reads go on at their own pace, for what
       // only a read knows.
       const readAt = this.polledAt.get(a.id) ?? (cached?.checkedAt ? Date.parse(cached.checkedAt) : undefined);
+      // A window that reset since the last attempt is owed one read now, even while failed reads
+      // back off (a server's Retry-After still holds): the limits shown would otherwise keep the
+      // old figure for up to half an hour after the provider renewed them.
+      const since = this.attemptedAt.get(a.id) ?? readAt;
+      if (
+        this.source(a) &&
+        since !== undefined &&
+        !this.inflight.has(a.id) &&
+        this.now() >= (this.serverRetryUntil.get(a.id) ?? 0) &&
+        this.resetSince(cached, since)
+      )
+        this.nextAttempt.delete(a.id);
       if (
         this.source(a) &&
         (readAt === undefined ||
@@ -568,6 +598,7 @@ export class UsageManager {
     )
       return Promise.resolve(previous);
     this.nextAttempt.set(id, this.now() + 60_000);
+    this.attemptedAt.set(id, this.now());
     this.identities.set(id, identityKey(account));
     this.cache.set(id, { ...previous, status: "loading" });
     const generation = this.generations.get(id) ?? 0;
