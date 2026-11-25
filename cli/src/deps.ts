@@ -63,7 +63,10 @@ async function readAppVersion(apps: string[]): Promise<string | undefined> {
 export function defaultDeps(): CliDeps {
   return {
     host: (sealer, apps) => nodeDesktopHost({ sealer, apps }),
-    securityTool: "/usr/bin/security",
+    // A stand-in tool for tests and parity recordings; only an absolute path is honored.
+    securityTool: path.isAbsolute(process.env.RELAY_SECURITY_TOOL ?? "")
+      ? process.env.RELAY_SECURITY_TOOL!
+      : "/usr/bin/security",
     request: requestUsageJson,
     claude: (explicit) => resolveExecutable(explicit),
     spawn,

@@ -96,6 +96,27 @@ function fetchStatus(host: string, port: number, key: string | undefined): Promi
   });
 }
 
+type Upstreams = { anthropicUrl?: string; codexUrl?: string; openaiUrl?: string; codexWebSocketUrl?: string };
+
+/** `RELAY_PROXY_UPSTREAMS`: local stand-ins for the provider APIs, for tests and parity recordings. */
+function parseUpstreams(raw: string | undefined): Upstreams | undefined {
+  if (!raw) return undefined;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    value = undefined;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new CliError("RELAY_PROXY_UPSTREAMS is not valid JSON.", EXIT.usage);
+  const upstreams: Upstreams = {};
+  for (const key of ["anthropicUrl", "codexUrl", "openaiUrl", "codexWebSocketUrl"] as const) {
+    const url = (value as Record<string, unknown>)[key];
+    if (typeof url === "string") upstreams[key] = url;
+  }
+  return upstreams;
+}
+
 /** Reads the limits of every connected account, the same way `relay usage` does. */
 function createUsageReader(ctx: CliContext) {
   const explicit = ctx.deps.claude(ctx.store.state.executable);
@@ -196,7 +217,9 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
   const usageCache: Record<string, AccountUsage | undefined> = {};
   const credentials = new Map<string, { token: string; until: number }>();
 
+  const upstreams = parseUpstreams(io.env.RELAY_PROXY_UPSTREAMS);
   const proxy = new ProxyServer({
+    upstreams,
     config: { host, port, enabled: true, apiKey: key },
     credentialResolver: async (account) => {
       const cached = credentials.get(account.id);

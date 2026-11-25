@@ -15,3 +15,6 @@ cli/dist/
 docs/audit-*/
 e2e/test-results/
 e2e/report/
+
+# Rust build output
+/target/
