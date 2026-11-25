@@ -1,0 +1,12 @@
+✓ platform     darwin arm64
+✗ claude-app   The Claude app was not found
+! claude-cli   No Claude Code CLI (only needed for limits and run)
+✓ data-folder  [..]/relay
+✓ vault        empty (made with the first account)
+✓ key          made with the first account
+✓ relay-app    not installed (not needed)
+✓ lock         free
+✓ desktop      ready to switch
+! terminal     could not read the terminal claude’s sign-in
+✓ gui-session  macOS desktop session
+✓ automation   macOS asks for the Automation permission the first time a terminal quits Claude. If it was refused: System Settings → Privacy & Security → Automation → your terminal app → Claude.

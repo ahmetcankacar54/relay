@@ -1,0 +1,14 @@
+Token kullanımı · son 7 gün (Europe/Istanbul)
+Toplam 592,7 B · girdi 5,3 B · çıktı 13,4 B · önbellek yazma 21 B · önbellek okuma 553 B · API karşılığı $9,93
+
+Gün         Work     Personal  Hesabı bilinmeyen  Relay dışı terminal  Toplam   API karşılığı
+2026-11-26  —        129,6 B   —                  10,1 B               139,7 B  $4,62
+2026-11-25  360,6 B  ≈22,3 B   —                  —                    382,9 B  $2,70
+2026-11-24  —        —         —                  —                    0        $0,00
+2026-11-23  —        69,9 B    210                —                    70,1 B   $2,61
+2026-11-22  —        —         —                  —                    0        $0,00
+2026-11-21  —        —         —                  —                    0        $0,00
+2026-11-20  —        —         —                  —                    0        $0,00
+
+Kesin hesap eşleşmesi 2026-10-01 tarihinden beri tutuluyor; öncesi Relay’in limit ölçümlerinden tahmin edildi (≈).
+API karşılığı: Anthropic API liste fiyatları (2026-11-11); abonelik ücretinden bağımsız.

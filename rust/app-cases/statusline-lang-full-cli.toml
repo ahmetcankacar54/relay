@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["statusline", "--lang", "tr"]
+status.code = 0
+fs.sandbox = true

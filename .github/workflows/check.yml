@@ -84,6 +84,8 @@ jobs:
       - run: npm run typecheck
       - name: Widget strings match the catalogs
         run: node --import tsx scripts/i18n/widget-strings.ts --check
+      - name: Rust catalogs match the catalogs
+        run: node --import tsx scripts/i18n/export-catalogs.ts --check
       - run: npm test
       - run: npm run build
       - run: npm run build:cli

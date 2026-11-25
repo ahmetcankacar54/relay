@@ -1,0 +1,22 @@
+{
+  "mode": "all",
+  "account": {
+    "id": "[..]",
+    "name": "Personal"
+  },
+  "sources": [
+    "Work"
+  ],
+  "summary": {
+    "profileId": "[..]",
+    "indexed": 0,
+    "archived": 0,
+    "projects": 0,
+    "transcriptsFound": 0,
+    "missingTranscripts": 0,
+    "unknownTranscripts": 0,
+    "duplicates": 0,
+    "sourceProfiles": 1,
+    "checkedAt": "[..]"
+  }
+}

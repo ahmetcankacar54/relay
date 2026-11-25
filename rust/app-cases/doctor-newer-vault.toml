@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["doctor"]
+env.add.RELAY_PARITY_SCENARIO = "newer-vault"
+status.code = 5
+fs.sandbox = true

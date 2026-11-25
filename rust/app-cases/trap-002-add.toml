@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["add", "héllo wörld", "--new", "--work", "--group", "Acme"]
+status.code = 4
+fs.sandbox = true

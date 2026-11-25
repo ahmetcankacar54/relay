@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["connect", "straße"]
+status.code = 2
+fs.sandbox = true

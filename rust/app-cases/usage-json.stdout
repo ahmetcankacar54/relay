@@ -1,0 +1,20 @@
+[
+  {
+    "id": "[..]",
+    "name": "Personal",
+    "status": "error",
+    "issue": "credentials-missing"
+  },
+  {
+    "id": "[..]",
+    "name": "Work",
+    "status": "error",
+    "issue": "credentials-missing"
+  },
+  {
+    "id": "[..]",
+    "name": "Codex",
+    "status": "error",
+    "issue": "expired"
+  }
+]

@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["tokens", "--account", "héllo wörld", "--json"]
+status.code = 2
+fs.sandbox = true

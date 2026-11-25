@@ -1,0 +1,6 @@
+bin.name = "relay"
+args = ["proxy", "start", "--yes", "--port", "18999"]
+env.add.RELAY_PARITY_ENV_RELAY_PROXY_UPSTREAMS = "{not json"
+env.add.RELAY_PARITY_SCENARIO = "gateway"
+status.code = 2
+fs.sandbox = true

@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["statusline", "--color"]
+env.add.RELAY_PARITY_ENV_NO_COLOR = "1"
+status.code = 0
+fs.sandbox = true

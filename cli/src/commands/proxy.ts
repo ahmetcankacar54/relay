@@ -107,8 +107,9 @@ function parseUpstreams(raw: string | undefined): Upstreams | undefined {
   } catch {
     value = undefined;
   }
+  // Worded so redact() keeps it: "is not valid JSON" reads as a parser error and is replaced.
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new CliError("RELAY_PROXY_UPSTREAMS is not valid JSON.", EXIT.usage);
+    throw new CliError("RELAY_PROXY_UPSTREAMS does not hold a JSON object.", EXIT.usage);
   const upstreams: Upstreams = {};
   for (const key of ["anthropicUrl", "codexUrl", "openaiUrl", "codexWebSocketUrl"] as const) {
     const url = (value as Record<string, unknown>)[key];

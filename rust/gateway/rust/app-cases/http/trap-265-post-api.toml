@@ -1,0 +1,10 @@
+[request]
+method = "POST"
+path = "/api/e%CC%81"
+body = ""
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

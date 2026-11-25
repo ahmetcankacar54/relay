@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["tokens", "--days", "9007199254740993"]
+status.code = 2
+fs.sandbox = true

@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["doctor", "--json"]
+env.add.RELAY_PARITY_SCENARIO = "recovery"
+status.code = 5
+fs.sandbox = true

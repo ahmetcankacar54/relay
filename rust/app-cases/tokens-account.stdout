@@ -1,0 +1,205 @@
+{
+  "range": 7,
+  "days": [
+    {
+      "date": "2026-11-20",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-21",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-22",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-23",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-24",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-25",
+      "byRow": {
+        "[..]": {
+          "input": 2500,
+          "output": 6100,
+          "cacheWrite": 12000,
+          "cacheRead": 340000,
+          "responses": 15,
+          "cost": 1.89,
+          "unpriced": 0,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "date": "2026-11-26",
+      "byRow": {}
+    }
+  ],
+  "rows": [
+    {
+      "key": "[..]",
+      "kind": "account",
+      "accountId": "[..]",
+      "name": "Work",
+      "estimated": false,
+      "totals": {
+        "input": 2500,
+        "output": 6100,
+        "cacheWrite": 12000,
+        "cacheRead": 340000,
+        "responses": 15,
+        "cost": 1.89,
+        "unpriced": 0
+      }
+    }
+  ],
+  "totals": {
+    "input": 2500,
+    "output": 6100,
+    "cacheWrite": 12000,
+    "cacheRead": 340000,
+    "responses": 15,
+    "cost": 1.89,
+    "unpriced": 0
+  },
+  "models": [
+    {
+      "model": "claude-sonnet-4-5",
+      "totals": {
+        "input": 2500,
+        "output": 6100,
+        "cacheWrite": 12000,
+        "cacheRead": 340000,
+        "responses": 15,
+        "cost": 1.89,
+        "unpriced": 0
+      }
+    }
+  ],
+  "progress": {
+    "percent": 100,
+    "complete": true
+  },
+  "exactSince": "2026-10-01",
+  "today": {
+    "date": "2026-11-26",
+    "totals": {
+      "input": 0,
+      "output": 0,
+      "cacheWrite": 0,
+      "cacheRead": 0,
+      "responses": 0,
+      "cost": 0,
+      "unpriced": 0
+    },
+    "slots": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "currentSlot": 50,
+    "change": null,
+    "yesterdayAverage": null
+  },
+  "unpricedModels": [],
+  "pricesChecked": "2026-11-11"
+}

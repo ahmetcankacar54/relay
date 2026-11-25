@@ -1,0 +1,57 @@
+[
+  {
+    "check": "platform",
+    "status": "ok",
+    "detail": "darwin arm64"
+  },
+  {
+    "check": "claude-app",
+    "status": "fail",
+    "detail": "The Claude app was not found"
+  },
+  {
+    "check": "claude-cli",
+    "status": "ok",
+    "detail": "[..]/bin/claude · 2.1.300 (Claude Code)"
+  },
+  {
+    "check": "data-folder",
+    "status": "ok",
+    "detail": "[..]/relay"
+  },
+  {
+    "check": "vault",
+    "status": "ok",
+    "detail": "ready"
+  },
+  {
+    "check": "key",
+    "status": "ok",
+    "detail": "\"Relay Vault Key\" is readable in the Keychain"
+  },
+  {
+    "check": "relay-app",
+    "status": "ok",
+    "detail": "not installed (not needed)"
+  },
+  {
+    "check": "lock",
+    "status": "ok",
+    "detail": "free"
+  },
+  {
+    "check": "desktop",
+    "status": "ok",
+    "detail": "ready to switch"
+  },
+  {
+    "check": "gui-session",
+    "status": "ok",
+    "detail": "macOS desktop session"
+  },
+  {
+    "check": "automation",
+    "status": "ok",
+    "detail": "macOS asks for the Automation permission the first time a terminal quits Claude. If it was refused: System Settings → Privacy & Security → Automation → your terminal app → Claude."
+  }
+]

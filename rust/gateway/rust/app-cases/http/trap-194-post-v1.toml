@@ -1,0 +1,15 @@
+[request]
+method = "POST"
+path = "/v1/e%CC%81"
+body = '{"model": "claude-sonnet-4-5", "max_tokens": 16, "messages": [{"role": "user", "content": "Hi"}]}'
+
+[request.headers]
+anthropic-version = "2023-06-01"
+content-type = "application/json"
+x-api-key = "relay-fixture-client-key-0123456789abcdef"
+
+[response]
+status = 404
+
+[response.headers]
+content-type = "application/json"

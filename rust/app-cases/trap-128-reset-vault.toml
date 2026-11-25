@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["reset-vault", "héllo wörld"]
+status.code = 2
+fs.sandbox = true

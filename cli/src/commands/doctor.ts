@@ -33,11 +33,6 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
       ? `${ctx.deps.platform} ${process.arch}`
       : `${ctx.deps.platform} ${process.arch} · ${t("srcContext.savingAndSwitchingWorksOnMacosOnly")}`,
   );
-  add(
-    "node",
-    olderThan(process.versions.node, "22.12.0") ? "fail" : "ok",
-    t("doctor.node2212OrNewerNeeded", { versionsNode: process.versions.node }),
-  );
   const app = claudeExecutable(ctx.paths.claudeApps);
   add("claude-app", app ? "ok" : mac ? "fail" : "warn", app ?? t("doctor.theClaudeAppWasNotFound"));
   const cli = await diagnoseCli(ctx.deps.claude(ctx.store.state.executable), ctx.paths.data);

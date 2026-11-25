@@ -1,0 +1,1 @@
+relay: Usage: relay add <name> [--work [--group <group>]] [--org <id>] [--new]

@@ -1,0 +1,9 @@
+[request]
+method = "HEAD"
+path = "/api/"
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

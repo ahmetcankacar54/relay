@@ -1,6 +1,6 @@
 {
   "name": "@ahmetcankacar/relay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Switch the Claude desktop app between saved accounts from the terminal. Unofficial; not affiliated with Anthropic.",
   "license": "MIT",
   "author": "Ahmet Can Kacar",

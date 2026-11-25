@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["history", "--json"]
+status.code = 0
+fs.sandbox = true

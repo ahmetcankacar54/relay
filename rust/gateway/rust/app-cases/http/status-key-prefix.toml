@@ -1,0 +1,12 @@
+[request]
+method = "GET"
+path = "/status"
+
+[request.headers]
+x-relay-key = "relay-fixture-client-key-0123456789abcde"
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

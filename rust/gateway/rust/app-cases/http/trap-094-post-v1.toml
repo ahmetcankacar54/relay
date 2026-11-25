@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/v1/responses/compact"
+body = '{"zebra":1,"apple":2,"10":3,"2":4,"é":5,"Apple":6}'
+
+[request.headers]
+authorization = "Bearer relay-fixture-client-key-0123456789abcdef"
+content-type = "application/json"
+
+[response]
+status = 404
+
+[response.headers]
+content-type = "application/json"

@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["rename", "Work", "Job"]
+env.add.RELAY_PARITY_SCENARIO = "state-lock"
+status.code = 3
+fs.sandbox = true

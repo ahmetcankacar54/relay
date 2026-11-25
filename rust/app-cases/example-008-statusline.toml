@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["statusline", "install"]
+status.code = 0
+fs.sandbox = true

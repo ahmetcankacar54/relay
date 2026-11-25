@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["switch", "👍🏽 thumbs", "-y"]
+status.code = 2
+fs.sandbox = true

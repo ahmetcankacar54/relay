@@ -1,0 +1,14 @@
+[request]
+method = "GET"
+path = "/v1/%C4%B0stanbul"
+
+[request.headers]
+anthropic-version = "2023-06-01"
+content-type = "application/json"
+x-api-key = "relay-fixture-client-key-0123456789abcdef"
+
+[response]
+status = 404
+
+[response.headers]
+content-type = "application/json"

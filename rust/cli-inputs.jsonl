@@ -1,0 +1,185 @@
+{"name": "version", "args": ["--version"]}
+{"name": "version-short", "args": ["-v"]}
+{"name": "help", "args": ["help"]}
+{"name": "no-command", "args": []}
+{"name": "help-flag", "args": ["--help"]}
+{"name": "help-tr", "args": ["help", "--lang", "tr"]}
+{"name": "status-help", "args": ["status", "-h"]}
+{"name": "unknown-command", "args": ["frobnicate"]}
+{"name": "unknown-flag", "args": ["status", "--bogus"]}
+{"name": "flag-not-taken", "args": ["list", "--days", "7"]}
+{"name": "rest-not-run", "args": ["status", "--", "x"]}
+{"name": "lang-unknown", "args": ["list", "--lang", "xx"]}
+{"name": "lang-env-tr", "args": ["list"], "env": {"RELAY_PARITY_ENV_RELAY_LANG": "tr"}}
+{"name": "lang-from-LANG", "args": ["status"], "env": {"RELAY_PARITY_ENV_RELAY_LANG": "", "RELAY_PARITY_ENV_LANG": "tr_TR.UTF-8"}}
+{"name": "worker-unknown", "args": ["__worker", "00000000-0000-4000-8000-000000000000"]}
+{"name": "status", "args": ["status"]}
+{"name": "status-json", "args": ["status", "--json"]}
+{"name": "status-tr", "args": ["status", "--lang", "tr"]}
+{"name": "status-operation-lock", "args": ["status"], "env": {"RELAY_PARITY_SCENARIO": "operation-lock"}}
+{"name": "status-json-operation-lock", "args": ["status", "--json"], "env": {"RELAY_PARITY_SCENARIO": "operation-lock"}}
+{"name": "status-pending", "args": ["status"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "status-json-pending", "args": ["status", "--json"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "status-recovery", "args": ["status"], "env": {"RELAY_PARITY_SCENARIO": "recovery"}}
+{"name": "status-unsaved", "args": ["status"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "status-json-unsaved", "args": ["status", "--json"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "status-empty", "args": ["status"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "status-newer-vault", "args": ["status"], "env": {"RELAY_PARITY_SCENARIO": "newer-vault"}}
+{"name": "status-newer-state-json", "args": ["status", "--json"], "env": {"RELAY_PARITY_SCENARIO": "newer-state"}}
+{"name": "list", "args": ["list"]}
+{"name": "ls", "args": ["ls"]}
+{"name": "list-json", "args": ["list", "--json"]}
+{"name": "ls-json", "args": ["ls", "--json"]}
+{"name": "list-tr", "args": ["list", "--lang", "tr"]}
+{"name": "list-no-color", "args": ["list", "--no-color"]}
+{"name": "list-empty", "args": ["list"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "list-json-empty", "args": ["list", "--json"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "list-extra-yes", "args": ["list", "--yes"]}
+{"name": "switch-no-name", "args": ["switch"]}
+{"name": "switch-two-names", "args": ["switch", "Work", "Personal"]}
+{"name": "switch-needs-confirm", "args": ["switch", "Work"]}
+{"name": "switch-needs-confirm-tr", "args": ["switch", "Work", "--lang", "tr"]}
+{"name": "switch-not-installed", "args": ["switch", "Work", "--yes"]}
+{"name": "switch-short-yes", "args": ["switch", "work", "-y"]}
+{"name": "switch-prefix", "args": ["switch", "Wo", "--yes"]}
+{"name": "switch-by-id", "args": ["switch", "2222", "--yes"]}
+{"name": "switch-already-active", "args": ["switch", "Personal", "--yes"]}
+{"name": "switch-no-desktop", "args": ["switch", "Codex", "--yes"]}
+{"name": "switch-unknown", "args": ["switch", "Nobody", "--yes"]}
+{"name": "switch-turkish-i", "args": ["switch", "PERSONAL", "--yes"]}
+{"name": "switch-operation-lock", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "operation-lock"}}
+{"name": "switch-recovery", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "recovery"}}
+{"name": "switch-pending", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "switch-profile-lock", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "profile-lock"}}
+{"name": "switch-newer-vault", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "newer-vault"}}
+{"name": "switch-newer-state", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "newer-state"}}
+{"name": "switch-empty", "args": ["switch", "Work", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "recover-nothing", "args": ["recover"]}
+{"name": "recover-extra", "args": ["recover", "now"]}
+{"name": "recover-needs-confirm", "args": ["recover"], "env": {"RELAY_PARITY_SCENARIO": "recovery"}}
+{"name": "recover-not-installed", "args": ["recover", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "recovery"}}
+{"name": "add-no-name", "args": ["add"]}
+{"name": "add-long-name", "args": ["add", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]}
+{"name": "add-needs-confirm", "args": ["add", "New"]}
+{"name": "add-not-installed", "args": ["add", "New", "--yes"]}
+{"name": "add-work-group", "args": ["add", "New", "--work", "--group", "Acme", "--yes"]}
+{"name": "add-provider-codex", "args": ["add", "New", "--provider", "codex"]}
+{"name": "add-provider-claude", "args": ["add", "New", "--provider", "Claude", "--yes"]}
+{"name": "add-name-taken", "args": ["add", "personal", "--yes"]}
+{"name": "add-cancel-none", "args": ["add", "--cancel", "--yes"]}
+{"name": "add-resume-none", "args": ["add", "--resume"]}
+{"name": "add-cancel-needs-confirm", "args": ["add", "--cancel"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "add-cancel-pending", "args": ["add", "--cancel", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "add-unsaved-needs-confirm", "args": ["add", "New"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "add-unsaved-yes", "args": ["add", "New", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "add-unsaved-new", "args": ["add", "New", "--new", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "add-unsaved-bad-org", "args": ["add", "New", "--org", "00000000-0000-4000-8000-000000000000", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "add-empty", "args": ["add", "First", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "add-bad-flag", "args": ["add", "New", "--json"]}
+{"name": "remove-no-name", "args": ["remove"]}
+{"name": "remove-needs-confirm", "args": ["remove", "Work"]}
+{"name": "remove-work", "args": ["remove", "Work", "--yes"]}
+{"name": "remove-codex", "args": ["remove", "Codex", "--yes"]}
+{"name": "remove-active", "args": ["remove", "Personal", "--yes"]}
+{"name": "remove-unknown", "args": ["remove", "Nobody", "--yes"]}
+{"name": "remove-state-lock", "args": ["remove", "Codex", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "state-lock"}}
+{"name": "remove-newer-state", "args": ["remove", "Codex", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "newer-state"}}
+{"name": "remove-pending-account", "args": ["remove", "Pending", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "rename", "args": ["rename", "Work", "Job"]}
+{"name": "rename-missing-new", "args": ["rename", "Work"]}
+{"name": "rename-taken", "args": ["rename", "Work", "personal"]}
+{"name": "rename-too-long", "args": ["rename", "Work", "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"]}
+{"name": "rename-state-lock", "args": ["rename", "Work", "Job"], "env": {"RELAY_PARITY_SCENARIO": "state-lock"}}
+{"name": "rename-newer-state", "args": ["rename", "Work", "Job"], "env": {"RELAY_PARITY_SCENARIO": "newer-state"}}
+{"name": "rename-tr", "args": ["rename", "Work", "Job", "--lang", "tr"]}
+{"name": "history", "args": ["history"]}
+{"name": "history-work", "args": ["history", "Work"]}
+{"name": "history-json", "args": ["history", "--json"]}
+{"name": "history-unknown", "args": ["history", "Nobody"]}
+{"name": "history-unsaved", "args": ["history"], "env": {"RELAY_PARITY_SCENARIO": "unsaved"}}
+{"name": "history-extra", "args": ["history", "Work", "Personal"]}
+{"name": "history-mode-off", "args": ["history", "mode", "off"]}
+{"name": "history-mode-same-group", "args": ["history", "mode", "same-group"]}
+{"name": "history-mode-selected", "args": ["history", "mode", "selected", "--accounts", "Personal,Work"]}
+{"name": "history-mode-selected-one", "args": ["history", "mode", "selected", "--accounts", "Personal"]}
+{"name": "history-mode-bad", "args": ["history", "mode", "sometimes"]}
+{"name": "history-sync-needs-confirm", "args": ["history", "sync"]}
+{"name": "history-sync-not-installed", "args": ["history", "sync", "--yes"]}
+{"name": "history-sync-extra", "args": ["history", "sync", "Work", "Personal"]}
+{"name": "history-sync-recovery", "args": ["history", "sync", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "recovery"}}
+{"name": "history-mode-state-lock", "args": ["history", "mode", "off"], "env": {"RELAY_PARITY_SCENARIO": "state-lock"}}
+{"name": "connect", "args": ["connect", "Work"]}
+{"name": "connect-no-name", "args": ["connect"]}
+{"name": "connect-codex", "args": ["connect", "Codex"]}
+{"name": "connect-profile-lock", "args": ["connect", "Work"], "env": {"RELAY_PARITY_SCENARIO": "profile-lock"}}
+{"name": "usage", "args": ["usage"]}
+{"name": "usage-json", "args": ["usage", "--json"]}
+{"name": "usage-one", "args": ["usage", "Work"]}
+{"name": "usage-tr", "args": ["usage", "--lang", "tr"]}
+{"name": "usage-profile-lock", "args": ["usage", "Work"], "env": {"RELAY_PARITY_SCENARIO": "profile-lock"}}
+{"name": "usage-empty", "args": ["usage"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "usage-json-empty", "args": ["usage", "--json"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "usage-unknown", "args": ["usage", "Nobody"]}
+{"name": "run", "args": ["run", "Personal", "--", "-p", "hello"]}
+{"name": "run-no-args", "args": ["run", "Work"]}
+{"name": "run-no-name", "args": ["run"]}
+{"name": "run-unknown", "args": ["run", "Nobody"]}
+{"name": "run-profile-lock", "args": ["run", "Work"], "env": {"RELAY_PARITY_SCENARIO": "profile-lock"}}
+{"name": "run-pending-not-signed-in", "args": ["run", "Pending"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "tokens", "args": ["tokens"]}
+{"name": "tokens-json", "args": ["tokens", "--json"]}
+{"name": "tokens-30", "args": ["tokens", "--days", "30"]}
+{"name": "tokens-90-json", "args": ["tokens", "--days", "90", "--json"]}
+{"name": "tokens-bad-days", "args": ["tokens", "--days", "5"]}
+{"name": "tokens-account", "args": ["tokens", "--account", "Work", "--json"]}
+{"name": "tokens-account-text", "args": ["tokens", "--account", "Personal"]}
+{"name": "tokens-extra", "args": ["tokens", "now"]}
+{"name": "tokens-no-ledger", "args": ["tokens"], "env": {"RELAY_PARITY_SCENARIO": "no-ledger"}}
+{"name": "tokens-tr", "args": ["tokens", "--lang", "tr"]}
+{"name": "tokens-empty", "args": ["tokens"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "doctor", "args": ["doctor"]}
+{"name": "doctor-json", "args": ["doctor", "--json"]}
+{"name": "doctor-tr", "args": ["doctor", "--lang", "tr"]}
+{"name": "doctor-empty", "args": ["doctor"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "doctor-operation-lock", "args": ["doctor"], "env": {"RELAY_PARITY_SCENARIO": "operation-lock"}}
+{"name": "doctor-recovery", "args": ["doctor", "--json"], "env": {"RELAY_PARITY_SCENARIO": "recovery"}}
+{"name": "doctor-pending", "args": ["doctor"], "env": {"RELAY_PARITY_SCENARIO": "pending"}}
+{"name": "doctor-newer-vault", "args": ["doctor"], "env": {"RELAY_PARITY_SCENARIO": "newer-vault"}}
+{"name": "proxy", "args": ["proxy"]}
+{"name": "proxy-status", "args": ["proxy", "status"]}
+{"name": "proxy-status-json", "args": ["proxy", "status", "--json"]}
+{"name": "proxy-status-port", "args": ["proxy", "status", "--port", "9123", "--host", "localhost"]}
+{"name": "proxy-env", "args": ["proxy", "env"]}
+{"name": "proxy-env-port-host", "args": ["proxy", "env", "--port", "9000", "--host", "localhost"]}
+{"name": "proxy-env-ipv6", "args": ["proxy", "env", "--host", "::1"]}
+{"name": "proxy-env-empty", "args": ["proxy", "env"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "proxy-unknown-sub", "args": ["proxy", "restart"]}
+{"name": "proxy-two-subs", "args": ["proxy", "status", "env"]}
+{"name": "proxy-bad-port", "args": ["proxy", "env", "--port", "0"]}
+{"name": "proxy-bad-port-text", "args": ["proxy", "env", "--port", "http"]}
+{"name": "proxy-bad-host", "args": ["proxy", "env", "--host", "8.8.8.8"]}
+{"name": "proxy-start-needs-consent", "args": ["proxy", "start"]}
+{"name": "proxy-start-bad-port", "args": ["proxy", "start", "--port", "70000", "--yes"]}
+{"name": "proxy-start-consent-tr", "args": ["proxy", "start", "--lang", "tr"]}
+{"name": "proxy-bad-upstreams", "args": ["proxy", "start", "--yes", "--port", "18999"], "env": {"RELAY_PARITY_SCENARIO": "gateway", "RELAY_PARITY_ENV_RELAY_PROXY_UPSTREAMS": "{not json"}}
+{"name": "statusline", "args": ["statusline"], "stdin": ""}
+{"name": "statusline-stdin", "args": ["statusline"], "stdin": "{\"session_id\": \"s-1\", \"rate_limits\": {\"five_hour\": {\"used_percentage\": 91.6, \"resets_at\": 1795689675}, \"seven_day\": {\"used_percentage\": 40, \"resets_at\": 1795772475}}}"}
+{"name": "statusline-gateway-session", "args": ["statusline"], "stdin": "{\"session_id\": \"parity-gateway-session\"}"}
+{"name": "statusline-bad-json", "args": ["statusline"], "stdin": "{not json"}
+{"name": "statusline-expired-live", "args": ["statusline"], "stdin": "{\"rate_limits\": {\"five_hour\": {\"used_percentage\": 99, \"resets_at\": 1795686015}}}"}
+{"name": "statusline-color", "args": ["statusline", "--color"], "stdin": ""}
+{"name": "statusline-no-color", "args": ["statusline", "--color", "--no-color"], "stdin": ""}
+{"name": "statusline-color-NO_COLOR", "args": ["statusline", "--color"], "env": {"RELAY_PARITY_ENV_NO_COLOR": "1"}, "stdin": ""}
+{"name": "statusline-profile", "args": ["statusline"], "env": {"RELAY_PARITY_ENV_CLAUDE_CONFIG_DIR": "{relay}/profiles/22222222-2222-4222-8222-222222222222"}, "stdin": ""}
+{"name": "statusline-stale", "args": ["statusline"], "env": {"RELAY_PARITY_SCENARIO": "stale-statusline"}, "stdin": ""}
+{"name": "statusline-empty", "args": ["statusline"], "env": {"RELAY_PARITY_SCENARIO": "empty"}, "stdin": ""}
+{"name": "statusline-empty-tr", "args": ["statusline", "--lang", "tr"], "env": {"RELAY_PARITY_SCENARIO": "empty"}, "stdin": ""}
+{"name": "statusline-lang-full-cli", "args": ["statusline", "--lang", "tr"], "stdin": ""}
+{"name": "statusline-install", "args": ["statusline", "install"]}
+{"name": "statusline-uninstall", "args": ["statusline", "uninstall"]}
+{"name": "statusline-bad-sub", "args": ["statusline", "show"]}
+{"name": "statusline-extra", "args": ["statusline", "install", "now"]}
+{"name": "reset-vault-key-readable", "args": ["reset-vault"]}
+{"name": "reset-vault-extra", "args": ["reset-vault", "now"]}
+{"name": "reset-vault-empty", "args": ["reset-vault"], "env": {"RELAY_PARITY_SCENARIO": "empty"}}
+{"name": "reset-vault-newer", "args": ["reset-vault", "--yes"], "env": {"RELAY_PARITY_SCENARIO": "newer-vault"}}

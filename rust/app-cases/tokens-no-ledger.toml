@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["tokens"]
+env.add.RELAY_PARITY_SCENARIO = "no-ledger"
+status.code = 0
+fs.sandbox = true

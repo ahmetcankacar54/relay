@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/v0/management/api-call"
+body = '{"method": "GET"}'
+
+[request.headers]
+content-type = "application/json"
+x-relay-key = "relay-fixture-client-key-0123456789abcdef"
+
+[response]
+status = 400
+
+[response.headers]
+content-type = "application/json"

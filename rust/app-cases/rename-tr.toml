@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["rename", "Work", "Job", "--lang", "tr"]
+status.code = 0
+fs.sandbox = true

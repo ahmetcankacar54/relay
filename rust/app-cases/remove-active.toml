@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["remove", "Personal", "--yes"]
+status.code = 3
+fs.sandbox = true

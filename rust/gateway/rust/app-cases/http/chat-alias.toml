@@ -1,0 +1,15 @@
+[request]
+method = "POST"
+path = "/chat/completions"
+body = '{"model": "gpt-5", "messages": [{"role": "user", "content": "Hi"}]}'
+
+[request.headers]
+authorization = "Bearer relay-fixture-client-key-0123456789abcdef"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json"
+x-request-id = "req_fixture_openai"

@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["proxy", "start", "--lang", "tr"]
+status.code = 4
+fs.sandbox = true

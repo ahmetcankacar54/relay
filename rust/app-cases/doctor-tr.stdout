@@ -1,0 +1,11 @@
+✓ platform     darwin arm64
+✗ claude-app   Claude uygulaması bulunamadı
+✓ claude-cli   [..]/bin/claude · 2.1.300 (Claude Code)
+✓ data-folder  [..]/relay
+✓ vault        hazır
+✓ key          Anahtarlık’ta "Relay Vault Key" okunabiliyor
+✓ relay-app    kurulu değil (gerekmez)
+✓ lock         serbest
+✓ desktop      geçişe hazır
+✓ gui-session  macOS masaüstü oturumu
+✓ automation   macOS, terminalin Claude’u ilk kapatışında Otomasyon izni sorar. Reddedildiyse: Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon → terminal uygulaması → Claude.

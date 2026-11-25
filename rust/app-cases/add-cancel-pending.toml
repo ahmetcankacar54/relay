@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["add", "--cancel", "--yes"]
+env.add.RELAY_PARITY_SCENARIO = "pending"
+status.code = 1
+fs.sandbox = true

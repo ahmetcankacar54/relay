@@ -1,0 +1,9 @@
+[request]
+method = "GET"
+path = "/v0/management/auth-files"
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"
