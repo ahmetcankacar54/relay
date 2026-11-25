@@ -124,6 +124,7 @@ Her sürümde bir `SHA256SUMS.txt` vardır; Relay kendini GitHub Releases'tan g�
 - Claude Code, Codex CLI ve omp için yerel, anahtarla korunan tek bir uç nokta. İstekler haftası önce biten ve hâlâ yeri olan hesaba gider; yer gerçek kapasiteyle karşılaştırılır (%85 dolu bir Max 20×'in yeni bir Pro'dan daha çok yeri vardır).
 - Oturumlar kendi hesabında ve istem önbelleğinde kalır; dolan bir hesap bir istemin ortasında değil başında boşaltılır.
 - Yalnızca bu Mac'i ya da seçersen Tailscale ağını dinler.
+- **API anahtarlarına taşma.** Tüm abonelik hesapları limitteyken Claude istekleri başarısız olmak yerine bir API anahtarına gidebilir: Anthropic API, OpenRouter, DeepSeek, Kimi, GLM ya da Anthropic uyumlu herhangi bir URL, senin sıranla. Her isteğin maliyeti akışta görünür; dolar cinsinden günlük tavan dolunca taşma o günün geri kalanında durur. Anahtarlar girişler gibi şifreli saklanır ve hiçbir zaman tamamı gösterilmez. API anahtarları token başına ücretlendirilir ve bu kullanım içindir; bu yüzden taşma abonelik riskini taşımaz. Codex istekleri hiç taşmaz.
 - Sen açana kadar kapalıdır. Relay'in olağan kullanımdan en uzak parçası budur; bkz. [Koşullar ve risk](#koşullar-ve-risk).
 
 ### Menü çubuğu, widget ve CLI
@@ -159,6 +160,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 Ana platform macOS'tur. Windows sürümü henüz gerçek bir makinede denenmedi; geri bildirimler memnuniyetle karşılanır.
 
+**Kaynak kullanımı:** menü çubuğunda boşta beklerken Relay, tüm süreçleriyle birlikte yaklaşık %0,1 CPU ve yaklaşık 395 MB bellek kullanır (en fazla 435 MB); penceresi önde açıkken yaklaşık %2 CPU kullanır ve Anahtar Zinciri izni sormaz (Apple silicon Mac; [nasıl ölçüldüğü](docs/development.md#resource-use)).
+
 ## Gizlilik ve güvenlik
 
 - **Yalnızca yerel.** Relay'in hesabı, sunucusu ve **telemetrisi ya da analitiği yoktur**. Verileri `~/Library/Application Support/Relay` (macOS) ya da `~/.config/Relay` (Linux) içindedir.
@@ -174,6 +177,7 @@ Bir sorun mu buldun? Lütfen gizlice bildir — bkz. [SECURITY.md](SECURITY.md).
 Relay resmi değil ve yaptığı işlerin bir kısmı, Anthropic'in üçüncü taraf araçlardan Claude oturumlarını kullanma beklentisine uymuyor. Ona güvenmeden önce lütfen bunu oku.
 
 - **Anthropic'in koşulları ne diyor?** [Claude Code yasal ve uyum sayfası](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use), abonelik oturumlarının (Free, Pro, Max, Ultra) Claude Code'un ve Anthropic'in kendi uygulamalarının olağan kullanımı için olduğunu; üçüncü taraf araçların bu oturumları saklamaması, yönlendirmemesi ve aracılık etmemesi gerektiğini; duyurulan limitlerin olağan, bireysel kullanıma göre olduğunu söyler. Anthropic bunu haber vermeden uygulayabileceğini belirtir.
+- **Anthropic'in Kullanım Politikası (12 Kasım 2026'dan beri geçerli).** [Kullanım Politikası](https://www.anthropic.com/legal/aup) şunu yasaklar: "Resell, proxy, or otherwise provide access to Claude through unauthorized means, including services that route requests through consumer subscriptions or misrepresent the product or client being used." (Claude'u yeniden satmak, proxy'lemek ya da izinsiz yollarla erişime açmak; buna istekleri tüketici abonelikleri üzerinden yönlendiren veya kullanılan ürünü ya da istemciyi farklı gösteren hizmetler de dahildir.) Relay'in iki özelliği bu maddeye girer: Claude abonelik hesaplarıyla ağ geçidi istekleri tüketici abonelikleri üzerinden yönlendirir; ağ geçidine bağlı omp ise isteklerini Claude Code olarak gönderir. Relay bu maddeyi gösterir ve ikisinden biri açılmadan önce onayını ister; `relay` CLI'ı `--yes` ister.
 - **Relay ne yapıyor?** Relay, Claude uygulamasını hesaplar arasında geçirebilmek ve limitleri okuyabilmek için hesaplarının oturumlarını bilgisayarında, şifreli olarak saklar. Ağ geçidi bir adım daha ileri gider: Claude Code isteklerini bu oturumlarla hesaplarına gönderir; omp bağlıysa omp'nin istekleri de Claude'a Claude Code'unkilerle aynı biçimde ulaşır.
 - **Ne olabilir?** Anthropic bu istekleri engelleyebilir ya da bunları kullanan bir hesabı kısıtlayabilir veya askıya alabilir. Relay bunu önleyemez; riski sen üstlenirsin (bkz. [lisans](LICENSE)).
 - **Risk nerede?** Claude uygulamasını geçirmek ve limitleri okumak olağan kullanıma en yakın kısımdır. Ağ geçidi bundan daha uzaktır; omp'yi bir Claude hesabıyla kullanmak ise en uzağıdır. Ağ geçidi sen açana kadar kapalıdır; bu riski almak istemiyorsan kapalı bırak.

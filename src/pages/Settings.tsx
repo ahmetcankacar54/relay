@@ -20,6 +20,10 @@ import type {
   RelaySettings,
 } from "../../shared/types";
 import { MenuBarTitleRows } from "./settings/MenuBarItems";
+import { NotificationGroup } from "./settings/NotificationSettings";
+import { DataGroups } from "./settings/DataSettings";
+import { ShortcutGroup } from "./settings/ShortcutSettings";
+import { MeterGroup } from "./settings/MeterSettings";
 import { Disclosure } from "@/components/Disclosure";
 import { localizeError } from "../../shared/error-text";
 import { updateShown, updateTitle } from "@/lib/update-text";
@@ -28,6 +32,7 @@ import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { routeHash, settingsTab, SETTINGS_TABS, type SettingsTab } from "@/app/routes";
 import { ExperimentalSwitchRows, RefreshIntervalRow, SwitchingTab } from "./settings/SwitchingTabs";
+import { ClaudeStatuslineRow } from "./settings/StatuslineRow";
 import { PlanningScreen } from "./Planning";
 import { macWording, usePlatform } from "@/data/platform";
 
@@ -37,6 +42,13 @@ export const showDiagnostics = ({
   action,
 }: Pick<ReturnType<typeof useRelay>, "api" | "action">) =>
   action("diagnostics", () => api.showDiagnostics());
+
+/** Saves the redacted diagnostics zip where the user picks; main builds it, the page passes no path. */
+export const exportDiagnostics = ({
+  api,
+  action,
+}: Pick<ReturnType<typeof useRelay>, "api" | "action">) =>
+  action("export-diagnostics", () => api.exportDiagnostics());
 
 /**
  * How Relay starts Claude: without HTTP/3. The choice lives outside the registry, so this row
@@ -183,6 +195,20 @@ export function UpdatesGroup({
           onCheckedChange={(enabled) => void action("update-auto", () => api.setUpdateAuto(enabled))}
         />
       </SettingRow>
+      <SettingRow
+        label={t("settings.getPreReleases")}
+        htmlFor="update-beta"
+        description={t("settings.getPreReleasesDescription")}
+      >
+        <Switch
+          id="update-beta"
+          checked={data?.settings?.updateChannel === "beta"}
+          disabled={!!busy}
+          onCheckedChange={(beta) =>
+            void action("settings", () => api.updateSettings({ updateChannel: beta ? "beta" : "stable" }))
+          }
+        />
+      </SettingRow>
     </SettingGroup>
   );
 }
@@ -318,8 +344,23 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               >
                 <Switch id="privacy-blur" checked={privacyBlur} onCheckedChange={setPrivacyBlur} />
               </SettingRow>
+              <SettingRow
+                label={t("settings.openAtLogin")}
+                htmlFor="launch-at-login"
+                description={t("settings.relayStartsHiddenWhenYouLog")}
+              >
+                <Switch
+                  id="launch-at-login"
+                  checked={settings.launchAtLogin === true}
+                  disabled={disabled}
+                  onCheckedChange={(launchAtLogin) => update({ launchAtLogin })}
+                />
+              </SettingRow>
               <RefreshIntervalRow />
             </SettingGroup>
+            <NotificationGroup />
+            <ShortcutGroup />
+            <MeterGroup />
             {/* The menu bar title and the switch window are macOS-only; other platforms keep the R icon. */}
             {data?.diagnostics.platform === "darwin" && (
               <SettingGroup id="settings-menu-bar" title={t("settings.menuBar")}>
@@ -444,6 +485,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   </Button>
                 </span>
               </SettingRow>
+              <ClaudeStatuslineRow api={api} action={action} t={t} />
               <SettingRow
                 label={t("settings.diagnosticsFiles")}
                 description={t("settings.sendOnlyDraftEventsJsonAnd")}
@@ -456,11 +498,24 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                   {mac ? t("settings.showInFinder") : t("settings.showInFolder")}
                 </Button>
               </SettingRow>
+              <SettingRow
+                label={t("settings.diagnosticsForABugReport")}
+                description={t("settings.oneZipOfRelaysLogsEmail")}
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void exportDiagnostics({ api, action })}
+                >
+                  {t("settings.export")}
+                </Button>
+              </SettingRow>
             </SettingGroup>
             <SettingGroup id="settings-troubleshooting" title={t("settings.troubleshooting")}>
               <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
               <ClaudeAppAccessRow api={api} t={t} />
             </SettingGroup>
+            <DataGroups />
             <SettingGroup id="settings-experimental" title={t("settings.experimental")}>
               <p className="py-2 text-xs text-muted-foreground">
                 {t("settings.experimentalFeaturesCanBreakWithAn")}

@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import type { UpdateManualReason, UpdateState } from "../../shared/types";
+import type { UpdateChannel, UpdateManualReason, UpdateState } from "../../shared/types";
 import {
   compareVersions,
   fetchJson,
+  newestRelease,
   parseChecksums,
   readCapped,
-  releaseFrom,
   type ReleaseAsset,
   type UpdateDriver,
 } from "./app-update";
@@ -24,8 +24,10 @@ export const UPDATE_SIGNATURE_MISMATCH =
 export const UPDATE_NO_CHECKSUM = "The release lists no checksum for the update.";
 
 export interface MacUpdateDeps {
-  /** The release feed: GitHub's latest-release JSON. */
-  feed: string;
+  /** The release feed of each channel: GitHub's latest-release JSON, or its release list. */
+  feeds: Record<UpdateChannel, string>;
+  /** The channel chosen in Settings, read at every check. */
+  channel(): UpdateChannel;
   /** `<userData>/updates`; each version gets its own folder. */
   folder: string;
   current: string;
@@ -110,8 +112,10 @@ export class MacUpdateDriver implements UpdateDriver {
     return path.join(this.deps.folder, version);
   }
   async check(report: (patch: Partial<UpdateState>) => void) {
-    const release = releaseFrom(await fetchJson(this.deps.feed, this.deps.request));
+    const channel = this.deps.channel();
+    const release = newestRelease(await fetchJson(this.deps.feeds[channel], this.deps.request), channel);
     if (!release) throw new Error("The update feed has no usable release.");
+    // Never older, on either channel: back on stable, a beta runs until a newer release comes.
     if (compareVersions(release.version, this.deps.current) <= 0) return report({ status: "up-to-date" });
     const { version, notesUrl } = release;
     report({ status: "available", version, notesUrl });
@@ -253,7 +257,7 @@ export class MacUpdateDriver implements UpdateDriver {
   /** Removes downloads of this version and older ones: once running, a version needs none. */
   prune(running = this.deps.current) {
     for (const name of fs.existsSync(this.deps.folder) ? fs.readdirSync(this.deps.folder) : [])
-      if (/^\d+\.\d+\.\d+$/.test(name) && compareVersions(name, running) <= 0)
+      if (/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(name) && compareVersions(name, running) <= 0)
         fs.rmSync(path.join(this.deps.folder, name), { recursive: true, force: true });
   }
 }

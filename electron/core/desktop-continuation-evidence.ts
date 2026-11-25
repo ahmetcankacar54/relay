@@ -696,13 +696,13 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     }
     for (const folder of folders) {
       if (!folder.isDirectory()) continue;
-      let names: string[];
+      let files: string[];
       try {
-        names = fsSync.readdirSync(path.join(root, folder.name));
+        files = fsSync.readdirSync(path.join(root, folder.name));
       } catch {
         continue;
       }
-      for (const name of names) {
+      for (const name of files) {
         if (!name.endsWith(".jsonl")) continue;
         const relative = `projects/${folder.name}/${name}`;
         if (excluded.has(relative)) continue;

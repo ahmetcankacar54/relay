@@ -307,6 +307,13 @@ const BACKEND_ERRORS: ReadonlyArray<readonly [backend: string, id: MessageId]> =
   ["Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.", "errors.anotherRelayProcessIsRenewingThis"],
   ["Stop the running session first.", "errors.stopTheRunningSessionFirst"],
   ["Terminal not found.", "errors.terminalNotFound"],
+  ["This profile needs a sign-in with a Claude subscription.", "errors.thisProfileNeedsAClaudeSubscription"],
+  // Saved in an account's sign-in status by builds before 0.29, so a registry may still hold it.
+  ["Bu profil Claude aboneliği ile giriş gerektiriyor.", "errors.thisProfileNeedsAClaudeSubscription"],
+  ["The process has not closed yet. The transfer did not start.", "errors.theProcessHasNotClosedYet"],
+  ["Sign in with this account first.", "errors.signInWithThisAccountFirst"],
+  ["This overflow upstream no longer exists.", "errors.overflowUpstreamGone"],
+  ["Enter this overflow upstream’s API key first.", "errors.overflowUpstreamNeedsKey"],
 ];
 const byText = new Map<string, MessageId>(BACKEND_ERRORS.map(([text, id]) => [text, id]));
 

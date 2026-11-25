@@ -1,4 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { motionPaused, onMotionPaused } from "@/lib/motion";
+import { runIdleMotion } from "@/mascot/idle-motion";
 import { PANDA_RIG } from "@/mascot/panda-rig";
 import { PANDA_SCENES, type PandaMotion, type PandaScene } from "@/mascot/scenes";
 import { cn } from "@/lib/utils";
@@ -27,10 +29,43 @@ export interface PandaRigProps {
   rig?: Partial<Record<PandaPose, string>>;
 }
 
+/** Read when the motions start, as the card panda does: a change takes effect at the next start. */
+const reducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * The occasional motions resting now (src/mascot/idle-motion.ts), as data-resting's value. Their timers
+ * run only while the window is seen (src/lib/motion.ts) and without Reduce motion; a resting motion's
+ * part keeps still, so the window paints nothing between two plays.
+ */
+function useResting(motion: readonly PandaMotion[]): string {
+  const key = motion.join(" ");
+  const paused = useSyncExternalStore(onMotionPaused, motionPaused, () => false);
+  const [resting, setResting] = useState<ReadonlySet<PandaMotion>>(() => new Set());
+  const latest = useRef(resting);
+  useEffect(() => {
+    latest.current = resting;
+  });
+  // `key` names the same motions as `motion`, whose array is new on every render.
+  useEffect(() => {
+    if (paused || reducedMotion()) return;
+    return runIdleMotion(motion, latest.current, (name, rests) =>
+      setResting((now) => {
+        const next = new Set(now);
+        if (rests) next.add(name);
+        else next.delete(name);
+        return next;
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, paused]);
+  return motion.filter((name) => resting.has(name)).join(" ");
+}
+
 /**
  * One puppet pose drawn inline. Decorative: hidden from assistive tech and
  * never focusable. The root's data attributes pick the expression, props and
- * motions (src/styles/panda.css).
+ * motions (src/styles/panda.css); data-resting names the idle motions between two plays.
  */
 export function PandaRig({
   pose,
@@ -45,6 +80,7 @@ export function PandaRig({
 }: PandaRigProps) {
   // Ids must be unique per drawn panda, or a second one would use the first one's clip paths.
   const prefix = `panda${useId().replace(/[^A-Za-z0-9_-]/g, "")}-`;
+  const resting = useResting(motion);
   const source = rig[pose];
   const markup = useMemo(() => source?.replaceAll(RIG_ID_TOKEN, prefix), [source, prefix]);
   if (markup === undefined)
@@ -69,6 +105,7 @@ export function PandaRig({
       data-expression={expression}
       data-props={props.join(" ")}
       data-motion={motion.join(" ")}
+      data-resting={resting || undefined}
       data-trick={trick}
       dangerouslySetInnerHTML={{ __html: markup }}
     />

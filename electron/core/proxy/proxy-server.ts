@@ -9,7 +9,6 @@ import {
   type ProxyLoopAlarm,
   type ProxyMetrics,
   type ProxyPick,
-  type ProxyPickReason,
   type ProxyState,
 } from "../../../shared/proxy-types";
 import {
@@ -30,8 +29,18 @@ import { isTailscaleIPv4, LOOPBACK_HOSTS } from "../../../shared/proxy-url";
 import { AnthropicUpstream } from "./anthropic-upstream";
 import { CodexUpstream } from "./codex-upstream";
 import { WebSocketBridge, rejectUpgrade } from "./websocket-bridge";
+import { forwardOverflow } from "./overflow-upstream";
 import {
-  BadRequestError,
+  localDayBounds,
+  overflowCost,
+  overflowModel,
+  spentToday,
+  type ApiUpstream,
+  type OverflowRates,
+  type OverflowSettings,
+} from "../../../shared/overflow";
+import { systemTimeZone } from "../../../shared/planning";
+import {
   parseRequestUrl,
   sendJsonError,
   type ForwardSpec,
@@ -90,6 +99,11 @@ const OVERLOADED_COOLDOWN_S = 10;
 const EXTRA_USAGE_COOLDOWN_S = 30 * 60;
 /** Answers another account may succeed at: a limit, a refused sign-in, an overloaded upstream. */
 const RETRYABLE = new Set([401, 403, 429, 503, 529]);
+/**
+ * Answers an overflow upstream may be skipped for, to the next one: its key refused, its limit
+ * hit, or the service failing. Nothing about it touches a subscription account.
+ */
+const OVERFLOW_NEXT = new Set([401, 402, 403, 429, 500, 502, 503, 504, 529]);
 const CODEX_WS_URL = "wss://chatgpt.com/backend-api/codex/responses";
 
 /**
@@ -143,6 +157,14 @@ export class ProxyServer {
   /** The clock for sessions, cooldowns and the traffic's times (tests pass their own). */
   private readonly now: () => number;
   private requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
+  /** An overflow upstream's API key, from the vault; undefined when none is saved. */
+  private overflowKey?: (upstreamId: string) => Promise<string | undefined>;
+  /** OpenRouter's published prices, for its overflow answers' costs. */
+  private overflowPrices?: { rate(model: string): Promise<OverflowRates | undefined> };
+  /** The planning time zone: the overflow cap is per day there. */
+  private readonly timeZone: () => string;
+  /** Overflow answers' costs when no request log keeps them (tests). */
+  private readonly ownOverflowCosts: { at: number; cost: number }[] = [];
   private hubFetch?: typeof fetch;
   /** Request body bytes held now, across requests; capped at `maxBufferedBytes`. */
   private bufferedBytes = 0;
@@ -168,6 +190,12 @@ export class ProxyServer {
     hubFetch?: typeof fetch;
     /** The cap on request body bytes held at once (tests pass a small one). */
     maxBufferedBytes?: number;
+    /** An overflow upstream's API key (from the vault), by upstream id. */
+    overflowKey?: (upstreamId: string) => Promise<string | undefined>;
+    /** OpenRouter's published prices, for overflow costs. */
+    overflowPrices?: { rate(model: string): Promise<OverflowRates | undefined> };
+    /** The time zone the overflow's daily cap counts days in (the planning one). */
+    timeZone?: () => string;
     /** Where requests go instead of the real services (tests, regional endpoints). */
     upstreams?: {
       anthropicUrl?: string;
@@ -188,6 +216,9 @@ export class ProxyServer {
     this.requestLog = options.requestLog;
     this.hubFetch = options.hubFetch;
     this.maxBufferedBytes = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
+    this.overflowKey = options.overflowKey;
+    this.overflowPrices = options.overflowPrices;
+    this.timeZone = options.timeZone ?? systemTimeZone;
 
     this.sessionCache = new ProxySessionCache({
       ttlSeconds: this.config.affinityTtlSeconds,
@@ -746,6 +777,13 @@ export class ProxyServer {
     const unreadableIds: string[] = [];
     // The account the previous try was held on, for the next try's reason.
     let heldOn: string | undefined;
+    // API-key overflow, when it can take this request: on, a Claude Messages request, an upstream on.
+    const spill = this.overflowFor(pathname, targetProvider);
+    // Whether overflow takes a request the pool cannot answer: always for a limit, for any other
+    // reason only when it is set to.
+    const toOverflow = (limited: boolean) => !!spill && (limited || spill.trigger === "unavailable");
+    const serveSpill = () =>
+      this.serveOverflow(req, res, bodyBuffer, parsed, requestedModel, about, spill!, heldOn);
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; ) {
       const { accounts, usageMap } = this.usageProvider();
       let selection: RouterSelection;
@@ -768,19 +806,23 @@ export class ProxyServer {
         }
         // Nothing was forwarded and the only accounts left could not be signed in with.
         if (lastHeld === undefined && unreadable.length) {
+          if (toOverflow(false)) return serveSpill();
           this.signInNeeded(res, targetProvider, requestedModel, unreadable, about);
           return;
         }
         if (err instanceof NoProviderAccountError && tried.size === 0) {
+          if (toOverflow(false)) return serveSpill();
           this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 503, note: "no-account", ...about });
           sendJsonError(res, 503, "api_error", err.message);
           return;
         }
         if (err instanceof NoEligibleAccountError && tried.size === 0) {
           if (err.signInOnly) {
+            if (toOverflow(false)) return serveSpill();
             this.signInNeeded(res, targetProvider, requestedModel, [], about);
             return;
           }
+          if (toOverflow(true)) return serveSpill();
           this.stats.recordError(err.message);
           this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 429, note: "all-limited", ...about });
           sendJsonError(
@@ -795,6 +837,7 @@ export class ProxyServer {
           return;
         }
         // Every other account was tried or is cooling down: the last answer was already held.
+        if (toOverflow(lastHeld === undefined || lastHeld === 429)) return serveSpill();
         this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: lastHeld ?? 429, note: "all-limited", ...about });
         sendJsonError(res, lastHeld ?? 429, lastHeld === 401 || lastHeld === 403 ? "authentication_error" : "rate_limit_error", "Every account for this provider is limited or unavailable");
         return;
@@ -829,10 +872,11 @@ export class ProxyServer {
         res,
         bodyBuffer,
         pathname,
-        isLast
-          ? undefined
-          : (status: number) =>
-              RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname, requestedModel),
+        // Held for the next account, or for overflow (a limit; with "unavailable", any outage),
+        // which also takes the last try's answer.
+        (status: number) =>
+          (!isLast && RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname, requestedModel)) ||
+          (RETRYABLE.has(status) && toOverflow(status === 429)),
         // Known with the headers: the token table may meet this request id before it is done.
         (early) => {
           if (early.requestId) this.requestLog?.bind(early.requestId, accountId);
@@ -910,8 +954,109 @@ export class ProxyServer {
         `${selection.account.name} answered ${outcome.statusCode}; trying another account`,
       );
     }
-    // Every attempt was held: the last one is never held, so this is not reached.
+    // Every attempt was held: only overflow holds the last one, and takes it now.
+    if (lastHeld !== undefined && toOverflow(lastHeld === 429)) return serveSpill();
     sendJsonError(res, 502, "api_error", "No account could answer the request");
+  }
+
+  /** The overflow setup, when it can take this request: on, a Claude Messages request, an upstream on. */
+  private overflowFor(pathname: string, provider: ProxyProvider): OverflowSettings | undefined {
+    const settings = this.config.overflow;
+    if (!settings?.enabled || provider !== "claude" || pathname !== "/v1/messages") return undefined;
+    return settings.upstreams.some((upstream) => upstream.enabled) ? settings : undefined;
+  }
+
+  /** Overflow spend so far in today's day of the planning time zone, in USD. */
+  overflowSpentToday(): number {
+    const costs = this.requestLog?.overflowCosts?.() ?? this.ownOverflowCosts;
+    return spentToday(costs, this.now(), this.timeZone());
+  }
+
+  /**
+   * Answers a request no subscription account could take from the API-key upstreams, in their
+   * order: one whose key is refused, limited or failing hands it to the next, the last one's
+   * answer goes to the client. Past the daily cap, a 429 says so until the day ends. Requests
+   * already under way when the cap is reached finish, so a day's spend can pass it by their cost.
+   * Nothing here cools an account down or drops its sign-in: an upstream's answer says nothing
+   * about the subscription accounts.
+   */
+  private async serveOverflow(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    body: Buffer,
+    parsed: unknown,
+    requested: string,
+    about: { client?: string; requestClass?: string; agentType?: string },
+    settings: OverflowSettings,
+    /** The account whose answer was held last, for the log's reason. */
+    after?: string,
+  ): Promise<void> {
+    const now = this.now();
+    const cap = settings.dailyCapUsd;
+    if (cap !== undefined && this.overflowSpentToday() >= cap) {
+      const { end } = localDayBounds(now, this.timeZone());
+      this.stats.recordLog({ at: now, provider: "claude", model: requested, status: 429, note: "overflow-cap", ...about });
+      sendJsonError(res, 429, "rate_limit_error", `Relay overflow daily cap of $${Number(cap.toFixed(2))} reached`, {
+        "retry-after": String(Math.max(1, Math.ceil((end - now) / 1000))),
+      });
+      return;
+    }
+    const usable: { upstream: ApiUpstream; key: string }[] = [];
+    for (const upstream of settings.upstreams.filter((u) => u.enabled).sort((a, b) => a.order - b.order)) {
+      const key = await this.overflowKey?.(upstream.id).catch(() => undefined);
+      if (key) usable.push({ upstream, key });
+      else this.stats.recordError(`Overflow (${upstream.label}) has no saved API key`);
+    }
+    if (!usable.length) {
+      this.stats.recordLog({ at: now, provider: "claude", model: requested, status: 503, note: "overflow-no-key", ...about });
+      sendJsonError(res, 503, "api_error", "Every account is limited and no overflow upstream has a saved API key");
+      return;
+    }
+    for (const [index, { upstream, key }] of usable.entries()) {
+      const model = overflowModel(upstream, requested);
+      const started = this.now();
+      this.stats.recordRequest(`overflow:${upstream.id}`);
+      const outcome = await forwardOverflow(req, res, body, {
+        upstream,
+        key,
+        model,
+        parsed,
+        stats: this.stats,
+        holdIf: index < usable.length - 1 ? (status) => OVERFLOW_NEXT.has(status) : undefined,
+      });
+      const tokens = outcome.tokens;
+      let cost: number | undefined;
+      if (tokens) {
+        const fetched =
+          upstream.preset === "openrouter" && !upstream.prices
+            ? await this.overflowPrices?.rate(model).catch(() => undefined)
+            : undefined;
+        cost = overflowCost(upstream, model, tokens, started, fetched);
+      }
+      if (cost) {
+        this.ownOverflowCosts.push({ at: started, cost });
+        const oldest = this.now() - 2 * 86_400_000;
+        while (this.ownOverflowCosts.length && this.ownOverflowCosts[0].at < oldest) this.ownOverflowCosts.shift();
+      }
+      this.stats.recordLog({
+        at: started,
+        provider: "claude",
+        model,
+        status: outcome.statusCode,
+        ms: this.now() - started,
+        upstream: upstream.label,
+        ...about,
+        ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
+        ...(tokens ? { tokens } : {}),
+        ...(cost !== undefined ? { cost } : {}),
+        ...(outcome.errorMessage ? { error: outcome.errorMessage } : {}),
+        ...(outcome.held ? { failover: true } : {}),
+        ...(tokens && cost === undefined ? { note: "unpriced" } : {}),
+        pick: { reason: "overflow", ...(after && index === 0 ? { after } : {}) },
+      });
+      if (!outcome.held) return;
+      this.stats.recordError(`Overflow (${upstream.label}) answered ${outcome.statusCode}; trying the next upstream`);
+    }
   }
 
   /**

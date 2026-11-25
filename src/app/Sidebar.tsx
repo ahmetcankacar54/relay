@@ -27,7 +27,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusDot } from "@/components/StatusDot";
-import { MiniMeter } from "@/components/LimitLine";
+import { MiniMeter, limitOriginText } from "@/components/LimitLine";
+import { limitOrigin } from "../../shared/quota-windows";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import { timeLeft } from "@/lib/account-row";
 import type { Locale, T } from "@/data/i18n";
@@ -227,6 +228,8 @@ export function Sidebar({
           t,
         )
       : undefined;
+  const activeUsage = relay?.active ? relay.data?.usage[relay.active.id] : undefined;
+  const origin = limitOriginText(limitOrigin(activeUsage?.fiveHour, activeUsage, Date.now()), Date.now(), t, language);
   const items: Item[] = [
     { id: "genel", icon: OverviewIcon, label: t("sidebar.overview") },
     {
@@ -379,6 +382,7 @@ export function Sidebar({
                 <MiniMeter
                   usedPercent={summary.fiveHour}
                   label={t("sidebar.n5HourPeriod", { used: formatUsed(summary.fiveHour, language) })}
+                  title={origin}
                 />
               )}
             </span>

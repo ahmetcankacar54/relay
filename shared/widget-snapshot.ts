@@ -543,6 +543,8 @@ function buildAccounts(
       limits.usage,
       now,
       limits.rate,
+      undefined,
+      limits.settings.autoSwitchStrategy,
     ).map((row) =>
       suggestion
         ? { ...row, recommended: row.account.id === suggestion.id }

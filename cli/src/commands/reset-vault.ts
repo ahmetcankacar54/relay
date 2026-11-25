@@ -21,7 +21,8 @@ const SET_ASIDE = ["accounts", "backups", "drafts", "extension", "journal.json",
 export const resetVault: Command = async ({ io, deps, parsed, t }) => {
   if (parsed.positionals.length)
     throw new CliError(t("resetVault.usageRelayResetVault"), EXIT.usage);
-  const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: false });
+  // The vault key is a macOS Keychain item; elsewhere Relay.app keeps it.
+  const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: false, macOS: true });
   if (ctx.vault.kind === "empty")
     throw new CliError(t("resetVault.theVaultIsEmptyNothingTo"), EXIT.failed);
   if (ctx.vault.kind === "newer")

@@ -126,6 +126,7 @@ Cada versión incluye un `SHA256SUMS.txt` y se actualiza sola desde GitHub Relea
 - Un endpoint local, protegido con clave, para Claude Code, Codex CLI y omp. Las solicitudes van a la cuenta cuya semana termina antes y que todavía tiene margen, comparado en capacidad real (un Max 20× al 85 % todavía tiene más margen que un Pro recién reiniciado).
 - Las sesiones se quedan en su cuenta y en su caché de prompts; una cuenta ocupada se vacía al inicio de un prompt, no a mitad.
 - Solo escucha en este Mac, o en tu red de Tailscale si así lo eliges.
+- **Desbordamiento a claves de API.** Cuando todas las cuentas de suscripción están en su límite, las solicitudes de Claude pueden ir a una clave de API en lugar de fallar: la API de Anthropic, OpenRouter, DeepSeek, Kimi, GLM o cualquier URL compatible con Anthropic, en el orden que elijas. El coste de cada solicitud aparece en el registro, y un tope diario en dólares detiene el desbordamiento el resto del día. Las claves se guardan cifradas como los inicios de sesión y nunca se muestran completas. Las claves de API se cobran por token y están pensadas para este uso, así que el desbordamiento no tiene el riesgo de las suscripciones. Las solicitudes de Codex nunca se desbordan.
 - Desactivada hasta que la actives. Es la parte de Relay más alejada del uso ordinario; consulta [Términos y riesgos](#términos-y-riesgos).
 
 ### Barra de menús, widget y CLI
@@ -161,6 +162,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 macOS es la plataforma principal. La versión para Windows todavía no se ha probado en una máquina real; los informes son bienvenidos.
 
+**Uso de recursos:** en reposo en la barra de menús, Relay usa alrededor del 0,1 % de CPU y unos 395 MB de memoria entre todos sus procesos (435 MB como máximo), alrededor del 2 % de CPU con su ventana abierta en primer plano, y no muestra ningún aviso del Llavero (Mac con Apple silicon; [cómo se mide](docs/development.md#resource-use)).
+
 ## Privacidad y seguridad
 
 - **Solo local.** Relay no tiene cuenta, ni servidor, ni **telemetría ni analíticas**. Sus datos están en `~/Library/Application Support/Relay` (macOS) o en `~/.config/Relay` (Linux).
@@ -176,6 +179,7 @@ macOS es la plataforma principal. La versión para Windows todavía no se ha pro
 Relay no es oficial, y parte de lo que hace no es la forma en que Anthropic quiere que las herramientas de terceros usen las sesiones de Claude. Lee esto antes de depender de él.
 
 - **Qué dicen los términos de Anthropic.** La [página legal y de cumplimiento de Claude Code](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use) dice que las sesiones de suscripción (Free, Pro, Max, Ultra) son para el uso ordinario de Claude Code y de las apps propias de Anthropic; que las herramientas de terceros no deben almacenar, enrutar ni intermediar esas sesiones; y que los límites anunciados presuponen un uso ordinario e individual. Anthropic dice que puede hacer cumplir esto sin previo aviso.
+- **La Política de uso de Anthropic (vigente desde el 12 de noviembre de 2026).** La [Política de uso](https://www.anthropic.com/legal/aup) prohíbe a los usuarios: "Resell, proxy, or otherwise provide access to Claude through unauthorized means, including services that route requests through consumer subscriptions or misrepresent the product or client being used." (Revender, hacer de proxy o dar acceso a Claude por medios no autorizados, incluidos los servicios que enrutan solicitudes a través de suscripciones de consumo o que falsean el producto o el cliente usado). Dos funciones de Relay caen bajo esta cláusula: la pasarela con cuentas de suscripción de Claude enruta solicitudes a través de suscripciones de consumo, y omp conectado a la pasarela envía sus solicitudes como Claude Code. Relay muestra esta cláusula y te pide aceptarla antes de activar cualquiera de las dos; la CLI `relay` pide `--yes`.
 - **Qué hace Relay.** Relay guarda las sesiones de tus cuentas en tu equipo, cifradas, para poder cambiar la app de Claude y leer los límites. La pasarela va más allá: envía solicitudes de Claude Code a tus cuentas con esas sesiones y, cuando omp está conectado, las solicitudes de omp llegan a Claude con la misma forma que las de Claude Code.
 - **Qué puede pasar.** Anthropic puede bloquear esas solicitudes, o limitar o suspender una cuenta que las use. Relay no puede impedirlo, y lo usas bajo tu propio riesgo (consulta la [licencia](LICENSE)).
 - **Dónde está el riesgo.** Cambiar la app de Claude y leer los límites es lo más cercano al uso ordinario. La pasarela está más lejos, y omp a través de una cuenta de Claude es lo más lejano. La pasarela está desactivada hasta que la actives; déjala desactivada si prefieres no asumir ese riesgo.

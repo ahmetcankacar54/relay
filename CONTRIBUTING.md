@@ -31,10 +31,13 @@ How switching, history merging and usage reading work is in [docs/development.md
 2. Run what CI runs, on your machine:
    ```sh
    npm run typecheck
+   npm run lint
+   npm run format:check   # Prettier on the files your change adds: npx prettier --write <file> fixes one
    npm test
    npm run build
+   npm run test:e2e       # browser preview: axe scan and screenshots (npx playwright install chromium once)
    ```
-   CI runs these on macOS, Windows and Linux; a test that needs macOS or POSIX file modes should be skipped elsewhere, not fail.
+   CI runs typecheck, tests and build on macOS, Windows and Linux; a test that needs macOS or POSIX file modes should be skipped elsewhere, not fail. Lint and formatting run once, on Linux. The e2e screenshots are compared on macOS only; after a deliberate UI change, update them on a Mac with `npm run test:e2e -- --update-snapshots` and commit the new images.
 3. Add or update tests for what you change.
 4. Write the commit message as what changed for the user, after a type: `fix: a dropped sign-in is found before a switch`, `feat: …`, `docs: …`, `test: …`.
 5. Use made-up names in tests and fixtures (`example.com`, "Vertex", "Alto"). No real company names, email addresses, account IDs or local paths.

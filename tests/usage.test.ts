@@ -5,6 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { Store, settingsSchema } from "../electron/core/store";
+import { defaultPlanning } from "../shared/planning";
 import {
   missingIdentity,
   networkDetail,
@@ -510,9 +511,11 @@ test("legacy preferences migrate without losing accounts and updates survive rel
   delete old.settings;
   await fs.writeFile(f.store.file, JSON.stringify(old));
   const migrated = new Store(f.root);
-  // Preferences that were never saved keep sharing across all accounts, as they did.
+  // Preferences that were never saved keep sharing across all accounts, as they did; planning
+  // starts in the system's time zone.
   assert.deepEqual(migrated.state.settings, {
     ...DEFAULT_SETTINGS,
+    planning: defaultPlanning(),
     desktopHistoryTransfer: "all",
   });
   assert.equal(migrated.account(f.a.id).name, "A");

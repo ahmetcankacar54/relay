@@ -14,6 +14,7 @@ import { recover } from "./recover";
 import { status } from "./status";
 import { switchCommand } from "./switch";
 import { proxyCommand } from "./proxy";
+import { statuslineCommand } from "./statusline";
 
 /** Every command by name, aliases included. */
 export const COMMANDS: Record<string, Command> = {
@@ -32,5 +33,6 @@ export const COMMANDS: Record<string, Command> = {
   tokens,
   doctor,
   proxy: proxyCommand,
+  statusline: statuslineCommand,
   "reset-vault": resetVault,
 };

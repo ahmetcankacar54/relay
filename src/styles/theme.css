@@ -54,7 +54,8 @@
   --ok-foreground: #166534;
   --warn: #ca8a04;
   --warn-foreground: #854d0e;
-  --crit: #dc2626;
+  /* Also full-limit text: 4.9:1 on a tinted card, where #dc2626 read 4.1:1. */
+  --crit: #c81e1e;
   /* Timeline rows, one colour per planned account (cycled). */
   --tone-1: #ea580c;
   --tone-2: #2563eb;

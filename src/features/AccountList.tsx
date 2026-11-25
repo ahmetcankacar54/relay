@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
-import { MiniMeter } from "@/components/LimitLine";
+import { MiniMeter, limitOriginText } from "@/components/LimitLine";
 import { headlineFigure } from "./Providers";
 import { useI18n } from "@/data/i18n";
 import { ringState } from "@/lib/account-row";
@@ -124,7 +124,12 @@ export function AccountList({
               </span>
             </span>
             <span className={cn(ring === "stale" && "opacity-60")}>
-              <MiniMeter usedPercent={ring === "unknown" ? undefined : figure.used} label={said} />
+              {/* The bar's own tooltip: the row's, then where its figure came from and when. */}
+              <MiniMeter
+                usedPercent={ring === "unknown" ? undefined : figure.used}
+                label={said}
+                title={[tooltip, limitOriginText(figure.origin, now, t, language)].filter(Boolean).join("\n") || undefined}
+              />
             </span>
             {note && (
               <span className={cn("block truncate text-muted-foreground", panel ? "text-2xs" : "text-xs")}>{note}</span>

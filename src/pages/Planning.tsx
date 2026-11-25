@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { PageBody, PageFrame } from "@/app/PageFrame";
+import { useRiskConsent } from "@/components/RiskConsent";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { PlanningPanel, planningHeadline, planningModel } from "../features/PlanningPanel";
+import { planningRisks } from "../../shared/feature-risk";
 
 /** The day's plan and the plan's accounts; the settings open in a sheet from the page header. */
 export function PlanningTab({
@@ -17,7 +19,9 @@ export function PlanningTab({
   const { api, data, accounts, active, settings, busy, desktop, action } =
     useRelay();
   const { t, language } = useI18n();
+  const consent = useRiskConsent();
   return (
+    <>
         <PlanningPanel
           settings={settings.planning}
           keeper={data?.planning}
@@ -31,7 +35,10 @@ export function PlanningTab({
           settingsOpen={settingsOpen}
           onSettingsOpenChange={onSettingsOpenChange}
           update={(patch) =>
-            void action("planning", () => api.updatePlanning(patch))
+            // Early start sends prompts for the user: it waits for its risk to be accepted.
+            void consent.ask(planningRisks(settings.planning, patch)).then(
+              (accepted) => accepted && action("planning", () => api.updatePlanning(patch)),
+            )
           }
           updateAccount={(id, input) =>
             void action(`plan:${id}`, () =>
@@ -39,6 +46,8 @@ export function PlanningTab({
             )
           }
         />
+        {consent.dialog}
+    </>
   );
 }
 

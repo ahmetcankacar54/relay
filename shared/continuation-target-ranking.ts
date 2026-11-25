@@ -1,6 +1,19 @@
 import { planCapacity } from "./planning";
 import { quotaWindows } from "./quota-windows";
-import type { Account, AccountUsage } from "./types";
+import type { Account, AccountUsage, AutoSwitchStrategy } from "./types";
+
+/** Every strategy, in the order Settings → Switching offers them; "best" is the default. */
+export const AUTO_SWITCH_STRATEGIES: readonly AutoSwitchStrategy[] = ["best", "weekly-first", "consume-first"];
+
+/**
+ * The used percent at which automatic switching leaves `account` and stops choosing it: its own
+ * line when one is saved (50–100), else `fallback`, the line of the caller's rule: the warning
+ * threshold for the suggestion, 90 for a target, 100 (full) for the account being left.
+ */
+export function switchAtPercent(account: Pick<Account, "switchAtPercent">, fallback: number): number {
+  const own = account.switchAtPercent;
+  return typeof own === "number" && Number.isInteger(own) && own >= 50 && own <= 100 ? own : fallback;
+}
 
 export interface ContinuationTargetCandidate {
   account: Account;
@@ -55,6 +68,8 @@ export interface RankingContext {
   now: number;
   /** Pro units per hour now */
   rate?: number;
+  /** How the accounts that hold half an hour are ordered; missing means "best". */
+  strategy?: AutoSwitchStrategy;
 }
 
 const MIN_LEFT_PERCENT = 10;
@@ -84,19 +99,47 @@ function openReset(usage: AccountUsage | undefined, now: number) {
   return Number.isFinite(reset) && reset > now ? reset : Infinity;
 }
 
+/** The weekly period's reset, when known and ahead: "weekly-first" uses that week before it is lost. */
+function weeklyReset(usage: AccountUsage | undefined, now: number) {
+  const reset = Date.parse(usage?.sevenDay?.resetsAt ?? "");
+  return Number.isFinite(reset) && reset > now ? reset : Infinity;
+}
+
+/**
+ * The order of the accounts that hold enough, by strategy. Infinity − Infinity is NaN, which
+ * falls through to the next key, as with two closed windows.
+ */
+const STRATEGY_ORDER: Record<
+  AutoSwitchStrategy,
+  (left: RankedContinuationTarget, right: RankedContinuationTarget, now: number) => number
+> = {
+  best: (left, right, now) => openReset(left.usage, now) - openReset(right.usage, now) || byScore(left, right),
+  "weekly-first": (left, right, now) =>
+    weeklyReset(left.usage, now) - weeklyReset(right.usage, now) || byScore(left, right),
+  // The most used first, in percent; the smaller capacity first among equals, so it drains.
+  "consume-first": (left, right) =>
+    left.remainingPercent - right.remainingPercent || left.score - right.score || byScore(left, right),
+};
+
+/** An account past its own switch line: automatic switching would leave it again at once. */
+const pastOwnLine = (r: RankedContinuationTarget) =>
+  r.account.switchAtPercent !== undefined && 100 - r.remainingPercent >= switchAtPercent(r.account, 100);
+
 /**
  * Rank policy-eligible candidates without mutating the caller's collection.
  * With a context: accounts with enough quota for half an hour at the current
- * tempo (else 10% left) first, open windows resetting soonest first (their
- * quota is lost at the reset), then closed windows and accounts bound by
- * their weekly window. Without one, or when nobody has enough: plan
- * capacity × remaining quota.
+ * tempo (else 10% left) first, in the strategy's order ("best": open windows
+ * resetting soonest first, as their quota is lost at the reset, then closed
+ * windows and accounts bound by their weekly window; "weekly-first": the
+ * weekly reset soonest; "consume-first": the least left), then the rest. Without
+ * one, or when nobody has enough: plan capacity × remaining quota. An account
+ * past its own switch line comes last in every order.
  */
 export function rankContinuationTargets(
   candidates: readonly ContinuationTargetCandidate[],
   context?: RankingContext,
 ): RankedContinuationTarget[] {
-  const ranked = candidates.map(({ account, usage }) => {
+  const all = candidates.map(({ account, usage }) => {
     const remainingPercent = remainingQuotaPercent(account, usage);
     return {
       account,
@@ -105,7 +148,9 @@ export function rankContinuationTargets(
       score: (planCapacity(account) * remainingPercent) / 100,
     };
   });
-  if (!context) return ranked.sort(byScore);
+  const past = all.filter(pastOwnLine).sort(byScore);
+  const ranked = all.filter((r) => !pastOwnLine(r));
+  if (!context) return [...ranked.sort(byScore), ...past];
   const rate = context.rate;
   // `score` is in Pro windows, so `score × 100` is Pro units.
   const enough = (r: RankedContinuationTarget) =>
@@ -114,15 +159,12 @@ export function rankContinuationTargets(
       ? r.score * 100 >= rate * MIN_TEMPO_HOURS
       : r.remainingPercent >= MIN_LEFT_PERCENT);
   const passing = ranked.filter(enough);
-  if (!passing.length) return ranked.sort(byScore);
-  // Two closed windows give Infinity − Infinity = NaN, which falls through to byScore.
-  passing.sort(
-    (left, right) =>
-      openReset(left.usage, context.now) -
-        openReset(right.usage, context.now) || byScore(left, right),
-  );
+  if (!passing.length) return [...ranked.sort(byScore), ...past];
+  const order = STRATEGY_ORDER[context.strategy ?? "best"] ?? STRATEGY_ORDER.best;
+  passing.sort((left, right) => order(left, right, context.now));
   return [
     ...passing,
     ...ranked.filter((r) => !passing.includes(r)).sort(byScore),
+    ...past,
   ];
 }

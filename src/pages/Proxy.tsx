@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { PageBody, PageFrame } from "@/app/PageFrame";
 import { addAccountHash, intentHash } from "@/app/routes";
+import { useRiskConsent } from "@/components/RiskConsent";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/data/i18n";
@@ -10,8 +11,11 @@ import { quotaAtRisk } from "@/lib/proxy-ui";
 import { cn } from "@/lib/utils";
 import type { ProxyClientId } from "../../shared/types";
 import { FORMAT_LOCALE } from "../../shared/i18n/locales";
+import { clientRisks, gatewayRisks, proxyPatchRisks } from "../../shared/feature-risk";
+import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
 import { GatewayHeader } from "./proxy/GatewayHeader";
 import { useCopy, useProxyStatus, useTab, type ProxyTab } from "./proxy/hooks";
+import { OverflowCard } from "./proxy/OverflowCard";
 import { PoolCard } from "./proxy/PoolCard";
 import { RequestFeed } from "./proxy/RequestFeed";
 import { RulesTab } from "./proxy/RulesTab";
@@ -43,7 +47,7 @@ function Attention({ tone, children, action }: { tone: "warn" | "crit"; children
  */
 export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
   const { t, language } = useI18n();
-  const { api, busy, desktop, action } = useRelay();
+  const { api, busy, desktop, action, settings } = useRelay();
   const proxy = useProxyStatus();
   const { setStatus, unreadable } = proxy;
   // Reads keep failing: the last state read may be stale, so none of it is shown.
@@ -52,8 +56,18 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
   const [savedTab, setTab] = useTab();
   const tab = initialTab ?? savedTab;
   const disabled = !!busy || !!desktop?.busy;
+  const consent = useRiskConsent();
+  // The pool as main will judge it: an account the page shows out of the pool is excluded.
+  const poolAccounts = status?.accounts ?? [];
+  const pool = {
+    enabled: settings.proxy?.enabled === true,
+    host: status?.host ?? DEFAULT_PROXY_CONFIG.host,
+    excludedAccountIds: poolAccounts.filter((a) => !a.inPool).map((a) => a.id),
+    boundClients: (status?.clients ?? []).filter((c) => c.bound).map((c) => c.id),
+  };
   /** True once the change is saved: `action` shows a failure itself and resolves either way. */
   const configure = async (patch: Patch) => {
+    if (!(await consent.ask(proxyPatchRisks(pool, patch, poolAccounts)))) return false;
     let saved = false;
     await action("proxy-configure", async () => {
       setStatus(await api.proxyConfigure(patch));
@@ -61,8 +75,17 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
     });
     return saved;
   };
-  const toggle = (enabled: boolean) => void action("proxy-toggle", async () => setStatus(await api.proxyToggle(enabled)));
-  const bind = (id: ProxyClientId) => void action("proxy-client", async () => setStatus(await api.proxyBindClient(id)));
+  // Without the risk accepted the switch stays off: it shows `running`, which nothing changed.
+  const toggle = (enabled: boolean) =>
+    void (async () => {
+      if (enabled && !(await consent.ask(gatewayRisks(pool, poolAccounts)))) return;
+      await action("proxy-toggle", async () => setStatus(await api.proxyToggle(enabled)));
+    })();
+  const bind = (id: ProxyClientId) =>
+    void (async () => {
+      if (!(await consent.ask(clientRisks(id)))) return;
+      await action("proxy-client", async () => setStatus(await api.proxyBindClient(id)));
+    })();
   const unbind = (id: ProxyClientId) => void action("proxy-client", async () => setStatus(await api.proxyUnbindClient(id)));
   const boundOff = !status?.running ? (status?.clients ?? []).filter((c) => c.bound) : [];
   // Bound, running, and nothing of its provider can answer: its requests all fail.
@@ -195,12 +218,16 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
                 <ToolsTab status={status} disabled={disabled} copy={copy} onBind={bind} onUnbind={unbind} />
               </TabsContent>
               <TabsContent value="kurallar">
-                <RulesTab status={status} disabled={disabled} onConfigure={configure} />
+                <div className="grid gap-4">
+                  <RulesTab status={status} disabled={disabled} onConfigure={configure} />
+                  <OverflowCard status={status} disabled={disabled} onStatus={setStatus} />
+                </div>
               </TabsContent>
             </>
           )}
         </Tabs>
       </PageBody>
+      {consent.dialog}
     </PageFrame>
   );
 }

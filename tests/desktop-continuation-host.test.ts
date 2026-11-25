@@ -67,8 +67,8 @@ const state = (): DesktopContinuationObservation => ({
   },
 });
 function fixture() {
-  let ui = snapshot();
-  let observed = state();
+  const ui = snapshot();
+  const observed = state();
   let delivery: ContinuationDelivery = { status: "absent" };
   const calls: string[] = [];
   const automation: DesktopAutomation = {

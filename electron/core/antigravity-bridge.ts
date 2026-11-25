@@ -1,6 +1,5 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import net from "node:net";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
@@ -22,6 +21,16 @@ const secret = () => randomBytes(32).toString("base64url");
 /** The names CLIProxyAPI gives Antigravity credentials: antigravity-<email>.json. */
 const CREDENTIAL_FILE = /^antigravity-[^/\\]+\.json$/;
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Asks an older sidecar's management route only when the current one answered with an error. A
+ * timeout or a refused connection is the same on both routes: asking again would only double the
+ * wait of a usage read that is already late.
+ */
+function olderRoute<T>(error: unknown, ask: () => Promise<T>): Promise<T> {
+  if (error instanceof Error && /^Antigravity OAuth service returned \d{3}$/.test(error.message)) return ask();
+  return Promise.reject(error);
+}
 
 async function freePort(): Promise<number> {
   const server = net.createServer();
@@ -280,7 +289,9 @@ export class AntigravityBridge {
     if (url.protocol !== "https:" || !/^(?:daily-)?cloudcode-pa\.googleapis\.com$/.test(url.hostname))
       throw new Error("Not a Code Assist address");
     type Files = { files?: { auth_index?: unknown; provider?: unknown; type?: unknown; disabled?: unknown }[] };
-    const listed = await this.management<Files>("/auth-files").catch(() => this.managementAt<Files>("/v0/management", "/auth-files"));
+    const listed = await this.management<Files>("/auth-files").catch((error: unknown) =>
+      olderRoute(error, () => this.managementAt<Files>("/v0/management", "/auth-files")),
+    );
     const file = listed.files?.find(
       (f) => (f.provider === "antigravity" || f.type === "antigravity") && f.disabled !== true && typeof f.auth_index === "string",
     );
@@ -298,8 +309,8 @@ export class AntigravityBridge {
       data: request.body,
     };
     type Answer = { status_code?: unknown; body?: unknown; header?: Record<string, unknown> };
-    const answer = await this.management<Answer>("/api-call", body).catch(() =>
-      this.managementAt<Answer>("/v0/management", "/api-call", body),
+    const answer = await this.management<Answer>("/api-call", body).catch((error: unknown) =>
+      olderRoute(error, () => this.managementAt<Answer>("/v0/management", "/api-call", body)),
     );
     const status = typeof answer.status_code === "number" ? answer.status_code : 502;
     const retry = answer.header?.["Retry-After"] ?? answer.header?.["retry-after"];

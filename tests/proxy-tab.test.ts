@@ -1,12 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
-import { act, createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { ProxyPage } from "../src/pages/Proxy";
-import { RelayContext, type Relay } from "../src/data/relay-context";
-import { I18nContext } from "../src/data/i18n";
-import { i18nValue, testT } from "./i18n";
+import { testT } from "./i18n";
 import {
   claudeCodeSnippet,
   clientHost,
@@ -18,75 +14,10 @@ import {
   resetLabel,
   validHost,
 } from "../src/lib/proxy-ui";
-import { DEFAULT_SETTINGS, type ProxyStatus, type Snapshot } from "../shared/types";
-import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const KEY = "relay-sec-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
-const status = (over: Partial<ProxyStatus> = {}): ProxyStatus => ({
-  running: true,
-  port: 8317,
-  host: "127.0.0.1",
-  clientApiKey: KEY,
-  stats: { totalRequests: 1234, activeRequests: 2, promptCacheHits: 97, cacheHitRate: 84.5 },
-  accounts: [
-    { id: "a", name: "Personal", email: "p@example.com", active: true, signedIn: true, quotaPercent: 42, resetInMinutes: 130, inPool: true, requests: 0 },
-    { id: "b", name: "Work", active: false, signedIn: true, quotaPercent: 100, resetInMinutes: 5, inPool: true, requests: 0 },
-    { id: "c", name: "New", active: false, signedIn: false, inPool: true, requests: 0 },
-  ],
-  ...over,
-});
 const t = testT("tr");
 const en = testT("en");
-
-function relayFor(proxy: ProxyStatus | undefined, api: object = {}): Relay {
-  const settings = { ...DEFAULT_SETTINGS };
-  return {
-    api: { claudeLaunch: async () => ({ quicOff: false }), ...api },
-    preview: false,
-    error: "",
-    notice: "",
-    accounts: [],
-    active: undefined,
-    settings,
-    busy: "",
-    usageBusy: new Set<string>(),
-    desktopBusy: false,
-    hasUnclaimedDesktop: false,
-    targetOrg: "",
-    historyRevision: 0,
-    version: "0.18.0",
-    desktop: {
-      available: true,
-      running: true,
-      organizations: [],
-      busy: false,
-      recoveryRequired: false,
-      errorRevision: 0,
-      ...(proxy ? { proxyStatus: proxy } : {}),
-    },
-    data: { settings, usage: {}, accounts: [], authFlows: [], diagnostics: { platform: "darwin", version: "2.1.0" } } as unknown as Snapshot,
-    requestDesktop() {},
-    setSetupId() {},
-    cancelDesktopRequest() {},
-    setOrg() {},
-    setNotice() {},
-    startCli: async () => {},
-    refreshUsage: async () => {},
-    action: async (_name: string, fn: () => Promise<unknown>) => void (await fn()),
-    setData() {},
-  } as unknown as Relay;
-}
-/** A switch's state, whatever the order of its attributes. */
-const checked = (html: string, id: string) =>
-  new RegExp(`<button[^>]*role="switch"[^>]*aria-checked="(true|false)"[^>]*id="${id}"`).exec(html)?.[1];
-const render = (relay: Relay, node: Parameters<typeof createElement>[0]) =>
-  renderToStaticMarkup(
-    createElement(
-      I18nContext.Provider,
-      { value: i18nValue("tr") },
-      createElement(RelayContext.Provider, { value: relay }, createElement(node as never)),
-    ),
-  );
 
 test("the client address is one a client can dial, and the key shows only its tail", () => {
   assert.equal(gatewayUrl("127.0.0.1", 8317), "http://127.0.0.1:8317");
@@ -133,7 +64,7 @@ test("a reset reads as time left, in both languages", () => {
 });
 
 test("main, the preload and the desktop snapshot carry the gateway; quitting stops it", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
   for (const name of ["proxy-status", "proxy-toggle", "proxy-configure", "proxy-regenerate-key", "proxy-bind-client", "proxy-unbind-client"]) {
     assert.match(main, new RegExp(`handle\\("${name}"`), name);

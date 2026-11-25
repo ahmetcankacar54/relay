@@ -12,7 +12,7 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type RelayAPI, type Snapshot } from "../shared/types";
 import { TOKEN_ROW_LABELS, type TokenCounts, type TokenRow, type TokenUsageView } from "../shared/token-usage-view";
-import { dayTip, fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
+import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 import { i18nValue, testT } from "./i18n";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -105,9 +105,6 @@ const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "
 const card = (state: Parameters<typeof TokenUsageCard>[0]["state"], language: Language = "tr") =>
   render(createElement(TokenUsageCard, { state, accounts }), language);
 const shown = (language: Language = "tr") => card({ view, loading: false }, language);
-/** The chart's <svg>, not the panda drawn in the "Panda anlatsın" button. */
-const chartOf = (container: Fake) =>
-  find(container, (n) => n.tagName === "svg" && (n as { attributes?: Map<string, string> }).attributes?.get?.("role") === "group")!;
 /** The day table on its own: the card folds it under "Gün gün tablo". */
 const dayTable = (language: Language = "tr") =>
   render(createElement(DayTable, { view, columns: tokenColumns(view, accounts, testT(language)), metric: "total" }), language);

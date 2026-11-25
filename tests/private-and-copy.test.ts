@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import fs from "node:fs";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -82,7 +83,7 @@ test("the places that show an account's e-mail blur it", () => {
 });
 
 test("Copy goes through main: the window's clipboard API is refused in Relay's windows", () => {
-  const main = fs.readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /setPermissionCheckHandler\(\(\) => false\)/);
   assert.match(main, /handle\("copy-text", \(text\) => \{\s*clipboard\.writeText\(z\.string\(\)\.max\(16_384\)\.parse\(text\)\);/);
   const preload = fs.readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");

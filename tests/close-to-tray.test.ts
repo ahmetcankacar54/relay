@@ -1,12 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mainSource } from "./helpers/main-source";
 
 // main.ts imports Electron, so these read its source, as the other main tests do.
-const main = readFileSync(
-  new URL("../electron/main.ts", import.meta.url),
-  "utf8",
-);
+const main = mainSource();
 /** One top-level function, from its signature to the closing brace at column 0. */
 function topLevel(name: string) {
   const start = main.indexOf(`function ${name}(`);
@@ -22,7 +19,7 @@ test("Cmd+Q closes the window to the menu bar and Alt+Cmd+Q quits Relay", () => 
   // The template itself is tested in tests/app-menu.test.ts; main hands it these actions.
   assert.match(
     main,
-    /appMenuTemplate\(getAppLocale\(\), \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
+    /appMenuTemplate\(getAppLocale\(\), \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*openDocumentation: /,
   );
 });
 

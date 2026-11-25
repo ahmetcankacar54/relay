@@ -8,6 +8,8 @@ export interface CliIO {
   isTTY: boolean;
   /** Asks a question on the terminal; undefined on end of input or Ctrl+C. */
   prompt(question: string): Promise<string | undefined>;
+  /** Everything piped to stdin (Claude Code's status line JSON); empty from a terminal. */
+  readInput?(): Promise<string>;
   env: NodeJS.ProcessEnv;
   cwd: string;
   now(): number;

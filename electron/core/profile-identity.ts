@@ -120,7 +120,7 @@ export function authStatus(
       loggedIn: false,
       checkedAt,
       error: status.loggedIn
-        ? "Bu profil Claude aboneliği ile giriş gerektiriyor."
+        ? "This profile needs a sign-in with a Claude subscription."
         : undefined,
     };
   const email = text(status.email, 254);

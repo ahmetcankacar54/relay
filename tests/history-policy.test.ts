@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { DEFAULT_SETTINGS, type Account } from "../shared/types";
+import { defaultPlanning } from "../shared/planning";
 import { historySources, allowedHistoryPair } from "../shared/history-policy";
 import { settingsSchema, settingsPatchSchema } from "../electron/core/store";
 
@@ -216,6 +217,7 @@ test("a stored registry without the history mode keeps the old default, all acco
     assert.equal(none.store.state.settings.desktopHistoryTransfer, "all");
     assert.deepEqual(none.store.state.settings, {
       ...DEFAULT_SETTINGS,
+      planning: defaultPlanning(),
       desktopHistoryTransfer: "all",
     });
   } finally {

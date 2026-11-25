@@ -9,8 +9,8 @@ the same switch as the Relay menu-bar app:
 3. it carries Code tab history between accounts;
 4. it reopens Claude.
 
-It can also show how much of each account's limits is used, and run Claude Code as a given
-account.
+It can also show how much of each account's limits is used, put the account and its limits in
+Claude Code's status line, and run Claude Code as a given account.
 
 Relay is unofficial and is not affiliated with or endorsed by Anthropic. It changes Claude
 Desktop's local files, so a Claude Desktop update can break it.
@@ -26,9 +26,12 @@ Desktop's local files, so a Claude Desktop update can break it.
 
 ## Requirements
 
-- macOS
+- macOS, Linux or Windows. Saving and switching Claude Desktop accounts (`add`, `switch`,
+  `recover`, `history sync`, `reset-vault`) works on macOS only: the CLI opens the vault through
+  the macOS Keychain. Elsewhere those commands say so, and Relay.app switches accounts; every other
+  command works.
 - Node.js 22.12 or newer
-- Claude Desktop (`/Applications/Claude.app` or `~/Applications/Claude.app`)
+- Claude Desktop (`/Applications/Claude.app` or `~/Applications/Claude.app`), for switching
 - For limits and `relay run`: the Claude Code CLI, version 2.1.296 or newer
 
 ## Install
@@ -108,6 +111,36 @@ relay tokens --days 30
 This shows daily token usage per account. Relay.app records it while the app is open; the CLI only
 reads it. Values marked `≈` were estimated from limit samples.
 
+## Claude Code status line
+
+```bash
+relay statusline install
+```
+
+Claude Code then shows a line like this under its prompt:
+
+```text
+Work · 5 h 42% · week 18% · renews 14:30
+```
+
+- **The account** is the one this Claude Code session runs on: the account the gateway used for the
+  session (shown with "via gateway"), the account of `relay run`, or the one the terminal's
+  `claude` is signed in to.
+- **The percentages** come from Claude Code itself when it reports them, else from Relay.app's last
+  read. The time is when the 5-hour period renews.
+- **Relay.app writes the data** (`statusline.json` in its data folder) on every limit read; the
+  command reads that file and Claude Code's own files only, never the network or the Keychain, and
+  answers in a few tens of milliseconds. When the file is more than 15 minutes old, the line says
+  how old. The labels are in Relay.app's language.
+- `--color` colors the percentages by how full they are.
+
+`relay statusline install` sets `statusLine` in `~/.claude/settings.json` and leaves every other
+setting alone. It writes this relay by absolute path (Node, then its launcher), because Claude Code
+runs the command in a shell that may not have npm's folder on its PATH. A status line you already
+had is saved, and `relay statusline uninstall` puts it back. Relay.app has the same switch:
+Settings → Advanced → Relay in Claude Code's status line. It writes the path of the `relay` it
+finds, and while none is installed it stays off and offers the install command.
+
 ## Commands
 
 | Command | What it does |
@@ -128,6 +161,8 @@ reads it. Values marked `≈` were estimated from limit samples.
 | `relay run <name> [-- <claude args>]` | Run Claude Code as `<name>`. |
 | `relay tokens [--days 7\|30\|90] [--account <name>] [--json]` | Daily token usage recorded by Relay.app. |
 | `relay doctor [--json]` | Check the setup. |
+| `relay statusline [--color]` | The line Claude Code shows under its prompt (reads Claude Code's JSON on stdin). |
+| `relay statusline install` / `uninstall` | Add Relay to Claude Code's status line, or take it out. |
 | `relay reset-vault [--yes]` | Start the vault over when its Keychain key is lost. |
 
 Accounts can be named by any case. `İ`, `I` and `ı` count as the same letter. A unique prefix of
@@ -149,12 +184,16 @@ These options work with every command:
 | 2 | Wrong usage, or an unknown or ambiguous account name |
 | 3 | Busy or blocked: another Relay is switching, a sign-in is pending, or a switch must be recovered |
 | 4 | Confirmation needed: no terminal and no `--yes` |
-| 5 | Environment: not macOS, an old Relay.app, the Keychain item unreadable, a sandbox, or no Automation permission |
+| 5 | Environment: a switching command off macOS, an old Relay.app, the Keychain item unreadable, a sandbox, or no Automation permission |
 
 ## Living with Relay.app
 
-The CLI and Relay.app share one data folder (`~/Library/Application Support/Relay`) and one
-account list.
+The CLI and Relay.app share one data folder and one account list:
+- macOS: `~/Library/Application Support/Relay`
+- Linux: `$XDG_CONFIG_HOME/Relay`, else `~/.config/Relay`
+- Windows: `%APPDATA%\Relay`
+
+`RELAY_HOME` points the CLI at another folder.
 
 - Relay.app must be 0.12 or newer. Open it once after updating, so it moves its vault to the format
   the CLI reads.

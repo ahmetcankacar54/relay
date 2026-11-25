@@ -11,6 +11,10 @@ import type { TerminalStatus } from "../shared/terminal-identity";
 import { localDate, localSlot } from "../shared/planning";
 import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
 import { resolveLocale } from "../shared/i18n/locales";
+import { acknowledgeRisks } from "../shared/feature-risk";
+import { remoteNotifyUrl } from "../shared/remote-notify";
+import { enabledMeters, type MeterReading } from "../shared/meters";
+import { OVERFLOW_PRESETS, keyHint, overflowModel, type OverflowSettings, type OverflowStatus } from "../shared/overflow";
 import type {
   Account,
   AuthFlow,
@@ -336,8 +340,53 @@ function previewTokenLedger(): LedgerSnapshot {
     progress: { scannedBytes: 1, totalBytes: 1, complete: true },
   };
 }
+/**
+ * The other tools' meters: Copilot and Cursor are on (their risk accepted), Gemini CLI is off so
+ * turning it on in Settings → Other tools shows the consent. Its sample is a Workspace account
+ * whose last read failed, so the row also shows a reading with an error beside it.
+ */
+const PREVIEW_METERS: MeterReading[] = [
+  {
+    provider: "copilot",
+    label: "individual · alto",
+    source: "unofficial",
+    readAt: minutes(-4),
+    windows: [
+      { name: "premium", kind: "monthly", unit: "premium requests", usedPercent: 62, used: 186, limit: 300, resetsAt: minutes(12 * 24 * 60) },
+      { name: "chat", kind: "monthly", unit: "requests", usedPercent: 8, resetsAt: minutes(12 * 24 * 60) },
+    ],
+  },
+  {
+    provider: "cursor",
+    label: "pro",
+    source: "unofficial",
+    readAt: minutes(-9),
+    windows: [
+      { name: "included", kind: "monthly", unit: "$", usedPercent: 91, used: 18.2, limit: 20, resetsAt: minutes(5 * 24 * 60) },
+      { name: "auto", kind: "monthly", unit: "$", usedPercent: 40, resetsAt: minutes(5 * 24 * 60) },
+      { name: "api", kind: "monthly", unit: "$", usedPercent: 51, resetsAt: minutes(5 * 24 * 60) },
+    ],
+  },
+  {
+    provider: "gemini-cli",
+    label: "Standard",
+    source: "unofficial",
+    readAt: minutes(-25),
+    error: { issue: "unavailable" },
+    windows: [
+      { name: "pro", kind: "daily", unit: "requests", usedPercent: 34, resetsAt: minutes(7 * 60) },
+      { name: "flash", kind: "daily", unit: "requests", usedPercent: 12, resetsAt: minutes(7 * 60) },
+    ],
+  },
+];
+const previewMeters = (settings: { meters?: readonly MeterReading["provider"][] }) =>
+  enabledMeters(settings).flatMap((provider) => PREVIEW_METERS.filter((m) => m.provider === provider));
 const state: Snapshot = {
-  settings: structuredClone(DEFAULT_SETTINGS),
+  settings: {
+    ...structuredClone(DEFAULT_SETTINGS),
+    meters: ["copilot", "cursor"],
+    riskAcknowledged: acknowledgeRisks({}, ["meter-copilot", "meter-cursor"]),
+  },
   usage: Object.fromEntries(
     accounts.map((a, i) => [
       a.id,
@@ -356,6 +405,8 @@ const state: Snapshot = {
             checkedAt: new Date(
               Date.now() - (i === 2 ? 50 : 1) * 60_000,
             ).toISOString(),
+            // Read through each account's own sign-in: the limit rows' tooltips say "Official API".
+            source: "cli",
             fiveHour: {
               usedPercent: [94, 22, 63, 100][i % 4],
               resetsAt: new Date(Date.now() + 110 * 60_000).toISOString(),
@@ -409,6 +460,8 @@ const state: Snapshot = {
 };
 /** The menu bar title's items, kept in memory so Settings can be tried in the preview. */
 let previewMenuBar: MenuBarItem[] = [...DEFAULT_MENU_BAR_ITEMS];
+/** Whether the preview's Claude Code status line shows Relay. */
+let previewStatusline = false;
 const desktopOnly = async (): Promise<never> => {
   throw new Error(
     "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",
@@ -781,6 +834,7 @@ const previewProxy: {
   excluded: string[];
   bound: Partial<Record<ProxyClientId, boolean>>;
   subagentOverflow: boolean;
+  overflow: Omit<OverflowSettings, "upstreams"> & { upstreams: OverflowStatus["upstreams"] };
 } = {
   running: scenario === "proxy-waiting",
   port: 8317,
@@ -793,6 +847,42 @@ const previewProxy: {
   // `?scenario=proxy-waiting` also shows Claude Code bound, as the Overview's gateway line needs.
   bound: scenario === "proxy-waiting" ? { "claude-code": true } : {},
   subagentOverflow: false,
+  overflow: {
+    enabled: true,
+    trigger: "limited",
+    dailyCapUsd: 5,
+    upstreams: [
+      {
+        ...OVERFLOW_PRESETS.anthropic,
+        id: "preview-anthropic",
+        preset: "anthropic",
+        enabled: true,
+        order: 0,
+        keyHint: "sk-…a1b2",
+      },
+      {
+        ...OVERFLOW_PRESETS.deepseek,
+        id: "preview-deepseek",
+        preset: "deepseek",
+        enabled: false,
+        order: 1,
+        keyHint: "sk-…9f3c",
+      },
+    ],
+  },
+};
+/** The preview's overflow status: made-up spend while the gateway runs. */
+const previewOverflow = (): OverflowStatus => {
+  const { overflow } = previewProxy;
+  const spent = previewProxy.running ? 1.27 : 0;
+  return {
+    enabled: overflow.enabled,
+    trigger: overflow.trigger ?? "limited",
+    ...(overflow.dailyCapUsd !== undefined ? { dailyCapUsd: overflow.dailyCapUsd } : {}),
+    spentTodayUsd: spent,
+    capReached: overflow.dailyCapUsd !== undefined && spent >= overflow.dailyCapUsd,
+    upstreams: [...overflow.upstreams].sort((a, b) => a.order - b.order),
+  };
 };
 const minutesTo = (iso: string | null | undefined) =>
   iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 60_000)) : undefined;
@@ -818,6 +908,7 @@ const previewRecent = (): ProxyRequestLog[] => {
     { at: now - 80_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "main", ms: 5_100, tokens: { input: 3, cacheWrite: 41_000, output: 120 }, cost: 0.156, note: "cold-move", miss: { reason: "expired" as const, tokens: 40_800 } },
     { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true, client: "agent-sdk", requestClass: "auxiliary", ms: 940, tokens: { input: 1_800, output: 24 } },
     { at: now - 160_000, provider: "codex", model: "gpt-5-codex", status: 503, note: "no-account", client: "codex" },
+    { at: now - 240_000, provider: "claude", model: "claude-sonnet-5-5", status: 200, ...cc, requestClass: "main", ms: 4_300, tokens: { input: 8_200, output: 640 }, cost: 0.0228, upstream: "Anthropic API", pick: { reason: "overflow" as const } },
   ];
 };
 const previewProxyStatus = (): ProxyStatus => ({
@@ -869,6 +960,7 @@ const previewProxyStatus = (): ProxyStatus => ({
   }),
   recent: previewRecent(),
   ...(previewProxy.subagentOverflow ? { subagentOverflow: true } : {}),
+  overflow: previewOverflow(),
   ...(previewProxy.running && accounts.length
     ? {
         nextPick: {
@@ -937,6 +1029,39 @@ export const previewApi: RelayAPI = {
   proxyRegenerateKey: async () => {
     previewProxy.key = `relay-sec-preview-${Math.random().toString(36).slice(2).padEnd(28, "0")}`;
     return previewProxyStatus();
+  },
+  proxyOverflowConfigure: async (input) => {
+    const overflow = previewProxy.overflow;
+    if (input.enabled !== undefined) overflow.enabled = input.enabled;
+    if (input.trigger) overflow.trigger = input.trigger;
+    if (input.dailyCapUsd === null) delete overflow.dailyCapUsd;
+    else if (input.dailyCapUsd !== undefined) overflow.dailyCapUsd = input.dailyCapUsd;
+    if (input.order) {
+      const order = input.order;
+      overflow.upstreams = overflow.upstreams.map((u) => ({ ...u, order: order.includes(u.id) ? order.indexOf(u.id) : order.length + u.order }));
+    }
+    return previewProxyStatus();
+  },
+  proxyOverflowSaveUpstream: async ({ key, id, ...fields }) => {
+    const overflow = previewProxy.overflow;
+    const existing = overflow.upstreams.find((u) => u.id === id);
+    const saved = {
+      ...fields,
+      id: existing?.id ?? `preview-${Math.random().toString(36).slice(2, 10)}`,
+      order: existing?.order ?? overflow.upstreams.length,
+      ...(key ? { keyHint: keyHint(key) } : existing?.keyHint ? { keyHint: existing.keyHint } : {}),
+    };
+    overflow.upstreams = existing ? overflow.upstreams.map((u) => (u.id === saved.id ? saved : u)) : [...overflow.upstreams, saved];
+    return previewProxyStatus();
+  },
+  proxyOverflowRemoveUpstream: async (id) => {
+    previewProxy.overflow.upstreams = previewProxy.overflow.upstreams.filter((u) => u.id !== id);
+    return previewProxyStatus();
+  },
+  proxyOverflowTest: async (id) => {
+    const upstream = previewProxy.overflow.upstreams.find((u) => u.id === id);
+    const model = upstream ? overflowModel(upstream, "claude-haiku-5-5") : "claude-haiku-5-5";
+    return upstream?.preset === "anthropic" ? { ok: true, model, status: 200 } : { ok: false, model, status: 401, message: "Invalid API key" };
   },
   detectProviders: async () => [
     {
@@ -1047,6 +1172,16 @@ export const previewApi: RelayAPI = {
     account.planning = input;
     return structuredClone(account);
   },
+  setAccountSwitchAt: async (id, percent) => {
+    const account = accounts.find((a) => a.id === id);
+    if (!account) throw new Error("Account not found.");
+    if (percent === undefined) delete account.switchAtPercent;
+    else account.switchAtPercent = percent;
+    return structuredClone(account);
+  },
+  // The browser preview posts nothing: a valid URL reads as delivered, as the app would say.
+  testRemoteNotify: async ({ url }) =>
+    remoteNotifyUrl(url) ? { ok: true, status: 200 } : { ok: false, reason: url.trim() ? "invalid-url" : "off" },
   extensionStatus: async () => structuredClone(previewExtension),
   linkExtension: async () => structuredClone(previewExtension),
   checkExtension: async () => {
@@ -1089,6 +1224,36 @@ export const previewApi: RelayAPI = {
   setLanguage: async () => {},
   getLanguage: async () => ({ pref: "system" as const, locale: resolveLocale("system", navigator.languages) }),
   showDiagnostics: desktopOnly,
+  exportDiagnostics: desktopOnly,
+  // The backup dialog runs through in the preview; nothing is written or read.
+  exportBackup: async ({ includeSignIns }) => ({
+    accounts: state.accounts.length,
+    signIns: includeSignIns ? state.accounts.length : 0,
+  }),
+  chooseBackup: async () => ({ name: "relay-2026-11-23.relaybackup" }),
+  openBackup: async () => ({
+    createdAt: new Date().toISOString(),
+    relayVersion: "0.29.0",
+    platform: "darwin",
+    signIns: true,
+    currentAccounts: state.accounts.length,
+    accounts: state.accounts.map((account) => ({
+      name: account.name,
+      provider: account.provider ?? "claude",
+      signIn: true,
+      present: true,
+    })),
+  }),
+  importBackup: async (mode) => ({
+    mode,
+    added: mode === "replace" ? state.accounts.length : 0,
+    skipped: mode === "merge" ? state.accounts.length : 0,
+    signIns: mode === "replace" ? state.accounts.length : 0,
+    signInsFailed: 0,
+    ...(mode === "replace" ? { before: "before-import-2026-11-23.relaybackup" } : {}),
+  }),
+  cancelBackup: async () => {},
+  resetData: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,
   checkUpdate: async () => {
@@ -1105,6 +1270,8 @@ export const previewApi: RelayAPI = {
     state.update = { ...(state.update ?? previewUpdate()), autoCheck: enabled };
   },
   openUpdateNotes: async () => {},
+  // The preview registers no global shortcuts.
+  pauseShortcuts: async () => {},
   setSeparateWindows: async (enabled) => {
     state.windows = { supported: true, open: [], others: 0, ...state.windows, enabled };
   },
@@ -1163,8 +1330,16 @@ export const previewApi: RelayAPI = {
             };
     return structuredClone(state.settings);
   },
+  acknowledgeRisk: async (ids) => {
+    state.settings.riskAcknowledged = acknowledgeRisks(state.settings.riskAcknowledged, ids);
+    return structuredClone(state.settings);
+  },
   refreshUsage: async (id) => structuredClone(state.usage[id]),
   claudeAppAccess: async () => ({ supported: true, allowed: false }),
+  claudeStatusline: async (enable) => {
+    if (enable !== undefined) previewStatusline = enable;
+    return { installed: previewStatusline, other: false, cli: "/opt/homebrew/bin/relay" };
+  },
   renewSignInNow: async () => ({ result: "unavailable" as const, detail: "preview" }),
   desktopSnapshot: async () => ({
     ...structuredClone(desktop),
@@ -1234,7 +1409,7 @@ export const previewApi: RelayAPI = {
     }),
   lostFoundCollection: async () =>
     lostFoundCollection(previewLostFoundSource()),
-  snapshot: async () => structuredClone(state),
+  snapshot: async () => structuredClone({ ...state, meters: previewMeters(state.settings) }),
   createAccount: async (input) => {
     if (scenario !== "unlinked-no-code" && scenario !== "mixed-connections")
       return desktopOnly();

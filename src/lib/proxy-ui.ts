@@ -233,6 +233,7 @@ export function requestDetail(
   }
   if (entry.note === "refused")
     parts.push(t("proxyUi.notALimitAnthropicTurnedThe"));
+  if (entry.note === "unpriced") parts.push(t("apiOverflow.costUnknown"));
   if (entry.note === "cold-move")
     parts.push(t("proxyUi.itsCacheWasColdMovedOff"));
   return parts.join(" · ");
@@ -244,6 +245,7 @@ const PICK_LABELS: Record<Exclude<ProxyPickReason, "bound">, MessageId> = {
   balanced: "proxyUi.pickedBalanced",
   priority: "proxyUi.pickedPriority",
   only: "proxyUi.pickedOnly",
+  overflow: "apiOverflow.pickedOverflow",
 };
 
 /** A routing reason alone, for the pool's next-session line: what the strategy looks for. */
@@ -253,6 +255,7 @@ const REASON_LABELS: Record<ProxyPickReason, MessageId> = {
   balanced: "proxyUi.reasonBalanced",
   priority: "proxyUi.reasonPriority",
   only: "proxyUi.reasonOnly",
+  overflow: "apiOverflow.reasonOverflow",
 };
 export function pickReasonLabel(reason: ProxyPickReason, t: T): string {
   return t(REASON_LABELS[reason]);

@@ -1,5 +1,6 @@
-// Builds the relay CLI for npm: one ESM bundle (Relay's Electron-free core, zod inlined) and a
-// plain-syntax launcher that checks macOS and the Node version before loading it.
+// Builds the relay CLI for npm: one ESM bundle (Relay's Electron-free core, zod inlined), a small
+// bundle for `relay statusline` alone (Claude Code runs it after every answer, so it must start
+// fast), and a plain-syntax launcher that checks the Node version and picks one of them.
 import { build } from "esbuild";
 import { chmod, copyFile, mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -26,5 +27,16 @@ const result = await build({
   logLevel: "warning",
 });
 await writeFile(new URL("meta.json", out), JSON.stringify(result.metafile));
+// No catalogs, no zod, no core: the statusline reads two small files and stdin.
+await build({
+  entryPoints: [fileURLToPath(new URL("../cli/src/statusline-bin.ts", import.meta.url))],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  outfile: fileURLToPath(new URL("relay-statusline.js", out)),
+  minify: false,
+  logLevel: "warning",
+});
 await copyFile(new URL("../cli/launcher.js", import.meta.url), new URL("relay.js", out));
 await chmod(new URL("relay.js", out), 0o755);

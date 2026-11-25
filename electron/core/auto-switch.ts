@@ -11,7 +11,7 @@ import {
   historySources,
 } from "../../shared/history-policy";
 import { quotaWindows } from "../../shared/usage";
-import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
+import { rankContinuationTargets, switchAtPercent } from "../../shared/continuation-target-ranking";
 import type { Store } from "./store";
 import type { DesktopManager } from "./desktop";
 
@@ -38,6 +38,8 @@ interface Dependencies {
   withDesktopLock?: <T>(action: () => Promise<T>) => Promise<T>;
   /** Pro units per hour now (the tempo); undefined when unknown. */
   tempoRate?: () => number | undefined;
+  /** The Claude app was prepared on `targetId`: the remote notifications post it. Never throws back. */
+  switched?: (targetId: string) => void;
 }
 function identityReady(account: Account) {
   return (
@@ -77,11 +79,16 @@ function futureReset(window: UsageWindow, now: number) {
 }
 /** The usage API's reset time moves by seconds between reads; an episode is one reset to the nearest 10 minutes. */
 const EPISODE_RESET_MS = 10 * 60_000;
+/**
+ * The source's windows at or past its switch line, each an episode until its reset: full (100)
+ * unless the account has its own line, where automatic switching leaves it earlier.
+ */
 function exhaustion(account: Account, usage: AccountUsage, now: number) {
+  const line = switchAtPercent(account, 100);
   return (["fiveHour", "sevenDay"] as const).flatMap((name) => {
     const window = usage[name];
     const expiresAt = window && futureReset(window, now);
-    return validWindow(window) && window!.usedPercent >= 100 && expiresAt
+    return validWindow(window) && window!.usedPercent >= line && expiresAt
       ? [
           {
             key: `${account.desktop!.accountUuid.toLowerCase()}:${account.desktop!.orgId.toLowerCase()}:${name}:${Math.round(expiresAt / EPISODE_RESET_MS)}`,
@@ -107,7 +114,7 @@ function usableTarget(
     windows.every(
       (window) =>
         validWindow(window) &&
-        window.usedPercent < 90 &&
+        window.usedPercent < switchAtPercent(account, 90) &&
         (!window.resetsAt || !!futureReset(window, now)),
     )
   );
@@ -201,11 +208,11 @@ export function autoSwitchDecision(
           source.desktop!.orgId.toLowerCase()
       ),
   );
-  // The same rule as the other automatic switches: soonest reset among the
-  // accounts with enough quota at the tempo, else capacity × remaining.
+  // The same rule as the other automatic switches: the strategy's order among the accounts
+  // with enough quota at the tempo, else capacity × remaining.
   const target = rankContinuationTargets(
     eligible.map((account) => ({ account, usage: usage[account.id] })),
-    { now, rate },
+    { now, rate, strategy: settings.autoSwitchStrategy },
   )[0]?.account;
   if (!target)
     return { ...state("blocked", "no-ready-target", source.id), exhausted };
@@ -511,6 +518,11 @@ export class AutoSwitchManager {
           switchedAt: new Date(this.now()).toISOString(),
         };
         this.publish(this.lastSuccess);
+        try {
+          this.dependencies.switched?.(targetId);
+        } catch {
+          // Telling about the switch must never turn it into a failed one.
+        }
       } catch {
         if (this.stopped) return;
         if (this.store.state.settings.autoSwitchMode !== "after-exit") {

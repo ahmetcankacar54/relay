@@ -11,6 +11,7 @@ import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import type { Destination } from "@/app/routes";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
 import { AccountsBoard } from "./overview/AccountsBoard";
+import { MetersCard } from "./overview/MetersCard";
 import { TodayCard } from "./overview/TodayCard";
 import { SetupChecklist } from "./overview/SetupChecklist";
 
@@ -83,6 +84,8 @@ export function Overview({
             Until the first snapshot the board's placeholders stand in for both. */}
         {accounts.length === 0 && relay.data !== undefined && <SetupChecklist go={go} />}
         <AccountsBoard now={now} />
+        {/* The other tools' meters, read-only: after the accounts Relay switches, before the plan. */}
+        <MetersCard now={now} />
         {cards.today && <TodayCard go={go} now={now} />}
         {accounts.length > 0 && <SetupChecklist go={go} />}
       </PageBody>

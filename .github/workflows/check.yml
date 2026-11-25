@@ -6,6 +6,65 @@ on:
 permissions:
   contents: read
 jobs:
+  # Lint and formatting do not depend on the platform: one runner is enough.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # format:check compares with the base commit to find the files this change adds.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+        env:
+          FORMAT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+  # The browser preview (npm run dev:ui) in Chromium: axe on both runners, and the screenshots on
+  # macOS only, where the baselines in e2e/__snapshots__ were drawn (e2e/preview.spec.ts).
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Playwright version
+        id: playwright
+        shell: bash
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install Chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      # A cached browser still needs the system libraries, which live outside the cache.
+      - name: Install Chromium's system libraries
+        if: steps.browsers.outputs.cache-hit == 'true' && runner.os == 'Linux'
+        run: npx playwright install-deps chromium
+      - run: npm run test:e2e
+      - name: Keep the report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-report-${{ matrix.os }}
+          path: |
+            e2e/report
+            e2e/test-results
+          retention-days: 7
   verify:
     strategy:
       # One platform's failure must not hide what the others report.
@@ -20,7 +79,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+      # The whole tree: Electron, which ships inside the app, is a devDependency.
+      - run: npm audit --audit-level=high
       - run: npm run typecheck
       - name: Widget strings match the catalogs
         run: node --import tsx scripts/i18n/widget-strings.ts --check
@@ -30,6 +90,16 @@ jobs:
       - name: Desktop IPC and PTY integration
         if: runner.os == 'macOS'
         run: npm run test:desktop
+      # Ubuntu 24.04's AppArmor refuses the unprivileged user namespaces Chromium's sandbox
+      # uses; allowing them keeps the smoke on the sandbox Relay ships with, no --no-sandbox.
+      - name: Allow Chromium's sandbox
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Windows and Linux have no fixture for the integration test above; this proves Relay
+      # boots with a fresh profile, answers over IPC and quits cleanly (docs/windows-verification.md).
+      - name: Boot smoke
+        if: runner.os != 'macOS'
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot
       # electron-builder never signs anything under Contents/PlugIns, so the
       # widget extension keeps the signature it has in dist-electron. The build
       # signs only its executable, which leaves the bundle without a resource
@@ -50,3 +120,6 @@ jobs:
           # so pull requests would not see what pushes see. The identity is
           # ad hoc ("-") and the workflow holds no certificate or secret.
           CSC_FOR_PULL_REQUEST: "true"
+      - name: Boot smoke of the packaged app.asar
+        if: runner.os != 'macOS'
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot -- --packaged

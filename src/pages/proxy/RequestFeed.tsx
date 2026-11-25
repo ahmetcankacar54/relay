@@ -80,15 +80,20 @@ export function RequestFeed({ status }: { status: ProxyStatus }) {
                   <span className="flex min-w-0 items-center gap-1 truncate">
                     <span className="truncate font-mono text-2xs">{entry.model || entry.provider || "—"}</span>
                     <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-                    <span className="truncate">
+                    <span className="truncate" data-slot={entry.upstream ? "request-upstream" : undefined}>
                       {to ??
+                        entry.upstream ??
                         (entry.note === "no-account"
                           ? t("requestFeed.noAccount")
                           : entry.note === "all-limited"
                             ? t("requestFeed.allLimited")
                             : entry.note === "sign-in"
                               ? t("requestFeed.noUsableSignIn")
-                              : "—")}
+                              : entry.note === "overflow-cap"
+                                ? t("apiOverflow.capReachedShort")
+                                : entry.note === "overflow-no-key"
+                                  ? t("apiOverflow.noKeyShort")
+                                  : "—")}
                     </span>
                     {entry.affinity && (
                       <span className="sr-only">{t("requestFeed.sessionKeptItsAccount")}</span>

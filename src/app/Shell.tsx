@@ -17,6 +17,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { Sidebar } from "./Sidebar";
 import { CardPanda, useCardPanda } from "./CardPanda";
 import { DesktopActionDialog } from "./DesktopActionDialog";
+import { ExistingRiskConsent } from "@/components/RiskConsent";
 import { intentHash, shortcutPage } from "./routes";
 import { useHashRoute } from "./useHashRoute";
 import { useMediaQuery } from "./useMediaQuery";
@@ -164,6 +165,8 @@ export function Shell() {
             </div>
           </main>
         </div>
+        {/* Features on from before Relay asked about their risks: asked once here, on any page. */}
+        <ExistingRiskConsent />
         <DesktopActionDialog />
       </RelayPrankStage>
     </TooltipProvider>

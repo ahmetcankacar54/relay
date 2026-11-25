@@ -144,7 +144,7 @@ export function overviewCards(accounts: readonly Account[]) {
 }
 
 /** The Overview's setup list: the prerequisites, then what makes Relay useful. */
-export type SetupKey = PrerequisiteKey | "first" | "second" | "mode" | "extension";
+export type SetupKey = PrerequisiteKey | "first" | "second" | "mode" | "extension" | "login";
 
 export interface SetupStep {
   key: SetupKey;
@@ -164,15 +164,16 @@ export interface SetupState {
 /**
  * The guided first run: the Claude app and Code (and the CLI when it is still missing), a first
  * and a second account with a saved Claude app sign-in (Relay switches between two), the choice
- * of when to switch, and on macOS and Linux the optional browser extension. `seen` holds the steps the user
+ * of when to switch, on macOS and Linux the optional browser extension, and the optional open at
+ * login, since planning and switching run only while Relay does. `seen` holds the steps the user
  * settled by hand: "mode" once the choice was opened (I switch myself is a choice too),
- * "extension" once skipped. Undefined until both snapshots have arrived.
+ * "extension" and "login" once skipped. Undefined until both snapshots have arrived.
  */
 export function setupState(input: {
   desktop?: DesktopState;
   diagnostics?: Diagnostics;
   accounts: readonly Account[];
-  settings: Pick<RelaySettings, "autoSwitchMode" | "claudeExtension">;
+  settings: Pick<RelaySettings, "autoSwitchMode" | "claudeExtension" | "launchAtLogin">;
   /** Continue at quota is on: a mode was chosen. */
   quota?: boolean;
   seen?: ReadonlySet<string>;
@@ -201,6 +202,7 @@ export function setupState(input: {
           },
         ]
       : []),
+    { key: "login", met: input.settings.launchAtLogin === true, optional: true },
   ];
   const ready = base.complete && steps.every((s) => s.optional || s.met);
   return {

@@ -31,7 +31,7 @@ export async function diagnoseCli(
     return {
       ...base,
       error:
-        "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+        "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.",
     };
   try {
     const { stdout } = await command(
@@ -46,7 +46,7 @@ export async function diagnoseCli(
     return {
       ...base,
       error:
-        "Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.",
+        "The Claude Code version could not be read. Check the executable.",
     };
   }
 }

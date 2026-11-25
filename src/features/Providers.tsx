@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cva } from "class-variance-authority";
 import { Badge } from "@/components/ui/badge";
-import { LimitLine, MiniMeter, countdown } from "@/components/LimitLine";
+import { LimitLine, MiniMeter, countdown, limitOriginText } from "@/components/LimitLine";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
 import { usageRowLabel, usageWindowRows, type UsageWindowRow } from "@/data/selectors";
@@ -11,9 +11,9 @@ import { formatRelative } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { AccountDot } from "@/components/AccountDot";
 import { ProviderLogo } from "@/components/ProviderLogo";
-import { limitHeadline } from "../../shared/quota-windows";
+import { limitHeadline, limitOrigin } from "../../shared/quota-windows";
 import { freshUsage } from "../../shared/usage";
-import type { Account, AccountUsage } from "../../shared/types";
+import type { AccountUsage } from "../../shared/types";
 import { formatPercent } from "../../shared/percent";
 import type { Locale } from "../../shared/i18n/locales";
 import { accountPlan } from "../pages/accounts/accountLabels";
@@ -162,6 +162,7 @@ export function AccountLimits({
           t={t}
           size={size}
           faded={faded}
+          origin={limitOrigin(row, usage, now)}
         />
       ))}
       {note && faded && readAt && (
@@ -173,7 +174,7 @@ export function AccountLimits({
   );
 }
 
-/** "%6" / "6%", "Dolu · 25 dk" or "—": an account's binding limit in a row. */
+/** "%6" / "6%", "Dolu · 25 dk" or "—": an account's binding limit in a row, and where it came from. */
 export function headlineFigure(usage: AccountUsage | undefined, now: number, t: T, language: Locale) {
   const head = limitHeadline(usage, now);
   if (!head) return { text: "—", used: undefined, full: false };
@@ -183,6 +184,7 @@ export function headlineFigure(usage: AccountUsage | undefined, now: number, t: 
     text: full ? (left ? t("providers.full", { left }) : t("common.full")) : formatPercent(head.usedPercent, language),
     used: head.usedPercent,
     full,
+    origin: limitOrigin(head, usage, now),
   };
 }
 
@@ -255,7 +257,7 @@ export function ProviderPane({ view, now, size = "md" }: { view: ProviderView; n
                   <span className="truncate font-medium">{account.name}</span>
                   <span className={cn("shrink-0 tabular-nums text-2xs", figure.full ? "font-semibold text-crit" : "text-muted-foreground")}>{figure.text}</span>
                 </div>
-                <MiniMeter usedPercent={figure.used} label={`${account.name} ${figure.text}`} />
+                <MiniMeter usedPercent={figure.used} label={`${account.name} ${figure.text}`} title={limitOriginText(figure.origin, now, t, language)} />
               </div>
               {view.id === "antigravity" && <AntigravityAction account={account} onAsk={setAsk} primary={account.id === suggested?.id} />}
             </li>

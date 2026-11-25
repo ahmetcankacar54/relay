@@ -13,3 +13,5 @@ config/local-signing.json
 cli/dist/
 .playwright-mcp/
 docs/audit-*/
+e2e/test-results/
+e2e/report/

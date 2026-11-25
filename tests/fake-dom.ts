@@ -84,6 +84,7 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     }
     /** The nearest element, this one included, with a tag name: all the selector Radix asks for ("form"). */
     closest(tag: string): FakeElement | null {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias -- the walk starts at this element
       for (let node: FakeElement | null = this; node; node = node.parentNode) if (node.tagName === tag) return node;
       return null;
     }

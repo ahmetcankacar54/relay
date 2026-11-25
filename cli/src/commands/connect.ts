@@ -58,7 +58,7 @@ export const connect: Command = async ({ io, deps, parsed, t }) => {
         await runClaude(ctx.deps, claude, ["auth", "logout"], profile, { timeoutMs: 30_000, env: io.env }).catch(() => 1);
         throw new CliError(
           localizeError(
-            "Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.",
+            "This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.",
             ctx.lang,
           ),
           EXIT.failed,

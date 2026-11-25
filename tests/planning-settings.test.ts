@@ -11,7 +11,7 @@ import {
   planningSchema,
   settingsPatchSchema,
 } from "../electron/core/store";
-import { systemTimeZone, wallTimeOrNext } from "../shared/planning";
+import { defaultPlanning, systemTimeZone, wallTimeOrNext } from "../shared/planning";
 import { DEFAULT_PLANNING, DEFAULT_SETTINGS } from "../shared/types";
 
 test("a legacy workday becomes weekday/weekend hours with its accounts and routine choice", () => {
@@ -32,7 +32,9 @@ test("a legacy workday becomes weekday/weekend hours with its accounts and routi
     weekend: { enabled: false, start: "09:00", end: "21:00" },
     accounts: [{ id: a }, { id: b }],
   });
-  assert.deepEqual(planningFromWorkday(undefined), DEFAULT_PLANNING);
+  // No workday was ever saved: a new install's planning, in the system's time zone.
+  assert.deepEqual(planningFromWorkday(undefined), defaultPlanning());
+  assert.equal(planningFromWorkday({ start: "09:00", timeZone: "Not/AZone" }).timeZone, systemTimeZone());
 });
 
 test("a registry without planning settings is migrated on load", async () => {

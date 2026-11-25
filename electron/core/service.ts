@@ -426,7 +426,7 @@ export class Service {
       throw new Error("Continue with the chosen account in Relay first, then send that session to the Claude app.");
     const auth = await this.checkAuth(account.id);
     if (!auth.auth?.loggedIn)
-      throw new Error(auth.auth?.error || "Önce bu hesapla giriş yap.");
+      throw new Error(auth.auth?.error || "Sign in with this account first.");
     const args: string[] = [];
     let sessionKey: string;
     if (source) {
@@ -543,7 +543,10 @@ export class Service {
   private async executable() {
     const result = await this.currentDiagnostics();
     if (!result.executable || result.error)
-      throw new Error(result.error || "Claude Code bulunamadı.");
+      throw new Error(
+        result.error ||
+          "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.",
+      );
     return result.executable;
   }
 }

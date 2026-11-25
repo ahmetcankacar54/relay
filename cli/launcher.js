@@ -3,12 +3,10 @@
 var parts = process.versions.node.split(".");
 var major = Number(parts[0]);
 var minor = Number(parts[1]);
-if (process.platform !== "darwin") {
-  console.error("relay works on macOS only.");
-  process.exit(5);
-}
 if (major < 22 || (major === 22 && minor < 12)) {
   console.error("relay needs Node.js 22.12 or newer (found " + process.versions.node + ").");
   process.exit(5);
 }
-import("./relay-cli.js");
+// Claude Code runs "relay statusline" after every answer: it gets a small bundle of its own.
+if (process.argv[2] === "statusline" && (process.argv[3] === undefined || process.argv[3].charAt(0) === "-")) import("./relay-statusline.js");
+else import("./relay-cli.js");

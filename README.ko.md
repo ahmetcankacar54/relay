@@ -126,6 +126,7 @@ Relay는 무료 오픈 소스(MIT)이며, 전적으로 사용자의 Mac에서 �
 - Claude Code, Codex CLI, omp를 위한 키로 보호되는 로컬 엔드포인트입니다. 요청은 주간 주기가 가장 먼저 끝나면서 아직 여유가 있는 계정으로 가며, 여유는 실제 용량으로 비교합니다(85% 사용한 Max 20×가 새로 시작한 Pro보다 여유가 더 많습니다).
 - 세션은 자신의 계정과 그 프롬프트 캐시에 머물고, 바빠진 계정은 프롬프트 도중이 아니라 프롬프트가 시작될 때 비워집니다.
 - 이 Mac에서만, 또는 원하면 Tailscale 네트워크에서만 수신합니다.
+- **API 키로 오버플로.** 모든 구독 계정이 한도에 도달하면 Claude 요청이 실패하는 대신 API 키로 갈 수 있습니다. Anthropic API, OpenRouter, DeepSeek, Kimi, GLM 또는 Anthropic 호환 URL을 정한 순서대로 사용합니다. 요청마다 비용이 기록에 표시되고, 달러 기준 일일 한도에 도달하면 그날 남은 시간 동안 오버플로가 멈춥니다. 키는 로그인 정보처럼 암호화해 저장하며 전체가 표시되지 않습니다. API 키는 토큰 단위로 과금되고 이런 용도를 위한 것이므로 오버플로에는 구독 계정의 위험이 없습니다. Codex 요청은 오버플로되지 않습니다.
 - 직접 켜기 전까지는 꺼져 있습니다. Relay에서 일반적인 사용과 가장 거리가 먼 부분이므로 [약관과 위험](#약관과-위험)을 참고하세요.
 
 ### 메뉴 막대, 위젯, CLI
@@ -161,6 +162,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 주요 플랫폼은 macOS입니다. Windows 빌드는 아직 실제 컴퓨터에서 테스트하지 않았습니다. 사용 후기를 환영합니다.
 
+**리소스 사용량:** 메뉴 막대에서 대기 중일 때 Relay는 모든 프로세스를 합쳐 CPU 약 0.1%, 메모리 약 395MB(최대 435MB)를 사용하고, 창을 앞에 열어 두어도 CPU는 약 2%이며, 키체인 권한 요청 창을 띄우지 않습니다(Apple 실리콘 Mac, [측정 방법](docs/development.md#resource-use)).
+
 ## 개인정보 보호 및 보안
 
 - **로컬 전용.** Relay에는 계정도, 서버도, **원격 측정(telemetry)이나 분석도 없습니다**. 데이터는 `~/Library/Application Support/Relay`(macOS) 또는 `~/.config/Relay`(Linux)에 저장됩니다.
@@ -176,6 +179,7 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 Relay는 비공식 도구이며, Relay가 하는 일 중 일부는 Anthropic이 서드파티 도구에 원하는 Claude 로그인 사용 방식이 아닙니다. Relay에 의존하기 전에 이 내용을 읽어 주세요.
 
 - **Anthropic 약관의 내용.** [Claude Code 법률 및 규정 준수 페이지](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)에 따르면 구독 로그인(Free, Pro, Max, Ultra)은 Claude Code와 Anthropic 자체 앱의 일반적인 사용을 위한 것이고, 서드파티 도구는 이러한 로그인을 저장하거나 라우팅하거나 중개해서는 안 되며, 공지된 한도는 일반적인 개인 사용을 전제로 합니다. Anthropic은 사전 통지 없이 이를 시행할 수 있다고 밝히고 있습니다.
+- **Anthropic 사용 정책(2026년 11월 12일부터 시행).** [사용 정책](https://www.anthropic.com/legal/aup)은 다음을 금지합니다. "Resell, proxy, or otherwise provide access to Claude through unauthorized means, including services that route requests through consumer subscriptions or misrepresent the product or client being used." (Claude를 재판매하거나, 프록시하거나, 승인되지 않은 방법으로 접근을 제공하는 것. 소비자 구독을 통해 요청을 중계하거나 사용 중인 제품이나 클라이언트를 속이는 서비스도 포함됩니다.) Relay의 두 기능이 이 조항에 해당합니다. Claude 구독 계정을 쓰는 게이트웨이는 소비자 구독을 통해 요청을 중계하고, 게이트웨이에 연결된 omp는 요청을 Claude Code인 것처럼 보냅니다. Relay는 둘 중 하나를 켜기 전에 이 조항을 보여 주고 수락을 요청하며, `relay` CLI는 `--yes`를 요구합니다.
 - **Relay가 하는 일.** Relay는 Claude 앱을 전환하고 한도를 읽기 위해 계정들의 로그인을 사용자의 컴퓨터에 암호화해 보관합니다. 게이트웨이는 여기서 더 나아가, 그 로그인으로 Claude Code 요청을 사용자의 계정에 보내며, omp가 연결되어 있으면 omp의 요청도 Claude Code의 요청과 같은 형태로 Claude에 도달합니다.
 - **일어날 수 있는 일.** Anthropic은 이러한 요청을 차단하거나, 이를 사용하는 계정을 제한하거나 정지할 수 있습니다. Relay는 이를 막을 수 없으며, 사용에 따른 위험은 사용자 본인이 부담합니다([라이선스](LICENSE) 참고).
 - **위험의 정도.** Claude 앱 전환과 한도 읽기는 일반적인 사용에 가장 가깝습니다. 게이트웨이는 그보다 멀고, Claude 계정을 통한 omp 사용이 가장 멉니다. 게이트웨이는 직접 켜기 전까지 꺼져 있으며, 이 위험을 감수하고 싶지 않다면 꺼 둔 채로 두세요.

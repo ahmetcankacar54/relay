@@ -4,6 +4,7 @@
 //   macOS   Relay-<v>-arm64.dmg (+ x64) and SHA256SUMS.txt   (Relay's own updater)
 //   Windows Relay-Setup-<v>-x64.exe, its .blockmap, latest.yml        (electron-updater)
 //   Linux   Relay-<v>-x86_64.AppImage, latest-linux.yml               (electron-updater)
+// (beta.yml and beta-linux.yml instead for a beta, X.Y.Z-beta.N: scripts/release-channel.mjs)
 // plus INSTALL.txt from docs/share/install-notes.md. Build first: the DMG with
 //   node scripts/stable-signing.mjs --dmg --arch arm64 --output release/share/<v>
 // and Windows/Linux with electron-builder into release/share/<v>-win and <v>-linux.
@@ -11,12 +12,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { releaseChannel } from "./release-channel.mjs";
 
 const version = process.argv[2];
-if (!/^\d+\.\d+\.\d+$/.test(version ?? "")) {
-  console.error("Usage: node scripts/release-assets.mjs <version>");
+const channel = releaseChannel(version);
+if (!channel) {
+  console.error("Usage: node scripts/release-assets.mjs <version: X.Y.Z or X.Y.Z-beta.N>");
   process.exit(2);
 }
+const [windowsYml, linuxYml] = channel.updaterFiles;
 const share = path.resolve("release/share");
 const out = path.join(share, version);
 const from = (dir, name) => path.join(share, dir, name);
@@ -25,9 +29,9 @@ const wanted = [
   { file: from(version, `Relay-${version}-x64.dmg`), required: false },
   { file: from(`${version}-win`, `Relay-Setup-${version}-x64.exe`), required: true },
   { file: from(`${version}-win`, `Relay-Setup-${version}-x64.exe.blockmap`), required: false },
-  { file: from(`${version}-win`, "latest.yml"), required: true },
+  { file: from(`${version}-win`, windowsYml), required: true },
   { file: from(`${version}-linux`, `Relay-${version}-x86_64.AppImage`), required: true },
-  { file: from(`${version}-linux`, "latest-linux.yml"), required: true },
+  { file: from(`${version}-linux`, linuxYml), required: true },
 ];
 const missing = wanted.filter((w) => w.required && !fs.existsSync(w.file)).map((w) => w.file);
 if (missing.length) {
@@ -46,7 +50,7 @@ fs.copyFileSync(path.resolve("docs/share/install-notes.md"), path.join(out, "INS
 names.push("INSTALL.txt");
 
 // The update files name what they download: those names must be the ones published.
-for (const yml of ["latest.yml", "latest-linux.yml"]) {
+for (const yml of channel.updaterFiles) {
   const text = fs.readFileSync(path.join(out, yml), "utf8");
   if (!text.includes(`version: ${version}`)) throw new Error(`${yml} is not for ${version}.`);
   for (const [, url] of text.matchAll(/^\s*(?:-\s+)?url:\s*(.+)$/gm))

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import { errorAfterRefresh, shouldPoll } from "../src/data/relay-action";
 import { prefFromStorage } from "../src/data/language";
@@ -8,7 +9,6 @@ test("the never-sent tray switch request is gone end to end", () => {
   // The menu bar switches through its own confirmation (traySwitch in main); nothing queues a
   // request for a renderer to take.
   for (const file of [
-    "../electron/main.ts",
     "../electron/preload.ts",
     "../shared/types.ts",
     "../src/data/useRelay.ts",
@@ -19,6 +19,7 @@ test("the never-sent tray switch request is gone end to end", () => {
     const source = readFileSync(new URL(file, import.meta.url), "utf8");
     assert.doesNotMatch(source, /consumeTraySwitch|consume-tray-switch|traySwitchRequest|onTraySwitch|relay:tray-switch/, file);
   }
+  assert.doesNotMatch(mainSource(), /consumeTraySwitch|consume-tray-switch|traySwitchRequest|onTraySwitch|relay:tray-switch/, "electron/main");
 });
 
 test("vite builds both the main window and the menu bar panel", () => {
@@ -59,7 +60,7 @@ test("the panel entry does not add an unused root class", () => {
 test("every Desktop operation refreshes the tray inside the lock when it begins and when it ends", () => {
   // The lock tells its listener inside the lock, at each begin and end
   // (tests/desktop-lock.test.ts); main's listener is the tray.
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\), \{/);
   const lock = readFileSync(new URL("../electron/core/desktop-lock.ts", import.meta.url), "utf8");
   const hold = lock.slice(lock.indexOf("private async hold"));

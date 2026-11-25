@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { UsageCard } from "../src/features/UsageCard";
-import { I18nContext } from "../src/data/i18n";
 import {
   limitFull,
   modelLimitFull,
@@ -17,7 +16,7 @@ import { accountHealth, modelLimitWords } from "../src/lib/account-health";
 import { meterFill } from "../src/lib/meter";
 import { quotaWindows } from "../shared/quota-windows";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type ModelWindow } from "../shared/types";
-import { i18nValue, testT } from "./i18n";
+import { testT } from "./i18n";
 
 // Saturday 2026-11-14 10:00 UTC; Fable's week opens on Monday at 05:00 UTC.
 const NOW = Date.parse("2026-11-14T10:00:00Z");
@@ -42,8 +41,6 @@ const acct = (id: string): Account => ({
 });
 const tr = testT("tr");
 const en = testT("en");
-const withI18n = (language: "tr" | "en", node: ReturnType<typeof createElement>) =>
-  renderToStaticMarkup(createElement(I18nContext.Provider, { value: i18nValue(language) }, node));
 
 test("a model's own limit reads model first, then its period; an Antigravity model is its name alone", () => {
   const rows = usageWindowRows(

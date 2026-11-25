@@ -27,6 +27,16 @@ import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import type { LanguagePref, Locale } from "./i18n/locales";
+import type { FeatureRiskId, RiskAcknowledgements } from "./feature-risk";
+import type { MeterProvider, MeterReading } from "./meters";
+import type { OverflowConfigureInput, OverflowStatus, OverflowTestResult, OverflowUpstreamInput } from "./overflow";
+import type {
+  BackupExportResult,
+  BackupFileChoice,
+  BackupImportMode,
+  BackupImportResult,
+  BackupSummary,
+} from "./backup";
 import {
   DEFAULT_PROXY_CONFIG,
   type ProxyClassShare,
@@ -63,6 +73,11 @@ export interface Account {
   provider?: AccountProvider;
   cooldownUntil?: string;
   planning?: AccountPlanning;
+  /**
+   * The used percent at which automatic switching leaves this account and stops choosing it
+   * (shared/continuation-target-ranking.ts `switchAtPercent`); missing means the global line.
+   */
+  switchAtPercent?: number;
 
   desktop?: {
     accountUuid: string;
@@ -177,8 +192,12 @@ export interface Snapshot {
   windows?: SeparateWindows;
   /** Relay's own updates: a newer release found, downloaded and ready to install. */
   update?: UpdateState;
+  /** Whether each global shortcut is registered; absent before Relay has tried. */
+  shortcuts?: Record<ShortcutAction, ShortcutState>;
   /** Google's Antigravity app on this computer and which Relay account it is signed in with. */
   antigravity?: AntigravityAppState;
+  /** The usage meters turned on in Settings → Other tools (shared/meters.ts), read-only, without tokens. */
+  meters?: MeterReading[];
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   /** Sign-ins being made for the terminal, one per account at most. */
@@ -440,6 +459,8 @@ export interface ProxyStatus {
   alarms?: ProxyLoopAlarm[];
   /** Today's gateway traffic by Claude Code's request class. */
   classShare?: ProxyClassShare[];
+  /** API-key upstreams that take Claude requests once every account is limited (keys masked). */
+  overflow?: OverflowStatus;
   /** The account a new session would get now, by provider, and why. */
   nextPick?: Partial<
     Record<
@@ -570,6 +591,13 @@ export interface RelayAPI {
     accountId: string,
     input: AccountPlanning,
   ): Promise<Account>;
+  /** Sets or clears (undefined) an account's own switch line, 50–100; returns the saved account. */
+  setAccountSwitchAt(accountId: string, percent: number | undefined): Promise<Account>;
+  /**
+   * Posts a sample "test" event to the given ntfy topic or webhook, without saving it: whether it
+   * arrived, the HTTP status, and a redacted reason when it did not.
+   */
+  testRemoteNotify(input: { url: string; kind: RemoteNotifyKind }): Promise<RemoteNotifyResult>;
   /** The Claude browser extension's setting, what Relay found and saved, and the last result; undefined outside macOS. */
   extensionStatus(): Promise<ExtensionStatus | undefined>;
   /** Runs the extension step for the account Desktop is on, without changing Claude. */
@@ -605,6 +633,26 @@ export interface RelayAPI {
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
   /**
+   * Saves a zip of Relay's logs, with emails, account names and tokens removed, where the user
+   * picks in a save dialog, then shows it; false when the dialog was cancelled. Takes no path.
+   */
+  exportDiagnostics(): Promise<boolean>;
+  /**
+   * Seals the accounts, settings and, with `includeSignIns`, the saved sign-ins into a backup file
+   * with the passphrase, saved where the user picks; undefined when the dialog was cancelled.
+   */
+  exportBackup(input: { passphrase: string; includeSignIns: boolean }): Promise<BackupExportResult | undefined>;
+  /** Import, first step: an open dialog for a backup file, checked before a passphrase is asked. */
+  chooseBackup(): Promise<BackupFileChoice | undefined>;
+  /** Import, second step: opens the picked file with its passphrase and tells what it holds. */
+  openBackup(passphrase: string): Promise<BackupSummary>;
+  /** Import, last step: merges the opened backup in, or replaces what is here with it. */
+  importBackup(mode: BackupImportMode): Promise<BackupImportResult>;
+  /** Forgets the picked or opened backup. */
+  cancelBackup(): Promise<void>;
+  /** Removes all of Relay's data and relaunches it in its first-run state. */
+  resetData(): Promise<void>;
+  /**
    * How Relay starts Claude: `quicOff`, without HTTP/3, which Relay also turns on itself after a
    * stuck start.
    */
@@ -619,6 +667,8 @@ export interface RelayAPI {
   setUpdateAuto(enabled: boolean): Promise<void>;
   /** Opens the newer release's page in the browser. */
   openUpdateNotes(): Promise<void>;
+  /** Lets the global shortcuts go while Settings records one (true), and registers them again (false). */
+  pauseShortcuts(paused: boolean): Promise<void>;
   /** Turns separate Claude windows on or off (Settings). */
   setSeparateWindows(enabled: boolean): Promise<void>;
   /** Opens the account in a separate Claude window, or brings its window forward. */
@@ -651,7 +701,9 @@ export interface RelayAPI {
   /** Menu bar panel only: main reports each time the panel is shown or hidden. */
   onPanelVisibility(callback: (shown: boolean) => void): () => void;
   quit(): Promise<void>;
-  updateSettings(input: Partial<Omit<RelaySettings, "proxy">>): Promise<RelaySettings>;
+  updateSettings(input: Partial<Omit<RelaySettings, "proxy" | "riskAcknowledged">>): Promise<RelaySettings>;
+  /** Records that the user read and accepted these features' risk texts; main refuses them until then. */
+  acknowledgeRisk(ids: FeatureRiskId[]): Promise<RelaySettings>;
   /** The Proxy Gateway's live state: whether it runs, its client key, counters and routing. */
   proxyStatus(): Promise<ProxyStatus>;
   /** Starts or stops the gateway and saves the choice. Rejects when it cannot start (port in use). */
@@ -675,6 +727,14 @@ export interface RelayAPI {
   proxyBindClient(id: ProxyClientId): Promise<ProxyStatus>;
   /** Takes the gateway out of the client's settings and restores what was there before. */
   proxyUnbindClient(id: ProxyClientId): Promise<ProxyStatus>;
+  /** Turns API-key overflow on or off, sets when it is used, its daily cap and its upstreams' order. */
+  proxyOverflowConfigure(input: OverflowConfigureInput): Promise<ProxyStatus>;
+  /** Adds an upstream (a key is needed) or changes one; a key given replaces the sealed one. */
+  proxyOverflowSaveUpstream(input: OverflowUpstreamInput): Promise<ProxyStatus>;
+  /** Forgets an upstream and its sealed key. */
+  proxyOverflowRemoveUpstream(id: string): Promise<ProxyStatus>;
+  /** Sends a one-token request to a saved upstream with its saved key. */
+  proxyOverflowTest(id: string): Promise<OverflowTestResult>;
   /**
    * Puts text on the clipboard from main: the window's own clipboard API is refused in Relay's
    * windows. Write only; nothing is ever read back.
@@ -700,6 +760,13 @@ export interface RelayAPI {
    * which reads limits through the app and renews Claude Code sign-ins; `ask` asks macOS now.
    */
   claudeAppAccess(ask?: boolean): Promise<{ supported: boolean; allowed: boolean }>;
+  /**
+   * Whether Claude Code's status line runs `relay statusline` (`installed`), whether another one
+   * is set (`other`), and where the relay CLI is installed (`cli`; missing when it is not, and then
+   * `enable: true` changes nothing). `enable` adds Relay's or takes it out, putting back the one it
+   * replaced.
+   */
+  claudeStatusline(enable?: boolean): Promise<{ installed: boolean; other: boolean; cli?: string }>;
   /** Renews the account's Claude Code sign-in now, in the background, from its claude.ai session. */
   renewSignInNow(
     accountId: string,
@@ -818,8 +885,107 @@ export interface RelaySettings {
   claudeExtension?: ExtensionSetting;
   /** What Relay does with the terminal's Claude Code sign-in at a switch; missing means "follow". */
   terminalCli?: TerminalMode;
+  /** Which notifications Relay shows (Settings → General → Notifications); missing keys mean DEFAULT_NOTIFICATIONS. */
+  notifications?: NotificationSettings;
+  /** Start Relay hidden at login (Settings → General); missing means off. */
+  launchAtLogin?: boolean;
+  /** Which releases Relay updates to (Settings → Updates); missing means "stable". */
+  updateChannel?: UpdateChannel;
+  /**
+   * Relay's global keyboard shortcuts, as Electron accelerators (shared/shortcuts.ts); a missing
+   * key means its default, an empty one means off.
+   */
+  shortcuts?: ShortcutSettings;
+  /**
+   * What a switch carries from the account being left into the Claude Code profile of the one
+   * switched to (Settings → Switching; electron/core/config-sync.ts); missing means all off.
+   */
+  configSync?: ConfigSyncSettings;
+  /** How automatic switching, the suggestion and the panel rank targets; missing means "best". */
+  autoSwitchStrategy?: AutoSwitchStrategy;
+  /** Relay's events posted to an ntfy topic or a webhook; missing, or without a URL, is off. */
+  remoteNotify?: RemoteNotifySettings;
+  /**
+   * The other tools whose usage Relay reads (Settings → Other tools; shared/meters.ts), each on
+   * only after its risk was accepted; missing means none.
+   */
+  meters?: MeterProvider[];
+  /**
+   * The risk text version the user accepted, by risky feature (shared/feature-risk.ts). Changed only
+   * through acknowledgeRisk; a feature missing here, or at an older version, asks again.
+   */
+  riskAcknowledged: RiskAcknowledgements;
 }
+/** One choice per item a switch keeps the same across the accounts' Claude Code profiles. */
+export interface ConfigSyncSettings {
+  /** User MCP servers (`mcpServers` in the profile's `.claude.json`), merged by name. */
+  mcpServers: boolean;
+  /** The `skills/` and `agents/` folders' entries, by name. */
+  skills: boolean;
+  /** settings.json's permissions, env (without secrets), hooks, statusLine and model. */
+  settings: boolean;
+  claudeMd: boolean;
+}
+export const DEFAULT_CONFIG_SYNC: ConfigSyncSettings = {
+  mcpServers: false,
+  skills: false,
+  settings: false,
+  claudeMd: false,
+};
 export type PrankLevel = "sometimes" | "rarely" | "off";
+/** "beta" also takes GitHub pre-releases; going back to "stable" never installs an older version. */
+export type UpdateChannel = "stable" | "beta";
+/** What a global shortcut does. */
+export type ShortcutAction = "openPanel" | "switchToSuggested";
+export type ShortcutSettings = Partial<Record<ShortcutAction, string>>;
+/** A shortcut as registered: off, working, or held by another app (or the other action). */
+export type ShortcutState = "off" | "on" | "taken";
+/**
+ * How the next account is chosen among those that hold half an hour at the tempo. "best" uses
+ * first what an upcoming five-hour reset would waste, else the most capacity; "weekly-first" the
+ * one whose weekly period resets soonest; "consume-first" the most used, keeping the others fresh.
+ */
+export type AutoSwitchStrategy = "best" | "weekly-first" | "consume-first";
+export type RemoteNotifyKind = "ntfy" | "webhook";
+/** Which events are posted: limit warnings, "ready again", automatic switches, ending sign-ins. */
+export interface RemoteNotifyEvents {
+  limit: boolean;
+  reset: boolean;
+  autoSwitch: boolean;
+  signIn: boolean;
+}
+export interface RemoteNotifySettings {
+  /** https, or http to this computer (a self-hosted ntfy); missing means off. */
+  url?: string;
+  kind: RemoteNotifyKind;
+  events: RemoteNotifyEvents;
+}
+/** A post's outcome; `error` is redacted and never names the URL. */
+export type RemoteNotifyResult =
+  | { ok: true; status: number }
+  | { ok: false; reason: "off" | "invalid-url" | "failed"; status?: number; error?: string };
+/** Whom the "ready again" notice is for: nobody, the account open in the Claude app, or every account. */
+export type LimitResetNotice = "off" | "in-use" | "all";
+/**
+ * One switch per notification type; each missing key means on (see shared/notifications.ts). The
+ * gateway's loop alarm has none: it guards against a runaway prompt spending a subscription.
+ */
+export interface NotificationSettings {
+  /** The 5-hour window: its warning at the threshold and its "ready again" notice. */
+  limitFiveHour?: boolean;
+  /** The weekly window: its warning at the threshold and its "ready again" notice. */
+  limitWeekly?: boolean;
+  /** After a window that reached the warning threshold resets; missing means "in-use". */
+  limitReset?: LimitResetNotice;
+  /** A finished switch, an automatic switch, rescued drafts, and the browser extension left on another account. */
+  switches?: boolean;
+  /** A Claude Code or Claude app sign-in that ends or has ended, and the browser extension that cannot sign in. */
+  signIns?: boolean;
+  /** Early start: a failed start and a plan adapted to today's pace. */
+  earlyStart?: boolean;
+  /** A downloaded Relay update is ready to install. */
+  updates?: boolean;
+}
 export interface PlanningHours {
   enabled: boolean;
   start: string;
@@ -926,6 +1092,11 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   autoSwitchMode: "off",
   autoSwitchAccounts: [],
   historyPolicyVersion: 2,
+  launchAtLogin: false,
+  updateChannel: "stable",
+  autoSwitchStrategy: "best",
+  configSync: DEFAULT_CONFIG_SYNC,
+  riskAcknowledged: {},
 };
 export type AutoSwitchReason =
   | "ledger-unavailable"
@@ -960,9 +1131,20 @@ export interface AutoSwitchState {
   switchedAt?: string;
   retryAt?: string;
 }
+/**
+ * Where a limit figure came from: the provider's own usage endpoint (Claude's OAuth usage,
+ * Codex's wham, Antigravity's quota API), claude.ai read through the Claude app's sign-in, the
+ * rate-limit headers of an answer through the gateway, or Relay's own estimate (a window whose
+ * reset passed after the read reads as empty).
+ */
+export type LimitSource = "official" | "app-session" | "gateway" | "estimate";
 export interface UsageWindow {
   usedPercent: number;
   resetsAt?: string;
+  /** Where this figure came from; absent on readings made before the field existed. */
+  source?: LimitSource;
+  /** When this figure was read or reported; absent before the field existed. */
+  readAt?: string;
 }
 export type UsageIssue =
   | "connect-cli"
@@ -993,6 +1175,10 @@ export interface ModelWindow {
    * (`antigravity_gemini_5h`). Undefined for a window of unknown length.
    */
   period?: "five_hour" | "seven_day";
+  /** Where this figure came from, as `UsageWindow.source`. */
+  source?: LimitSource;
+  /** When this figure was read or reported, as `UsageWindow.readAt`. */
+  readAt?: string;
 }
 export interface AccountUsage {
   accountId: string;

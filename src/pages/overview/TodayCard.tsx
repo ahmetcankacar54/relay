@@ -124,7 +124,7 @@ export function TodayCard({
             {nowLine}
           </div>
         </div>
-        {rows.map(({ account, windows }, index) => (
+        {rows.map(({ account, windows }) => (
           <div
             key={account.id}
             className="grid grid-cols-[84px_1fr] items-center gap-2"

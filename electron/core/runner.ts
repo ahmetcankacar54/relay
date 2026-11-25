@@ -6,6 +6,7 @@ import { ProfileLockBusyError } from "./profile-lock";
 /** node-pty loads a native module; only a terminal needs it, so the first one loads it. */
 let ptyModule: typeof Pty | undefined;
 function loadPty(): typeof Pty {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- loaded on first use, not at startup
   ptyModule ??= require("node-pty") as typeof Pty;
   return ptyModule;
 }
@@ -116,7 +117,7 @@ export class Runner {
         new Promise<never>((_, reject) => {
           timer = setTimeout(
             () =>
-              reject(new Error("İşlem henüz kapanmadı. Aktarım başlatılmadı.")),
+              reject(new Error("The process has not closed yet. The transfer did not start.")),
             5000,
           );
         }),

@@ -560,9 +560,15 @@ test("met steps fold into one done line, then the list guides to the accounts an
   assert.match(item(pair, "done"), /Hesaplarını ekle/);
   assert.match(item(pair, "mode"), /Ne zaman geçileceğini seç[\s\S]*<button[^>]*>Seç<\/button>/);
   assert.match(item(pair, "extension"), /İsteğe bağlı/);
-  // A mode chosen and no optional step (Windows): nothing left to say.
+  // A mode chosen on Windows: only the optional open at login is left, with Turn on and Skip.
   const done = firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "win32" } });
   done.settings = { ...done.settings, autoSwitchMode: "after-exit" };
+  assert.match(
+    item(checklist(render(done)), "login"),
+    /Relay’i oturum açılınca başlat[\s\S]*İsteğe bağlı[\s\S]*Planlama, otomatik geçiş ve ağ geçidi yalnızca Relay açıkken çalışır\.[\s\S]*<button[^>]*>Aç<\/button>[\s\S]*<button[^>]*>Atla<\/button>/,
+  );
+  // Open at login on as well: nothing left to say.
+  done.settings = { ...done.settings, launchAtLogin: true };
   assert.equal(checklist(render(done)), "");
   // Linux offers the optional extension step as macOS does.
   const linux = firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "linux" } });

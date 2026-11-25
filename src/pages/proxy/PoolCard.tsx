@@ -2,9 +2,8 @@ import { Fragment } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { intentHash } from "@/app/routes";
 import { AccountCard, AccountLimits } from "@/components/AccountCard";
-import { ExternalLink } from "@/components/ExternalLink";
 import { ListCard, ListGroup, ListNote, ListSection } from "@/components/ListCard";
-import { EXTERNAL_LINKS } from "../../../shared/external-links";
+import { RiskNote } from "@/components/RiskConsent";
 import { PageSection } from "@/components/PageSection";
 import { Private } from "@/components/Private";
 import { StatusDot } from "@/components/StatusDot";
@@ -15,7 +14,6 @@ import { FORMAT_LOCALE, type Locale } from "../../../shared/i18n/locales";
 import { macWording, usePlatform } from "@/data/platform";
 import { useRelay } from "@/data/relay-context";
 import { compactCount, moveWithinProvider, pickReasonLabel, quotaAtRisk, resetLabel, usd } from "@/lib/proxy-ui";
-import { cn } from "@/lib/utils";
 import type { ProxyAccountStatus, ProxyStatus } from "../../../shared/types";
 import { limitColumns, modelOnlyUsage } from "../../../shared/quota-windows";
 import type { Patch } from "./shared";
@@ -163,8 +161,7 @@ export function PoolCard({
                   {/* Google forbids Antigravity sign-ins in other software outright: say so where they join the pool. */}
                   {provider === "antigravity" && (
                     <ListNote className="text-xs text-muted-foreground">
-                      <span data-slot="antigravity-risk">{t("poolCard.antigravityRisk")}</span>{" "}
-                      <ExternalLink href={EXTERNAL_LINKS.antigravityTerms}>{t("poolCard.antigravityTermsLink")}</ExternalLink>
+                      <RiskNote id="antigravity-gateway" slot="antigravity-risk" />
                     </ListNote>
                   )}
                   {own.map((account, index) => {
@@ -174,16 +171,17 @@ export function PoolCard({
                     const usage = relay.data?.usage[account.id];
                     // An Antigravity account's limits are its pools: each column the fullest of its length.
                     const pools = modelOnlyUsage(usage) ? limitColumns(usage, now) : undefined;
+                    // The gateway's figures are the usage's own windows, so they keep those windows' source and age.
                     const five = pools
                       ? pools.five
                       : account.fiveHourPercent === undefined
                         ? undefined
-                        : { usedPercent: account.fiveHourPercent, resetsAt: resetAt(account.fiveHourResetMinutes, now) };
+                        : { usedPercent: account.fiveHourPercent, resetsAt: resetAt(account.fiveHourResetMinutes, now), source: usage?.fiveHour?.source, readAt: usage?.fiveHour?.readAt };
                     const week = pools
                       ? pools.week
                       : account.weeklyPercent === undefined
                         ? undefined
-                        : { usedPercent: account.weeklyPercent, resetsAt: resetAt(account.weeklyResetMinutes, now) };
+                        : { usedPercent: account.weeklyPercent, resetsAt: resetAt(account.weeklyResetMinutes, now), source: usage?.sevenDay?.source, readAt: usage?.sevenDay?.readAt };
                     const clock = account.fullAt
                       ? new Date(account.fullAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
                       : undefined;
@@ -269,7 +267,7 @@ export function PoolCard({
                           unread ? (
                             unreadNote
                           ) : (
-                            <AccountLimits five={five} week={week} pooled={!!pools} now={now} t={t} />
+                            <AccountLimits five={five} week={week} pooled={!!pools} usage={usage} now={now} t={t} />
                           )
                         }
                         menu={

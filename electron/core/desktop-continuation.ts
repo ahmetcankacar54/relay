@@ -733,7 +733,7 @@ export class DesktopContinuationManager {
         account,
         usage: snapshot.usage[account.id],
       })),
-      { now: this.now(), rate: snapshot.tempoRate },
+      { now: this.now(), rate: snapshot.tempoRate, strategy: snapshot.settings.autoSwitchStrategy },
     )[0];
     if (!chosen || !enrolled(chosen.account)) return undefined;
     return { ...arm, target: identity(chosen.account) };

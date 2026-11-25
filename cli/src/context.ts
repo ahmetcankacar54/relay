@@ -51,18 +51,20 @@ const closedSealer = (t: T): Sealer => {
  * Everything a command needs, after the checks that keep the CLI from damaging what Relay.app
  * or a newer version wrote. `write`: the command changes the registry or the vault. `desktop`:
  * it runs a Desktop operation, so the vault key is loaded and DesktopManager initialized.
+ * `macOS`: the command needs macOS's own tools. A Desktop operation that writes does too: the
+ * CLI opens the vault through the macOS Keychain; on Windows and Linux only Relay.app holds its key.
  */
 export async function openContext(
   io: CliIO,
   partial: Partial<CliDeps>,
   flags: Flags,
-  needs: { write: boolean; desktop: boolean },
+  needs: { write: boolean; desktop: boolean; macOS?: boolean },
 ): Promise<CliContext> {
   const deps = { ...defaultDeps(), ...partial };
   const lang = pickLang(flags.lang as string | undefined, io.env);
   const t = translator(lang);
-  if (deps.platform !== "darwin")
-    throw new CliError(t("srcContext.relayWorksOnMacosOnly"), EXIT.environment);
+  if (deps.platform !== "darwin" && (needs.macOS || (needs.desktop && needs.write)))
+    throw new CliError(t("srcContext.savingAndSwitchingWorksOnMacosOnly"), EXIT.environment);
   const paths = relayPaths(io.env);
   const appVersion = await deps.relayAppVersion();
   const stateExisted = fs.existsSync(path.join(paths.data, "state.json"));

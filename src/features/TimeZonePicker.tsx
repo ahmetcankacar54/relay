@@ -5,7 +5,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Check, ChevronDown, Globe2, LocateFixed, Search } from "lucide-react";
+import { Check, ChevronDown, Globe2, LocateFixed } from "lucide-react";
 import { SearchIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {

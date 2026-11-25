@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { ipcSource, mainSource } from "./helpers/main-source";
 import fs from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -91,7 +92,7 @@ test("the snapshot carries draft summaries without text", async (t) => {
     }),
     [],
   );
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   for (const name of ["panel-snapshot", "snapshot"])
     assert.match(handler(main, name), /drafts: await draftSummaries\(desktop\),/);
 });
@@ -936,7 +937,7 @@ test("retrying after accessibility leaves the retries on when a run in flight tu
 });
 
 test("granting accessibility, or coming back to Relay with it granted, retries the drafts left for Copy", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   const request = handler(main, "request-desktop-accessibility");
   const granted = request.indexOf("const granted =");
   const retry = request.search(
@@ -1342,13 +1343,13 @@ test("at launch, drafts waiting only for other accounts arm the 60 s check, not 
 });
 
 test("main gives the scheduler the re-typing setting, off unless turned on, and a change of it runs a pass", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   assert.match(
     main,
     /const draftRetype = \(\) => draftRetypeEnabled\(service\.store\.state\.settings\);/,
   );
   const deps = main.slice(
-    main.indexOf("draftRestore = new DraftScheduler("),
+    main.indexOf("new DraftScheduler("),
     main.indexOf("desktop.onSwitched"),
   );
   assert.match(deps, /retype: draftRetype,/);
@@ -1372,7 +1373,7 @@ test("re-typing runs only on macOS once turned on; Linux leaves every draft for 
 });
 
 test("the accessibility request asks only while a feature that needs it is on", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   const request = handler(main, "request-desktop-accessibility");
   const guard = request.search(/if \(!accessibilityWanted\(\)\) return false;/);
   assert.ok(guard >= 0);
@@ -1387,7 +1388,7 @@ test("the accessibility request asks only while a feature that needs it is on", 
 });
 
 test("the quit notice addresses the user as sen", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   assert.match(main, /say\("electronMain\.relayStaysOpenUntilTheRenewal"\)/);
   assert.equal(testT("tr")("electronMain.relayStaysOpenUntilTheRenewal"), "Relay, yenileme bitene kadar açık kalır. Sonra yeniden çık.");
 });
@@ -1436,7 +1437,7 @@ test("the restore notification counts drafts and never names them", () => {
   );
   assert.equal(draftNotice({ restored: 0, left: 0 }, "tr"), undefined);
   // Main shows only that text, in the tray's language.
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   const notify = main.slice(main.indexOf("function notifyDrafts"));
   assert.match(
     notify.slice(0, notify.indexOf("\n}")),
@@ -1445,12 +1446,12 @@ test("the restore notification counts drafts and never names them", () => {
 });
 
 test("every switch schedules a restore through one hook, on the Desktop lock", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   assert.match(main, /desktop\.onSwitched = \(\) => void draftRestore\.afterSwitch\(\);/);
   assert.match(main, /void draftRestore\.start\(\);/);
   assert.match(main, /draftRestore\?\.stop\(\);/);
   const deps = main.slice(
-    main.indexOf("draftRestore = new DraftScheduler("),
+    main.indexOf("new DraftScheduler("),
     main.indexOf("desktop.onSwitched"),
   );
   assert.match(deps, /pending: \(\) => desktop\.pendingDraftRecords\(\),/);
@@ -1464,7 +1465,7 @@ test("every switch schedules a restore through one hook, on the Desktop lock", (
 });
 
 test("main runs every Desktop operation on one lock, and a restore record refuses none of the user's actions", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   assert.match(
     main,
     /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\), \{\s*acquire: \(kind\) => operationLock\?\.tryAcquire\(kind\),\s*release: \(\) => operationLock\?\.release\(\),\s*\}\);/,
@@ -1497,14 +1498,11 @@ test("main runs every Desktop operation on one lock, and a restore record refuse
 });
 
 test("no IPC handler returns draft text", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   // Text is read in one place in main: the restorer's deps, outside every handler.
   assert.equal(main.match(/pendingDraftRecords\(/g)?.length, 1);
   assert.equal(main.match(/draftText\(/g), null);
-  const ipc = main.slice(
-    main.indexOf("function bindIPC"),
-    main.indexOf('app.on("activate"'),
-  );
+  const ipc = ipcSource();
   assert.doesNotMatch(ipc, /pendingDraftRecords|draftText|\.text\b/);
   // Copy and Dismiss go through the trusted wrapper and resolve with nothing.
   assert.match(
@@ -1523,7 +1521,7 @@ test("no IPC handler returns draft text", () => {
 });
 
 test("the sidebar recipe is copied in main: the renderer sends an offer id and gets nothing back", () => {
-  const main = source("../electron/main.ts");
+  const main = mainSource();
   assert.match(
     main,
     /const sidebar = sidebarActions\(\{\s*gaps: desktop,\s*writeClipboard: \(text\) => clipboard\.writeText\(text\),\s*changed: broadcastChanged,\s*log: logDraftEvent,\s*\}\);/,

@@ -3,10 +3,30 @@ import { useI18n, type T } from "@/data/i18n";
 import { windowElapsed, type UsageWindowRow } from "@/data/selectors";
 import { formatPercent, meterFill } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { countdown } from "@/lib/time";
-import { usedAt } from "../../shared/quota-windows";
+import { countdown, formatRelative } from "@/lib/time";
+import type { Locale } from "../../shared/i18n/locales";
+import type { LimitSource } from "../../shared/types";
+import { usedAt, type LimitOrigin } from "../../shared/quota-windows";
 
 export { countdown };
+
+const SOURCE_NAMES = {
+  official: "limitLine.sourceOfficial",
+  "app-session": "limitLine.sourceAppSession",
+  gateway: "limitLine.sourceGateway",
+  estimate: "limitLine.sourceEstimate",
+} as const satisfies Record<LimitSource, string>;
+
+/**
+ * A limit's provenance as its tooltip says it: "Source: Official API · 3 min ago". The age follows
+ * `now`, so it moves on with the row's own clock. Undefined when nothing says where it came from.
+ */
+export function limitOriginText(origin: LimitOrigin | undefined, now: number, t: T, language: Locale): string | undefined {
+  if (!origin) return;
+  const source = t(SOURCE_NAMES[origin.source]);
+  const age = origin.readAt ? formatRelative(origin.readAt, now, language) : "";
+  return age ? t("limitLine.sourceAge", { source, age }) : t("limitLine.source", { source });
+}
 
 const track = cva("relative overflow-hidden rounded-full bg-track", {
   variants: { size: { sm: "h-1.5", md: "h-2" } },
@@ -35,6 +55,7 @@ export function LimitLine({
   showReset = true,
   ariaLabel,
   hint,
+  origin,
 }: {
   label: string;
   usedPercent: number;
@@ -53,6 +74,8 @@ export function LimitLine({
   ariaLabel?: string;
   /** Said in the tooltip after the label, not shown (a pooled provider's pool). */
   hint?: string;
+  /** Where the figure came from and when (`limitOrigin`): the tooltip's last line. */
+  origin?: LimitOrigin;
 }) {
   const { language } = useI18n();
   // A window whose reset has passed is empty again, whatever the reading says.
@@ -69,8 +92,9 @@ export function LimitLine({
   const reading = [label, hint, full ? (reset ? t("limitLine.full", { left: reset }) : t("common.full")) : reset ? `${percent} · ${reset}` : percent]
     .filter(Boolean)
     .join(" ");
+  const tooltip = [title ?? reading, limitOriginText(origin, now, t, language)].filter(Boolean).join("\n");
   return (
-    <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title ?? reading}>
+    <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={tooltip}>
       {/*
        * One line that never spills into the next column: the reset time truncates first, the label
        * keeps at most 60 % of the line, the percentage always shows; the tooltip has the whole reading.
@@ -130,10 +154,10 @@ export function NoLimitLine({ label, size = "sm", title }: { label?: string; siz
 }
 
 /** A bare bar for a row (no label): the account's binding limit at a glance. */
-export function MiniMeter({ usedPercent, label }: { usedPercent: number | undefined; label: string }) {
+export function MiniMeter({ usedPercent, label, title }: { usedPercent: number | undefined; label: string; title?: string }) {
   const used = usedPercent === undefined ? 0 : Math.min(100, Math.max(0, usedPercent));
   return (
-    <div className={track({ size: "sm" })} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(used)}>
+    <div className={track({ size: "sm" })} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(used)} title={title}>
       {usedPercent !== undefined && <div className={cn("h-full rounded-full", meterFill(used))} style={{ width: `${used}%` }} />}
     </div>
   );

@@ -457,7 +457,7 @@ export function AccountsTable({
             </>
           }
           meta={<StatusLabel status={status} />}
-          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} now={now} t={t} />}
+          limits={<AccountLimits five={five} week={week} pooled={pooled} faded={faded} usage={usage} now={now} t={t} />}
           action={actionNode}
           menu={menuNode}
         />

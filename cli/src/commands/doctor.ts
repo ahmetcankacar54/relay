@@ -24,14 +24,22 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
   const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
   const checks: Check[] = [];
   const add = (check: string, status: Status, detail: string) => checks.push({ check, status, detail });
-  add("platform", ctx.deps.platform === "darwin" ? "ok" : "fail", `${ctx.deps.platform} ${process.arch}`);
+  // Off macOS the CLI reads and runs, but leaves saving and switching to Relay.app.
+  const mac = ctx.deps.platform === "darwin";
+  add(
+    "platform",
+    mac ? "ok" : "warn",
+    mac
+      ? `${ctx.deps.platform} ${process.arch}`
+      : `${ctx.deps.platform} ${process.arch} · ${t("srcContext.savingAndSwitchingWorksOnMacosOnly")}`,
+  );
   add(
     "node",
     olderThan(process.versions.node, "22.12.0") ? "fail" : "ok",
     t("doctor.node2212OrNewerNeeded", { versionsNode: process.versions.node }),
   );
   const app = claudeExecutable(ctx.paths.claudeApps);
-  add("claude-app", app ? "ok" : "fail", app ?? t("doctor.theClaudeAppWasNotFound"));
+  add("claude-app", app ? "ok" : mac ? "fail" : "warn", app ?? t("doctor.theClaudeAppWasNotFound"));
   const cli = await diagnoseCli(ctx.deps.claude(ctx.store.state.executable), ctx.paths.data);
   add(
     "claude-cli",
@@ -68,7 +76,9 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
           ? t("doctor.emptyMadeWithTheFirstAccount")
           : t("doctor.ready"),
   );
-  if (vault.kind === "ready" || vault.kind === "newer") {
+  if (!mac) {
+    // The vault key is a macOS Keychain item; elsewhere only Relay.app reads it.
+  } else if (vault.kind === "ready" || vault.kind === "newer") {
     try {
       await readVaultKey(ctx.deps.securityTool);
       add("key", "ok", t("doctor.relayVaultKeyIsReadableIn"));
@@ -131,18 +141,21 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
               : t("doctor.theTerminalClaudeIsOn", { onName: on.name }),
     );
   }
-  add(
-    "gui-session",
-    ctx.deps.guiSession() ? "ok" : "warn",
-    ctx.deps.guiSession()
-      ? t("doctor.macosDesktopSession")
-      : t("doctor.noDesktopSessionSshClaudeCannot"),
-  );
-  add(
-    "automation",
-    "ok",
-    t("doctor.macosAsksForTheAutomationPermission"),
-  );
+  // A desktop session and the Automation permission matter only where the CLI quits Claude.
+  if (mac) {
+    add(
+      "gui-session",
+      ctx.deps.guiSession() ? "ok" : "warn",
+      ctx.deps.guiSession()
+        ? t("doctor.macosDesktopSession")
+        : t("doctor.noDesktopSessionSshClaudeCannot"),
+    );
+    add(
+      "automation",
+      "ok",
+      t("doctor.macosAsksForTheAutomationPermission"),
+    );
+  }
   const failed = checks.some((c) => c.status === "fail");
   if (ctx.json) printJson(io, checks);
   else

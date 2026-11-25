@@ -1,4 +1,4 @@
-import type { Account, AccountUsage, AuthFlow, DesktopState, ModelWindow, RelaySettings, Snapshot } from "../../shared/types";
+import type { Account, AccountUsage, AuthFlow, AutoSwitchStrategy, DesktopState, LimitSource, ModelWindow, RelaySettings, Snapshot } from "../../shared/types";
 import { freshUsage, quotaWindows } from "../../shared/usage";
 import { modelOnlyUsage, spentModelWindows } from "../../shared/quota-windows";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
@@ -56,8 +56,9 @@ export const windowAccounts = (data: Snapshot | undefined): ReadonlySet<string> 
   new Set(data?.windows?.open.map((w) => w.accountId));
 
 /**
- * Other accounts best first, by the switch rule (`rate`: the tempo, Pro units per hour). One open
- * in its own Claude window (`inWindows`, by id) cannot be switched to, so it is never recommended.
+ * Other accounts best first, by the switch rule (`rate`: the tempo, Pro units per hour; `strategy`:
+ * Settings → Switching's). One open in its own Claude window (`inWindows`, by id) cannot be
+ * switched to, so it is never recommended.
  */
 export function overviewAccounts(
   active: Account | undefined,
@@ -66,11 +67,12 @@ export function overviewAccounts(
   now = Date.now(),
   rate?: number,
   inWindows: ReadonlySet<string> = new Set(),
+  strategy?: AutoSwitchStrategy,
 ): OverviewRow[] {
   const others = accounts.filter((a) => a.id !== active?.id);
   const ranked = rankContinuationTargets(
     others.map((account) => ({ account, usage: usage[account.id] })),
-    { now, rate },
+    { now, rate, strategy },
   );
   // Only a Claude account is switched to in the Claude app; Codex and Antigravity accounts feed the gateway.
   const claude = (a: Account) => (a.provider ?? "claude") === "claude";
@@ -132,6 +134,9 @@ export interface UsageWindowRow {
   period?: WindowPeriod;
   /** A model's own limit (Fable, Opus, an Antigravity model), listed after the account's two. */
   model?: boolean;
+  /** Where the figure came from and when (`UsageWindow.source`, `.readAt`), when known. */
+  source?: LimitSource;
+  readAt?: string;
 }
 
 /**
@@ -181,6 +186,8 @@ export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
       resetsAt: w.resetsAt,
       period: periodOf(w),
       model: true,
+      ...(w.source ? { source: w.source } : {}),
+      ...(w.readAt ? { readAt: w.readAt } : {}),
     });
   return rows;
 }

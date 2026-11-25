@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import fs from "node:fs/promises";
-import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -844,11 +844,8 @@ test("the manager reads continuationOwns and pendingAuth separately on every dec
   assert.equal(switches, 0);
 });
 test("main passes the fleet and continuation conditions to continuationOwns, and only the sign-in check to pendingAuth", () => {
-  const main = readFileSync(
-    new URL("../electron/main.ts", import.meta.url),
-    "utf8",
-  );
-  const start = main.indexOf("autoSwitch = new AutoSwitchManager(");
+  const main = mainSource();
+  const start = main.indexOf("new AutoSwitchManager(");
   assert.ok(start >= 0);
   const block = main.slice(
     start,

@@ -11,6 +11,7 @@
   "files": [
     "dist/relay.js",
     "dist/relay-cli.js",
+    "dist/relay-statusline.js",
     "README.md",
     "README.tr.md",
     "LICENSE"
@@ -18,9 +19,6 @@
   "engines": {
     "node": ">=22.12"
   },
-  "os": [
-    "darwin"
-  ],
   "keywords": [
     "claude",
     "claude-desktop",
@@ -28,6 +26,9 @@
     "accounts",
     "switcher",
     "macos",
+    "linux",
+    "windows",
+    "statusline",
     "cli"
   ],
   "publishConfig": {

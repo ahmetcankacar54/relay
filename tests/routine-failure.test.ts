@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
 import { routineFailure, routineFailureNotice } from "../shared/routine-failure";
 import { testT } from "./i18n";
@@ -26,7 +27,7 @@ test("a reason without a label is left out, never shown as a code", () => {
 });
 
 test("the notification and the planning panel read the same labels", () => {
-  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const main = mainSource();
   assert.match(main, /routineFailureNotice\(account\.name, reason, getAppLocale\(\)\)/);
   assert.doesNotMatch(main, /\(\$\{reason\}\)/);
   const panel = readFileSync(new URL("../src/features/PlanningPanel.tsx", import.meta.url), "utf8");

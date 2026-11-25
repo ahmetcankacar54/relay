@@ -18,11 +18,21 @@ import {
 } from "../../features/SwitchPreferences";
 import { ExtensionPreference } from "../../features/ExtensionPreference";
 import { TerminalPreference } from "../../features/TerminalPreference";
+import { ConfigSyncPreference } from "../../features/ConfigSyncPreference";
 import { copyDraftAction, dismissDraftAction, draftReason } from "../../panel/PanelDrafts";
 import { ContinuationSettings } from "../../features/ContinuationSettings";
 import { AutomationSettings } from "../../features/AutomationControl";
 import { WarningThreshold } from "../Usage";
-import type { RelaySettings } from "../../../shared/types";
+import type { AutoSwitchStrategy, RelaySettings } from "../../../shared/types";
+import { AUTO_SWITCH_STRATEGIES } from "../../../shared/continuation-target-ranking";
+import type { MessageId } from "../../../shared/i18n/translate";
+
+/** Each strategy's name and its one-line explanation, shown under the choice. */
+const STRATEGY_TEXT: Record<AutoSwitchStrategy, { label: MessageId; description: MessageId }> = {
+  best: { label: "switchStrategy.best", description: "switchStrategy.bestDescription" },
+  "weekly-first": { label: "switchStrategy.weeklyFirst", description: "switchStrategy.weeklyFirstDescription" },
+  "consume-first": { label: "switchStrategy.consumeFirst", description: "switchStrategy.consumeFirstDescription" },
+};
 
 /** A row of the "what switches along" card: the card draws the line between rows. */
 const partClass = "border-t py-2 first:border-t-0 first:pt-0 last:pb-0";
@@ -180,6 +190,7 @@ export function SwitchingTab() {
             )}
           </Card>
         </PageSection>
+        <ConfigSyncPreference settings={settings} update={update} disabled={disabled} t={t} />
         <PageSection
           title={t("switchingTabs.nearTheLimit")}
           info={t("switchingTabs.relayMarksAccountsNearTheirLimit")}
@@ -217,6 +228,20 @@ export function SwitchingTab() {
               checked={settings.suggestAccounts}
               disabled={disabled || !settings.usageWarnings}
               onCheckedChange={(suggestAccounts) => update({ suggestAccounts })}
+            />
+          </SettingRow>
+          {/* One order for preparing on quit, Continue at quota, the suggestion and the panel. */}
+          <SettingRow
+            label={t("switchStrategy.whichAccountNext")}
+            htmlFor="switch-strategy"
+            description={t(STRATEGY_TEXT[settings.autoSwitchStrategy ?? "best"].description)}
+          >
+            <OptionSelect<AutoSwitchStrategy>
+              id="switch-strategy"
+              value={settings.autoSwitchStrategy ?? "best"}
+              disabled={disabled}
+              onChange={(autoSwitchStrategy) => update({ autoSwitchStrategy })}
+              options={AUTO_SWITCH_STRATEGIES.map((value) => ({ value, label: t(STRATEGY_TEXT[value].label) }))}
             />
           </SettingRow>
         </Card>

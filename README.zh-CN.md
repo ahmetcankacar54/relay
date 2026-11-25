@@ -126,6 +126,7 @@ Relay 免费、开源（MIT），完全在你的 Mac 上运行，除了你本来
 - 为 Claude Code、Codex CLI 和 omp 提供的本地端点，受密钥保护。请求会发往本周最先结束且仍有余量的账号，余量按实际容量比较（用了 85% 的 Max 20× 仍比全新的 Pro 余量更多）。
 - 会话留在自己的账号和它的提示缓存上；繁忙的账号会在一次提示开始时被移出，而不是在中途。
 - 只监听这台 Mac，或者在你选择时监听你的 Tailscale 网络。
+- **溢出到 API 密钥。** 所有订阅账号都达到限额时，Claude 请求可以改走 API 密钥而不是失败：Anthropic API、OpenRouter、DeepSeek、Kimi、GLM 或任何兼容 Anthropic 的 URL，按你设定的顺序使用。每个请求的费用会显示在请求列表中，达到以美元计的每日上限后，当天剩余时间不再溢出。密钥像登录信息一样加密保存，从不完整显示。API 密钥按 token 计费，本就用于这种场景，因此溢出不带订阅账号的风险。Codex 请求从不溢出。
 - 在你开启之前一直关闭。这是 Relay 中离常规使用最远的部分；见[条款与风险](#条款与风险)。
 
 ### 菜单栏、小组件和 CLI
@@ -161,6 +162,8 @@ English、Türkçe、Deutsch、Français、Español、Português (Brasil)、Ital
 
 macOS 是主要平台。Windows 版本尚未在真机上测试过；欢迎反馈。
 
+**资源占用：**在菜单栏中空闲时，Relay 的所有进程合计占用约 0.1% 的 CPU、约 395 MB 内存（最多 435 MB）；窗口在前台打开时约占 2% 的 CPU；且不会弹出钥匙串授权提示（Apple 芯片 Mac；[测量方法](docs/development.md#resource-use)）。
+
 ## 隐私与安全
 
 - **仅在本地运行。** Relay 没有账号体系、没有服务器，**也没有遥测或分析**。它的数据保存在 `~/Library/Application Support/Relay`（macOS）或 `~/.config/Relay`（Linux）。
@@ -176,6 +179,7 @@ macOS 是主要平台。Windows 版本尚未在真机上测试过；欢迎反馈
 Relay 不是官方工具，它的部分做法并不是 Anthropic 希望第三方工具使用 Claude 登录的方式。在依赖它之前，请先阅读本节。
 
 - **Anthropic 的条款怎么说。** [Claude Code 法律与合规页面](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)指出：订阅登录（Free、Pro、Max、Ultra）用于 Claude Code 和 Anthropic 自家应用的常规使用；第三方工具不应存储、路由或中转这些登录；公布的限额以常规的个人使用为前提。Anthropic 表示可能会在不另行通知的情况下执行这些规定。
+- **Anthropic 使用政策（自 2026 年 11 月 12 日起生效）。** [使用政策](https://www.anthropic.com/legal/aup)禁止用户："Resell, proxy, or otherwise provide access to Claude through unauthorized means, including services that route requests through consumer subscriptions or misrepresent the product or client being used."（转售、代理或以其他未经授权的方式提供对 Claude 的访问，包括通过消费者订阅转发请求或冒充所用产品或客户端的服务。）Relay 有两项功能属于这一条款：使用 Claude 订阅账号的网关通过消费者订阅转发请求；连接到网关的 omp 以 Claude Code 的身份发送请求。在开启其中任何一项之前，Relay 会显示这一条款并请你确认；`relay` CLI 需要 `--yes`。
 - **Relay 做了什么。** Relay 在你的电脑上以加密方式保存你各账号的登录，以便切换 Claude 应用和读取限额。网关更进一步：它使用这些登录把 Claude Code 请求发送到你的账号；连接 omp 时，omp 的请求会以与 Claude Code 请求相同的形式到达 Claude。
 - **可能发生什么。** Anthropic 可以拦截此类请求，也可以限制或暂停使用这些请求的账号。Relay 无法阻止这种情况，使用风险由你自行承担（见[许可证](LICENSE)）。
 - **风险在哪里。** 切换 Claude 应用和读取限额最接近常规使用。网关离常规使用更远，而通过 Claude 账号使用 omp 是最远的。网关在你开启之前一直关闭；如果你不想承担这种风险，请保持关闭。

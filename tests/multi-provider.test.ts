@@ -21,6 +21,7 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { i18nValue, testT } from "./i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DetectedProviderSession, type Snapshot } from "../shared/types";
+import { acknowledgeRisks } from "../shared/feature-risk";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const NOW = Date.parse("2026-11-09T10:00:00Z");
@@ -367,7 +368,9 @@ test("Antigravity onboarding starts Google OAuth without asking for an API key",
     let closed = 0;
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(wrap(relayFor({}, [claude], {
+    // Google's risk already accepted: the consent dialog has its own test (risk-consent.test.ts).
+    const accepted = { ...DEFAULT_SETTINGS, riskAcknowledged: acknowledgeRisks({}, ["antigravity-account"]) };
+    await act(async () => root.render(wrap(relayFor({ settings: accepted }, [claude], {
       startAntigravityOAuth: async (input: object) => {
         starts.push(input);
         return { accountId: "ag-pending", state: "validstate123" };

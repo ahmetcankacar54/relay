@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { allowedHistoryPair } from "../../shared/history-policy";
 import { quotaWindows } from "../../shared/usage";
+import { switchAtPercent } from "../../shared/continuation-target-ranking";
 import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
 
 /** Stopped-session orchestration with durable at-most-one submission. */
@@ -290,7 +291,7 @@ export function continuationPolicyReason(
     )
   )
     return "source-quota-available";
-  if (quotaWindows(target)!.some((w) => w.usedPercent >= 90))
+  if (quotaWindows(target)!.some((w) => w.usedPercent >= switchAtPercent(request.target, 90)))
     return "target-quota-unavailable";
   const cooldown = request.target.cooldownUntil;
   if (

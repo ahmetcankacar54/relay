@@ -15,7 +15,6 @@ import { AccountsTable } from "../src/pages/accounts/AccountsTable";
 import { AccountsBoard } from "../src/pages/overview/AccountsBoard";
 import { forgetSetupOnLeave } from "../src/pages/Accounts";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { clockLocative } from "../shared/tr-dative";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { i18nValue } from "./i18n";
 import {

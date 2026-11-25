@@ -1,5 +1,6 @@
 import { allowedHistoryPair } from "./history-policy";
 import { quotaWindows } from "./usage";
+import { switchAtPercent } from "./continuation-target-ranking";
 import type {
   Account,
   AccountUsage,
@@ -94,7 +95,7 @@ export function continuationTargetReadinessReason(
   const windows = quotaWindows(usage);
   if (!windows) return "five-hour-unavailable";
   if (!windows.every((w) => validWindow(w, now))) return "quota-window-invalid";
-  if (windows.some((w) => w.usedPercent >= 90))
+  if (windows.some((w) => w.usedPercent >= switchAtPercent(target, 90)))
     return "target-quota-unavailable";
   if (
     target.cooldownUntil &&

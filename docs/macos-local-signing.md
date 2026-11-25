@@ -60,6 +60,11 @@ Both hold the same certificate-signed app; the `desktop-automation` helper is a
 universal binary. One architecture alone: add `--arch arm64` or `--arch x64` to
 `node scripts/stable-signing.mjs --dmg --output release/share`.
 
+`npm run release` builds both the same way and attaches them to the GitHub
+release (docs/development.md, "Releasing"). Other Macs can also install the
+release with Homebrew: `brew install --cask ahmetcankacar54/tap/relay`; the
+"Open Anyway" step below is still needed once.
+
 electron-builder rebuilds node-pty inside `node_modules` for each architecture,
 so the command builds this Mac's architecture last. If a build fails, or after an
 `--arch` build for the other architecture, restore node-pty for this Mac with

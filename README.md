@@ -124,6 +124,7 @@ Every release carries a `SHA256SUMS.txt` and updates itself from GitHub Releases
 - A local, key-protected endpoint for Claude Code, Codex CLI and omp. Requests go to the account whose week ends first and that still has room, compared in real capacity (a Max 20× at 85 % still has more room than a fresh Pro).
 - Sessions stay on their account and its prompt cache; a busy account is drained at the start of a prompt, not in the middle.
 - Listens only on this Mac, or on your Tailscale network if you choose.
+- **Overflow to API keys.** When every subscription account is at its limit, Claude requests can go to an API key instead of failing: Anthropic's API, OpenRouter, DeepSeek, Kimi, GLM or any Anthropic-compatible URL, tried in your order. Each request's cost shows in the feed, and a daily cap in dollars stops overflow for the rest of the day. Keys are sealed like sign-ins and never shown in full. API keys are billed per token and meant for this use, so overflow carries none of the subscription risk. Codex requests never overflow.
 - Off until you turn it on. It is the part of Relay furthest from ordinary use; see [Terms & risk](#terms--risk).
 
 ### Menu bar, widget and CLI
@@ -159,6 +160,8 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 macOS is the main platform. The Windows build has not been tested on a real machine yet; reports are welcome.
 
+**Resource use:** idle in the menu bar, Relay takes about 0.1 % CPU and about 395 MB of memory across all its processes (435 MB at most), about 2 % CPU with its window open in front, and shows no Keychain prompt (Apple silicon Mac; [how it is measured](docs/development.md#resource-use)).
+
 ## Privacy & security
 
 - **Local only.** Relay has no account, no server and **no telemetry or analytics**. Its data lives in `~/Library/Application Support/Relay` (macOS) or `~/.config/Relay` (Linux).
@@ -174,6 +177,7 @@ Found a problem? Please report it privately — see [SECURITY.md](SECURITY.md).
 Relay is unofficial, and some of what it does is not how Anthropic wants third-party tools to use Claude sign-ins. Please read this before you rely on it.
 
 - **What Anthropic's terms say.** The [Claude Code legal and compliance page](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use) says subscription sign-ins (Free, Pro, Max, Ultra) are for ordinary use of Claude Code and Anthropic's own apps; that third-party tools should not store, route or intermediate those sign-ins; and that advertised limits assume ordinary, individual use. Anthropic says it may enforce this without notice.
+- **Anthropic's Usage Policy (in force from 12 November 2026).** The [Usage Policy](https://www.anthropic.com/legal/aup) says users must not "Resell, proxy, or otherwise provide access to Claude through unauthorized means, including services that route requests through consumer subscriptions or misrepresent the product or client being used." Two Relay features fall under this clause: the gateway with Claude subscription accounts routes requests through consumer subscriptions, and omp connected to the gateway sends its requests as Claude Code. Relay shows this clause and asks you to accept it before either one turns on; the `relay` CLI asks for `--yes`.
 - **What Relay does.** Relay keeps your accounts' sign-ins on your computer, encrypted, so it can switch the Claude app and read limits. The gateway goes further: it sends Claude Code requests to your accounts with those sign-ins, and when omp is connected, omp's requests reach Claude in the same shape as Claude Code's.
 - **What can happen.** Anthropic can block such requests, or limit or suspend an account that uses them. Relay cannot prevent that, and you use it at your own risk (see the [license](LICENSE)).
 - **Where the risk sits.** Switching the Claude app and reading limits stay closest to ordinary use. The gateway is further from it, and omp through a Claude account is the furthest. The gateway is off until you turn it on; leave it off if you would rather not take that risk.

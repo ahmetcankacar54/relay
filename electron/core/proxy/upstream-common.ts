@@ -288,7 +288,7 @@ export function limitScopeOf(headers: http.IncomingHttpHeaders): "model" | "acco
 }
 
 /** The `error.message` of a JSON error body, or undefined. */
-function errorMessage(body: string | undefined): { type?: string; message?: string } | undefined {
+export function errorMessage(body: string | undefined): { type?: string; message?: string } | undefined {
   if (!body) return undefined;
   try {
     const parsed = JSON.parse(body);

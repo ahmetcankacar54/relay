@@ -1,56 +1,151 @@
 name: Release
 
+# A version tag builds the Windows and Linux assets and attaches them, with their SHA256SUMS.txt
+# (signed when the RELAY_UPDATE_SIGNING_KEY secret is set), to a DRAFT release. The signed macOS
+# DMGs need the local certificate, so they are added from the Mac with `npm run release`, which
+# re-signs the combined checksums and publishes. See docs/development.md, "Releasing".
+# A beta tag (vX.Y.Z-beta.N, scripts/release-channel.mjs) makes a pre-release draft, and
+# electron-builder writes its updater files as beta.yml and beta-linux.yml.
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v0.18.0)'
+        description: 'Tag to build (e.g. v0.29.0 or v0.30.0-beta.1)'
         required: true
         type: string
 
 permissions:
   contents: read
 
-jobs:
-  release:
-    runs-on: macos-latest
-    # Only this job publishes, so only it may write the release.
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+env:
+  # The dispatch input reaches the shell as data, never as script text.
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            target: --win nsis
+            files: |
+              release/*.exe
+              release/*.exe.blockmap
+              release/latest.yml
+              release/beta.yml
+          - os: ubuntu-latest
+            name: linux
+            target: --linux AppImage
+            files: |
+              release/*.AppImage
+              release/latest-linux.yml
+              release/beta-linux.yml
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # bash on Windows too: a failing command stops the step.
+        shell: bash
+    steps:
+      - name: Check the tag
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]; then
+            echo "Not a release tag: $TAG" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
       - name: Verify types and tests
         run: |
           npm run typecheck
           npm test
 
-      - name: Build and Publish Release (Draft-First)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The dispatch input reaches the shell as data, never as script text.
-          INPUT_TAG: ${{ inputs.tag }}
+      - name: Build ${{ matrix.name }} assets
         run: |
-          VERSION=${INPUT_TAG:-$GITHUB_REF_NAME}
-          VERSION=${VERSION#v}
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Not a release version: $VERSION" >&2
-            exit 1
+          npm run build
+          npx electron-builder ${{ matrix.target }} --x64 --publish never
+        env:
+          # No certificate on these runners: the installer and AppImage are unsigned; updates
+          # are trusted through the signed SHA256SUMS.txt instead.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: relay-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only this job writes the release.
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: relay-*
+          path: assets
+          merge-multiple: true
+
+      - name: Create the draft release if missing
+        run: |
+          cp docs/share/install-notes.md assets/INSTALL.txt
+          if draft=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null); then
+            if [ "$draft" != "true" ]; then
+              echo "$TAG is already published; its assets are not changed." >&2
+              exit 1
+            fi
+          else
+            prerelease=()
+            if [[ "$TAG" == *-beta.* ]]; then prerelease=(--prerelease); fi
+            gh release create "$TAG" --draft "${prerelease[@]}" --verify-tag --title "$TAG" --generate-notes
           fi
-          echo "Releasing version $VERSION"
-          node scripts/publish-release.mjs "$VERSION" --force
+
+      # Lines already on the draft (the Mac's DMGs) are kept once verified; only node's own
+      # modules are used, so no install is needed.
+      - name: Checksums and signature
+        env:
+          RELAY_UPDATE_SIGNING_KEY: ${{ secrets.RELAY_UPDATE_SIGNING_KEY }}
+        run: node scripts/update-signing.mjs sums assets --tag "$TAG"
+
+      - name: Attach to the draft
+        run: |
+          gh release upload "$TAG" assets/* --clobber
+          # Unsigned sums must not sit beside a signature of older ones.
+          if [ ! -f assets/SHA256SUMS.txt.sig ] && gh release view "$TAG" --json assets -q '.assets[].name' | grep -qx 'SHA256SUMS.txt.sig'; then
+            gh release delete-asset "$TAG" SHA256SUMS.txt.sig --yes
+          fi
+          ls -l assets

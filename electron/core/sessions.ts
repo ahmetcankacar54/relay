@@ -99,7 +99,7 @@ export async function scanSessions(
   } catch (error: any) {
     if (error.code !== "ENOENT")
       warnings.push(
-        "Bir profilin oturum klasörü okunamadı veya bağlantı içeriyor.",
+        "A profile's session folder could not be read or holds a link.",
       );
     return { sessions, warnings };
   }
@@ -110,7 +110,7 @@ export async function scanSessions(
     try {
       files = await fsp.readdir(project, { withFileTypes: true });
     } catch {
-      warnings.push("Bir proje klasörü okunamadı.");
+      warnings.push("A project folder could not be read.");
       continue;
     }
     for (const entry of files) {
@@ -125,7 +125,7 @@ export async function scanSessions(
         await assertContained(root, file);
         const stat = await fsp.stat(file);
         if (stat.size > MAX_TRANSCRIPT) {
-          warnings.push("128 MB üzerindeki bir oturum taranmadı.");
+          warnings.push("A session over 128 MB was not scanned.");
           continue;
         }
         const id = entry.name.slice(0, -6);
@@ -173,7 +173,7 @@ export async function scanSessions(
           accountId,
           projectDir: cwd,
           projectName: path.basename(cwd) || cwd,
-          title: (title || summary || firstPrompt || "Başlıksız oturum")
+          title: (title || summary || firstPrompt || "Untitled session")
             .replace(/\s+/g, " ")
             .slice(0, 180),
           updatedAt: stat.mtime.toISOString(),
@@ -190,7 +190,7 @@ export async function scanSessions(
           metadataCache.delete(metadataCache.keys().next().value!);
         metadataCache.set(file, { signature, session });
       } catch {
-        warnings.push("Bir oturum dosyası okunamadı; kaynak dosya korundu.");
+        warnings.push("A session file could not be read; the source file was kept.");
       }
     }
   }

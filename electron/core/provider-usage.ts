@@ -179,7 +179,7 @@ function modelPool(id: string, label: string): string {
  * The headline of pool windows: the pool with the most room (judged on its fuller window), as its
  * fuller window. The account still answers while that pool has room.
  */
-function poolHeadline(windows: ModelWindow[]): Pick<ProviderLimits, "fiveHour" | "sevenDay"> {
+function poolHeadline(windows: ModelWindow[], now = Date.now()): Pick<ProviderLimits, "fiveHour" | "sevenDay"> {
   const pools = new Map<string, ModelWindow>();
   for (const w of windows) {
     const seen = pools.get(w.label);
@@ -189,7 +189,7 @@ function poolHeadline(windows: ModelWindow[]): Pick<ProviderLimits, "fiveHour" |
   const headline: UsageWindow = { usedPercent: best.usedPercent, ...(best.resetsAt ? { resetsAt: best.resetsAt } : {}) };
   const weekly =
     best.period === "seven_day" ||
-    (!best.period && !!best.resetsAt && Date.parse(best.resetsAt) - Date.now() > 24 * HOUR * 1000);
+    (!best.period && !!best.resetsAt && Date.parse(best.resetsAt) - now > 24 * HOUR * 1000);
   return weekly ? { sevenDay: headline } : { fiveHour: headline };
 }
 
@@ -247,7 +247,7 @@ export function parseAntigravitySummary(value: unknown, now = Date.now()): Provi
     windows.push(...own.sort((a, b) => order(a) - order(b)));
   }
   if (!windows.length) return undefined;
-  return { limits: { ...poolHeadline(windows), modelWindows: windows } };
+  return { limits: { ...poolHeadline(windows, now), modelWindows: windows } };
 }
 
 /**
@@ -387,6 +387,12 @@ function sidecarDetail(error: unknown): string {
 }
 
 /**
+ * How long one read may go on asking: past it no further address is tried. Each call through the
+ * sidecar can wait 20 s or more, and a read holds one of the usage reads' two places meanwhile.
+ */
+export const ANTIGRAVITY_READ_MS = 60_000;
+
+/**
  * Reads an Antigravity account's model quotas through its CLIProxyAPI sidecar, which holds the
  * Google sign-in and renews it: Relay never handles the token itself.
  */
@@ -396,9 +402,12 @@ export async function readAntigravityUsage(
   now: () => number = Date.now,
 ): Promise<ProviderUsageResult> {
   const body = JSON.stringify(projectId ? { project: projectId } : {});
+  const started = now();
+  const late = () => now() - started >= ANTIGRAVITY_READ_MS;
   // The pools Antigravity shows. A refused sign-in stops here; anything else (the free tier's 403,
   // an outage, an answer without buckets) moves on, and in the end to the model list.
   for (const url of ANTIGRAVITY_SUMMARY_URLS) {
+    if (late()) break;
     let response: FetchedResponse;
     try {
       response = await call({ url, body, userAgent: ANTIGRAVITY_SUMMARY_AGENT });
@@ -416,6 +425,10 @@ export async function readAntigravityUsage(
   }
   let last: UsageError | undefined;
   for (const url of ANTIGRAVITY_QUOTA_URLS) {
+    if (late()) {
+      last ??= new UsageError("unavailable", undefined, "antigravity quota: no answer in time");
+      break;
+    }
     let response: FetchedResponse;
     try {
       response = await call({ url, body });
