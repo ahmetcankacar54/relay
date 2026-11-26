@@ -199,8 +199,23 @@ fn a_claude_app_sign_in_reads_claude_ais_usage_for_the_accounts_organization() {
             content_type: "text/html".into(),
             retry_after: None,
             body: "<html>".into(),
+            cf_mitigated: None,
         }),
         Some(UsageIssue::Unavailable)
+    );
+    // A bot challenge is named in the issue log, so it never reads as a sign-out.
+    *answer.lock().unwrap() = WebResponse {
+        status: 403,
+        content_type: "text/html".into(),
+        retry_after: None,
+        body: "<html>".into(),
+        cf_mitigated: Some("challenge".into()),
+    };
+    let challenged = reader.read(&account(), false).unwrap_err();
+    assert_eq!(challenged.issue, UsageIssue::Unavailable);
+    assert_eq!(
+        challenged.detail.as_deref(),
+        Some("desktop usage 403 challenge")
     );
     assert_eq!(
         issue(WebResponse {
@@ -712,4 +727,22 @@ fn a_vault_that_cannot_keep_the_password_never_fails_the_read_that_got_it() {
     };
     let read = safe_storage_password(options(|| true, |_| {}, tool, Some(saved)));
     assert_eq!(read.get(true).unwrap(), PASSWORD);
+}
+
+/// Release gate (network, run by hand: `cargo test -p relay-core --test desktop_usage -- --ignored
+/// live`): claude.ai's Cloudflare lets Relay's own HTTP client through, as it let Electron. With no
+/// cookie the answer is claude.ai's JSON refusal; a bot challenge would make every Claude app
+/// limit read fail.
+#[test]
+#[ignore = "talks to claude.ai"]
+fn live_claude_ai_answers_relays_client_without_a_challenge() {
+    let response =
+        relay_core::desktop_usage::claude_web_request("https://claude.ai/api/organizations", "")
+            .expect("claude.ai answered");
+    assert_ne!(
+        response.cf_mitigated.as_deref(),
+        Some("challenge"),
+        "{response:?}"
+    );
+    assert!(response.content_type.contains("json"), "{response:?}");
 }

@@ -77,6 +77,7 @@ pub fn json(status: u16, body: &str) -> WebResponse {
         content_type: "application/json".into(),
         retry_after: None,
         body: body.into(),
+        cf_mitigated: None,
     }
 }
 

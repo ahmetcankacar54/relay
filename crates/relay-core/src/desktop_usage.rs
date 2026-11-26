@@ -392,6 +392,8 @@ pub struct WebResponse {
     pub content_type: String,
     pub retry_after: Option<String>,
     pub body: String,
+    /// Cloudflare's `cf-mitigated` header (`challenge` when the client was not let through).
+    pub cf_mitigated: Option<String>,
 }
 
 /// A current Safari's user agent: claude.ai's gateway accepts it like a browser's.
@@ -425,6 +427,7 @@ pub fn claude_web_request(url: &str, cookie: &str) -> Result<WebResponse, UsageE
     };
     let content_type = header("content-type").unwrap_or_default();
     let retry_after = header("retry-after");
+    let cf_mitigated = header("cf-mitigated");
     let body = match crate::usage::read_capped(&mut response, MAX_BODY).map_err(|_| failed())? {
         Some(data) => String::from_utf8_lossy(&data).into_owned(),
         None => " ".repeat(MAX_BODY + 1),
@@ -434,6 +437,7 @@ pub fn claude_web_request(url: &str, cookie: &str) -> Result<WebResponse, UsageE
         content_type,
         retry_after,
         body,
+        cf_mitigated,
     })
 }
 
@@ -825,9 +829,12 @@ impl DesktopUsageReader {
         match response.status {
             401 => return Err(UsageError::with_detail(UsageIssue::Expired, detail)),
             // A JSON refusal is claude.ai's own; an HTML one is a gateway and passes on its own.
+            // Cloudflare's bot challenge is named, so usage-issues.json tells it from a sign-out.
             403 => {
                 return Err(if json {
                     UsageError::with_detail(UsageIssue::Expired, detail)
+                } else if response.cf_mitigated.as_deref() == Some("challenge") {
+                    UsageError::with_detail(UsageIssue::Unavailable, format!("{detail} challenge"))
                 } else {
                     UsageError::with_detail(UsageIssue::Unavailable, format!("{detail} html"))
                 });
