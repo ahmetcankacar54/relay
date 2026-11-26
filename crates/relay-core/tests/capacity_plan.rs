@@ -702,9 +702,15 @@ fn planning_stays_bounded_with_three_four_and_six_accounts() {
     let six_list = with_pro(3);
     let (six_plan, six) = counted(&six_list, 1.15);
     assert!(six < 1_000.0, "{six}");
-    // A loose canary for a per-simulation slowdown, not a speed budget.
+    // A loose canary for a per-simulation slowdown, not a speed budget; unoptimized test
+    // builds on shared CI runners are several times slower than release.
     let took = began.elapsed().as_millis();
-    assert!(took < 2_000, "planning took {took} ms");
+    let budget = if cfg!(debug_assertions) {
+        15_000
+    } else {
+        2_000
+    };
+    assert!(took < budget, "planning took {took} ms");
 
     assert_eq!(six_plan.starts.len(), 6);
     for start in &six_plan.starts {
