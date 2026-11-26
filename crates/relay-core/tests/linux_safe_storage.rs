@@ -161,6 +161,7 @@ fn on_linux_the_keyring_is_asked_only_for_v11_login_cookies() {
                     content_type: "application/json".into(),
                     retry_after: None,
                     body: "{}".into(),
+                    cf_mitigated: None,
                 })
             }
         }),
