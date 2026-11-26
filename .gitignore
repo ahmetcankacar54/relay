@@ -26,3 +26,4 @@ e2e/report/
 /rust/**/*.node
 /rust/*-rs/test-inputs.jsonl
 /rust/*-rs/cases.jsonl
+/rust/**/replay-report.md

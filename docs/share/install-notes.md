@@ -75,7 +75,7 @@ few seconds. Settings → Advanced → Updates has "Check now" and turns the
 automatic check off. Versions before 0.16.0 must be updated by hand once.
 From 1.0.0 Relay is a native app (Rust and the system's WebKit) instead of an
 Electron one: it uses about half the memory while idle. Updating from 0.29
-keeps your accounts, groups, settings and the window's sidebar width. Each
+keeps your accounts, groups and settings. Each
 account's background sign-in renewal asks you to sign in once more after the
 update. The relay command-line tool is inside the app:
 /Applications/Relay.app/Contents/Resources/bin/relay.
