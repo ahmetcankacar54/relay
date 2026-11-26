@@ -1,13 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import http from "node:http";
-import type net from "node:net";
 import { calibrateLimits, slotCostBetween, type CostSlots } from "../shared/limit-calibration";
-import { withMoveCost } from "../electron/core/proxy/proxy-status";
-import { GatewayInsights } from "../electron/core/proxy/proxy-insights";
-import { ProxyServer } from "../electron/core/proxy/proxy-server";
+import { withMoveCost } from "../shared/proxy-status";
 import { requestDetail, sessionCacheLine, windowShare } from "../src/lib/proxy-ui";
-import type { Account, AccountUsage } from "../shared/types";
 import type { UsageSample } from "../shared/usage-statistics";
 import { testT } from "./i18n";
 
@@ -83,75 +78,6 @@ test("moving a session costs its prompt at the write price, and a share of the o
   assert.equal(withMoveCost(session, {}).moveCost?.percent, undefined, "no calibration, no share");
   assert.equal(withMoveCost(session, { a: calibrations.a }).moveCost?.percent, 0.57, "only its own: that one");
   assert.equal(withMoveCost({ ...session, model: "mystery-model" }, calibrations).moveCost, undefined);
-});
-
-test("a cold session on an account near its limit moves before its next request writes the cache there", async () => {
-  const clock = { now: Date.UTC(2026, 10, 13, 12) };
-  const usage: Record<string, AccountUsage> = {
-    a: { accountId: "a", status: "ready", stale: false, fiveHour: { usedPercent: 50, resetsAt: new Date(clock.now + 2 * HOUR).toISOString() } },
-    b: { accountId: "b", status: "ready", stale: false, fiveHour: { usedPercent: 10, resetsAt: new Date(clock.now + 4 * HOUR).toISOString() } },
-  };
-  const tokens: string[] = [];
-  const upstream = http.createServer((req, res) => {
-    req.resume();
-    req.on("end", () => {
-      tokens.push(String(req.headers.authorization).replace("Bearer ", ""));
-      res.writeHead(200, { "content-type": "text/event-stream" });
-      res.end('event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":2,"cache_read_input_tokens":0,"cache_creation_input_tokens":40000,"output_tokens":3}}}\n\n');
-    });
-  });
-  await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
-  const account = (id: string): Account => ({ id, name: id, kind: "personal", group: "default", color: "#000", createdAt: new Date(clock.now).toISOString() });
-  const server = new ProxyServer({
-    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "soonest-reset" },
-    credentialResolver: async (a) => `tok-${a.id}`,
-    usageProvider: () => ({ accounts: [account("a"), account("b")], usageMap: usage }),
-    upstreams: { anthropicUrl: `http://127.0.0.1:${(upstream.address() as net.AddressInfo).port}` },
-    now: () => clock.now,
-  });
-  const { port } = await server.start();
-  const send = () =>
-    new Promise<void>((resolve, reject) =>
-      http
-        .request({ host: "127.0.0.1", port, method: "POST", path: "/v1/messages", headers: { "x-claude-code-session-id": "s-1", "x-claude-code-request-class": "main" } }, (res) => {
-          res.resume();
-          res.on("end", () => resolve());
-        })
-        .on("error", reject)
-        .end(JSON.stringify({ model: "claude-opus-5-5" })),
-    );
-  try {
-    await send();
-    assert.deepEqual(tokens, ["tok-a"], "A resets first");
-    // Still warm, though A is now near its limit: the session stays for its cache.
-    usage.a = { ...usage.a, fiveHour: { ...usage.a.fiveHour!, usedPercent: 93 } };
-    clock.now += 2 * MINUTE;
-    await send();
-    assert.deepEqual(tokens, ["tok-a", "tok-a"]);
-    // Six minutes of quiet: the five-minute cache is gone, and A is still near its limit.
-    clock.now += 6 * MINUTE;
-    await send();
-    assert.deepEqual(tokens, ["tok-a", "tok-a", "tok-b"]);
-    const [moved] = server.stats.recent();
-    assert.equal(moved.note, "cold-move");
-    assert.equal(moved.miss?.reason, "expired", "the cache had expired: that, not the account, wrote it again");
-  } finally {
-    await server.stop();
-    await new Promise<void>((resolve) => {
-      upstream.closeAllConnections();
-      upstream.close(() => resolve());
-    });
-  }
-});
-
-test("a session reads as cold once its cache has outlived its lifetime", () => {
-  const clock = { now: 0 };
-  const insights = new GatewayInsights(() => clock.now);
-  insights.observeAnswer({ at: 0, sessionKey: "hdr:x", accountId: "a", model: "m", requestClass: "main", tokens: { input: 1, cacheWrite: 10_000 } });
-  assert.equal(insights.isCold("hdr:x"), false);
-  clock.now = 5 * MINUTE + 1;
-  assert.equal(insights.isCold("hdr:x"), true);
-  assert.equal(insights.isCold("hdr:unknown"), false, "a session Relay knows nothing of is left alone");
 });
 
 test("the page words a move's cost and a miss's share of the 5-hour window", () => {

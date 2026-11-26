@@ -17,6 +17,7 @@ export default defineConfig(
       "cli/npm/dist/",
       // rust-anything's generated bindings and recorders for the parity crates.
       "rust/",
+      "target/",
       "docs/audit-*/",
       ".claude/",
       ".superpowers/",

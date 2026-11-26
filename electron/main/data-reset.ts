@@ -1,7 +1,7 @@
 import { app } from "electron";
 import { beginReset } from "../core/data-reset";
 import { setLaunchAtLogin } from "../core/login-item";
-import { PROXY_CLIENTS, unbindClient } from "../core/proxy/proxy-clients";
+import { PROXY_CLIENTS, unbindClient } from "../core/proxy-clients";
 import { securityKeychain } from "../core/terminal-identity";
 import { credentialService } from "../core/usage-credentials";
 import { VAULT_KEY_ACCOUNT, VAULT_KEY_SERVICE } from "../core/vault-key";

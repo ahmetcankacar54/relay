@@ -13,7 +13,7 @@ import { gatewayHostAllowed, gatewayUrl } from "../../shared/proxy-url";
 import type { Account, ProxyStatus } from "../../shared/types";
 import { OverflowKeys } from "../core/overflow-keys";
 import { readCodexCredential } from "../core/provider-credentials";
-import { OpenRouterPrices } from "../core/proxy/overflow-upstream";
+import { GatewaySidecar } from "./gateway-sidecar";
 import {
   PROXY_CLIENTS,
   bindClient,
@@ -21,15 +21,14 @@ import {
   tailscaleAddress,
   releaseClientSync,
   type ClientTarget,
-} from "../core/proxy/proxy-clients";
-import { ProxyServer } from "../core/proxy/proxy-server";
+} from "../core/proxy-clients";
 import {
   buildProxyStatus,
   generateProxyKey,
   poolAccounts,
   proxyExtrasSchema,
   type ProxyExtras,
-} from "../core/proxy/proxy-status";
+} from "../../shared/proxy-status";
 import { readCredential, UsageError } from "../core/usage-credentials";
 import { say } from "../i18n";
 import { antigravityBridge } from "./antigravity";
@@ -270,10 +269,17 @@ export function overflowKeys(): OverflowKeys | undefined {
     );
   return overflowKeyStore;
 }
-/** OpenRouter's published prices for its overflow answers, read at most daily, kept on disk. */
-let openRouterPriceCache: OpenRouterPrices | undefined;
-const openRouterPrices = () =>
-  (openRouterPriceCache ??= new OpenRouterPrices({ file: path.join(app.getPath("userData"), "openrouter-prices.json") }));
+/**
+ * The `relay` binary the gateway runs as (`relay __gateway`): bundled under the app's resources,
+ * or in development `RELAY_GATEWAY_BIN` (an absolute path) or the workspace's debug build.
+ */
+export function gatewayBinary(): string {
+  const name = process.platform === "win32" ? "relay.exe" : "relay";
+  if (app.isPackaged) return path.join(process.resourcesPath, "bin", name);
+  const chosen = process.env.RELAY_GATEWAY_BIN;
+  if (chosen && path.isAbsolute(chosen)) return chosen;
+  return path.join(app.getAppPath(), "target", "debug", name);
+}
 /** Starts the gateway on the saved port and host; a first start also creates the client key. */
 export async function startProxy(): Promise<void> {
   if (proxyServer) return;
@@ -283,52 +289,63 @@ export async function startProxy(): Promise<void> {
     saveProxySettings(config);
   }
   const credentials = new Map<string, { token: string; until: number }>();
-  const server = new ProxyServer({
+  const server = new GatewaySidecar({
+    binary: gatewayBinary(),
     config,
-    overflowKey: async (upstreamId) => overflowKeys()?.get(upstreamId),
-    overflowPrices: openRouterPrices(),
-    timeZone: () => service.store.state.settings.planning.timeZone,
-    antigravityResolver: async (account) => {
-      if (account.provider !== "antigravity" || !account.auth?.loggedIn) return undefined;
-      const bridge = antigravityBridge(account.id);
-      if (!(await bridge.hasCredential())) return undefined;
-      await bridge.start();
-      return bridge.endpoint;
+    // OpenRouter's published prices for its overflow answers, read at most daily, kept on disk.
+    openRouterPricesFile: path.join(app.getPath("userData"), "openrouter-prices.json"),
+    hooks: {
+      overflowKey: async (upstreamId) => overflowKeys()?.get(upstreamId),
+      timeZone: () => service.store.state.settings.planning.timeZone,
+      antigravity: async (account) => {
+        if (account.provider !== "antigravity" || !account.auth?.loggedIn) return undefined;
+        const bridge = antigravityBridge(account.id);
+        if (!(await bridge.hasCredential())) return undefined;
+        await bridge.start();
+        return bridge.endpoint;
+      },
+      credential: async (account) => {
+        const cached = credentials.get(account.id);
+        if (cached && cached.until > Date.now()) return cached.token;
+        credentials.delete(account.id);
+        const credential = await gatewayCredential(account);
+        if (!credential) return undefined;
+        credentials.set(account.id, {
+          token: credential.accessToken,
+          until: Math.min(Date.now() + PROXY_CREDENTIAL_TTL_MS, credential.expiresAt ?? Infinity),
+        });
+        return credential.accessToken;
+      },
+      onCredentialRejected: (accountId) => {
+        credentials.delete(accountId);
+        // Refused although it read: the page shows it as renewing, not as working.
+        gatewaySignIns.delete(accountId);
+        renewForGateway(accountId);
+      },
+      // An expired or unreadable token: the usage reader renews it when it can (never prompts).
+      onCredentialMissing: (accountId) => renewForGateway(accountId),
+      // Every answer says how full the account's windows are: newer than the last read.
+      onLiveLimits: (accountId, live) => {
+        usage?.observe(accountId, live);
+        // The status line names the account the gateway just used for the session.
+        scheduleStatusline();
+      },
+      onLoopAlarm: (alarm) => notifyLoopAlarm(alarm),
+      requestLog: gatewayRequests(),
+      // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
+      // Only the accounts left in the pool, in its order (strict priority reads the order).
+      usage: () => ({
+        accounts: poolAccounts(service.store.state.accounts, proxySettings()),
+        usageMap: usage?.snapshot() ?? {},
+      }),
+      // The gateway stopped by itself: the page says why, and a toggle starts it again.
+      onExit: (message) => {
+        if (proxyServer !== server) return;
+        set.proxyServer(undefined);
+        proxyError = message;
+        scheduleStatusline();
+      },
     },
-    credentialResolver: async (account) => {
-      const cached = credentials.get(account.id);
-      if (cached && cached.until > Date.now()) return cached.token;
-      credentials.delete(account.id);
-      const credential = await gatewayCredential(account);
-      if (!credential) return undefined;
-      credentials.set(account.id, {
-        token: credential.accessToken,
-        until: Math.min(Date.now() + PROXY_CREDENTIAL_TTL_MS, credential.expiresAt ?? Infinity),
-      });
-      return credential.accessToken;
-    },
-    onCredentialRejected: (accountId) => {
-      credentials.delete(accountId);
-      // Refused although it read: the page shows it as renewing, not as working.
-      gatewaySignIns.delete(accountId);
-      renewForGateway(accountId);
-    },
-    // An expired or unreadable token: the usage reader renews it when it can (never prompts).
-    onCredentialMissing: (accountId) => renewForGateway(accountId),
-    // Every answer says how full the account's windows are: newer than the last read.
-    onLiveLimits: (accountId, live) => {
-      usage?.observe(accountId, live);
-      // The status line names the account the gateway just used for the session.
-      scheduleStatusline();
-    },
-    onLoopAlarm: (alarm) => notifyLoopAlarm(alarm),
-    requestLog: gatewayRequests(),
-    // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
-    // Only the accounts left in the pool, in its order (strict priority reads the order).
-    usageProvider: () => ({
-      accounts: poolAccounts(service.store.state.accounts, proxySettings()),
-      usageMap: usage?.snapshot() ?? {},
-    }),
   });
   try {
     await server.start();

@@ -1,6 +1,5 @@
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { Account, AccountUsage, ProxyClientStatus, ProxyStatus } from "../../../shared/types";
+import type { Account, AccountUsage, ProxyClientStatus, ProxyStatus } from "./types";
 import type {
   ProxyClassShare,
   ProxyConfig,
@@ -8,18 +7,21 @@ import type {
   ProxyMetrics,
   ProxyRequestLog,
   ProxySessionView,
-} from "../../../shared/proxy-types";
-import type { LimitCalibration } from "../../../shared/limit-calibration";
-import { responseCost } from "../../../shared/model-prices";
-import { GATEWAY_HOST_ERROR, LOOPBACK_HOSTS, gatewayHostAllowed } from "../../../shared/proxy-url";
-import { OVERFLOW_PRESET_IDS, type OverflowStatus } from "../../../shared/overflow";
+} from "./proxy-types";
+import type { LimitCalibration } from "./limit-calibration";
+import { responseCost } from "./model-prices";
+import { GATEWAY_HOST_ERROR, LOOPBACK_HOSTS, gatewayHostAllowed } from "./proxy-url";
+import { OVERFLOW_PRESET_IDS, type OverflowStatus } from "./overflow";
 
 /** The prefix every client key starts with, so a key pasted somewhere is recognised as Relay's. */
 export const PROXY_KEY_PREFIX = "relay-sec-";
 
-/** A new client key: 256 random bits, URL-safe, behind the `relay-sec-` prefix. */
-export const generateProxyKey = (): string =>
-  `${PROXY_KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
+/** A new client key: 256 random bits, URL-safe (unpadded base64url), behind the `relay-sec-` prefix. */
+export function generateProxyKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const base64 = btoa(String.fromCharCode(...bytes));
+  return `${PROXY_KEY_PREFIX}${base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+}
 
 /**
  * What the Proxy Gateway page may change: where the gateway listens (this computer, or its

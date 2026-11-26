@@ -1,25 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import http from "node:http";
-import type net from "node:net";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TooltipProvider } from "../src/components/ui/tooltip";
-import { ProxyRouter } from "../electron/core/proxy/proxy-router";
-import { ProxySessionCache } from "../electron/core/proxy/proxy-session-cache";
-import { ProxyServer } from "../electron/core/proxy/proxy-server";
-import { buildProxyStatus } from "../electron/core/proxy/proxy-status";
-import { cleanEntry } from "../electron/core/proxy/proxy-request-log";
+import { buildProxyStatus } from "../shared/proxy-status";
+import { cleanEntry } from "../electron/core/gateway-request-log";
 import { DEFAULT_PROXY_CONFIG } from "../shared/proxy-types";
 import { pickLine, pickReasonLabel } from "../src/lib/proxy-ui";
 import { ProxyPage } from "../src/pages/Proxy";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { i18nValue, testT } from "./i18n";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type ProxyStatus, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type ProxyStatus, type Snapshot } from "../shared/types";
 
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
 const tr = testT("tr");
 const en = testT("en");
 const account = (id: string, name = id): Account => ({
@@ -29,110 +22,6 @@ const account = (id: string, name = id): Account => ({
   group: "default",
   color: "#000",
   createdAt: "2026-11-01T00:00:00.000Z",
-});
-const usageOf = (id: string, five: number, resetHours: number, now: number): AccountUsage => ({
-  accountId: id,
-  status: "ready",
-  stale: false,
-  fiveHour: { usedPercent: five, resetsAt: new Date(now + resetHours * HOUR).toISOString() },
-});
-
-test("the router says why it chose an account: the session's own, the strategy's pick, or the only one", () => {
-  const now = Date.UTC(2026, 10, 13, 12);
-  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => now });
-  const accounts = [account("a"), account("b"), account("c")];
-  const usage = { a: usageOf("a", 93, 1, now), b: usageOf("b", 20, 2, now), c: usageOf("c", 10, 4, now) };
-
-  const first = router.selectAccount("s-1", accounts, usage, "claude");
-  assert.equal(first.account.id, "b", "A resets first but is near its limit");
-  assert.equal(first.reason, "soonest-reset");
-  assert.deepEqual(first.nearlyFull, ["a"]);
-
-  const again = router.selectAccount("s-1", accounts, usage, "claude");
-  assert.equal(again.reason, "bound");
-  assert.equal(again.nearlyFull, undefined);
-
-  const lone = router.selectAccount("s-2", [account("c")], usage, "claude");
-  assert.equal(lone.reason, "only");
-
-  const strict = new ProxyRouter({ strategy: "strict-priority", now: () => now });
-  assert.equal(strict.selectAccount("s-3", accounts, usage, "claude").reason, "priority");
-  const balanced = new ProxyRouter({ strategy: "balanced", now: () => now });
-  assert.equal(balanced.selectAccount("s-4", accounts, usage, "claude").reason, "balanced");
-});
-
-test("a session whose account waits on its sign-in is served elsewhere and says which account it waits for", () => {
-  const now = Date.UTC(2026, 10, 13, 12);
-  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => now });
-  const accounts = [account("a"), account("b")];
-  const usage = { a: usageOf("a", 20, 1, now), b: usageOf("b", 20, 3, now) };
-  assert.equal(router.selectAccount("s-1", accounts, usage, "claude").account.id, "a");
-  router.markUnavailable("a", 5 * MINUTE, "auth");
-  const served = router.selectAccount("s-1", accounts, usage, "claude");
-  assert.equal(served.account.id, "b");
-  assert.equal(served.boundWaiting, "a");
-});
-
-test("the preview names a new session's account without binding anything", () => {
-  const now = Date.UTC(2026, 10, 13, 12);
-  const cache = new ProxySessionCache();
-  const router = new ProxyRouter({ strategy: "soonest-reset", sessionCache: cache, now: () => now });
-  const usage = { a: usageOf("a", 95, 1, now), b: usageOf("b", 20, 2, now) };
-  const pick = router.preview([account("a"), account("b")], usage, "claude");
-  assert.equal(pick?.account.id, "b");
-  assert.deepEqual(pick?.nearlyFull, ["a"]);
-  assert.equal(cache.count(), 0);
-  assert.equal(router.preview([account("a")], usage, "codex"), undefined, "no account of that provider");
-});
-
-test("a request held on one account names it on the account that served it, and the log keeps the reason", async () => {
-  const now = Date.UTC(2026, 10, 13, 12);
-  const usage = { a: usageOf("a", 20, 1, now), b: usageOf("b", 20, 3, now) };
-  const upstream = http.createServer((req, res) => {
-    req.resume();
-    req.on("end", () => {
-      if (req.headers.authorization === "Bearer tok-a") {
-        res.writeHead(529, { "content-type": "application/json" });
-        res.end('{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}');
-        return;
-      }
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end('{"usage":{"input_tokens":2,"output_tokens":3}}');
-    });
-  });
-  await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
-  const server = new ProxyServer({
-    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "soonest-reset" },
-    credentialResolver: async (a) => `tok-${a.id}`,
-    usageProvider: () => ({ accounts: [account("a"), account("b")], usageMap: usage }),
-    upstreams: { anthropicUrl: `http://127.0.0.1:${(upstream.address() as net.AddressInfo).port}` },
-    now: () => now,
-  });
-  const { port } = await server.start();
-  try {
-    assert.deepEqual(server.nextPicks(), { claude: { accountId: "a", reason: "soonest-reset" } });
-    await new Promise<void>((resolve, reject) =>
-      http
-        .request({ host: "127.0.0.1", port, method: "POST", path: "/v1/messages", headers: { "x-claude-code-session-id": "s-1" } }, (res) => {
-          res.resume();
-          res.on("end", () => resolve());
-        })
-        .on("error", reject)
-        .end(JSON.stringify({ model: "claude-opus-5-5" })),
-    );
-    const [served, held] = server.stats.recent();
-    assert.equal(held.accountId, "a");
-    assert.deepEqual(held.pick, { reason: "soonest-reset" });
-    assert.equal(served.accountId, "b");
-    assert.equal(served.pick?.after, "a");
-    assert.equal(served.pick?.boundWaiting, "a", "an overload keeps the session bound to A");
-  } finally {
-    await server.stop();
-    await new Promise<void>((resolve) => {
-      upstream.closeAllConnections();
-      upstream.close(() => resolve());
-    });
-  }
 });
 
 test("a pick read back from disk keeps known reasons and account ids only", () => {

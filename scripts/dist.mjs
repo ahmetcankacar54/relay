@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildRelayBinary } from "./relay-binary.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 if (process.platform === "darwin") {
@@ -13,6 +14,8 @@ if (process.platform === "darwin") {
   );
 } else {
   execFileSync("npm", ["run", "build"], { cwd: root, stdio: "inherit" });
+  // The gateway's binary; electron-builder's afterPack hook copies it into the app.
+  buildRelayBinary();
   execFileSync(
     process.execPath,
     [

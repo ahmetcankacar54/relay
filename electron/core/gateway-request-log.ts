@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ProxyClassShare, ProxyMoveReason, ProxyPick, ProxyPickReason, ProxyRequestLog } from "../../../shared/proxy-types";
+import type { ProxyClassShare, ProxyMoveReason, ProxyPick, ProxyPickReason, ProxyRequestLog } from "../../shared/proxy-types";
+
+/** How many requests the live feed keeps. */
+export const REQUEST_LOG_SIZE = 40;
 
 /** How long the gateway's requests are kept: past the token table's own rescans of recent days. */
 export const REQUEST_LOG_KEEP_DAYS = 35;
@@ -127,7 +130,7 @@ export class GatewayRequestLog {
     this.byRequestId.clear();
     for (const entry of entries)
       if (entry.requestId && entry.accountId) this.byRequestId.set(entry.requestId, entry.accountId);
-    this.latest = entries.slice(-(this.options.feedSize ?? 40));
+    this.latest = entries.slice(-(this.options.feedSize ?? REQUEST_LOG_SIZE));
     this.today = { day: this.dayOf(this.now()), byClass: new Map() };
     this.spend = [];
     for (const entry of entries) this.count(entry);
@@ -194,7 +197,7 @@ export class GatewayRequestLog {
     if (clean.requestId && clean.accountId) this.byRequestId.set(clean.requestId, clean.accountId);
     this.count(clean);
     this.latest.push(clean);
-    const size = this.options.feedSize ?? 40;
+    const size = this.options.feedSize ?? REQUEST_LOG_SIZE;
     if (this.latest.length > size) this.latest.splice(0, this.latest.length - size);
     try {
       this.append(JSON.stringify(clean) + "\n");

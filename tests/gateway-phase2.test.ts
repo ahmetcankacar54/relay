@@ -1,117 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import http from "node:http";
-import type net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { ProxyServer, clientOf } from "../electron/core/proxy/proxy-server";
-import { classifyFailure, parseLiveLimits } from "../electron/core/proxy/upstream-common";
-import { GatewayRequestLog, cleanEntry } from "../electron/core/proxy/proxy-request-log";
-import { ProxyStats } from "../electron/core/proxy/proxy-stats";
+import { GatewayRequestLog, cleanEntry } from "../electron/core/gateway-request-log";
 import { attribute } from "../electron/core/token-attribution";
 import { UsageManager } from "../electron/core/usage";
 import { Store } from "../electron/core/store";
 import type { Account } from "../shared/types";
-import type { ProxyRequestLog } from "../shared/proxy-types";
 import { testT } from "./i18n";
 
-/** The rate-limit headers of a real answer through the gateway (2026-11-13), request id shortened. */
-const ALLOWED = {
-  "anthropic-ratelimit-unified-5h-reset": "1794582600",
-  "anthropic-ratelimit-unified-5h-status": "allowed",
-  "anthropic-ratelimit-unified-5h-utilization": "0.0",
-  "anthropic-ratelimit-unified-7d-reset": "1795060800",
-  "anthropic-ratelimit-unified-7d-status": "allowed",
-  "anthropic-ratelimit-unified-7d-utilization": "0.28",
-  "anthropic-ratelimit-unified-fallback-percentage": "0.5",
-  "anthropic-ratelimit-unified-overage-disabled-reason": "org_level_disabled",
-  "anthropic-ratelimit-unified-overage-status": "rejected",
-  "anthropic-ratelimit-unified-representative-claim": "five_hour",
-  "anthropic-ratelimit-unified-reset": "1794582600",
-  "anthropic-ratelimit-unified-status": "allowed",
+/** The windows of a real answer through the gateway (2026-11-13), as the gateway reads them. */
+const LIVE = {
+  fiveHour: { usedPercent: 0, resetsAt: new Date(1794582600 * 1000).toISOString() },
+  sevenDay: { usedPercent: 28, resetsAt: new Date(1795060800 * 1000).toISOString() },
 };
-const errorBody = (type: string, message: string) => JSON.stringify({ type: "error", error: { type, message } });
-
-test("an answer's windows are read as percents with their resets", () => {
-  assert.deepEqual(parseLiveLimits(ALLOWED), {
-    fiveHour: { usedPercent: 0, resetsAt: new Date(1794582600 * 1000).toISOString() },
-    sevenDay: { usedPercent: 28, resetsAt: new Date(1795060800 * 1000).toISOString() },
-  });
-  assert.equal(parseLiveLimits({ "content-type": "application/json" }), undefined);
-  assert.equal(parseLiveLimits({ "anthropic-ratelimit-unified-5h-utilization": "lots" }), undefined);
-  assert.deepEqual(parseLiveLimits({ "anthropic-ratelimit-unified-5h-utilization": "1.2" }), { fiveHour: { usedPercent: 100 } });
-  assert.deepEqual(parseLiveLimits({ "anthropic-ratelimit-unified-7d-utilization": "0.973" }), { sevenDay: { usedPercent: 97.3 } });
-});
-
-test("a 429 is a limit when a window says so or its message names a limit; Anthropic's bare refusal is not", () => {
-  const json = { "content-type": "application/json" };
-  // What Anthropic answers a request that does not come from Claude Code (2026-11-13): no
-  // rate-limit header at all, no Retry-After, the message "Error".
-  const bare = { ...json, "x-should-retry": "true" };
-  assert.equal(classifyFailure(429, bare, errorBody("rate_limit_error", "Error")), "refused");
-  assert.equal(classifyFailure(429, { ...json, ...ALLOWED }, errorBody("rate_limit_error", "Error")), "refused");
-  // A spent window says so: a limit, whatever the message.
-  assert.equal(
-    classifyFailure(429, { ...json, ...ALLOWED, "anthropic-ratelimit-unified-5h-status": "rejected" }, errorBody("rate_limit_error", "Error")),
-    "limit",
-  );
-  assert.equal(classifyFailure(429, { ...json, ...ALLOWED, "anthropic-ratelimit-unified-status": "rejected" }, errorBody("rate_limit_error", "Error")), "limit");
-  // Without a message it may be a short limit: wait out its Retry-After, as before.
-  assert.equal(classifyFailure(429, { ...json, ...ALLOWED }, "{}"), "limit");
-  assert.equal(classifyFailure(429, bare, undefined), "limit");
-  // A Retry-After asks for a wait: honoured as a limit.
-  assert.equal(classifyFailure(429, { ...bare, "retry-after": "42" }, errorBody("rate_limit_error", "slow down")), "limit");
-  // A message about a limit: another account may take the request.
-  for (const message of [
-    "Number of requests has exceeded your rate limit",
-    "This request would exceed your account's rate limit. Please try again later.",
-    "You've hit your weekly limit",
-  ])
-    assert.equal(classifyFailure(429, bare, errorBody("rate_limit_error", message)), "limit", message);
-  assert.equal(classifyFailure(429, { ...json, ...ALLOWED }, errorBody("rate_limit_error", "Extra usage is required for long context requests.")), "extra-usage");
-});
-
-test("the client is told apart by its user agent", () => {
-  assert.equal(clientOf({ "user-agent": "claude-cli/2.1.322 (external, cli)" }), "claude-code");
-  assert.equal(clientOf({ "user-agent": "claude-cli/2.1.322 (external, sdk-cli)" }), "claude-code");
-  assert.equal(clientOf({ "user-agent": "claude-cli/2.1.322 (external, sdk-ts, agent-sdk/0.2.1)" }), "agent-sdk");
-  assert.equal(clientOf({ "user-agent": "codex_cli_rs/0.80.0 (Mac OS 26.5.0; arm64)" }), "codex");
-  assert.equal(clientOf({ "user-agent": "curl/8.7.1" }), "curl");
-  assert.equal(clientOf({}), undefined);
-});
-
-async function upstreamServer(reply: (req: http.IncomingMessage, res: http.ServerResponse) => void) {
-  const seen: http.IncomingMessage[] = [];
-  const server = http.createServer((req, res) => {
-    req.resume();
-    req.on("end", () => {
-      seen.push(req);
-      reply(req, res);
-    });
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return {
-    seen,
-    url: `http://127.0.0.1:${(server.address() as net.AddressInfo).port}`,
-    close: () =>
-      new Promise<void>((resolve) => {
-        server.closeAllConnections();
-        server.close(() => resolve());
-      }),
-  };
-}
-
-const ask = (port: number, options: http.RequestOptions, body = "{}") =>
-  new Promise<{ status: number; body: string }>((resolve, reject) => {
-    const req = http.request({ host: "127.0.0.1", port, ...options }, (res) => {
-      let text = "";
-      res.on("data", (chunk) => (text += chunk));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: text }));
-    });
-    req.on("error", reject);
-    req.end(body);
-  });
 
 const account = (id: string): Account => ({
   id,
@@ -120,83 +23,6 @@ const account = (id: string): Account => ({
   group: "default",
   color: "#000",
   createdAt: new Date().toISOString(),
-});
-
-test("each answer reports its windows and request id as its headers arrive, and the log keeps who asked, how long and the tokens", async () => {
-  const upstream = await upstreamServer((_req, res) => {
-    res.writeHead(200, { "content-type": "text/event-stream", "request-id": "req_011CgzTest", ...ALLOWED });
-    res.write('event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":3,"cache_read_input_tokens":900,"cache_creation_input_tokens":40,"output_tokens":1}}}\n\n');
-    res.end('event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":7}}\n\n');
-  });
-  const live: unknown[] = [];
-  const bound: [string, string][] = [];
-  const recorded: ProxyRequestLog[] = [];
-  const server = new ProxyServer({
-    config: { port: 0, host: "127.0.0.1", enabled: true },
-    credentialResolver: async () => "tok",
-    usageProvider: () => ({ accounts: [account("a")], usageMap: {} }),
-    upstreams: { anthropicUrl: upstream.url },
-    onLiveLimits: (accountId, windows) => live.push({ accountId, windows }),
-    requestLog: { recent: () => [], record: (entry) => recorded.push(entry), bind: (id, accountId) => bound.push([id, accountId]) },
-  });
-  const { port } = await server.start();
-  try {
-    const answer = await ask(port, {
-      method: "POST",
-      path: "/v1/messages",
-      headers: { "user-agent": "claude-cli/2.1.322 (external, cli)", "x-claude-code-request-class": "subagent" },
-    });
-    assert.equal(answer.status, 200);
-    assert.deepEqual(bound, [["req_011CgzTest", "a"]]);
-    assert.deepEqual(live, [{ accountId: "a", windows: parseLiveLimits(ALLOWED) }]);
-    assert.equal(recorded.length, 1);
-    const entry = recorded[0];
-    assert.equal(entry.accountId, "a");
-    assert.equal(entry.requestId, "req_011CgzTest");
-    assert.equal(entry.client, "claude-code");
-    assert.equal(entry.requestClass, "subagent");
-    assert.deepEqual(entry.tokens, { input: 3, output: 7, cacheRead: 900, cacheWrite: 40 });
-    assert.equal(typeof entry.ms, "number");
-    // Claude Code's start-up check needs no key, as with Anthropic.
-    assert.equal((await ask(port, { method: "GET", path: "/api/hello" }, "")).status, 200);
-  } finally {
-    await server.stop();
-    await upstream.close();
-  }
-});
-
-test("Anthropic's bare 429 goes back to the client at once: no account is paused, none other is tried", async () => {
-  const upstream = await upstreamServer((_req, res) => {
-    // As Anthropic answers it: no rate-limit header, no Retry-After.
-    res.writeHead(429, { "content-type": "application/json", "x-should-retry": "true" });
-    res.end(errorBody("rate_limit_error", "Error"));
-  });
-  const server = new ProxyServer({
-    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "strict-priority" },
-    credentialResolver: async (a) => `tok-${a.id}`,
-    usageProvider: () => ({ accounts: [account("a"), account("b")], usageMap: {} }),
-    upstreams: { anthropicUrl: upstream.url },
-  });
-  const { port } = await server.start();
-  try {
-    const answer = await ask(port, { method: "POST", path: "/v1/messages", headers: { "user-agent": "curl/8.7.1" } });
-    assert.equal(answer.status, 429);
-    assert.match(answer.body, /none of the account's limits is spent/);
-    assert.match(answer.body, /did not pause the account/);
-    assert.equal(upstream.seen.length, 1, "the other account was not tried");
-    assert.equal(server.router.cooldownOf("a"), undefined);
-    const [entry] = server.stats.recent();
-    assert.equal(entry.note, "refused");
-    assert.equal(entry.failover, undefined, "it did not go on to the next account");
-    assert.equal(entry.error, "Error");
-    assert.equal(entry.client, "curl");
-    // The next request goes out as usual.
-    await ask(port, { method: "POST", path: "/v1/messages" });
-    assert.equal(upstream.seen.length, 2);
-  } finally {
-    await server.stop();
-    await upstream.close();
-  }
 });
 
 test("the request log keeps 35 days across restarts, answers which account served a request id, and reads back only what it wrote", (t) => {
@@ -228,10 +54,6 @@ test("the request log keeps 35 days across restarts, answers which account serve
   assert.equal(cleanEntry({ at: 1, status: 200, prompt: "secret", tokens: { input: -4, output: 9 } })?.tokens?.output, 9);
   assert.equal("prompt" in (cleanEntry({ at: 1, status: 200, prompt: "secret" }) ?? {}), false);
   assert.equal(cleanEntry({ at: 1, status: 2000 }), undefined);
-
-  // The gateway's feed starts from what the log kept.
-  const stats = new ProxyStats(again);
-  assert.deepEqual(stats.recent().map((e) => e.requestId), ["req_3", "req_2"]);
 });
 
 test("a response that came through the gateway is the serving account's, whatever its entry point", () => {
@@ -288,7 +110,7 @@ test("an answer's windows make the account fresh for everything that reads limit
   assert.equal(read.fiveHour?.usedPercent, 10);
 
   clock.now += 4 * 60_000;
-  manager.observe(claude.id, parseLiveLimits(ALLOWED)!);
+  manager.observe(claude.id, LIVE);
   const live = manager.snapshot()[claude.id];
   assert.equal(live.status, "ready");
   assert.equal(live.stale, false);
@@ -301,7 +123,7 @@ test("an answer's windows make the account fresh for everything that reads limit
 
   // The same percents a minute later add no sample; a moved percent does, once a minute.
   clock.now += 61_000;
-  manager.observe(claude.id, parseLiveLimits(ALLOWED)!);
+  manager.observe(claude.id, LIVE);
   assert.equal(samples.length, 2);
   manager.observe(claude.id, { fiveHour: { usedPercent: 3 } });
   assert.equal(samples.length, 3);

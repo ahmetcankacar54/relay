@@ -78,6 +78,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      # The gateway runs as the Rust `relay` binary (relay __gateway), packaged with the app.
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: npm ci
       # The whole tree: Electron, which ships inside the app, is a devDependency.
       - run: npm audit --audit-level=high
@@ -88,6 +93,9 @@ jobs:
         run: node --import tsx scripts/i18n/export-catalogs.ts --check
       - run: npm test
       - run: npm run build
+      # electron-builder's afterPack hook copies it into the package (scripts/relay-binary.mjs).
+      - name: Build the gateway's relay binary
+        run: node scripts/relay-binary.mjs
       - name: Desktop IPC and PTY integration
         if: runner.os == 'macOS'
         run: npm run test:desktop
@@ -124,6 +132,8 @@ jobs:
       - name: Boot smoke of the packaged app.asar
         if: runner.os != 'macOS'
         run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot -- --packaged
+      - name: The packaged gateway starts, answers and stops
+        run: node scripts/smoke-gateway.mjs
   # The Rust workspace (Cargo.toml): the core, the gateway, the catalogs and the CLI.
   rust:
     strategy:

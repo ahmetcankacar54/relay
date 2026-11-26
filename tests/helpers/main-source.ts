@@ -23,6 +23,7 @@ const DOMAIN_MODULES = [
   "updates",
   "statusline",
   "gateway-requests",
+  "gateway-sidecar",
   "tokens-widget",
   "antigravity",
   "gateway",

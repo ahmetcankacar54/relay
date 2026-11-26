@@ -11,8 +11,7 @@ import {
   proxyConfigurePatch,
   quotaPercent,
   resetInMinutes,
-} from "../electron/core/proxy/proxy-status";
-import { ProxyStats } from "../electron/core/proxy/proxy-stats";
+} from "../shared/proxy-status";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage } from "../shared/types";
 import { DEFAULT_PROXY_CONFIG } from "../shared/proxy-types";
 
@@ -167,37 +166,4 @@ test("a stopped gateway shows zero counters, no active account, and why it did n
     }).accounts[0].active,
     false,
   );
-});
-
-test("the gateway's counters: requests in flight, answers that read the cache, the latest account", () => {
-  const stats = new ProxyStats();
-  stats.requestStarted();
-  stats.requestStarted();
-  stats.requestEnded();
-  stats.recordRequest("a");
-  stats.recordRequest("b");
-  stats.recordTokens("a", { input: 100, cacheRead: 300 });
-  stats.recordTokens("b", { input: 50, cacheRead: 0 });
-  stats.recordTokens("b", { cacheRead: 10 });
-  const metrics = stats.getMetrics(0);
-  assert.equal(metrics.activeRequests, 1);
-  assert.equal(metrics.promptCacheHits, 2);
-  assert.equal(metrics.lastAccountId, "b");
-  stats.requestEnded();
-  stats.requestEnded();
-  assert.equal(stats.getMetrics(0).activeRequests, 0, "never below zero");
-  stats.reset();
-  assert.equal(stats.getMetrics(0).promptCacheHits, 0);
-  assert.equal(stats.getMetrics(0).lastAccountId, undefined);
-});
-
-
-test("the cache hit rate counts what was written to the cache as a miss", () => {
-  const stats = new ProxyStats();
-  stats.recordTokens("a", { input: 100, cacheRead: 800, cacheWrite: 100 });
-  assert.equal(stats.getMetrics(0).cacheHitRatio, 0.8);
-  // A cold start (a session moved to another account, or back after the cache expired) writes
-  // its whole history again: that has to pull the rate down.
-  stats.recordTokens("b", { input: 10, cacheWrite: 990 });
-  assert.equal(stats.getMetrics(0).cacheHitRatio, 0.4);
 });
