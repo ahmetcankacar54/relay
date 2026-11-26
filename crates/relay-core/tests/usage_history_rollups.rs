@@ -8,7 +8,7 @@ mod helpers;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use helpers::*;
 use relay_core::shared::types::{Account, AccountUsage};
@@ -273,14 +273,10 @@ fn a_transient_rollups_write_failure_is_retried_on_the_next_record() {
     let clock = Clock::new(start());
     let mut history = clock.open(&dir.root);
     let target = rollups_file(&dir.root);
-    let failures = Arc::new(AtomicUsize::new(1));
+    // Only the first rename fails.
+    let fail_next = Arc::new(AtomicBool::new(true));
     history.set_file_fault(Box::new(move |op, path| {
-        if op == FileOp::Rename
-            && path == target
-            && failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
-                .is_ok()
-        {
+        if op == FileOp::Rename && path == target && fail_next.swap(false, Ordering::SeqCst) {
             return Err(std::io::Error::other("disk full"));
         }
         Ok(())
