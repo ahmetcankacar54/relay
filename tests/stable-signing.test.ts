@@ -197,7 +197,7 @@ function fixtureRun(
       ? ""
       : target.endsWith("RelayWidget.appex")
         ? ".widget"
-        : target.endsWith("bin/relay")
+        : /bin[\\/]relay$/.test(target) // path.join's separator: \ on Windows
           ? ".relay-cli"
           : `.${path.basename(target)}`;
     const identifier = `dev.relay.workspace${name}`;
