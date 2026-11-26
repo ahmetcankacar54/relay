@@ -2,14 +2,22 @@
 //! are UI code in `src/lib/extension-ui.ts`, which stays TypeScript.
 
 use std::collections::BTreeMap;
+#[cfg(unix)]
 use std::fs;
+#[cfg(not(windows))]
 use std::path::Path;
 
+#[cfg(not(windows))]
 use relay_core::browser_system::{
-    BrowserSystem, LinuxProcess, LockOwner, browser_running, data_dir, extension_instances,
-    find_command, linux_browser_system, linux_main_pids, lock_owner, session_environment,
+    BrowserSystem, browser_running, data_dir, extension_instances, find_command,
+    linux_browser_system,
 };
-use relay_core::shared::browser_extension::{BrowserApp, CLAUDE_EXTENSION_ID, browser_apps};
+use relay_core::browser_system::{
+    LinuxProcess, LockOwner, linux_main_pids, lock_owner, session_environment,
+};
+use relay_core::shared::browser_extension::BrowserApp;
+#[cfg(not(windows))]
+use relay_core::shared::browser_extension::{CLAUDE_EXTENSION_ID, browser_apps};
 
 fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
@@ -130,12 +138,14 @@ fn a_singleton_lock_target_names_its_host_and_pid() {
 }
 
 /// A Linux browser system that answers only what `browser_running` asks.
+#[cfg(not(windows))]
 struct Fake {
     lock: Option<String>,
     alive: Option<i64>,
     processes: String,
 }
 
+#[cfg(not(windows))]
 impl BrowserSystem for Fake {
     fn support(&self) -> &Path {
         Path::new("/cfg")
@@ -178,6 +188,7 @@ impl BrowserSystem for Fake {
     fn sleep(&self, _ms: u64) {}
 }
 
+#[cfg(not(windows))]
 fn fake(lock: Option<&str>, alive: Option<i64>, processes: &str) -> Fake {
     Fake {
         lock: lock.map(str::to_owned),

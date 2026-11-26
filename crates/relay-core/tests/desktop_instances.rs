@@ -1,15 +1,19 @@
 //! Port of tests/desktop-instances.test.ts.
 
 use relay_core::desktop_host_node::{AppAction, app_script, open_args};
-use relay_core::desktop_instances::{
-    ClaudeWindowProcess, ProcessRow, mac_instances, process_rows, user_data_dir,
-};
+#[cfg(not(windows))]
+use relay_core::desktop_instances::{ClaudeWindowProcess, user_data_dir};
+use relay_core::desktop_instances::{ProcessRow, mac_instances, process_rows};
 
 const EXE: &str = "/Applications/Claude.app/Contents/MacOS/Claude";
+#[cfg(not(windows))]
 const HELPER: &str =
     "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper";
+#[cfg(not(windows))]
 const RENDERER: &str = "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)";
+#[cfg(not(windows))]
 const DISCLAIMER: &str = "/Applications/Claude.app/Contents/Helpers/disclaimer";
+#[cfg(not(windows))]
 const BROWSER_HOST: &str = "/Applications/Claude.app/Contents/Helpers/chrome-native-host";
 #[cfg(not(windows))]
 const DEFAULT_DIR: &str = "/Users/me/Library/Application Support/Claude";
@@ -26,6 +30,7 @@ fn census(rows: &[(i64, i64, &str, String)]) -> Vec<ProcessRow> {
     process_rows(&commands.join("\n"), &args.join("\n"))
 }
 
+#[cfg(not(windows))]
 fn window(dir: &str, pid: i64, pids: &[i64]) -> ClaudeWindowProcess {
     ClaudeWindowProcess {
         dir: dir.into(),

@@ -9,7 +9,9 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use helpers::{Fixture, NOW, failed, serial};
-use relay_core::relay_paths::{Platform, home_dir};
+use relay_core::relay_paths::Platform;
+#[cfg(unix)]
+use relay_core::relay_paths::home_dir;
 use relay_core::shared::types::UsageIssue;
 use relay_core::usage::UsageRequest;
 use relay_core::usage_credentials::{UsageCredential, UsageError, parse_credential};

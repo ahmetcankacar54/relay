@@ -1,10 +1,13 @@
 //! Port of tests/claude-app-location.test.ts. Skipped: "Settings and the setup checklist offer
 //! Choose location, and main keeps the choice" reads UI and main-process source text.
 
+#[cfg(not(windows))]
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use relay_core::desktop_host_node::{claude_candidates, resolve_claude_executable};
+use relay_core::desktop_host_node::claude_candidates;
+#[cfg(not(windows))]
+use relay_core::desktop_host_node::resolve_claude_executable;
 use relay_core::relay_paths::Platform;
 
 #[test]

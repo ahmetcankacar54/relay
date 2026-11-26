@@ -13,17 +13,22 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use relay_core::desktop_files::{CarriedConversation, CarriedMember};
+#[cfg(unix)]
+use relay_core::draft_storage::remove_legacy_draft_backups;
 use relay_core::draft_storage::{
-    LEVELDB, LOCAL_STORAGE, copy_local_storage, remove_legacy_draft_backups, sweep_draft_leftovers,
+    LEVELDB, LOCAL_STORAGE, copy_local_storage, sweep_draft_leftovers,
 };
+#[cfg(unix)]
+use relay_core::draft_transfer::assert_local_storage;
 use relay_core::draft_transfer::{
     CLAUDE_RUNNING, CaptureInput, CaptureOutcome, DraftJob, DraftPage, DraftResult, EMPTY_STORAGE,
-    assert_local_storage, capture_drafts, checked_result, drafts_blocked_reason, read_drafts,
-    run_draft_job,
+    capture_drafts, checked_result, drafts_blocked_reason, read_drafts, run_draft_job,
 };
+#[cfg(unix)]
+use relay_core::draft_vault::VaultError;
 use relay_core::draft_vault::{
     Clock, DraftPatch, DraftReadStage, DraftRecord, DraftSlots, DraftState, DraftVault,
-    DraftVaultHooks, Seal, Unseal, VaultError, summarize,
+    DraftVaultHooks, Seal, Unseal, summarize,
 };
 use relay_core::drafts::{
     CONVERSATION_DRAFT_PREFIX as P, CapturedDraft, NEW_SESSION_DRAFT, select_drafts,

@@ -1,1 +1,3 @@
 out/
+# LevelDB keeps its records in *.log files, which the repo-wide *.log rule would drop.
+!*.log

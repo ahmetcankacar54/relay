@@ -2,17 +2,21 @@
 //! (`isClaudeDesktopExecutable`, environment.rs) belongs to the Usage slice's tests.
 
 use std::collections::{BTreeMap, HashMap};
+#[cfg(not(windows))]
 use std::path::Path;
 
 use relay_core::desktop_host_node::{VersionFiles, linux_electron_version, linux_launch_env};
 use relay_core::desktop_instances::{
     ClaudeInstances, ProcessRow, linux_claude_command, linux_instances, linux_process_rows,
 };
+#[cfg(not(windows))]
 use relay_core::desktop_launch::claude_log;
+#[cfg(not(windows))]
 use relay_core::relay_paths::Platform;
 
 const EXE: &str = "/usr/bin/claude-desktop";
 const LIB: &str = "/usr/lib/claude-desktop/claude-desktop";
+#[cfg(not(windows))]
 const WINDOW_DIR: &str =
     "/home/me/.config/Relay/claude-windows/3c9e1f20-4b7a-4d1e-9f2a-6d5b8c0e7a14/data";
 
@@ -30,6 +34,7 @@ fn row(pid: i64, ppid: i64, args: &str) -> (i64, i64, String) {
     (pid, ppid, args.to_string())
 }
 
+#[cfg(not(windows))]
 fn sorted(mut list: Vec<i64>) -> Vec<i64> {
     list.sort();
     list
