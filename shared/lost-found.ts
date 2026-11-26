@@ -192,7 +192,7 @@ export interface LostFoundWeek {
 
 export interface LostFoundInput {
   rollups?: UsageRollups;
-  /** Active-account segments, oldest first (electron/core/active-account-timeline.ts). */
+  /** Active-account segments, oldest first (crates/relay-core active_account_timeline). */
   segments: {
     accountUuid: string;
     orgId?: string;

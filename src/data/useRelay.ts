@@ -72,14 +72,10 @@ function deferredApi(load: () => Promise<RelayAPI>): RelayAPI {
   });
 }
 
-// Electron's preload API, else the Tauri bridge (src/data/tauri-bridge.ts).
-// Phase 6: drop the window.relay fallback
-const injected =
-  typeof window === "undefined"
-    ? undefined
-    : (window.relay ?? (inTauri() ? tauriRelayApi() : undefined));
+// The Tauri bridge (src/data/tauri-bridge.ts); outside Tauri, the browser preview.
+const injected = inTauri() ? tauriRelayApi() : undefined;
 // The browser preview's sample data (`npm run dev:ui`) is development only. A built app always
-// has the preload's API, and its bundle carries no sample data.
+// has the bridge, and its bundle carries no sample data.
 export const api: RelayAPI =
   injected ??
   deferredApi(

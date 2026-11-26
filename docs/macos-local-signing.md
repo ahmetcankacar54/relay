@@ -30,16 +30,21 @@ means the key permission was not granted.
 npm run install:mac
 ```
 
-This builds, signs the app and its `desktop-automation` helper with the pinned
-certificate (no timestamp server; hardened runtime with the exceptions in
-`build/entitlements.mac.plist`), verifies both designated requirements are
-certificate based, and replaces
-`/Applications/Relay.app`. Without `--install` (`npm run dist`) the signed bundle
-stays in `release/stable/mac-arm64/Relay.app`.
+This builds `Relay.app` with `tauri build`, adds the `desktop-automation` helper
+(`Contents/MacOS`), the `relay` CLI (`Contents/Resources/bin/relay`) and the
+`RelayWidget.appex` widget, signs them inside out with the pinned certificate (no
+timestamp server; hardened runtime with the exceptions in
+`build/entitlements.mac.plist`, the widget with its own), verifies every
+designated requirement is certificate based, and replaces
+`/Applications/Relay.app`. Without `--install` (`npm run dist:mac:local`) the
+signed bundle stays in the output folder, as `mac-arm64/Relay.app` (`mac/` for
+Intel).
 
 After the first certificate-signed install, grant Accessibility to Relay once in
 System Settings → Privacy & Security → Accessibility (remove any older Relay
-entries first). Later installs keep that permission.
+entries first). Later installs keep that permission, the move from Relay 0.x to
+1.0 included: the bundle id, the helper's identifier and the certificate are the
+same.
 
 Verify an existing bundle:
 
@@ -65,10 +70,9 @@ release (docs/development.md, "Releasing"). Other Macs can also install the
 release with Homebrew: `brew install --cask ahmetcankacar54/tap/relay`; the
 "Open Anyway" step below is still needed once.
 
-electron-builder rebuilds node-pty inside `node_modules` for each architecture,
-so the command builds this Mac's architecture last. If a build fails, or after an
-`--arch` build for the other architecture, restore node-pty for this Mac with
-`npx electron-builder install-app-deps`.
+Each architecture is a separate `tauri build` for its Rust target
+(`aarch64-apple-darwin`, `x86_64-apple-darwin`), so the Intel build needs
+`rustup target add x86_64-apple-darwin` once.
 
 The certificate is local and the app is not notarized by Apple, so the other Mac
 blocks the first launch of a downloaded copy:
@@ -82,5 +86,5 @@ A newer download may ask for this step again. Because every build uses the same
 certificate, the Accessibility permission granted there is kept. Skipping the
 step entirely needs a paid Apple Developer ID certificate and notarization.
 
-The other Mac needs macOS 13 or later, Claude Desktop and, for usage limits, the
-native Claude Code CLI 2.1.296+. Node.js and Xcode are only needed to build.
+The other Mac needs macOS 14 or later, Claude Desktop and, for usage limits, the
+native Claude Code CLI 2.1.296+. Node.js, Rust and Xcode are only needed to build.

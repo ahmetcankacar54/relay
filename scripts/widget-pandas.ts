@@ -1,6 +1,6 @@
 /**
- * Builds the widget's panda heads (electron/native/widget/pandas/*.png) from the puppet rig's head
- * (assets/mascot/source/rig/head.svg), one per mood the widget shows (shared/widget-snapshot.ts
+ * Builds the widget's panda heads (native/widget/pandas/*.png) from the puppet rig's head
+ * (assets/mascot/source/rig/head.svg), one per mood the widget shows (crates/relay-core widget_snapshot
  * `WidgetMood`): happy while all is well, wide eyes when the open account's five-hour window is
  * nearly used, worried once a limit is full, and asleep (closed eyes) while there is nothing
  * current to watch.
@@ -21,7 +21,7 @@ import sharp from "sharp";
 
 const root = path.resolve(import.meta.dirname, "..");
 const RIG_HEAD = path.join(root, "assets", "mascot", "source", "rig", "head.svg");
-export const WIDGET_PANDAS = path.join(root, "electron/native/widget/pandas");
+export const WIDGET_PANDAS = path.join(root, "native/widget/pandas");
 
 type Expression = "open" | "closed" | "happy" | "worried" | "wide";
 

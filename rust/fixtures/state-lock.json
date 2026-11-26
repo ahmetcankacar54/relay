@@ -1,0 +1,187 @@
+{
+  "env": {
+    "RELAY_HOME": "@ROOT@/relay",
+    "RELAY_CLAUDE_DIR": "@ROOT@/claude",
+    "RELAY_CLAUDE_APP": "@ROOT@/Claude.app",
+    "RELAY_SECURITY_TOOL": "@ROOT@/security/security",
+    "HOME": "@ROOT@/home",
+    "LANG": "en_US.UTF-8",
+    "RELAY_LANG": "en"
+  },
+  "entries": [
+    {
+      "path": "bin",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "bin/claude",
+      "mode": 493
+    },
+    {
+      "path": "claude",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/Cookies",
+      "mode": 420
+    },
+    {
+      "path": "claude/claude-code-sessions",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/claude-code-sessions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/claude-code-sessions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/a0a0a0a0-a0a0-4a0a-8a0a-a0a0a0a0a0a0",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/claude-code-sessions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/claude-code-sessions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/b0b0b0b0-b0b0-4b0b-8b0b-b0b0b0b0b0b0",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/config.json",
+      "mode": 384
+    },
+    {
+      "path": "home",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "home/.claude",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/active-account-timeline.json",
+      "mode": 384
+    },
+    {
+      "path": "relay/desktop-vault",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/desktop-vault/accounts",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/desktop-vault/accounts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.bin",
+      "mode": 384
+    },
+    {
+      "path": "relay/desktop-vault/accounts/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.bin",
+      "mode": 384
+    },
+    {
+      "path": "relay/desktop-vault/backups",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/desktop-vault/backups/0c8b4ae4-c823-4c49-bdfb-04e30f9eb2d7.bin",
+      "mode": 384
+    },
+    {
+      "path": "relay/desktop-vault/backups/c8d6ceec-2fcd-47c1-a6f1-114bd309b76b.bin",
+      "mode": 384
+    },
+    {
+      "path": "relay/desktop-vault/format.json",
+      "mode": 384
+    },
+    {
+      "path": "relay/desktop-vault/history-seen.json",
+      "mode": 384
+    },
+    {
+      "path": "relay/profiles",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/profiles/11111111-1111-4111-8111-111111111111",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/profiles/11111111-1111-4111-8111-111111111111/fixture-auth-status.json",
+      "mode": 420
+    },
+    {
+      "path": "relay/profiles/22222222-2222-4222-8222-222222222222",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/profiles/22222222-2222-4222-8222-222222222222/fixture-auth-status.json",
+      "mode": 420
+    },
+    {
+      "path": "relay/profiles/33333333-3333-4333-8333-333333333333",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "relay/state.json",
+      "mode": 384,
+      "substitute": true
+    },
+    {
+      "path": "relay/state.json.bak",
+      "mode": 384,
+      "substitute": true
+    },
+    {
+      "path": "relay/state.lock",
+      "mode": 384,
+      "substitute": true
+    },
+    {
+      "path": "relay/statusline.json",
+      "mode": 384,
+      "substitute": true
+    },
+    {
+      "path": "relay/token-ledger.json",
+      "mode": 384
+    },
+    {
+      "path": "security",
+      "mode": 493,
+      "dir": true
+    },
+    {
+      "path": "security/item-Claude_Safe_Storage",
+      "mode": 420
+    },
+    {
+      "path": "security/item-Relay_Vault_Key",
+      "mode": 420
+    },
+    {
+      "path": "security/security",
+      "mode": 493
+    }
+  ]
+}

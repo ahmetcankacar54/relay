@@ -9,8 +9,8 @@
  *
  * Without a blockmap (the Tauri bundles have none, embedded or beside them) electron-updater falls
  * back to a full download. The 0.x updater still installs only a file the release's signed
- * SHA256SUMS.txt lists under the name it expects (electron/core/win-linux-update.ts
- * installerName), so the installer must carry exactly that name.
+ * SHA256SUMS.txt lists under the name it expects (installerName in Relay 0.x's
+ * electron/core/win-linux-update.ts), so the installer must carry exactly that name.
  *
  * Usage:
  *   node scripts/electron-update-yml.mjs <installer> --version <v> [--output <dir>]
@@ -23,7 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { releaseChannel } from "./release-channel.mjs";
 
-/** The installer a release publishes for a platform; electron/core/win-linux-update.ts names it so too. */
+/** The installer a release publishes for a platform; Relay 0.x's electron/core/win-linux-update.ts names it so too. */
 export function installerName(platform, version) {
   if (platform === "win32") return `Relay-Setup-${version}-x64.exe`;
   if (platform === "linux") return `Relay-${version}-x86_64.AppImage`;

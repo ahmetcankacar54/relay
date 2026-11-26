@@ -59,7 +59,7 @@ function fixtureBinary(): Promise<string> {
       "/usr/bin/xcrun",
       [
         "swiftc",
-        "electron/native/desktop-automation.swift",
+        "native/desktop-automation.swift",
         "-D",
         "RELAY_AX_SELECTOR_FIXTURE",
         "-o",

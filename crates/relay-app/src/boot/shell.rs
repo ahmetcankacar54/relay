@@ -3,7 +3,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use relay_core::login_item::launched_at_login;
+use relay_core::login_item::{LOGIN_LAUNCH_FLAG, launched_at_login};
 use relay_core::relay_paths::Platform;
 use relay_core::shared::relay_link::relay_link_argument;
 use tauri::AppHandle;
@@ -23,13 +23,14 @@ pub fn boot_shell(app: &AppHandle) {
     crate::services::tokens_widget::start_token_scan();
     STATE.initialized.store(true, Ordering::SeqCst);
     crate::services::login_item::apply_launch_at_login();
-    // A login launch stays in the tray; the window opens when the user asks for it.
+    // A login launch, or one with `--hidden` (scripts/perf-idle.mjs), stays in the tray; the
+    // window opens when the user asks for it.
     let argv: Vec<String> = std::env::args().collect();
     let login_launch = launched_at_login(
         &argv,
         Platform::current(),
         OPENED_AT_LOGIN.load(Ordering::SeqCst),
-    );
+    ) || argv.iter().any(|a| a == LOGIN_LAUNCH_FLAG);
     crate::menu::apply(app, crate::i18n::locale());
     if !login_launch {
         crate::windows::main::create(app, None);

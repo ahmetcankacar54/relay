@@ -46,6 +46,10 @@ npm installs a small launcher and, as an optional dependency, the binary for you
 `relay-<version>-<target>.tar.gz` (`.zip` on Windows) from the GitHub release `cli-v<version>`,
 unpack it and put `relay` on your PATH.
 
+Relay.app 1.0 and later carries the same binary at `Relay.app/Contents/Resources/bin/relay`, and
+the Homebrew cask (`brew install --cask ahmetcankacar54/tap/relay`) puts it on your PATH as
+`relay`, so with the app installed through Homebrew there is nothing else to install.
+
 ## First account
 
 Open Claude Desktop, sign in, and open the Code tab once. Then save that account:

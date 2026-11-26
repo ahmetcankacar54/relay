@@ -1,6 +1,6 @@
 //! The pre-v2 vault seal (Electron safeStorage). macOS is checked against real Electron bytes
-//! (`scripts/parity/safe-storage-golden.cjs`); Windows and Linux against vectors built here in
-//! Chromium's OSCrypt layout until their CI golden runs exist.
+//! (written by `scripts/parity/safe-storage-golden.cjs`, deleted with Electron at the Tauri
+//! cutover); Windows and Linux against vectors built here in Chromium's OSCrypt layout.
 
 use std::cell::RefCell;
 use std::path::Path;

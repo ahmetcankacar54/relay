@@ -22,9 +22,6 @@ export type {
   ExtensionStatus,
   ExtensionTarget,
 } from "./browser-extension";
-import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
-import type { DraftSummary } from "../electron/core/draft-vault";
-export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import type { LanguagePref, Locale } from "./i18n/locales";
 import type { FeatureRiskId, RiskAcknowledgements } from "./feature-risk";
@@ -843,10 +840,46 @@ export interface RelayAPI {
     callback: (event: TerminalEvent & { sequence?: number }) => void,
   ): () => void;
 }
-declare global {
-  interface Window {
-    relay?: RelayAPI;
-  }
+
+/** Desktop continuation's state, as the main window and the panel show it. */
+export interface DesktopContinuationSnapshot {
+  status:
+    | "off"
+    | "armed"
+    | "waiting"
+    | "executing"
+    | "continued"
+    | "blocked"
+    | "reconciliation-required";
+  reason: string;
+  canArm: boolean;
+  enabled: boolean;
+  executable: boolean;
+  observationReason?: string;
+  checkedAt?: string;
+  sourceId?: string;
+  targetId?: string;
+  targetSelection?: "automatic";
+  allowedTargetCount?: number;
+  sessionId?: string;
+  projectKey?: string;
+  permissionMode?: string;
+  requestId?: string;
+}
+
+/** `pending` waits to be re-typed; `needs-copy` could not be and waits for the user. */
+export type DraftState = "pending" | "needs-copy";
+
+/** What the panel may know of a captured draft: never its text. */
+export interface DraftSummary {
+  id: string;
+  to: string;
+  title: string;
+  newSession: boolean;
+  attachments: boolean;
+  state: DraftState;
+  reason?: string;
+  capturedAt: string;
 }
 
 export interface RelaySettings {
@@ -892,13 +925,13 @@ export interface RelaySettings {
   /** Which releases Relay updates to (Settings → Updates); missing means "stable". */
   updateChannel?: UpdateChannel;
   /**
-   * Relay's global keyboard shortcuts, as Electron accelerators (shared/shortcuts.ts); a missing
+   * Relay's global keyboard shortcuts, as accelerators (shared/shortcuts.ts); a missing
    * key means its default, an empty one means off.
    */
   shortcuts?: ShortcutSettings;
   /**
    * What a switch carries from the account being left into the Claude Code profile of the one
-   * switched to (Settings → Switching; electron/core/config-sync.ts); missing means all off.
+   * switched to (Settings → Switching; crates/relay-core config_sync); missing means all off.
    */
   configSync?: ConfigSyncSettings;
   /** How automatic switching, the suggestion and the panel rank targets; missing means "best". */

@@ -1,8 +1,7 @@
-//! LevelDB golden files (plan Phase 4 parity). `scripts/parity/golden.ts` writes
-//! `tests/golden/leveldb/`: an extension storage made by classic-level (Google LevelDB) and a
-//! claude.ai Local Storage made by Electron's Chromium. These tests read both with the Rust code;
-//! `write_golden_leveldb` (ignored) writes `tests/golden/out/leveldb/` for
-//! `golden.ts --verify crates/relay-core/tests/golden/out` to open with classic-level.
+//! LevelDB golden files (plan Phase 4 parity), written by `scripts/parity/golden.ts` before the
+//! Tauri cutover deleted it (see `golden.rs`): `tests/golden/leveldb/` holds an extension storage
+//! made by classic-level (Google LevelDB) and a claude.ai Local Storage made by Electron's
+//! Chromium. These tests read both with the Rust code.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -102,31 +101,4 @@ fn the_electron_local_storage_reads_as_chromium_wrote_it() {
     // Both encodings were read: a draft outside Latin-1 (UTF-16) and one inside it.
     assert!(drafts.values().any(|v| v.contains("ğüşİ")));
     assert!(drafts.values().any(|v| v.contains("latin draft é")));
-}
-
-/// Writes `tests/golden/out/leveldb/extension` (the golden storage after a Rust write of
-/// `signIn`) and `extension-fresh` (a new rusty-leveldb database holding `after`).
-#[test]
-#[ignore]
-fn write_golden_leveldb() {
-    let expected: Extension = json(&golden().join("leveldb/extension.json"));
-    let out = golden().join("out/leveldb");
-    let _ = fs::remove_dir_all(&out);
-    fs::create_dir_all(&out).unwrap();
-    let copy = extension_copy(&out);
-    LevelExtensionStorage
-        .write(&copy, &expected.sign_in)
-        .unwrap();
-    let fresh = out.join("extension-fresh");
-    let options = rusty_leveldb::Options {
-        create_if_missing: true,
-        ..Default::default()
-    };
-    let mut db = rusty_leveldb::DB::open(&fresh, options).unwrap();
-    let mut batch = rusty_leveldb::WriteBatch::default();
-    for (k, v) in &expected.after {
-        batch.put(k.as_bytes(), v.as_bytes());
-    }
-    db.write(batch, true).unwrap();
-    db.close().unwrap();
 }

@@ -3,8 +3,10 @@ import type { Plugin } from "vite";
 /** "serve" is the Vite dev server (`npm run dev`); "build" is the app that ships. */
 export type CspMode = "serve" | "build";
 
-/** The dev server's hot-reload socket: vite.config.ts `server`, electron/main.ts's dev URL. */
+/** The dev server's hot-reload socket: vite.config.ts `server`, tauri.conf.json's `devUrl`. */
 const DEV_SOCKET = "ws://127.0.0.1:5173";
+/** Tauri's IPC: `ipc:` on macOS and Linux, http://ipc.localhost on Windows (WebView2). */
+const TAURI_IPC = "ipc: http://ipc.localhost";
 
 /** The windows' Content-Security-Policy. Only development may connect to the dev server. */
 export function contentSecurityPolicy(mode: CspMode): string {
@@ -15,8 +17,8 @@ export function contentSecurityPolicy(mode: CspMode): string {
     "font-src 'self'",
     "img-src 'self' data:",
     mode === "serve"
-      ? `connect-src 'self' ${DEV_SOCKET}`
-      : "connect-src 'self'",
+      ? `connect-src 'self' ${TAURI_IPC} ${DEV_SOCKET}`
+      : `connect-src 'self' ${TAURI_IPC}`,
     "object-src 'none'",
     "base-uri 'none'",
     "frame-src 'none'",

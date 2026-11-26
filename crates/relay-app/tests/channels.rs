@@ -1,7 +1,6 @@
-//! The bridge's channel table: every channel the UI calls (src/data/tauri-bridge.ts, and
-//! electron/preload.ts while it exists) has a handler, and nothing else is registered. Plus the
-//! dispatch rules that need no running core: who may call, unknown channels, and the argument
-//! checks of `Call`.
+//! The bridge's channel table: every channel the UI calls (src/data/tauri-bridge.ts) has a
+//! handler, and nothing else is registered. Plus the dispatch rules that need no running core:
+//! who may call, unknown channels, and the argument checks of `Call`.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -35,22 +34,6 @@ fn quoted_channels(text: &str) -> BTreeSet<String> {
     found
 }
 
-/// The channels a TS file passes to `ipcRenderer.<method>(`.
-fn preload_channels(source: &str, method: &str) -> BTreeSet<String> {
-    let mut found = BTreeSet::new();
-    let needle = format!("ipcRenderer.{method}(");
-    let mut rest = source;
-    while let Some(at) = rest.find(&needle) {
-        let tail = rest[at + needle.len()..].trim_start();
-        if let Some(name) = tail.strip_prefix('"') {
-            let end = name.find('"').expect("closing quote");
-            found.insert(name[..end].to_owned());
-        }
-        rest = &rest[at + needle.len()..];
-    }
-    found
-}
-
 fn registered_invoke() -> BTreeSet<String> {
     invoke_channels().into_iter().collect()
 }
@@ -73,29 +56,6 @@ fn every_bridge_channel_has_a_handler_and_no_other_is_registered() {
         missing.is_empty() && extra.is_empty(),
         "invoke channels: missing {missing:?}, extra {extra:?}"
     );
-    assert_eq!(registered_send(), send);
-}
-
-#[test]
-fn every_electron_preload_channel_has_a_handler() {
-    let preload = repo().join("electron/preload.ts");
-    // Phase 6 deletes the Electron preload; the bridge test above stays.
-    let Ok(preload) = std::fs::read_to_string(preload) else {
-        return;
-    };
-    let switch_preload =
-        std::fs::read_to_string(repo().join("electron/switch-preload.ts")).unwrap_or_default();
-    let invoke = preload_channels(&preload, "invoke");
-    assert!(
-        invoke.len() >= 118,
-        "{} invoke channels parsed",
-        invoke.len()
-    );
-    let registered = registered_invoke();
-    let missing: Vec<_> = invoke.difference(&registered).collect();
-    assert!(missing.is_empty(), "no handler for {missing:?}");
-    let mut send = preload_channels(&preload, "send");
-    send.extend(preload_channels(&switch_preload, "send"));
     assert_eq!(registered_send(), send);
 }
 

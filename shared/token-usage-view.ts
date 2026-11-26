@@ -1,14 +1,48 @@
-import type {
-  LedgerSnapshot,
-  TokenCounts,
-} from "../electron/core/token-ledger";
 import type { MessageId } from "./i18n/translate";
 import { PRICES_CHECKED } from "./model-prices";
 import { localDate, localSlot, wallTime } from "./planning";
 import type { Account } from "./types";
 import { FORMER_KEY, type StatisticsRange } from "./usage-statistics-view";
 
-export type { LedgerSnapshot, TokenCounts };
+/** One response kind's tokens for a day, who and model, as the token ledger counts them. */
+export interface TokenCounts {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  responses: number;
+  /** What these tokens would cost on the API, in USD; see shared/model-prices.ts. */
+  cost?: number;
+  /** Tokens of responses whose model has no price; they add nothing to `cost`. */
+  unpriced?: number;
+  /** Some of `cost` was estimated from sums counted before responses were priced. */
+  costEstimated?: true;
+}
+/** One quarter hour of one day for one `who`: the four kinds and their cost. */
+export interface SlotCounts {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  cost: number;
+}
+/** The token ledger's snapshot (crates/relay-core token_ledger). */
+export interface LedgerSnapshot {
+  /** date → who → model → counts; who = `acct:<id>` | `est:<id>` | "terminal" | "unknown". */
+  days: Record<string, Record<string, Record<string, TokenCounts>>>;
+  /** date → who → quarter hour (0–95) → counts, for the last 8 days. */
+  slots?: Record<string, Record<string, Record<string, SlotCounts>>>;
+  /** When slots began to be kept: earlier responses of those days have none. */
+  slotsSince?: number;
+  progress: {
+    scannedBytes: number;
+    totalBytes: number;
+    /** A full pass has finished since the counts were last emptied. */
+    complete: boolean;
+    /** The last save failed: what was counted since is lost when Relay quits. */
+    error?: true;
+  };
+}
 
 export interface TokenRow {
   /** The account id, or "former", "terminal" or "unknown"; the key of `days[].byRow`. */

@@ -78,13 +78,17 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      # The gateway runs as the Rust `relay` binary (relay __gateway), packaged with the app.
+      # The boot smoke below runs the Tauri app (crates/relay-app).
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: 1.97.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Tauri's Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libdbus-1-dev pkg-config xvfb
       - run: npm ci
-      # The whole tree: Electron, which ships inside the app, is a devDependency.
       - run: npm audit --audit-level=high
       - run: npm run typecheck
       - name: Widget strings match the catalogs
@@ -92,48 +96,16 @@ jobs:
       - name: Rust catalogs match the catalogs
         run: node --import tsx scripts/i18n/export-catalogs.ts --check
       - run: npm test
-      - run: npm run build
-      # electron-builder's afterPack hook copies it into the package (scripts/relay-binary.mjs).
-      - name: Build the gateway's relay binary
-        run: node scripts/relay-binary.mjs
-      - name: Desktop IPC and PTY integration
+      - run: npm run build:ui
+      # Relay boots with a fresh profile, its page answers `snapshot` through the bridge and it
+      # exits cleanly (scripts/smoke-boot.mjs, docs/windows-verification.md).
+      - name: Build the boot smoke
+        run: cargo build -p relay-app --features smoke
+      - name: Boot smoke
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot
+      - name: Desktop IPC integration
         if: runner.os == 'macOS'
         run: npm run test:desktop
-      # Ubuntu 24.04's AppArmor refuses the unprivileged user namespaces Chromium's sandbox
-      # uses; allowing them keeps the smoke on the sandbox Relay ships with, no --no-sandbox.
-      - name: Allow Chromium's sandbox
-        if: runner.os == 'Linux'
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # Windows and Linux have no fixture for the integration test above; this proves Relay
-      # boots with a fresh profile, answers over IPC and quits cleanly (docs/windows-verification.md).
-      - name: Boot smoke
-        if: runner.os != 'macOS'
-        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot
-      # electron-builder never signs anything under Contents/PlugIns, so the
-      # widget extension keeps the signature it has in dist-electron. The build
-      # signs only its executable, which leaves the bundle without a resource
-      # seal and fails the app's codesign --verify --deep --strict. Sign the
-      # whole extension ad hoc with its own entitlements first. Release builds
-      # sign it with the local certificate instead (scripts/stable-signing.mjs).
-      - name: Sign the widget extension ad hoc
-        if: runner.os == 'macOS'
-        run: >-
-          codesign --force --sign - --options runtime
-          --entitlements electron/native/widget/widget.entitlements
-          dist-electron/RelayWidget.appex
-      - name: Package unsigned application
-        run: npx electron-builder --dir --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          # electron-builder skips signing on pull requests unless this is set,
-          # so pull requests would not see what pushes see. The identity is
-          # ad hoc ("-") and the workflow holds no certificate or secret.
-          CSC_FOR_PULL_REQUEST: "true"
-      - name: Boot smoke of the packaged app.asar
-        if: runner.os != 'macOS'
-        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot -- --packaged
-      - name: The packaged gateway starts, answers and stops
-        run: node scripts/smoke-gateway.mjs
   # The Rust workspace (Cargo.toml): the core, the gateway, the catalogs, the CLI and the app.
   rust:
     strategy:
@@ -190,16 +162,17 @@ jobs:
       # Relay.app with the helper, the CLI and the widget, signed inside out, and its DMG.
       - name: Package Relay.app ad hoc
         if: runner.os == 'macOS'
-        run: node scripts/tauri-stable-signing.mjs --ad-hoc --debug --dmg --arch arm64 --output release/tauri
+        run: node scripts/stable-signing.mjs --ad-hoc --debug --dmg --arch arm64 --output release/tauri
       - name: Package the installer
         if: runner.os != 'macOS'
         run: node scripts/tauri-build.mjs --debug --output release/tauri
         env:
           # linuxdeploy, an AppImage itself, then runs without FUSE.
           APPIMAGE_EXTRACT_AND_RUN: "1"
-  # The Rust CLI and gateway against what the TS originals did (rust/README.md), and the files
-  # both sides write opened by the other (scripts/parity/golden.ts). The recordings were made on
-  # macOS and replay only there; elsewhere `cargo test` in the job above covers the CLI.
+  # The Rust CLI and gateway against what the TS originals did (rust/README.md), the golden files
+  # the TS wrote opened by Rust, and the cases recorded from deleted shared/ modules. The recordings
+  # were made on macOS and replay only there; elsewhere `cargo test` in the job above covers the CLI.
+  # Node runs the parity scripts and the napi bindings; no npm package is needed.
   parity:
     runs-on: macos-latest
     steps:
@@ -207,8 +180,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: 1.97.1
@@ -229,15 +200,10 @@ jobs:
         run: rust-anything app replay . --build "node scripts/parity/fixture-run.mjs target/release/relay"
       - name: Gateway replay
         run: rust-anything app replay rust/gateway --build "node ../../scripts/parity/gateway-run.mjs ../../target/release/relay"
-      - name: The TS opens its committed golden files
-        run: node --import tsx scripts/parity/golden.ts --verify crates/relay-core/tests/golden
       - name: Rust opens the TS golden files
         run: cargo test -p relay-core --test golden --test golden_leveldb
-      - name: The TS opens the files Rust writes
-        run: |
-          cargo test -p relay-core --test golden -- --ignored write_golden --exact
-          cargo test -p relay-core --test golden_leveldb -- --ignored write_golden_leveldb --exact
-          node --import tsx scripts/parity/golden.ts --verify crates/relay-core/tests/golden/out
+      - name: Cases recorded from deleted shared/ modules
+        run: cargo test -p relay-core --test recorded_cases
       # Each shared/ unit's napi port against what the TS returned when it was recorded. One target
       # folder for all of them (rust-cache keeps it), and no LTO: link time, not what is compared.
       - name: Unit parity (rust/<unit>-rs)

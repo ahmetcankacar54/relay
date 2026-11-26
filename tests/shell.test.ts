@@ -264,8 +264,8 @@ test("the shell fades the current page in inside a keyed wrapper; the page toolb
   const open = wrapper.index;
   const close = shell.indexOf("</div>", shell.indexOf("{page === \"ayarlar\""));
   const read = (file: string) => fs.readFileSync(path.join(import.meta.dirname, "../src/app", file), "utf8");
-  assert.match(read("PageHeader.tsx"), /data-slot="toolbar"[\s\S]*sticky top-0[\s\S]*\[-webkit-app-region:drag\]/);
-  assert.match(read("Sidebar.tsx"), /h-13 w-full shrink-0 \[-webkit-app-region:drag\]/);
+  assert.match(read("PageHeader.tsx"), /data-slot="toolbar"[\s\S]*data-tauri-drag-region="deep"[\s\S]*sticky top-0/);
+  assert.match(read("Sidebar.tsx"), /data-tauri-drag-region="deep" className="relative h-13 w-full shrink-0"/);
   for (const page of ["genel", "hesaplar", "kullanim", "ayarlar"]) {
     const at = shell.indexOf(`{page === "${page}"`);
     assert.ok(at > open && at < close, `${page} renders inside the wrapper`);

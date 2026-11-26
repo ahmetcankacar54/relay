@@ -13,10 +13,16 @@ const read = (file: string) =>
 test("the built app's policy names no dev server; development keeps its hot-reload socket", () => {
   const built = contentSecurityPolicy("build");
   const dev = contentSecurityPolicy("serve");
-  for (const origin of ["ws:", "5173", "127.0.0.1", "localhost", "http:"])
+  // Besides 'self', the built app connects to Tauri's IPC only.
+  const ipc = "ipc: http://ipc.localhost";
+  for (const origin of ["ws:", "5173", "127.0.0.1"])
     assert.ok(!built.includes(origin), `${origin} in ${built}`);
-  assert.match(built, /(^|; )connect-src 'self'(;|$)/);
-  assert.match(dev, /(^|; )connect-src 'self' ws:\/\/127\.0\.0\.1:5173(;|$)/);
+  assert.match(built, /(^|; )connect-src 'self' ipc: http:\/\/ipc\.localhost(;|$)/);
+  assert.equal(built.replace(` ${ipc}`, "").match(/localhost|http:/), null);
+  assert.match(
+    dev,
+    /(^|; )connect-src 'self' ipc: http:\/\/ipc\.localhost ws:\/\/127\.0\.0\.1:5173(;|$)/,
+  );
   // Apart from the socket, both modes are the same strict policy.
   assert.equal(dev.replace(" ws://127.0.0.1:5173", ""), built);
   for (const policy of [built, dev]) {

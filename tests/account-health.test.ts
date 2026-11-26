@@ -14,6 +14,8 @@ import type { AccountFix } from "../src/lib/account-health";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type UsageIssue } from "../shared/types";
 import type { Locale } from "../shared/i18n/locales";
 import { testT } from "./i18n";
+import { cliNeedsReconnect, readsThroughApp } from "../shared/account-state";
+import { historyIdentity, usageIdentity } from "../shared/usage-statistics";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -376,4 +378,31 @@ test("the status names only the fixes its rows produce", () => {
     ].map((h) => h.fix),
   );
   assert.deepEqual([...produced].sort(), Object.keys(fixes).sort());
+});
+
+test("the account's status names the Claude app as its usage source", () => {
+  const ACCOUNT = "0d1e2f3a-38b0-4c1f-9d39-6f1f4c0a1b2c";
+  const ORG = "11111111-2222-4333-8444-555555555555";
+  const account = {
+    id: "a",
+    name: "A",
+    group: "g",
+    color: "#000",
+    createdAt: "2026-11-01T00:00:00.000Z",
+    desktop: { accountUuid: ACCOUNT, orgId: ORG, savedAt: "2026-11-01T00:00:00.000Z" },
+  } as Account;
+  const t = testT("en");
+  const ready = { accountId: "a", status: "ready" as const, stale: false, source: "desktop" as const, checkedAt: "2026-11-07T12:00:00Z" };
+  assert.equal(readsThroughApp(account, ready), true);
+  assert.equal(cliNeedsReconnect(account, ready), false);
+  assert.deepEqual(usageSignInStatus(account, ready, false, t), { tone: "ok", label: "Through the Claude app" });
+  const expired = { ...ready, status: "error" as const, issue: "expired" as const };
+  assert.equal(cliNeedsReconnect(account, expired), true);
+  // Without a usage source the CLI sign-in is still asked for.
+  const none = { accountId: "a", status: "idle" as const, stale: false, issue: "connect-cli" as const };
+  assert.equal(readsThroughApp(account, none), false);
+  assert.equal(cliNeedsReconnect(account, none), true);
+  // Samples read through the app are filed under the app's identity.
+  assert.equal(usageIdentity(account), JSON.stringify(["uuid", ACCOUNT, ORG]));
+  assert.equal(historyIdentity(account), JSON.stringify(["uuid", ACCOUNT, ORG]));
 });

@@ -199,7 +199,7 @@
   --color-account-plum: var(--account-plum);
   --color-account-none: var(--account-none);
 }
-/* The Electron main window on macOS shows the system sidebar material (electron/main.ts). */
+/* The main window on macOS shows the system sidebar material (crates/relay-app, window-vibrancy). */
 @custom-variant vibrant (&:where([data-vibrancy] *));
 /* Icons draw with a 1.5 px line, as in the macOS and Claude apps (lucide's default is 2). */
 svg.lucide {

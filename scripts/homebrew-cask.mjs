@@ -21,7 +21,7 @@ export const dmgName = (version, arch) => `Relay-${version}-${arch}.dmg`;
 /** Relay 1.0 and later is the Tauri app: macOS 14+, with the relay CLI inside. */
 export const isTauriVersion = (version) => Number(version.split(".")[0]) >= 1;
 
-/** The relay CLI inside the Tauri app (scripts/tauri-stable-signing.mjs puts it there). */
+/** The relay CLI inside the Tauri app (scripts/stable-signing.mjs puts it there). */
 export const CASK_CLI = "#{appdir}/Relay.app/Contents/Resources/bin/relay";
 
 /**

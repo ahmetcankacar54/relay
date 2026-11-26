@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * `npm run tauri:build`: Relay 1.0's packages (crates/relay-app, Tauri), under the release names
- * Relay 0.x's updaters look for (docs/development.md, "Releasing"):
- *   macOS    scripts/tauri-stable-signing.mjs: the signed Relay.app, and with --dmg its
+ * `npm run dist`: Relay's packages (crates/relay-app, Tauri), under the release names Relay 0.x's
+ * updaters look for (docs/development.md, "Releasing"):
+ *   macOS    scripts/stable-signing.mjs: the signed Relay.app, and with --dmg its
  *            Relay-<v>-<arch>.dmg. Every argument is passed on to it.
  *   Windows  <output>/Relay-Setup-<v>-x64.exe and latest.yml (beta.yml for a beta)
  *   Linux    <output>/Relay-<v>-x86_64.AppImage and latest-linux.yml (beta-linux.yml)
@@ -112,10 +112,7 @@ async function main() {
   if (process.platform === "darwin") {
     execFileSync(
       process.execPath,
-      [
-        path.join(root, "scripts/tauri-stable-signing.mjs"),
-        ...process.argv.slice(2),
-      ],
+      [path.join(root, "scripts/stable-signing.mjs"), ...process.argv.slice(2)],
       { cwd: root, stdio: "inherit" },
     );
     return;

@@ -1,43 +1,65 @@
+#!/usr/bin/env node
+/**
+ * Relay's macOS app (crates/relay-app, Tauri), signed with the pinned certificate so macOS keeps
+ * its permissions across updates (docs/macos-local-signing.md):
+ *   1. `tauri build --no-sign --bundles app` per architecture (aarch64-apple-darwin,
+ *      x86_64-apple-darwin);
+ *   2. the native helper desktop-automation (scripts/build-native.mjs, in dist-native/) goes to
+ *      Contents/MacOS/desktop-automation, the relay CLI (crates/relay-cli) to
+ *      Contents/Resources/bin/relay, where Relay 0.29 had it, and RelayWidget.appex to
+ *      Contents/PlugIns/. Not Contents/MacOS/relay: macOS file systems ignore case, so that is
+ *      Contents/MacOS/Relay, the app itself;
+ *   3. everything is signed inside out with the pinned certificate (or ad hoc, for a local check
+ *      with --ad-hoc): helper, CLI, widget (with its own entitlements), then the app with
+ *      build/entitlements.mac.plist, under the hardened runtime;
+ *   4. inspectStableSigning checks every permission-relevant signature;
+ *   5. with --dmg, createDiskImage makes Relay-<version>-<arch>.dmg; with --install the bundle
+ *      replaces /Applications/Relay.app.
+ * The bundle id, the app name, the certificate and the DMG's name and layout are Relay 0.x's, so
+ * its own updater installs this app in place; --previous checks that continuity against an
+ * installed 0.x (Electron) or 1.x bundle.
+ *
+ *   node scripts/stable-signing.mjs [--arch arm64|x64|both] [--output release/stable]
+ *     [--identity <sha1> | --ad-hoc] [--dmg] [--debug] [--skip-build] [--install]
+ *     [--previous <Relay.app>] [--verify <Relay.app>]
+ */
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, X509Certificate } from "node:crypto";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
-import {
-  closeSync,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readSync,
-  realpathSync,
-} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildRelayBinary } from "./relay-binary.mjs";
+import {
+  buildNativeHelpers,
+  NATIVE_DIR,
+  WIDGET_APPEX,
+} from "./build-native.mjs";
+import { buildRelayBinary, relayBinary, relayTarget } from "./relay-binary.mjs";
+import { CLI_TARGET_DIR, runTauri, tauriVersion } from "./tauri-build.mjs";
 
 export const APP_IDENTIFIER = "dev.relay.workspace";
-const appIdentifier = APP_IDENTIFIER;
 /** The widget extension, inside the app; it alone is sandboxed. */
 export const WIDGET_RELATIVE = "Contents/PlugIns/RelayWidget.appex";
 export const WIDGET_ENTITLEMENTS = fileURLToPath(
-  new URL("../electron/native/widget/widget.entitlements", import.meta.url),
+  new URL("../native/widget/widget.entitlements", import.meta.url),
 );
-/** The `relay` binary the gateway runs as (scripts/relay-binary.mjs puts it there). */
+/** The `relay` binary the gateway runs as. */
 export const RELAY_CLI_RELATIVE = "Contents/Resources/bin/relay";
-export const RELAY_CLI_IDENTIFIER = `${appIdentifier}.relay-cli`;
-/** The app's hardened-runtime exceptions; the widget keeps its own. */
+export const RELAY_CLI_IDENTIFIER = `${APP_IDENTIFIER}.relay-cli`;
+export const HELPER_RELATIVE = "Contents/MacOS/desktop-automation";
+export const HELPER_IDENTIFIER = `${APP_IDENTIFIER}.desktop-automation`;
+/** The app's entitlements: only the Apple events that quit Claude Desktop and browsers. */
 export const APP_ENTITLEMENTS = fileURLToPath(
   new URL("../build/entitlements.mac.plist", import.meta.url),
 );
-/** The permission-relevant code of the Electron bundle; Tauri's is in tauri-stable-signing.mjs. */
+
+/** The permission-relevant code of Relay's bundle. */
 export const permissionTargets = [
-  { relative: "", identifier: appIdentifier },
-  ...["desktop-automation"].map((name) => ({
-    relative: `Contents/Resources/app.asar.unpacked/dist-electron/${name}`,
-    identifier: `${appIdentifier}.${name}`,
-  })),
+  { relative: "", identifier: APP_IDENTIFIER },
+  { relative: HELPER_RELATIVE, identifier: HELPER_IDENTIFIER },
   // chronod runs the widget by this identity; keep it the same across updates.
-  { relative: WIDGET_RELATIVE, identifier: `${appIdentifier}.widget` },
+  { relative: WIDGET_RELATIVE, identifier: `${APP_IDENTIFIER}.widget` },
   // A plain Mach-O from cargo: no Info.plist to bind; its identifier comes at signing.
   {
     relative: RELAY_CLI_RELATIVE,
@@ -47,120 +69,24 @@ export const permissionTargets = [
 ];
 
 /**
- * The relay binary is signed under its own identifier; without one codesign
- * would name it after the file. Everything else keeps the options it had.
+ * The same identities in a Relay 0.x (Electron) bundle, which kept the helper in its
+ * app.asar.unpacked: what --previous compares against when the installed app is 0.x.
  */
-export function relayCliOptionsForFile(app, base) {
-  const cli = path.join(path.resolve(app), RELAY_CLI_RELATIVE);
-  return (file) => {
-    const inherited = typeof base === "function" ? base(file) : undefined;
-    if (path.resolve(file) !== cli) return inherited;
-    return {
-      ...inherited,
-      additionalArguments: [
-        ...(inherited?.additionalArguments ?? []),
-        "--identifier",
-        RELAY_CLI_IDENTIFIER,
-      ],
-    };
-  };
-}
+export const LEGACY_TARGETS = permissionTargets.map((target) =>
+  target.relative === HELPER_RELATIVE
+    ? {
+        ...target,
+        relative:
+          "Contents/Resources/app.asar.unpacked/dist-electron/desktop-automation",
+      }
+    : target,
+);
 
-/**
- * The widget extension and its executable get the widget's own entitlements
- * (the App Sandbox and read access to Relay's widget directory) with the
- * hardened runtime; everything else keeps what electron-builder chose.
- */
-export function widgetOptionsForFile(app, base) {
-  const root = path.join(path.resolve(app), WIDGET_RELATIVE);
-  return (file) => {
-    const absolute = path.resolve(file);
-    const inherited = typeof base === "function" ? base(file) : undefined;
-    if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`))
-      return inherited;
-    return {
-      ...inherited,
-      entitlements: WIDGET_ENTITLEMENTS,
-      hardenedRuntime: true,
-    };
-  };
-}
-
-// These are data in Electron's resource directories, not nested code. The
-// enclosing framework/app signature still seals them in CodeResources. Avoid
-// @electron/osx-sign's generic binary heuristic signing each locale separately.
-function knownResourcePath(relative) {
-  if (
-    /^Contents\/Resources\/(?:app\.asar|default_app\.asar|icon\.icns|electron\.icns)$/.test(
-      relative,
-    )
-  )
-    return true;
-  const resource = relative.match(
-    /^Contents\/Frameworks\/Electron Framework\.framework\/Versions\/[^/]+\/Resources\/(.+)$/,
-  )?.[1];
-  return (
-    typeof resource === "string" &&
-    /^(?:[^/]+\.lproj\/locale\.pak|chrome_(?:100|200)_percent\.pak|resources\.pak|icudtl\.dat|v8_context_snapshot\.(?:arm64|x86_64)\.bin|snapshot_blob\.bin|MainMenu\.nib)$/.test(
-      resource,
-    )
-  );
-}
-
-const machOMagic = new Set([
-  0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca,
-  0xcafebabf, 0xbfbafeca,
-]);
-
-/** Fail closed: a resource name must never hide native or script executable code. */
-export function knownResourceSigningIgnore(app) {
-  const root = path.resolve(app);
-  return (file) => {
-    const absolute = path.resolve(file);
-    const relative = path.relative(root, absolute).split(path.sep).join("/");
-    if (!knownResourcePath(relative)) return false;
-    let descriptor;
-    try {
-      const stat = lstatSync(absolute);
-      if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o111) !== 0)
-        return false;
-      const realRoot = realpathSync(root);
-      const realFile = realpathSync(absolute);
-      if (
-        !realFile.startsWith(`${realRoot}${path.sep}`) ||
-        !knownResourcePath(
-          path.relative(realRoot, realFile).split(path.sep).join("/"),
-        )
-      )
-        return false;
-      descriptor = openSync(absolute, "r");
-      const opened = fstatSync(descriptor);
-      if (
-        !opened.isFile() ||
-        opened.dev !== stat.dev ||
-        opened.ino !== stat.ino ||
-        (opened.mode & 0o111) !== 0
-      )
-        return false;
-      const header = Buffer.alloc(4);
-      const bytes = readSync(descriptor, header, 0, header.length, 0);
-      if (bytes < 4) return false;
-      if (machOMagic.has(header.readUInt32BE(0))) return false;
-      // Retain other recognizable executables too; their extensions are not proof.
-      if (
-        header.subarray(0, 2).equals(Buffer.from("#!")) ||
-        header.subarray(0, 2).equals(Buffer.from("MZ")) ||
-        header.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))
-      )
-        return false;
-      return true;
-    } catch {
-      // Missing, unreadable or ambiguous files stay in normal signing.
-      return false;
-    } finally {
-      if (descriptor !== undefined) closeSync(descriptor);
-    }
-  };
+/** The targets of a bundle's layout: a Relay 0.x has its app.asar. */
+export function layoutTargets(bundle) {
+  return fsSync.existsSync(path.join(bundle, "Contents/Resources/app.asar"))
+    ? LEGACY_TARGETS
+    : permissionTargets;
 }
 
 /** Public certificate fingerprint only. Never accepts a name or ad-hoc identity. */
@@ -216,15 +142,14 @@ export function publicCertificateSigningPolicy(pemListing, fingerprint) {
     issuer: certificate.issuer,
     validTo: certificate.validTo,
     // Local self-signed builds do not depend on Apple's timestamp service.
-    // CA-issued Apple signing identities retain the library's normal timestamp.
+    // CA-issued Apple signing identities keep codesign's timestamp server.
     ...(selfSigned ? { timestamp: "none" } : {}),
   };
 }
 
 export function markSigningFailure(runtime = process) {
   runtime.exitCode = 1;
-  // electron-builder's own CLI uses this safeguard: native build dependencies
-  // can otherwise reset exitCode during shutdown after a signing failure.
+  // Keep the failure even if something resets exitCode during shutdown.
   runtime.on("exit", () => {
     runtime.exitCode = 1;
   });
@@ -260,8 +185,8 @@ function execute(file, args) {
 
 /**
  * Verifies permission-relevant binaries against the pinned public certificate. `options.targets`
- * names another bundle layout's targets; `options.adHoc` checks a local ad-hoc build instead
- * (no certificate, so no fingerprint and no designated requirement to read).
+ * names another bundle layout's targets (layoutTargets); `options.adHoc` checks a local ad-hoc
+ * build instead (no certificate, so no fingerprint and no designated requirement to read).
  */
 export async function inspectStableSigning(bundle, fingerprint, options = {}) {
   const adHoc = options.adHoc === true;
@@ -274,7 +199,7 @@ export async function inspectStableSigning(bundle, fingerprint, options = {}) {
   );
   await fs.chmod(directory, 0o700);
   try {
-    // --deep is verification only. The signing library signs nested code inside out.
+    // --deep is verification only. Signing goes inside out (signingCommands).
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", root]);
     const targets = [];
     for (const [index, target] of (
@@ -355,7 +280,7 @@ export function verifySigningContinuity(previous, next, run = execute) {
   if (previous.bundle === next.bundle)
     throw new Error("Continuity requires two separately retained app bundles.");
   for (const prior of previous.targets) {
-    // By identity, not path: a layout change (Electron to Tauri) keeps each identifier.
+    // By identity, not path: a layout change (0.x to 1.x) keeps each identifier.
     const current = next.targets.find(
       (target) => target.identifier === prior.identifier,
     );
@@ -385,44 +310,8 @@ export function verifySigningContinuity(previous, next, run = execute) {
   return { verified: true, previous: previous.bundle, next: next.bundle };
 }
 
-/** Preserve electron-builder's normal nested-code signing, entitlements and DR. */
-export function pinnedSigner(fingerprint, signAsync) {
-  const pin = normalizeSigningFingerprint(fingerprint);
-  return async (options) => {
-    if (options.platform !== "darwin")
-      throw new Error(
-        "Relay's stable local signer only supports macOS app bundles.",
-      );
-    await signAsync({
-      ...options,
-      optionsForFile: relayCliOptionsForFile(
-        options.app,
-        widgetOptionsForFile(options.app, options.optionsForFile),
-      ),
-      identity: pin,
-      // We validate the full fingerprint ourselves. Name discovery would permit
-      // a different same-name certificate; codesign still validates/signs normally.
-      identityValidation: false,
-      ignore: [
-        ...(Array.isArray(options.ignore)
-          ? options.ignore
-          : options.ignore
-            ? [options.ignore]
-            : []),
-        knownResourceSigningIgnore(options.app),
-      ],
-    });
-  };
-}
-
-/**
- * The architectures to build, in order. `both` builds this Mac's own last:
- * electron-builder rebuilds node-pty in node_modules for each one, so the last
- * build leaves it on the host architecture that `npm run dev` and tests use.
- */
-function buildArchitectures(arch, hostArch) {
-  if (arch === "both")
-    return hostArch === "x64" ? ["arm64", "x64"] : ["x64", "arm64"];
+function buildArchitectures(arch) {
+  if (arch === "both") return ["arm64", "x64"];
   if (arch === "arm64" || arch === "x64") return [arch];
   throw new Error("Use --arch arm64, x64 or both.");
 }
@@ -431,15 +320,22 @@ export function parseArguments(args, hostArch = process.arch) {
   const options = {
     arch: hostArch,
     output: "release/stable",
-    skipBuild: false,
-    install: false,
+    adHoc: false,
+    debug: false,
     dmg: false,
+    install: false,
+    skipBuild: false,
+  };
+  const switches = {
+    "--ad-hoc": "adHoc",
+    "--debug": "debug",
+    "--dmg": "dmg",
+    "--install": "install",
+    "--skip-build": "skipBuild",
   };
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
-    if (flag === "--skip-build") options.skipBuild = true;
-    else if (flag === "--install") options.install = true;
-    else if (flag === "--dmg") options.dmg = true;
+    if (switches[flag]) options[switches[flag]] = true;
     else if (
       ["--identity", "--arch", "--output", "--previous", "--verify"].includes(
         flag,
@@ -453,7 +349,15 @@ export function parseArguments(args, hostArch = process.arch) {
   }
   if (options.identity)
     options.identity = normalizeSigningFingerprint(options.identity);
-  options.arches = buildArchitectures(options.arch, hostArch);
+  if (options.adHoc && options.identity)
+    throw new Error("Use --identity or --ad-hoc, not both.");
+  // An ad-hoc app has no stable identity: installed, it would lose macOS permissions and the
+  // Keychain's trust at the next real build; and it shares no requirement with a signed one.
+  if (options.adHoc && (options.install || options.previous))
+    throw new Error(
+      "--ad-hoc builds are for checking only: no --install or --previous.",
+    );
+  options.arches = buildArchitectures(options.arch);
   if (options.install && options.arches.length > 1)
     throw new Error(
       "--install needs one architecture: use --arch arm64 or x64.",
@@ -461,7 +365,10 @@ export function parseArguments(args, hostArch = process.arch) {
   return options;
 }
 
-/** electron-builder writes x64 to <output>/mac and arm64 to <output>/mac-arm64. */
+/**
+ * Each architecture's bundle in its own folder, arm64 in mac-arm64/ and x64 in mac/ as for every
+ * Relay before, and its disk image Relay-<version>-<arch>.dmg (homebrew-cask.mjs dmgName).
+ */
 export function architecturePlan(output, arches, version) {
   return arches.map((arch) => ({
     arch,
@@ -474,12 +381,104 @@ export function architecturePlan(output, arches, version) {
   }));
 }
 
-export function architectureFailure(arch, cause) {
-  return new Error(
-    `The ${arch} build failed. node-pty in node_modules may now be built for ${arch}; ` +
-      "restore it for this Mac with: npx electron-builder install-app-deps",
-    { cause },
+/** Where `tauri build` leaves the app for an architecture. */
+export function tauriAppBundle(base, arch, debug = false) {
+  return path.join(
+    base,
+    "target",
+    relayTarget("darwin", arch),
+    debug ? "debug" : "release",
+    "bundle/macos/Relay.app",
   );
+}
+
+/**
+ * The codesign calls, inside out: each nested piece before what seals it. `identity` is the
+ * certificate fingerprint, or "-" for ad hoc; `timestamp` "none" skips the timestamp server.
+ */
+export function signingCommands(app, { identity, timestamp }) {
+  const common = [
+    "--force",
+    "--sign",
+    identity,
+    "--options",
+    "runtime",
+    timestamp === "none" ? "--timestamp=none" : "--timestamp",
+  ];
+  return [
+    [
+      ...common,
+      "--identifier",
+      HELPER_IDENTIFIER,
+      "--entitlements",
+      APP_ENTITLEMENTS,
+      path.join(app, HELPER_RELATIVE),
+    ],
+    // A plain Mach-O from cargo: without --identifier codesign would name it after the file.
+    [
+      ...common,
+      "--identifier",
+      RELAY_CLI_IDENTIFIER,
+      "--entitlements",
+      APP_ENTITLEMENTS,
+      path.join(app, RELAY_CLI_RELATIVE),
+    ],
+    // The App Sandbox and read access to Relay's widget folder; its identifier is its Info.plist's.
+    [
+      ...common,
+      "--entitlements",
+      WIDGET_ENTITLEMENTS,
+      path.join(app, WIDGET_RELATIVE),
+    ],
+    [...common, "--entitlements", APP_ENTITLEMENTS, app],
+  ];
+}
+
+/**
+ * Copies Tauri's app to `bundle` and adds the helper, the CLI and the widget. Fails when the CLI
+ * is the app's own executable: on a case-insensitive disk target/<triple>/release/relay and
+ * .../Relay are one file, which relay-app's binary name (relay-app) is there to prevent.
+ */
+export function assembleBundle(source, bundle, { helper, cli, widget }) {
+  if (
+    fsSync
+      .readFileSync(cli)
+      .equals(fsSync.readFileSync(path.join(source, "Contents/MacOS/Relay")))
+  )
+    throw new Error(`${cli} is Relay's app executable, not the relay CLI.`);
+  fsSync.rmSync(bundle, { recursive: true, force: true });
+  fsSync.mkdirSync(path.dirname(bundle), { recursive: true });
+  execFileSync("/usr/bin/ditto", [source, bundle]);
+  for (const [from, relative] of [
+    [helper, HELPER_RELATIVE],
+    [cli, RELAY_CLI_RELATIVE],
+  ]) {
+    const to = path.join(bundle, relative);
+    fsSync.mkdirSync(path.dirname(to), { recursive: true });
+    fsSync.copyFileSync(from, to);
+    fsSync.chmodSync(to, 0o755);
+  }
+  const plugins = path.join(bundle, WIDGET_RELATIVE);
+  fsSync.mkdirSync(path.dirname(plugins), { recursive: true });
+  execFileSync("/usr/bin/ditto", [widget, plugins]);
+}
+
+/** What Relay 0.x's updater and macOS read from the app's Info.plist. */
+export function checkInfoPlist(bundle, version) {
+  const plist = path.join(bundle, "Contents/Info.plist");
+  const read = (key) =>
+    execFileSync("/usr/bin/plutil", ["-extract", key, "raw", plist], {
+      encoding: "utf8",
+    }).trim();
+  const expected = {
+    CFBundleIdentifier: APP_IDENTIFIER,
+    CFBundleExecutable: "Relay",
+    CFBundleShortVersionString: version,
+    LSMinimumSystemVersion: "14.0",
+  };
+  for (const [key, value] of Object.entries(expected))
+    if (read(key) !== value)
+      throw new Error(`${key} is ${read(key)}, not ${value}.`);
 }
 
 /**
@@ -508,14 +507,6 @@ export async function pinnedIdentity(root, fingerprint) {
   }
   // This command uses an existing identity. Importing a certificate or opening a
   // different signing keychain is a separate user action, never a build side effect.
-  if (
-    ["CSC_LINK", "CSC_KEYCHAIN", "CSC_KEY_PASSWORD"].some(
-      (name) => process.env[name],
-    )
-  )
-    throw new Error(
-      "Unset CSC_LINK, CSC_KEYCHAIN and CSC_KEY_PASSWORD for existing-identity signing.",
-    );
   const listing = execute("/usr/bin/security", [
     "find-identity",
     "-v",
@@ -569,104 +560,6 @@ export async function releaseOutput(root, output) {
   return resolved;
 }
 
-async function main() {
-  if (process.platform !== "darwin")
-    throw new Error("Stable macOS signing requires macOS.");
-  const options = parseArguments(process.argv.slice(2));
-  const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-  const identity = await pinnedIdentity(root, options.identity);
-  const prior = options.previous
-    ? await inspectStableSigning(options.previous, identity.fingerprint)
-    : undefined;
-  if (options.verify) {
-    const report = await inspectStableSigning(
-      options.verify,
-      identity.fingerprint,
-    );
-    if (prior) report.continuity = verifySigningContinuity(prior, report);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    return;
-  }
-  const timestampPolicy = signingTimestampPolicy(identity);
-  const output = await releaseOutput(root, options.output);
-  const { version } = JSON.parse(
-    await fs.readFile(path.join(root, "package.json"), "utf8"),
-  );
-  const plan = architecturePlan(output, options.arches, version);
-  if (plan.some((step) => prior?.bundle === step.bundle))
-    throw new Error(
-      "Choose a new output directory to retain the previous signed bundle.",
-    );
-  if (!options.skipBuild)
-    execFileSync("npm", ["run", "build"], {
-      cwd: root,
-      stdio: "inherit",
-    });
-  const { build, Platform, Arch } = await import("electron-builder");
-  const { signAsync } = await import("@electron/osx-sign");
-  // The gateway's binary for each architecture, before electron-builder touches
-  // node-pty; its afterPack hook copies it into the bundle (relay-binary.mjs).
-  if (!options.skipBuild)
-    for (const step of plan) buildRelayBinary("darwin", step.arch, root);
-  for (const step of plan) {
-    try {
-      // electron-builder merges this config with package.json's "build",
-      // electronFuses included.
-      await build({
-        projectDir: root,
-        targets: Platform.MAC.createTarget("dir", Arch[step.arch]),
-        config: {
-          forceCodeSigning: true,
-          // The installed Electron only matches this Mac's architecture; another
-          // architecture uses electron-builder's verified download of the same version.
-          ...(step.arch === process.arch
-            ? { electronDist: path.join(root, "node_modules/electron/dist") }
-            : {}),
-          directories: { output },
-          mac: {
-            identity: identity.fingerprint,
-            sign: pinnedSigner(identity.fingerprint, signAsync),
-            // The hardened runtime with the exceptions a self-signed Electron
-            // app needs: V8's JIT, loading its own native modules (node-pty,
-            // classic-level) without a Team ID for library validation to
-            // match, and the Apple events that quit Claude Desktop and browsers.
-            hardenedRuntime: true,
-            entitlements: APP_ENTITLEMENTS,
-            entitlementsInherit: APP_ENTITLEMENTS,
-            strictVerify: true,
-            ...(timestampPolicy.timestamp
-              ? { timestamp: timestampPolicy.timestamp }
-              : {}),
-            // Do not infer Apple ID notarization credentials for a local build.
-            notarize: false,
-          },
-        },
-      });
-      const report = await inspectStableSigning(
-        step.bundle,
-        identity.fingerprint,
-      );
-      report.timestampPolicy = timestampPolicy.selfSigned
-        ? "local-no-server"
-        : "library-default";
-      if (prior) report.continuity = verifySigningContinuity(prior, report);
-      if (options.dmg)
-        report.diskImage = await createDiskImage(step.bundle, step.image);
-      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    } catch (error) {
-      // Only a build for another architecture can leave node-pty off this Mac's.
-      throw plan.length > 1 || step.arch !== process.arch
-        ? architectureFailure(step.arch, error)
-        : error;
-    }
-  }
-  if (plan.at(-1).arch !== process.arch)
-    process.stdout.write(
-      `node-pty in node_modules is now built for ${plan.at(-1).arch}; restore it for this Mac with: npx electron-builder install-app-deps\n`,
-    );
-  if (options.install) installBundle(plan[0].bundle);
-}
-
 /**
  * Wrap the verified bundle in a DMG for another Mac, with macOS's own hdiutil:
  * no download, and the copy keeps the app's signature intact. The image itself
@@ -689,7 +582,7 @@ export async function createDiskImage(bundle, image) {
         "-fs",
         "HFS+",
         // LZMA: about 30% smaller than the default zlib; any Mac that runs
-        // Relay (macOS 13+) opens it.
+        // Relay (macOS 14+) opens it.
         "-format",
         "ULMO",
         image,
@@ -757,12 +650,96 @@ export function installBundle(bundle) {
   process.stdout.write(`Installed ${target}\n`);
 }
 
+async function main() {
+  if (process.platform !== "darwin")
+    throw new Error("Relay's macOS build requires macOS.");
+  const options = parseArguments(process.argv.slice(2));
+  const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+  // build-native.mjs works from the workspace root.
+  process.chdir(root);
+  const identity = options.adHoc
+    ? { fingerprint: "-", name: "ad hoc" }
+    : await pinnedIdentity(root, options.identity);
+  const inspect = (bundle, targets) =>
+    inspectStableSigning(bundle, identity.fingerprint, {
+      targets,
+      adHoc: options.adHoc,
+    });
+  const prior = options.previous
+    ? await inspect(options.previous, layoutTargets(options.previous))
+    : undefined;
+  if (options.verify) {
+    const report = await inspect(options.verify, permissionTargets);
+    if (prior) report.continuity = verifySigningContinuity(prior, report);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+  const timestamp = options.adHoc
+    ? "none"
+    : (signingTimestampPolicy(identity).timestamp ?? "server");
+  const output = await releaseOutput(root, options.output);
+  const version = tauriVersion(root);
+  const plan = architecturePlan(output, options.arches, version);
+  if (plan.some((step) => prior?.bundle === step.bundle))
+    throw new Error(
+      "Choose a new output directory to retain the previous signed bundle.",
+    );
+  if (!options.skipBuild) {
+    // One universal helper and widget serve both architectures.
+    await buildNativeHelpers();
+    execFileSync("npm", ["run", "build:ui"], { cwd: root, stdio: "inherit" });
+    for (const step of plan) {
+      buildRelayBinary("darwin", step.arch, root, CLI_TARGET_DIR);
+      runTauri(
+        [
+          "build",
+          "--ci",
+          "--no-sign",
+          "--bundles",
+          "app",
+          "--target",
+          relayTarget("darwin", step.arch),
+          ...(options.debug ? ["--debug"] : []),
+          // The UI was built once above.
+          "--config",
+          JSON.stringify({ build: { beforeBuildCommand: null } }),
+        ],
+        root,
+      );
+    }
+  }
+  for (const step of plan) {
+    assembleBundle(
+      tauriAppBundle(root, step.arch, options.debug),
+      step.bundle,
+      {
+        helper: path.join(NATIVE_DIR, "desktop-automation"),
+        cli: relayBinary("darwin", step.arch, root, CLI_TARGET_DIR),
+        widget: path.join(NATIVE_DIR, WIDGET_APPEX),
+      },
+    );
+    for (const args of signingCommands(step.bundle, {
+      identity: identity.fingerprint,
+      timestamp,
+    }))
+      execFileSync("/usr/bin/codesign", args, { stdio: "inherit" });
+    checkInfoPlist(step.bundle, version);
+    const report = await inspect(step.bundle, permissionTargets);
+    report.arch = step.arch;
+    if (prior) report.continuity = verifySigningContinuity(prior, report);
+    if (options.dmg)
+      report.diskImage = await createDiskImage(step.bundle, step.image);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  }
+  if (options.install) installBundle(plan[0].bundle);
+}
+
 if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 )
   main().catch((error) => {
-    // A failed architecture wraps the build's own error, which may wrap a tool's output.
+    // A failed step wraps the tool's own error, which may wrap its output.
     for (let reason = error; reason; reason = reason.cause)
       if (reason.message) console.error(reason.message);
     markSigningFailure();

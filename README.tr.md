@@ -11,7 +11,7 @@ her 5 saatlik ve haftalık limiti tek bakışta gör, işi yerel bir ağ geçidi
 [![Son sürüm](https://img.shields.io/github/v/release/ahmetcankacar54/relay?style=flat-square&label=s%C3%BCr%C3%BCm&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases/latest)
 [![İndirme](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=indirme&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
-[![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#kurulum)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-000000?style=flat-square&logo=apple&logoColor=white)](#kurulum)
 [![Linux · Windows](https://img.shields.io/badge/-Linux%20destekleniyor%20%C2%B7%20Windows%20deneysel-2f6feb?style=flat-square)](#platformlar)
 [![15 dil](https://img.shields.io/badge/dil-15-6b645e?style=flat-square)](#15-dil)
 [![MIT](https://img.shields.io/badge/lisans-MIT-6b645e?style=flat-square)](LICENSE)
@@ -47,12 +47,14 @@ Relay ücretsizdir, açık kaynaktır (MIT), tamamen Mac'inde çalışır ve zat
 
 | Platform | İndir | Not |
 | --- | --- | --- |
-| **macOS 13+** (Apple silicon) | [`Relay-<sürüm>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | Ana platform: menü çubuğu paneli, widget, otomatik geçiş. |
-| **Windows 10/11** (x64) | [`Relay-Setup-<sürüm>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Elle geçiş, limitler, hesaplar, ağ geçidi. Deneysel: henüz gerçek bir makinede denenmedi. |
-| **Linux** (x64) | [`Relay-<sürüm>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Linux için resmi Claude Desktop ile çalışır. |
+| **macOS 14+** (Apple silicon) | [`Relay-<sürüm>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | Ana platform: menü çubuğu paneli, widget, otomatik geçiş. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<sürüm>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Elle geçiş, limitler, hesaplar, ağ geçidi. WebView2 gerekir (Windows 11'de yerleşik). Deneysel: henüz gerçek bir makinede denenmedi. |
+| **Linux** (x64) | [`Relay-<sürüm>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Linux için resmi Claude Desktop ile çalışır. webkit2gtk-4.1 gerekir (Ubuntu 22.04 ve sonrası). |
 | **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … [CLI rehberi](cli/README.tr.md). |
 
 Her sürümde bir `SHA256SUMS.txt` vardır; Relay kendini GitHub Releases'tan günceller.
+
+Relay 1.0, Tauri ile yapılmış yerel bir uygulamadır: aynı React arayüzünün altında bir Rust çekirdeği. Relay 0.x (Electron uygulaması) kendini yerinde 1.0'a günceller ve her hesabı ve ayarı korur; Windows'ta yeni yükleyici eski sürümün Yüklü uygulamalar kaydını da kaldırır. `relay` CLI da yerel bir ikili dosyadır: npm küçük bir başlatıcıyla birlikte platformuna uygun ikiliyi kurar, Relay.app de aynısını taşır (`Relay.app/Contents/Resources/bin/relay`; Homebrew cask'ı bunu PATH'ine ekler).
 
 > [!IMPORTANT]
 > **Relay geliştiricinin kendi sertifikasıyla imzalıdır ama Apple tarafından notarize edilmemiştir.** İlk açılışta macOS bir kez engeller:
@@ -160,7 +162,7 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 Ana platform macOS'tur. Windows sürümü henüz gerçek bir makinede denenmedi; geri bildirimler memnuniyetle karşılanır.
 
-**Kaynak kullanımı:** menü çubuğunda boşta beklerken Relay, tüm süreçleriyle birlikte yaklaşık %0,1 CPU ve yaklaşık 395 MB bellek kullanır (en fazla 435 MB); penceresi önde açıkken yaklaşık %2 CPU kullanır ve Anahtar Zinciri izni sormaz (Apple silicon Mac; [nasıl ölçüldüğü](docs/development.md#resource-use)).
+**Kaynak kullanımı:** menü çubuğunda boşta beklerken Relay, tüm süreçleriyle birlikte %1 CPU ve 250 MB bellek sınırının altında tutulur ve Anahtar Zinciri izni sormaz ([nasıl ölçüldüğü](docs/development.md#resource-use)).
 
 ## Gizlilik ve güvenlik
 
@@ -168,7 +170,7 @@ Ana platform macOS'tur. Windows sürümü henüz gerçek bir makinede denenmedi;
 - **Konuştuğu yerler:** hesaplarının zaten kullandığı servisler — `claude.ai`, `api.anthropic.com` (kullanım ve profil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) —, kendi güncellemeleri için `api.github.com` ve sürümü sabit, SHA-256'sı denetlenen yardımcı aracı (CLIProxyAPI) bir Antigravity hesabı için ilk gerektiğinde ve bir güncelleme yeni bir sürüm sabitlediğinde indirmek için `github.com`.
 - **Kimlik bilgileri** arayüze hiç ulaşmaz. Kayıtlı Claude uygulaması girişleri macOS Anahtar Zinciri'nde (Linux'ta Secret Service ya da KWallet) tutulan bir anahtarla şifrelenir. Ağ geçidi anahtarını içeren dosyalar yalnızca senin okuyabileceğin şekilde yazılır.
 - **Claude uygulamasının dosyaları** yalnızca uygulama kapalıyken, şifreli bir yedek ve yazma günlüğünden sonra değiştirilir.
-- **Sağlamlaştırılmış uygulama:** korumalı alanda çalışan pencereler, sürümlerde geliştirici araçları yok, uygulamaya yalnızca Relay'in kendi sayfaları erişebilir ve sıkı bir içerik güvenliği politikası.
+- **Sağlamlaştırılmış uygulama:** sürümlerde geliştirici araçları yok, uygulamaya yalnızca Relay'in kendi sayfaları erişebilir ve sıkı bir içerik güvenliği politikası.
 
 Bir sorun mu buldun? Lütfen gizlice bildir — bkz. [SECURITY.md](SECURITY.md).
 
@@ -225,13 +227,14 @@ Relay'i menü çubuğundan kapat, `Relay.app`'i Çöp Sepeti'ne taşı; kayıtl�
 
 ## Kaynaktan derleme
 
-Gereksinimler: Node.js 22.12+, macOS'ta Xcode Command Line Tools.
+Gereksinimler: Node.js 22.12+, Rust (rustup ile; sürümü `rust-toolchain.toml` seçer) ve macOS'ta Xcode Command Line Tools. Relay'i çalıştırmak için macOS 14+, WebView2'li Windows 10/11 ya da webkit2gtk-4.1'li Linux gerekir.
 
 ```sh
 npm ci
-npm run dev        # Electron + Vite
+npm run dev        # Vite arayüzüyle Tauri uygulaması, düzenledikçe yenilenir
 npm run dev:ui     # örnek hesaplarla tarayıcı önizlemesi (elli hesap için ?demo=50)
-npm test           # 3.000+ test
+npm test           # arayüz testleri
+cargo test --workspace   # Rust çekirdek, uygulama ve CLI testleri
 npm run dist:mac:local   # imzalı yerel derleme (bkz. docs/macos-local-signing.md)
 ```
 

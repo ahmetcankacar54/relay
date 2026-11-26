@@ -37,7 +37,7 @@ use crate::state::STATE;
 const EXTENSION_HEALTH_MS: u64 = 15 * 60_000;
 
 /// The `desktop-automation` helper: beside Relay's executable once bundled; in a development
-/// run, there or else where `npm run build:native` leaves it (dist-electron).
+/// run, there or else where `npm run build:native` leaves it (dist-native).
 fn automation_helper() -> PathBuf {
     let beside = STATE
         .paths()
@@ -51,7 +51,7 @@ fn automation_helper() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
-        .join("dist-electron")
+        .join("dist-native")
         .join("desktop-automation")
 }
 

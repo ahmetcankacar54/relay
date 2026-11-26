@@ -11,7 +11,7 @@ see every 5-hour and weekly limit at a glance, and let a local gateway spread th
 [![Latest release](https://img.shields.io/github/v/release/ahmetcankacar54/relay?style=flat-square&label=release&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
-[![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#install)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-000000?style=flat-square&logo=apple&logoColor=white)](#install)
 [![Linux · Windows](https://img.shields.io/badge/-Linux%20supported%20%C2%B7%20Windows%20experimental-2f6feb?style=flat-square)](#platforms)
 [![15 languages](https://img.shields.io/badge/languages-15-6b645e?style=flat-square)](#15-languages)
 [![MIT](https://img.shields.io/badge/license-MIT-6b645e?style=flat-square)](LICENSE)
@@ -47,12 +47,14 @@ Relay is free, open source (MIT), runs entirely on your Mac, and sends nothing t
 
 | Platform | Download | Notes |
 | --- | --- | --- |
-| **macOS 13+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | The main platform: menu-bar panel, widget, automatic switching. |
-| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Switching by hand, limits, accounts, gateway. Experimental: not yet tested on a real machine. |
-| **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Works with the official Claude Desktop for Linux. |
+| **macOS 14+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | The main platform: menu-bar panel, widget, automatic switching. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Switching by hand, limits, accounts, gateway. Needs WebView2 (built into Windows 11). Experimental: not yet tested on a real machine. |
+| **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Works with the official Claude Desktop for Linux. Needs webkit2gtk-4.1 (Ubuntu 22.04 or later). |
 | **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … see the [CLI guide](cli/README.md). |
 
 Every release carries a `SHA256SUMS.txt` and updates itself from GitHub Releases.
+
+Relay 1.0 is a native app built with Tauri: a Rust core under the same React interface. A Relay 0.x (the Electron app) updates itself to 1.0 in place and keeps every account and setting; on Windows the new installer also removes the old version's entry from Installed apps. The `relay` CLI is a native binary too: npm installs a small launcher with the binary for your platform, and Relay.app carries the same one (`Relay.app/Contents/Resources/bin/relay`, which the Homebrew cask puts on your PATH).
 
 > [!IMPORTANT]
 > **Relay is signed with the author's own certificate but is not notarized by Apple.** The first time you open it, macOS blocks it once:
@@ -160,7 +162,7 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 macOS is the main platform. The Windows build has not been tested on a real machine yet; reports are welcome.
 
-**Resource use:** idle in the menu bar, Relay takes about 0.1 % CPU and about 395 MB of memory across all its processes (435 MB at most), about 2 % CPU with its window open in front, and shows no Keychain prompt (Apple silicon Mac; [how it is measured](docs/development.md#resource-use)).
+**Resource use:** idle in the menu bar, Relay is held to under 1 % CPU and 250 MB of memory across all its processes, and it shows no Keychain prompt ([how it is measured](docs/development.md#resource-use)).
 
 ## Privacy & security
 
@@ -168,7 +170,7 @@ macOS is the main platform. The Windows build has not been tested on a real mach
 - **Who it talks to:** the services your accounts already use — `claude.ai`, `api.anthropic.com` (usage and profile), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity) — `api.github.com` for its own updates, and `github.com` to download a pinned helper (CLIProxyAPI, its SHA-256 checked) when Relay first needs it for an Antigravity account, and again after an update pins a new version.
 - **Credentials** never reach the UI. Saved Claude app sign-ins are encrypted with a key kept in the macOS Keychain (Secret Service or KWallet on Linux). Files that hold the gateway key are written readable by you only.
 - **The Claude app's files** are changed only while it is closed, after an encrypted backup and a write journal.
-- **Hardened app:** sandboxed renderer windows, no developer tools in releases, only Relay's own pages can call into the app, and a strict content security policy.
+- **Hardened app:** no developer tools in releases, only Relay's own pages can call into the app, and a strict content security policy.
 
 Found a problem? Please report it privately — see [SECURITY.md](SECURITY.md).
 
@@ -225,13 +227,14 @@ Quit Relay from the menu bar, move `Relay.app` to the Trash, and delete `~/Libra
 
 ## Build from source
 
-Requirements: Node.js 22.12+, and on macOS the Xcode Command Line Tools.
+Requirements: Node.js 22.12+, Rust (through rustup; `rust-toolchain.toml` picks the version), and on macOS the Xcode Command Line Tools. Running Relay needs macOS 14+, Windows 10/11 with WebView2, or Linux with webkit2gtk-4.1.
 
 ```sh
 npm ci
-npm run dev        # Electron + Vite
+npm run dev        # the Tauri app with the Vite UI, reloading as you edit
 npm run dev:ui     # browser preview with sample accounts (?demo=50 for fifty)
-npm test           # 3,000+ tests
+npm test           # UI tests
+cargo test --workspace   # Rust core, app and CLI tests
 npm run dist:mac:local   # signed local build (see docs/macos-local-signing.md)
 ```
 

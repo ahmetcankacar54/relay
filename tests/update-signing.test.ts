@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, generateKeyPairSync } from "node:crypto";
+import { createHash, createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -28,9 +28,10 @@ import {
 } from "../scripts/homebrew-cask.mjs";
 // @ts-expect-error The standalone build script has no declaration file.
 import { architecturePlan } from "../scripts/stable-signing.mjs";
-import { parseChecksums } from "../electron/core/app-update";
-import { signedBy } from "../electron/core/win-linux-update";
-import { UPDATE_SIGNING_PUBLIC_KEY } from "../electron/core/update-signing-key";
+
+/** The update public key the app embeds (crates/relay-core/src/update_signing_key.rs), SPKI DER base64. */
+const UPDATE_SIGNING_PUBLIC_KEY =
+  "MCowBQYDK2VwAyEAa/6A8ozVRHKMFUYNkgyK8tF7eBdUpjcfDVPsCPvqMrA=";
 
 const temp = (t: { after(fn: () => void): void }) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-signing-"));
@@ -38,8 +39,18 @@ const temp = (t: { after(fn: () => void): void }) => {
   return dir;
 };
 const hex = (text: string) => createHash("sha256").update(text).digest("hex");
+/** An Ed25519 check of `sig` over `text`, done by node:crypto alone, independent of the scripts. */
+function signedBy(text: string, sig: string, key: string): boolean {
+  try {
+    const publicKey = createPublicKey({ key: Buffer.from(key, "base64"), format: "der", type: "spki" });
+    if (publicKey.asymmetricKeyType !== "ed25519") return false;
+    return verify(null, Buffer.from(text), publicKey, Buffer.from(sig, "base64"));
+  } catch {
+    return false;
+  }
+}
 
-test("the sums a release script signs are the sums the app accepts, and nothing else", () => {
+test("the sums a release script signs verify under the release's public key, and nothing else does", () => {
   const { privateKey } = generateKeyPairSync("ed25519");
   const publicKey = publicKeyBase64(privateKey);
   const text = formatSums(
@@ -70,7 +81,7 @@ test("the sums a release script signs are the sums the app accepts, and nothing 
   assert.equal(signedBy(text, signature, rsa), false);
 });
 
-test("the app embeds a well-formed Ed25519 public key, the one the scripts check against", () => {
+test("the embedded Ed25519 public key is well-formed, the one the scripts check against", () => {
   assert.equal(embeddedPublicKey(), UPDATE_SIGNING_PUBLIC_KEY);
   // 12-byte Ed25519 SPKI header and a 32-byte key.
   assert.equal(Buffer.from(UPDATE_SIGNING_PUBLIC_KEY, "base64").length, 44);
@@ -123,7 +134,7 @@ test("the signing key comes from the environment or a private file, and is never
   );
 });
 
-test("sums cover the release files only, read back the way the app reads them, and merge", (t) => {
+test("sums cover the release files only, read back by the sums parser, and merge", (t) => {
   const dir = temp(t);
   for (const name of [
     "Relay-1.2.3-arm64.dmg",
@@ -151,10 +162,9 @@ test("sums cover the release files only, read back the way the app reads them, a
   ]);
   const text = formatSums(mergeSums(remote, local));
   assert.equal(text.split("\n").filter(Boolean).length, 3);
-  const app = parseChecksums(text);
-  assert.deepEqual([...parseSums(text)].sort(), [...app].sort());
-  assert.equal(app.get("INSTALL.txt"), hex("INSTALL.txt"));
-  assert.equal(app.get("Relay-Setup-1.2.3-x64.exe"), hex("exe"));
+  const read = parseSums(text);
+  assert.equal(read.get("INSTALL.txt"), hex("INSTALL.txt"));
+  assert.equal(read.get("Relay-Setup-1.2.3-x64.exe"), hex("exe"));
 });
 
 test("the Homebrew cask points at the DMGs the release uploads, per architecture", () => {
@@ -210,7 +220,7 @@ test("the Homebrew cask points at the DMGs the release uploads, per architecture
 test("from 1.0 the cask links the relay CLI the Tauri app carries and needs macOS 14", () => {
   const sums = `${hex("arm")}  Relay-1.0.0-arm64.dmg\n${hex("intel")}  Relay-1.0.0-x64.dmg\n`;
   const tauri = caskFromSums("1.0.0", sums);
-  // The path tauri-stable-signing.mjs copies the CLI to; Homebrew links it as `relay`.
+  // The path stable-signing.mjs copies the CLI to; Homebrew links it as `relay`.
   assert.match(
     tauri,
     /\n {2}app "Relay\.app"\n {2}binary "#\{appdir\}\/Relay\.app\/Contents\/Resources\/bin\/relay"\n\n {2}zap trash: \[/,

@@ -1,14 +1,12 @@
 /**
  * The `relay` binary (crates/relay-cli) inside the packaged app, where the Proxy Gateway runs as
- * `relay __gateway` (electron/main/gateway.ts, gatewayBinary). Cargo builds it for the package's
- * platform and architecture; electron-builder's afterPack hook (package.json "build") copies it
- * to the app's resources/bin before anything is signed. A missing build fails the package: an app
- * without it would have no gateway.
+ * `relay __gateway`. Cargo builds it for the package's platform and architecture;
+ * scripts/stable-signing.mjs (macOS) and scripts/tauri-build.mjs (Windows, Linux) put it in the
+ * app's resources/bin. A missing build fails the package: an app without it would have no gateway.
  *
  *   node scripts/relay-binary.mjs [--arch arm64|x64]   builds it for this platform
  */
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,25 +70,6 @@ export function buildRelayBinary(
     },
   );
   return relayBinary(platform, arch, base, targetDir);
-}
-
-/** electron-builder's afterPack: the binary goes to <resources>/bin, executable. */
-export default async function afterPack(context) {
-  const { Arch } = await import("electron-builder");
-  const platform = context.electronPlatformName;
-  const source = relayBinary(platform, Arch[context.arch]);
-  if (!fs.existsSync(source))
-    throw new Error(
-      `${path.relative(root, source)} is missing: build it first with node scripts/relay-binary.mjs.`,
-    );
-  const bin = path.join(
-    context.packager.getResourcesDir(context.appOutDir),
-    "bin",
-  );
-  fs.mkdirSync(bin, { recursive: true });
-  const destination = path.join(bin, relayBinaryName(platform));
-  fs.copyFileSync(source, destination);
-  if (platform !== "win32") fs.chmodSync(destination, 0o755);
 }
 
 if (

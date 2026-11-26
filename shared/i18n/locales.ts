@@ -1,6 +1,6 @@
 /**
  * The languages Relay speaks. English is the source; every other catalog translates its ids. Kept
- * free of Electron, React and the DOM so the renderer, main, the CLI and tests share it.
+ * free of React and the DOM so the windows, scripts and tests share it.
  */
 export const LOCALES = [
   "en",

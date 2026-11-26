@@ -3,9 +3,6 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TooltipProvider } from "../src/components/ui/tooltip";
-import { buildProxyStatus } from "../shared/proxy-status";
-import { cleanEntry } from "../electron/core/gateway-request-log";
-import { DEFAULT_PROXY_CONFIG } from "../shared/proxy-types";
 import { pickLine, pickReasonLabel } from "../src/lib/proxy-ui";
 import { ProxyPage } from "../src/pages/Proxy";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -22,38 +19,6 @@ const account = (id: string, name = id): Account => ({
   group: "default",
   color: "#000",
   createdAt: "2026-11-01T00:00:00.000Z",
-});
-
-test("a pick read back from disk keeps known reasons and account ids only", () => {
-  const entry = cleanEntry({
-    at: 1,
-    status: 200,
-    pick: { reason: "soonest-reset", nearlyFull: ["a", 7, "x".repeat(65)], after: "b", overflow: true, extra: "no" },
-  });
-  assert.deepEqual(entry?.pick, { reason: "soonest-reset", nearlyFull: ["a"], after: "b", overflow: true });
-  assert.equal(cleanEntry({ at: 1, status: 200, pick: { reason: "dice" } })?.pick, undefined);
-});
-
-test("the status carries the next pick and a sign-in the gateway cannot use, only for pool accounts", () => {
-  const now = Date.UTC(2026, 10, 13, 12);
-  const base = {
-    config: { ...DEFAULT_PROXY_CONFIG, excludedAccountIds: ["c"] },
-    accounts: [account("a"), account("b"), account("c")].map((a) => ({ ...a, auth: { loggedIn: true } }) as Account),
-    usage: {},
-    now,
-    nextPick: { claude: { accountId: "a", reason: "balanced" as const } },
-    gatewaySignIn: (id: string) => (id === "a" ? undefined : id === "b" ? ("missing" as const) : ("expired" as const)),
-  };
-  const status = buildProxyStatus({ ...base, running: true });
-  assert.deepEqual(status.nextPick, { claude: { accountId: "a", reason: "balanced" } });
-  assert.deepEqual(
-    status.accounts.map((a) => a.gatewaySignIn),
-    [undefined, "missing", undefined],
-    "C is out of the pool: the gateway never reads it",
-  );
-  const stopped = buildProxyStatus({ ...base, running: false });
-  assert.equal(stopped.nextPick, undefined);
-  assert.equal(stopped.accounts[1].gatewaySignIn, undefined);
 });
 
 test("the page words why a request went to its account", () => {

@@ -1,42 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { deniedBrowsers, macBrowserSystem, type BrowserSystem } from "../electron/core/browser-system";
 import { extensionGuide, instanceLine } from "../src/lib/extension-ui";
 import { isExternalLink, EXTERNAL_LINKS } from "../shared/external-links";
 import { DEFAULT_EXTENSION, type ExtensionStatus } from "../shared/browser-extension";
 import { testT } from "./i18n";
 
 const t = testT("en");
-const fake = (present: string[], denied: string[]): BrowserSystem =>
-  ({
-    support: "/support",
-    exists: (file: string) => present.some((dir) => file === path.join("/support", dir)),
-    denied: (file: string) => denied.some((dir) => file === path.join("/support", dir, "Local State")),
-  }) as unknown as BrowserSystem;
-
-test("a browser macOS keeps from Relay is told apart from one that is not there", () => {
-  const system = fake(["Google/Chrome", "BraveSoftware/Brave-Browser"], ["Google/Chrome"]);
-  assert.deepEqual(deniedBrowsers(system), ["chrome"]);
-  // A browser that is not installed, or a fake system without the check, is never "denied".
-  assert.deepEqual(deniedBrowsers(fake([], ["Google/Chrome"])), []);
-  assert.deepEqual(deniedBrowsers({ ...fake(["Google/Chrome"], []), denied: undefined } as BrowserSystem), []);
-});
-
-test("the real check says readable files are not denied and missing ones are not either", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-access-"));
-  try {
-    const file = path.join(dir, "Local State");
-    fs.writeFileSync(file, "{}");
-    const system = macBrowserSystem(dir);
-    assert.equal(system.denied!(file), false);
-    assert.equal(system.denied!(path.join(dir, "missing")), false);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 test("with no extension found because macOS blocks the browser, the card says how to allow it", () => {
   const status: ExtensionStatus = { setting: { ...DEFAULT_EXTENSION, mode: "restart" }, instances: [], saved: [], denied: ["chrome"] };

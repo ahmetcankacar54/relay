@@ -15,15 +15,15 @@ Thanks for helping. Bug reports, translations and pull requests are all welcome.
 
 ## Development
 
-Requirements: Node.js 22.12+, and on macOS the Xcode Command Line Tools.
+Requirements: Node.js 22.12+, Rust (the toolchain in `rust-toolchain.toml`, through rustup), and on macOS the Xcode Command Line Tools; on Linux, webkit2gtk-4.1 and Tauri's other build dependencies.
 
 ```sh
 npm ci
 npm run dev:ui     # browser preview with sample accounts
-npm run dev        # the full Electron app
+npm run dev        # the full app: tauri dev, the UI from Vite on 127.0.0.1:5173
 ```
 
-How switching, history merging and usage reading work is in [docs/development.md](docs/development.md).
+Relay is a Tauri 2 app: the Rust core and app in `crates/`, the React UI in `src/` and `shared/`. How switching, history merging and usage reading work is in [docs/development.md](docs/development.md).
 
 ## Pull requests
 
@@ -33,7 +33,9 @@ How switching, history merging and usage reading work is in [docs/development.md
    npm run typecheck
    npm run lint
    npm run format:check   # Prettier on the files your change adds: npx prettier --write <file> fixes one
-   npm test
+   npm test               # the UI and shared/ tests
+   cargo test --workspace
+   cargo clippy --workspace --all-targets -- -D warnings
    npm run build
    npm run test:e2e       # browser preview: axe scan and screenshots (npx playwright install chromium once)
    ```

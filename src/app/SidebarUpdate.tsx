@@ -95,7 +95,7 @@ export function SidebarUpdate({
             aria-label={full}
             disabled={!run || (status === "ready" && busy)}
             onClick={run}
-            className="relative mb-1 grid size-10 place-items-center rounded-md text-sidebar-foreground outline-none hover:bg-sidebar-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60 [-webkit-app-region:no-drag]"
+            className="relative mb-1 grid size-10 place-items-center rounded-md text-sidebar-foreground outline-none hover:bg-sidebar-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
           >
             <Download className="size-5" aria-hidden />
             <span aria-hidden className="absolute top-2 right-2 size-2 rounded-full bg-primary" />
@@ -106,7 +106,7 @@ export function SidebarUpdate({
     );
 
   return (
-    <div data-slot="update-card" className="group/update relative mb-1 w-full [-webkit-app-region:no-drag]">
+    <div data-slot="update-card" className="group/update relative mb-1 w-full">
       <button
         type="button"
         aria-label={full}

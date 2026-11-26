@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
 import { readFileSync } from "node:fs";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import {
   blockReason,
   cliDetail,
@@ -18,9 +14,6 @@ import {
 import { MIN_CLI_VERSION, USAGE_CLI_VERSION, meetsCliMinimum, readsUsage } from "../shared/cli-version";
 import { EXTERNAL_LINKS, isExternalLink } from "../shared/external-links";
 import { intentHash, PAGE_INTENTS } from "../src/app/routes";
-import { supportsDesktop } from "../electron/core/environment";
-import { Service } from "../electron/core/service";
-import { localizeError } from "../src/messages";
 import type { Account, DesktopState, Diagnostics } from "../shared/types";
 import { testT } from "./i18n";
 
@@ -71,9 +64,6 @@ test("the CLI minimum is the one the Desktop check uses", () => {
   assert.equal(meetsCliMinimum("3.0.0"), true);
   assert.equal(meetsCliMinimum("1.9.999"), false);
   assert.equal(meetsCliMinimum("unknown"), false);
-  // The platform gate stays in environment.ts; the version gate is the shared one.
-  assert.equal(supportsDesktop("2.1.285", "darwin", "arm64"), true);
-  assert.equal(supportsDesktop("2.1.285", "linux", "x64"), false);
 });
 
 test("reading limits needs a newer CLI, the one the usage refresher enforces", () => {
@@ -84,10 +74,6 @@ test("reading limits needs a newer CLI, the one the usage refresher enforces", (
   assert.equal(readsUsage("2.0.999"), false);
   assert.equal(readsUsage("1.9.999"), false);
   assert.equal(readsUsage("unknown"), false);
-  // The refresher in main reads the same constant, not a number of its own.
-  const main = mainSource();
-  assert.match(main, /readsUsage\(diagnostics\.version/);
-  assert.doesNotMatch(main, /< 296/);
 });
 
 test("cliState reads the diagnostics: unknown, missing, unreadable, outdated or ok", () => {
@@ -241,100 +227,12 @@ test("only the two first-run pages, the providers' terms and the Full Disk Acces
   assert.equal(isExternalLink("file:///etc/passwd"), false);
 });
 
-test("the main window opens allow-listed links in the browser and nothing else", () => {
-  const main = mainSource();
-  const opener = /window\.webContents\.setWindowOpenHandler\(([\s\S]*?)\n {2}\}\);/.exec(main)?.[1] ?? "";
-  assert.match(opener, /isExternalLink\(url\)/);
-  assert.match(opener, /shell\.openExternal\(url\)/);
-  assert.match(opener, /action: "deny"/);
-  // No new channel opens arbitrary URLs.
-  assert.doesNotMatch(main, /handle\("open-(?:external|url|link)"/);
-});
-
 test("openPage carries the add intent to the main window", () => {
   assert.deepEqual(PAGE_INTENTS, ["ekle"]);
   assert.equal(intentHash("hesaplar", "ekle"), "#/hesaplar?ekle");
   assert.equal(intentHash("genel"), "#/genel");
-  const main = mainSource();
-  const ipcStart = main.indexOf('handle("open-page",');
-  const ipcHandler = main.slice(ipcStart, main.indexOf('handle("quit"', ipcStart));
-  assert.match(ipcHandler, /z\.enum\(PAGE_INTENTS\)\.optional\(\)\.parse\(intent\)/);
-  const openPageStart = main.indexOf("function openPage(");
-  const openPageBody = main.slice(openPageStart, main.indexOf("function showWindow(", openPageStart));
-  assert.match(openPageBody, /send\("relay:navigate", target, want\)/);
-  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  assert.match(preload, /openPage: \(page, intent\) =>\s*ipcRenderer\.invoke\("relay:open-page", page, intent\)/);
-  assert.match(preload, /callback\(page as never, intent as never\)/);
   const shell = readFileSync(new URL("../src/app/Shell.tsx", import.meta.url), "utf8");
   assert.match(shell, /window\.location\.hash = intentHash\(page, intent\)/);
-});
-
-test("a missing CLI error says where to choose the file, in both languages", async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-missing-"));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));
-  service.store.update((s) => {
-    s.executable = path.join(root, "no-such-claude");
-  });
-  const { error } = await service.diagnose();
-  assert.ok(error);
-  assert.equal(
-    localizeError(error, "tr"),
-    "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
-  );
-  assert.equal(
-    localizeError(error, "en"),
-    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Advanced → Claude Code CLI.",
-  );
-});
-
-const writeVersionCli = (file: string, version: string) =>
-  fs.writeFile(file, `#!${process.execPath}\nconsole.log(${JSON.stringify(version)});\n`, { mode: 0o700 });
-
-test("a CLI installed after Relay started is noticed by a later snapshot, at most once per throttle", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-late-"));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));
-  let now = 1_000_000;
-  service.now = () => now;
-  const cli = path.join(root, "claude");
-  service.store.update((s) => {
-    s.executable = cli;
-  });
-  const first = await service.panelSnapshot();
-  assert.equal(first.diagnostics.executable, undefined);
-  assert.ok(first.diagnostics.error);
-  await writeVersionCli(cli, "2.1.296 (Claude Code)");
-  // Within the throttle the cached result stands.
-  now += 5_000;
-  assert.ok((await service.panelSnapshot()).diagnostics.error);
-  now += Service.REDIAGNOSE_MS;
-  const found = (await service.panelSnapshot()).diagnostics;
-  assert.equal(found.executable, cli);
-  assert.equal(found.error, undefined);
-  assert.equal(found.version, "2.1.296 (Claude Code)");
-  assert.equal((await service.snapshot()).diagnostics.version, "2.1.296 (Claude Code)");
-  // A usable result is kept for the whole process.
-  await writeVersionCli(cli, "2.1.300 (Claude Code)");
-  now += Service.REDIAGNOSE_MS * 2;
-  assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
-});
-
-test("a CLI too old to read limits is looked at again, so an update is noticed", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-old-"));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));
-  let now = 1_000_000;
-  service.now = () => now;
-  const cli = path.join(root, "claude");
-  await writeVersionCli(cli, "2.1.290 (Claude Code)");
-  service.store.update((s) => {
-    s.executable = cli;
-  });
-  assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.290 (Claude Code)");
-  await writeVersionCli(cli, "2.1.296 (Claude Code)");
-  now += Service.REDIAGNOSE_MS;
-  assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
 });
 
 test("the setup list needs two connected accounts and a choice of when to switch; the extension and open at login are optional", () => {

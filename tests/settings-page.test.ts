@@ -1,9 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
 import { act, createElement } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
 import { exportDiagnostics, PlanningPage, PrivacyNotes, Settings, SwitchingPage } from "../src/pages/Settings";
 import { SETTINGS_TABS } from "../src/app/routes";
@@ -79,13 +77,6 @@ test("the system group offers the diagnostics files, and say which ones to send"
   const { showDiagnostics } = await import("../src/pages/Settings");
   await showDiagnostics(relay);
   assert.deepEqual(calls, ["diagnostics", "show"]);
-  const main = mainSource();
-  assert.match(main, /handle\("show-diagnostics", async \(\) => \{/);
-  const handler = main.slice(main.indexOf('handle("show-diagnostics"'));
-  assert.match(handler.slice(0, 600), /shell\.showItemInFolder\(/);
-  assert.match(handler.slice(0, 600), /"draft-events\.json"/);
-  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
 });
 
 test("Advanced exports the redacted diagnostics zip through main, which takes no path", async () => {
@@ -110,10 +101,6 @@ test("Advanced exports the redacted diagnostics zip through main, which takes no
   );
   await exportDiagnostics(relay);
   assert.deepEqual(calls, ["export-diagnostics", "export"]);
-  const main = mainSource();
-  assert.match(main, /handle\("export-diagnostics", \(\) => exportDiagnostics\(\)\);/);
-  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  assert.match(preload, /exportDiagnostics: \(\) => ipcRenderer\.invoke\("relay:export-diagnostics"\)/);
 });
 
 test("General offers Open at login, off until turned on", () => {
@@ -580,23 +567,4 @@ test("moving a row and the drop under the pointer", () => {
   assert.equal(dropIndex([120, 160, 200, 240], 3, 150), 1);
   assert.equal(dropIndex([120, 160, 200, 240], 0, 300), 3);
   assert.equal(dropIndex([120, 160, 200, 240], 1, 100), 0);
-});
-
-test("main keeps the menu bar title beside the registry and redraws it on a change", () => {
-  const main = mainSource();
-  assert.match(main, /new MenuBarTitle\(path\.join\(app\.getPath\("userData"\), "menu-bar\.json"\)\)/);
-  const handler = main.slice(main.indexOf('handle("set-menu-bar-title"'));
-  assert.match(handler.slice(0, 500), /z\.array\(z\.enum\(MENU_BAR_ITEMS\)\)/);
-  assert.match(handler.slice(0, 500), /\.strict\(\)/);
-  assert.match(handler.slice(0, 500), /tray\?\.update\(\)/);
-  // The tray reads the choice and today's figures; the figures come from the widget's ledger read.
-  assert.match(main, /titleItems: menuBarTitle\?\.current\.items/);
-  assert.match(main, /today: trayToday/);
-  assert.match(main, /trayToday = complete/);
-  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  assert.match(preload, /menuBarTitle: \(\) => ipcRenderer\.invoke\("relay:menu-bar-title"\)/);
-  assert.match(preload, /setMenuBarTitle: \(choice\) => ipcRenderer\.invoke\("relay:set-menu-bar-title", choice\)/);
-  // The registry's settings stay as they are: no schema change for an older CLI to refuse.
-  const store = readFileSync(new URL("../electron/core/store.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(store, /menuBar(Title|Items)/);
 });

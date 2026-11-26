@@ -1,0 +1,77 @@
+{
+  "env": {
+    "RELAY_HOME": "@ROOT@/relay",
+    "RELAY_CLAUDE_DIR": "@ROOT@/claude",
+    "RELAY_CLAUDE_APP": "@ROOT@/Claude.app",
+    "RELAY_SECURITY_TOOL": "@ROOT@/security/security",
+    "HOME": "@ROOT@/home",
+    "LANG": "en_US.UTF-8",
+    "RELAY_LANG": "en"
+  },
+  "entries": [
+    {
+      "path": "bin",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "bin/claude",
+      "mode": 493
+    },
+    {
+      "path": "claude",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/Cookies",
+      "mode": 420
+    },
+    {
+      "path": "claude/claude-code-sessions",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/claude-code-sessions/cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/claude-code-sessions/cccccccc-cccc-4ccc-8ccc-cccccccccccc/c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "claude/config.json",
+      "mode": 384
+    },
+    {
+      "path": "home",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "home/.claude",
+      "mode": 448,
+      "dir": true
+    },
+    {
+      "path": "security",
+      "mode": 493,
+      "dir": true
+    },
+    {
+      "path": "security/item-Claude_Safe_Storage",
+      "mode": 420
+    },
+    {
+      "path": "security/item-Relay_Vault_Key",
+      "mode": 420
+    },
+    {
+      "path": "security/security",
+      "mode": 493
+    }
+  ]
+}

@@ -1,12 +1,12 @@
 /**
- * The oldest Claude Code CLI Relay works with. `supportsDesktop` (electron/core/environment.ts)
+ * The oldest Claude Code CLI Relay works with. `supports_desktop` (crates/relay-core environment)
  * gates on it.
  */
 export const MIN_CLI_VERSION = "2.1.285";
 
 /**
  * The oldest Claude Code CLI Relay can read usage limits with. The usage credential refresher
- * (electron/main.ts) refuses older ones, and the Overview checklist and the add-account dialog
+ * (crates/relay-app) refuses older ones, and the Overview checklist and the add-account dialog
  * name it: their ✓ means the CLI can read limits.
  */
 export const USAGE_CLI_VERSION = "2.1.296";

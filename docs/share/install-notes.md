@@ -1,10 +1,10 @@
-Relay 0.29.0 — account switcher for the Claude app (Claude Desktop)
+Relay 1.0.0 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.29.0-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-1.0.0-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
-   not supported by this build. Requires macOS 13 or later.
+   not supported by this build. Requires macOS 14 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
    from inside the DMG.
 3) Open Relay. When macOS says "Apple could not verify…", click Done.
@@ -73,6 +73,12 @@ six hours). When one is downloaded and checked, a notification and a banner
 say "Relay … is ready": click Update and Relay reopens as the new version in a
 few seconds. Settings → Advanced → Updates has "Check now" and turns the
 automatic check off. Versions before 0.16.0 must be updated by hand once.
+From 1.0.0 Relay is a native app (Rust and the system's WebKit) instead of an
+Electron one: it uses about half the memory while idle. Updating from 0.29
+keeps your accounts, groups, settings and the window's sidebar width. Each
+account's background sign-in renewal asks you to sign in once more after the
+update. The relay command-line tool is inside the app:
+/Applications/Relay.app/Contents/Resources/bin/relay.
 
 TWO ACCOUNTS AT ONCE (EXPERIMENTAL, macOS)
 Settings → Advanced → "Separate Claude windows". Then "Open in a separate
