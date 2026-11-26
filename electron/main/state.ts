@@ -17,7 +17,7 @@ import type { FleetContinuation } from "../core/fleet-continuation";
 import type { GlobalShortcuts } from "../core/global-shortcuts";
 import type { MenuBarTitle } from "../core/menu-bar-title";
 import type { ProcessLock } from "../core/process-lock";
-import type { ProxyServer } from "../core/proxy/proxy-server";
+import type { GatewaySidecar } from "./gateway-sidecar";
 import type { Service } from "../core/service";
 import type { SignInRenewal } from "../core/sign-in-renewal";
 import type { SwitchDiagnostics } from "../core/switch-diagnostics";
@@ -85,7 +85,7 @@ export let signInRenewal: SignInRenewal | undefined;
  * by their limits. Started with the app when turned on, stopped when Relay quits. Every start,
  * stop and restart runs one after the other, so a quick toggle can never leave two servers.
  */
-export let proxyServer: ProxyServer | undefined;
+export let proxyServer: GatewaySidecar | undefined;
 /** Moves the Antigravity app and agy between saved accounts; macOS only. */
 export let antigravitySwitcher: AntigravitySwitcher | undefined;
 
@@ -123,6 +123,6 @@ export const set = {
   quitting: (value: boolean) => (quitting = value),
   systemShutdownAt: (value: number) => (systemShutdownAt = value),
   signInRenewal: (value: SignInRenewal) => (signInRenewal = value),
-  proxyServer: (value: ProxyServer | undefined) => (proxyServer = value),
+  proxyServer: (value: GatewaySidecar | undefined) => (proxyServer = value),
   antigravitySwitcher: (value: AntigravitySwitcher) => (antigravitySwitcher = value),
 };

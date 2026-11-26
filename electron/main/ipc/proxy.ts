@@ -5,8 +5,8 @@ import { z } from "zod";
 import { clientRisks, gatewayRisks, proxyPatchRisks } from "../../../shared/feature-risk";
 import { DEFAULT_OVERFLOW_CAP_USD, type OverflowSettings } from "../../../shared/overflow";
 import type { ProxyClientId } from "../../../shared/proxy-types";
-import { testOverflowUpstream } from "../../core/proxy/overflow-upstream";
-import { bindClient, unbindClient } from "../../core/proxy/proxy-clients";
+import { testOverflowUpstream } from "../../core/overflow-test";
+import { bindClient, unbindClient } from "../../core/proxy-clients";
 import {
   apiUpstreamSchema,
   generateProxyKey,
@@ -14,7 +14,7 @@ import {
   overflowSettingsSchema,
   overflowUpstreamInput,
   proxyConfigurePatch,
-} from "../../core/proxy/proxy-status";
+} from "../../../shared/proxy-status";
 import { say } from "../../i18n";
 import {
   applyProxyConfig,

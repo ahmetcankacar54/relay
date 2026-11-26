@@ -4,7 +4,9 @@ Technical notes that used to live in the README: building and signing, icons, ho
 
 ## Install and run
 
-Requirements: macOS, Node.js 22.12+, Xcode Command Line Tools and Claude Desktop.
+Requirements: macOS, Node.js 22.12+, Rust (the toolchain `rust-toolchain.toml` pins, through
+rustup, with the `x86_64-apple-darwin` target for the Intel build), Xcode Command Line Tools
+and Claude Desktop.
 Usage limits are read with Claude Code: the copy Claude Desktop downloads for its
 Code tab is enough, or a separately installed CLI (2.1.296+).
 
@@ -28,6 +30,10 @@ with sample data, `?demo=50` for 50 accounts), `npm test`, `npm run typecheck`.
 After `npm run build`, `npm run test:desktop` is the macOS integration test and
 `npm run test:boot` the boot smoke CI runs on Windows and Linux (start with a
 fresh profile, answer over IPC, quit cleanly; `-- --packaged` for the packaged app).
+The gateway runs `target/debug/relay` outside a package; `npm run dev` builds it
+(`cargo build -p relay-cli`) before starting Electron, and says so when cargo is
+missing or the build fails. `RELAY_GATEWAY_BIN` (an absolute path) points at
+another build and skips that step.
 
 Code health: `npm run lint` (ESLint, `eslint.config.mjs`) and `npm run format:check`
 (Prettier on the files a change adds since `origin/main`; older files are hand-formatted
@@ -133,6 +139,15 @@ adapts the menu-bar icon to light and dark appearances.
   `cli/npm/dist/`, and a `cli-v<version>` tag publishes them
   (`.github/workflows/cli-release.yml`) with the bare binaries as archives on
   that GitHub release.
+- The Proxy Gateway is the same Rust binary, run by the app as a child process
+  (`relay __gateway`, `electron/main/gateway-sidecar.ts`) that speaks
+  newline-delimited JSON on its stdin and stdout
+  (`crates/relay-gateway/src/sidecar.rs`). The package carries it in
+  `resources/bin`: `node scripts/relay-binary.mjs` builds it for the platform
+  and architecture, electron-builder's `afterPack` hook copies it in (packaging
+  fails without it), `scripts/stable-signing.mjs` signs it as
+  `dev.relay.workspace.relay-cli`, and `node scripts/smoke-gateway.mjs` checks
+  the packaged one starts, answers `/status` and stops.
 
 ## Linux
 

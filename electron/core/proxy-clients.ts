@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ProxyClientId, ProxyConfig } from "../../../shared/proxy-types";
-import type { ProxyClientStatus } from "../../../shared/types";
-import { isTailscaleIPv4 } from "../../../shared/proxy-url";
+import type { ProxyClientId, ProxyConfig } from "../../shared/proxy-types";
+import type { ProxyClientStatus } from "../../shared/types";
+import { isTailscaleIPv4 } from "../../shared/proxy-url";
 import {
   ompAgentDir,
   ompBlocked,

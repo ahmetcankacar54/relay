@@ -215,6 +215,22 @@ pub enum ToolRun {
     Failed,
 }
 
+/// `command.spawn()`, retried a few times on Linux's ETXTBSY: exec is refused while another
+/// process still holds the file open for writing (a just-written tool inherited across a
+/// concurrent fork), which clears in moments.
+fn spawn_retrying(command: &mut Command) -> std::io::Result<std::process::Child> {
+    #[cfg(unix)]
+    for attempt in 1..=5u64 {
+        match command.spawn() {
+            Err(error) if error.raw_os_error() == Some(libc::ETXTBSY) => {
+                std::thread::sleep(Duration::from_millis(20 * attempt));
+            }
+            spawned => return spawned,
+        }
+    }
+    command.spawn()
+}
+
 /// Node's `execFile` with `timeout`, `killSignal: "SIGKILL"` and `maxBuffer`. A `max_buffer` of 0
 /// discards both outputs (`stdio: "ignore"`).
 pub(crate) fn run_tool(
@@ -248,7 +264,7 @@ pub(crate) fn run_tool(
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    let mut child = match command.spawn() {
+    let mut child = match spawn_retrying(&mut command) {
         Ok(child) => child,
         Err(error) => return ToolRun::SpawnFailed(error.to_string()),
     };

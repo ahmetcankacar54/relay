@@ -9,9 +9,9 @@ import {
   releaseClientSync,
   tailscaleAddress,
   unbindClient,
-} from "../electron/core/proxy/proxy-clients";
-import { orderedAccounts, poolAccounts, buildProxyStatus } from "../electron/core/proxy/proxy-status";
-import { ProxyStats, REQUEST_LOG_SIZE } from "../electron/core/proxy/proxy-stats";
+} from "../electron/core/proxy-clients";
+import { orderedAccounts, poolAccounts, buildProxyStatus } from "../shared/proxy-status";
+import { GatewayRequestLog, REQUEST_LOG_SIZE } from "../electron/core/gateway-request-log";
 import { isTailscaleIPv4 } from "../shared/proxy-url";
 import { DEFAULT_PROXY_CONFIG } from "../shared/proxy-types";
 import { compactCount, moveInOrder, quotaAtRisk } from "../src/lib/proxy-ui";
@@ -237,15 +237,20 @@ test("the pool keeps its saved order, leaves excluded accounts out, and reports 
   assert.equal(status.accounts[1].inPool, false);
 });
 
-test("the request log keeps the newest entries first and caps its length", () => {
-  const stats = new ProxyStats();
-  for (let i = 0; i < REQUEST_LOG_SIZE + 5; i++) stats.recordLog({ at: i, status: 200, model: "m".repeat(200) });
-  const recent = stats.recent();
-  assert.equal(recent.length, REQUEST_LOG_SIZE);
-  assert.equal(recent[0].at, REQUEST_LOG_SIZE + 4);
-  assert.equal(recent[0].model?.length, 80);
-  stats.reset();
-  assert.deepEqual(stats.recent(), []);
+test("the request log keeps the newest entries for the feed and caps their length", () => {
+  const dir = home();
+  try {
+    const log = new GatewayRequestLog(path.join(dir, "gateway-requests.jsonl"), { feedSize: REQUEST_LOG_SIZE });
+    log.load();
+    const now = Date.now();
+    for (let i = 0; i < REQUEST_LOG_SIZE + 5; i++) log.record({ at: now + i, status: 200, model: "m".repeat(200) });
+    const recent = log.recent();
+    assert.equal(recent.length, REQUEST_LOG_SIZE);
+    assert.equal(recent.at(-1)?.at, now + REQUEST_LOG_SIZE + 4, "the newest last");
+    assert.equal(recent.at(-1)?.model?.length, 80);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("quota at risk: a weekly window resetting within two days with a quarter or more left", () => {

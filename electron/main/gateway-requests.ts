@@ -1,7 +1,6 @@
 import { app } from "electron";
 import path from "node:path";
-import { GatewayRequestLog } from "../core/proxy/proxy-request-log";
-import { REQUEST_LOG_SIZE } from "../core/proxy/proxy-stats";
+import { GatewayRequestLog, REQUEST_LOG_SIZE } from "../core/gateway-request-log";
 /** The gateway's requests across restarts: the feed, and which account served a request id. */
 let gatewayRequestLog: GatewayRequestLog | undefined;
 export function gatewayRequests(): GatewayRequestLog {

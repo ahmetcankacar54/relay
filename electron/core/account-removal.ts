@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AccountRemoved, DesktopState } from "../../shared/types";
 import { writeBytes } from "./desktop-files";
 import { acquireProfileLock } from "./profile-lock";
-import { proxyExtrasSchema, type ProxyExtras } from "./proxy/proxy-status";
+import { proxyExtrasSchema, type ProxyExtras } from "../../shared/proxy-status";
 import type { Store } from "./store";
 
 /** Why an account cannot be removed now: it is open in the Claude app, or its sign-in there is pending. */

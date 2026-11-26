@@ -138,6 +138,12 @@ test("the custom signer pins the key while retaining library signing policy and 
     WIDGET_ENTITLEMENTS,
   );
   assert.deepEqual(perFile("/fixture/Relay.app/Contents/PlugIns/RelayWidget.appexx"), optionsForFile());
+  // The gateway's relay binary has no Info.plist: its identifier is given to codesign.
+  assert.deepEqual(perFile("/fixture/Relay.app/Contents/Resources/bin/relay"), {
+    ...optionsForFile(),
+    additionalArguments: ["--identifier", "dev.relay.workspace.relay-cli"],
+  });
+  assert.deepEqual(perFile("/fixture/Relay.app/Contents/Resources/bin/relay2"), optionsForFile());
   assert.equal(received?.strictVerify, true);
   assert.equal(received?.requirements, undefined);
   await assert.rejects(
@@ -174,6 +180,8 @@ function fixtureRun(
     wrongCertificate?: boolean;
     adHoc?: boolean;
     failDeep?: boolean;
+    /** Identifiers whose signature binds no Info.plist (a plain Mach-O). */
+    unboundPlist?: string[];
   } = {},
 ) {
   const calls: { file: string; args: string[] }[] = [];
@@ -189,10 +197,12 @@ function fixtureRun(
       ? ""
       : target.endsWith("RelayWidget.appex")
         ? ".widget"
-        : `.${path.basename(target)}`;
+        : /bin[\\/]relay$/.test(target) // path.join's separator: \ on Windows
+          ? ".relay-cli"
+          : `.${path.basename(target)}`;
     const identifier = `dev.relay.workspace${name}`;
     if (args.includes("--verbose=4"))
-      return `Identifier=${identifier}\n${overrides.adHoc ? "Signature=adhoc" : "Authority=Relay Local Development"}\nCDHash=1234\nSealed Resources version=2\n`;
+      return `Identifier=${identifier}\n${overrides.adHoc ? "Signature=adhoc" : "Authority=Relay Local Development"}\nCDHash=1234\n${overrides.unboundPlist?.includes(identifier) ? "Info.plist=not bound" : "Info.plist entries=20"}\nSealed Resources version=2\n`;
     if (args.some((arg) => arg.startsWith("--extract-certificates"))) return "";
     if (args.includes("--requirements"))
       return `designated => identifier "${identifier}" and certificate leaf = H"${fingerprint}"`;
@@ -229,13 +239,14 @@ test("final artifact verification checks the actual public signing certificate o
       "dev.relay.workspace",
       "dev.relay.workspace.desktop-automation",
       "dev.relay.workspace.widget",
+      "dev.relay.workspace.relay-cli",
     ],
   );
   assert.equal(
     fixture.calls.filter((call) =>
       call.args.some((arg) => arg.startsWith("--extract-certificates")),
     ).length,
-    3,
+    4,
   );
 });
 
@@ -266,6 +277,23 @@ test("missing trust, ad-hoc fallback and a wrong certificate fail final acceptan
   );
 });
 
+test("only the gateway's relay binary may be signed without a bound Info.plist", async () => {
+  const cli = await inspectStableSigning(
+    "/fixture/Relay.app",
+    fingerprint,
+    fixtureRun({ unboundPlist: ["dev.relay.workspace.relay-cli"] }).options,
+  );
+  assert.equal(cli.verified, true);
+  await assert.rejects(
+    inspectStableSigning(
+      "/fixture/Relay.app",
+      fingerprint,
+      fixtureRun({ unboundPlist: ["dev.relay.workspace.desktop-automation"] }).options,
+    ),
+    /Invalid stable signing metadata for dev\.relay\.workspace\.desktop-automation/,
+  );
+});
+
 test("update continuity verifies old and new requirements against separately retained bundles", async () => {
   const fixture = fixtureRun();
   const previous = await inspectStableSigning(
@@ -284,8 +312,8 @@ test("update continuity verifies old and new requirements against separately ret
     true,
   );
   const checks = fixture.calls.slice(countBefore);
-  // Two directions for each of the three targets.
-  assert.equal(checks.length, 6);
+  // Two directions for each of the four targets.
+  assert.equal(checks.length, 8);
   assert.ok(checks.every((call) => call.args.includes("--test-requirement")));
   assert.ok(
     checks.every((call) =>

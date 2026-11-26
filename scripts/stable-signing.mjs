@@ -13,6 +13,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildRelayBinary } from "./relay-binary.mjs";
 
 const appIdentifier = "dev.relay.workspace";
 /** The widget extension, inside the app; it alone is sandboxed. */
@@ -20,6 +21,9 @@ export const WIDGET_RELATIVE = "Contents/PlugIns/RelayWidget.appex";
 export const WIDGET_ENTITLEMENTS = fileURLToPath(
   new URL("../electron/native/widget/widget.entitlements", import.meta.url),
 );
+/** The `relay` binary the gateway runs as (scripts/relay-binary.mjs puts it there). */
+export const RELAY_CLI_RELATIVE = "Contents/Resources/bin/relay";
+export const RELAY_CLI_IDENTIFIER = `${appIdentifier}.relay-cli`;
 /** The app's hardened-runtime exceptions; the widget keeps its own. */
 export const APP_ENTITLEMENTS = fileURLToPath(
   new URL("../build/entitlements.mac.plist", import.meta.url),
@@ -32,7 +36,33 @@ const permissionTargets = [
   })),
   // chronod runs the widget by this identity; keep it the same across updates.
   { relative: WIDGET_RELATIVE, identifier: `${appIdentifier}.widget` },
+  // A plain Mach-O from cargo: no Info.plist to bind; its identifier comes at signing.
+  {
+    relative: RELAY_CLI_RELATIVE,
+    identifier: RELAY_CLI_IDENTIFIER,
+    infoPlist: false,
+  },
 ];
+
+/**
+ * The relay binary is signed under its own identifier; without one codesign
+ * would name it after the file. Everything else keeps the options it had.
+ */
+export function relayCliOptionsForFile(app, base) {
+  const cli = path.join(path.resolve(app), RELAY_CLI_RELATIVE);
+  return (file) => {
+    const inherited = typeof base === "function" ? base(file) : undefined;
+    if (path.resolve(file) !== cli) return inherited;
+    return {
+      ...inherited,
+      additionalArguments: [
+        ...(inherited?.additionalArguments ?? []),
+        "--identifier",
+        RELAY_CLI_IDENTIFIER,
+      ],
+    };
+  };
+}
 
 /**
  * The widget extension and its executable get the widget's own entitlements
@@ -252,7 +282,8 @@ export async function inspectStableSigning(bundle, fingerprint, options = {}) {
         details.match(/^Identifier=(.+)$/m)?.[1] !== target.identifier ||
         details.includes("Signature=adhoc") ||
         details.includes("linker-signed") ||
-        details.includes("Info.plist=not bound") ||
+        (target.infoPlist !== false &&
+          details.includes("Info.plist=not bound")) ||
         (target.relative === "" && details.includes("Sealed Resources=none"))
       )
         throw new Error(
@@ -341,7 +372,10 @@ export function pinnedSigner(fingerprint, signAsync) {
       );
     await signAsync({
       ...options,
-      optionsForFile: widgetOptionsForFile(options.app, options.optionsForFile),
+      optionsForFile: relayCliOptionsForFile(
+        options.app,
+        widgetOptionsForFile(options.app, options.optionsForFile),
+      ),
       identity: pin,
       // We validate the full fingerprint ourselves. Name discovery would permit
       // a different same-name certificate; codesign still validates/signs normally.
@@ -529,6 +563,10 @@ async function main() {
     });
   const { build, Platform, Arch } = await import("electron-builder");
   const { signAsync } = await import("@electron/osx-sign");
+  // The gateway's binary for each architecture, before electron-builder touches
+  // node-pty; its afterPack hook copies it into the bundle (relay-binary.mjs).
+  if (!options.skipBuild)
+    for (const step of plan) buildRelayBinary("darwin", step.arch, root);
   for (const step of plan) {
     try {
       // electron-builder merges this config with package.json's "build",

@@ -72,6 +72,11 @@ jobs:
           node-version: 24
           cache: npm
 
+      # The gateway runs as the Rust `relay` binary (relay __gateway), packaged with the app.
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: 1.97.1
+
       - run: npm ci
 
       - name: Verify types and tests
@@ -82,7 +87,10 @@ jobs:
       - name: Build ${{ matrix.name }} assets
         run: |
           npm run build
+          # electron-builder's afterPack hook copies it into the app (scripts/relay-binary.mjs).
+          node scripts/relay-binary.mjs --arch x64
           npx electron-builder ${{ matrix.target }} --x64 --publish never
+          node scripts/smoke-gateway.mjs
         env:
           # No certificate on these runners: the installer and AppImage are unsigned; updates
           # are trusted through the signed SHA256SUMS.txt instead.

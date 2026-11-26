@@ -16,7 +16,6 @@ import { pathToFileURL } from "node:url";
 import { DesktopManager, type DesktopHost } from "../../electron/core/desktop";
 import { jsonBytes, writeBytes } from "../../electron/core/desktop-files";
 import { writePrivateJson } from "../../electron/core/continuation-journal";
-import { acquireProfileLock } from "../../electron/core/profile-lock";
 import { STATE_SCHEMA, Store } from "../../electron/core/store";
 import { credentialService } from "../../electron/core/usage-credentials";
 import { createSealer } from "../../electron/core/vault-crypto";
@@ -576,15 +575,17 @@ export async function buildFixtureHome(
   };
   writePrivateJson(path.join(data, STATUSLINE_FILE), statusline);
 
-  // Busy and interrupted states. A held lock names a live process and a start in the future, so
-  // it is never stale and its age always reads 0 s.
+  // Busy and interrupted states. A held lock names a live process (this one) and a start far
+  // ahead of any real clock: a lock is stale once its holder began after it was written, and
+  // the holder starts at real time while the fixture's clock is pinned. Its age reads 0 s.
+  const HELD_SINCE = "2099-01-01T00:00:00.000Z";
   const lockInfo = (by: "app" | "cli", kind: string) =>
     JSON.stringify({
       pid: holderPid,
       token: "fixture-lock-token",
       by,
       kind,
-      startedAt: new Date(now + HOUR).toISOString(),
+      startedAt: HELD_SINCE,
     });
   if (scenarios.has("state-lock"))
     fs.writeFileSync(path.join(data, "state.lock"), lockInfo("app", "state"), {
@@ -596,12 +597,23 @@ export async function buildFixtureHome(
       lockInfo("app", "switch"),
       { mode: 0o600 },
     );
-  if (scenarios.has("profile-lock"))
-    acquireProfileLock(
-      path.join(data, "profiles", ".locks"),
-      work.id,
-      "exclusive",
+  if (scenarios.has("profile-lock")) {
+    // As acquireProfileLock writes it, with the start above.
+    const locks = path.join(data, "profiles", ".locks", work.id);
+    fs.mkdirSync(locks, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(
+      path.join(
+        locks,
+        `${holderPid}-4d1b8289-c85d-40f9-957c-2da59172021e.json`,
+      ),
+      JSON.stringify({
+        pid: holderPid,
+        kind: "exclusive",
+        startedAt: HELD_SINCE,
+      }),
+      { mode: 0o600 },
     );
+  }
   if (scenarios.has("pending")) {
     const pendingId = "44444444-4444-4444-8444-444444444444";
     store.update((s) => {
