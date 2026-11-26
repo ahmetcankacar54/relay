@@ -98,9 +98,12 @@ fn a_held_lock_is_touched_and_a_replaced_one_is_left_alone() {
     set_times(&file, old).unwrap();
     lock.touch();
     assert!(fs::metadata(&file).unwrap().modified().unwrap() > old);
-    // Someone else's lock under the same name now: neither touched nor removed.
-    fs::remove_dir(&file).unwrap();
+    // Someone else's lock under the same name now: neither touched nor removed. The old one is
+    // moved aside first so the new directory cannot reuse its inode (ext4 and tmpfs do).
+    let aside = dir.path().join("z.lock.old");
+    fs::rename(&file, &aside).unwrap();
     fs::create_dir(&file).unwrap();
+    fs::remove_dir(&aside).unwrap();
     set_times(&file, old).unwrap();
     lock.touch();
     assert_eq!(fs::metadata(&file).unwrap().modified().unwrap(), old);

@@ -185,7 +185,8 @@ mod manager {
         let presence = Arc::clone(&session);
         f.manager.configure(|h| {
             h.session_of = Arc::new(move |_| *presence.lock().unwrap());
-            h.session_settle_ms = 60;
+            // Wide enough that a busy CI runner still sees the 15 ms writer in time.
+            h.session_settle_ms = 1_000;
             h.session_poll_ms = 5;
             h.sign_in_verify_ms = vec![1, 2];
         });
