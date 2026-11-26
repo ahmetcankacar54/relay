@@ -375,7 +375,7 @@ pub fn dispatch(channel: &str, call: &Call) -> IpcResult {
     {
         match channel {
             "relay:panel-snapshot" => crate::smoke::page_ready(),
-            "relay:snapshot" => crate::smoke::snapshot_called(value),
+            "relay:snapshot" => crate::smoke::snapshot_called(value, call.arg(0)),
             _ => {}
         }
     }

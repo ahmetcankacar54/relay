@@ -110,7 +110,13 @@ async function main() {
   const resultFile = path.join(dir, "smoke-result.json");
   const env = { ...(await isolatedEnv(dir)), RELAY_SMOKE_RESULT: resultFile };
   const started = Date.now();
-  const child = spawn(app, [], { stdio: "inherit", env });
+  // stderr is kept for the report: a smoke build says there which call failed or was refused.
+  const child = spawn(app, [], { stdio: ["ignore", "inherit", "pipe"], env });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    stderr = (stderr + chunk).slice(-64_000);
+  });
   const timer = setTimeout(() => {
     console.error(`Relay did not exit within ${TIMEOUT_MS / 1000} s; killing it.`);
     child.kill("SIGKILL");
@@ -137,13 +143,19 @@ async function main() {
 
   if (problems.length) {
     console.error(problems.join("\n"));
+    console.error(
+      stderr.trim()
+        ? `Relay's stderr (last 64 kB):\n${stderr.trimEnd()}`
+        : "Relay wrote nothing to stderr.",
+    );
     console.error(`Test folder kept at ${dir}`);
     process.exitCode = 1;
     return;
   }
   console.log(
     `PASS: Relay booted, its page answered snapshot through the bridge (${result.accounts} accounts) ` +
-      `and it exited cleanly in ${seconds} s (${process.platform}-${process.arch}).`,
+      `and it exited cleanly in ${seconds} s (${process.platform}-${process.arch}). ` +
+      `Isolation: ${JSON.stringify(result.isolation)}`,
   );
   // WebView helper processes can hold files a moment after the exit, Windows longest.
   await fs
