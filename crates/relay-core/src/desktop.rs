@@ -866,28 +866,31 @@ impl DesktopManager {
     /// Desktop for observers, which never decide a quit, launch or write: concurrent callers
     /// share one reading, reused for DESKTOP_CACHE_MS and dropped by every Desktop operation.
     pub fn cached_snapshot(&self) -> DesktopResult<DesktopState> {
-        let shared = self.st().shared.clone();
-        let reused = shared
-            .as_ref()
-            .filter(|entry| {
-                let age = self.now() - entry.at;
-                (0..DESKTOP_CACHE_MS).contains(&age)
-            })
-            .cloned();
-        let reading = match &reused {
+        let now = self.now();
+        // Looked up and, when none is fresh, installed under one lock: concurrent callers
+        // never begin a reading each.
+        let (entry, reused) = {
+            let mut st = self.st();
+            match st
+                .shared
+                .as_ref()
+                .filter(|entry| (0..DESKTOP_CACHE_MS).contains(&(now - entry.at)))
+            {
+                Some(entry) => (Arc::clone(entry), true),
+                None => (Self::install(&mut st, now), false),
+            }
+        };
+        let reading = if reused {
             // Shared with the reading under way; one that has not begun yet is made here.
-            Some(entry) => entry
+            entry
                 .cell
                 .get_or_init(|| self.read(|| self.host.seems_running()))
-                .clone()?,
-            None => self.track(|| self.host.seems_running())?,
+                .clone()?
+        } else {
+            self.settle(&entry, || self.host.seems_running())?
         };
         let state = self.state_of(&reading);
-        Ok(if reused.is_some() {
-            state
-        } else {
-            self.observed(state)
-        })
+        Ok(if reused { state } else { self.observed(state) })
     }
 
     /// Tells `on_state` about a state just read; a hook that fails changes nothing.
@@ -904,18 +907,33 @@ impl DesktopManager {
         &self,
         running: impl FnOnce() -> DesktopResult<bool>,
     ) -> DesktopResult<DesktopReading> {
+        let entry = Self::install(&mut self.st(), self.now());
+        self.settle(&entry, running)
+    }
+
+    /// A new reading, shared from now on.
+    fn install(st: &mut ManagerState, at: i64) -> Arc<SharedReading> {
         let entry = Arc::new(SharedReading {
-            at: self.now(),
+            at,
             cell: OnceLock::new(),
         });
-        self.st().shared = Some(Arc::clone(&entry));
+        st.shared = Some(Arc::clone(&entry));
+        entry
+    }
+
+    /// Makes the installed reading; a failed one is no longer shared.
+    fn settle(
+        &self,
+        entry: &Arc<SharedReading>,
+        running: impl FnOnce() -> DesktopResult<bool>,
+    ) -> DesktopResult<DesktopReading> {
         let result = entry.cell.get_or_init(|| self.read(running)).clone();
         if result.is_err() {
             let mut st = self.st();
             if st
                 .shared
                 .as_ref()
-                .is_some_and(|shared| Arc::ptr_eq(shared, &entry))
+                .is_some_and(|shared| Arc::ptr_eq(shared, entry))
             {
                 st.shared = None;
             }

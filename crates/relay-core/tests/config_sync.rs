@@ -1,9 +1,12 @@
-//! Port of `tests/config-sync.test.ts`. Skipped: "a Desktop switch carries account A's MCP server
-//! into account B's profile" (DesktopManager, the Desktop port) and "Settings → Switching shows
-//! the four choices…" (React UI).
+//! Port of `tests/config-sync.test.ts`. Skipped: "Settings → Switching shows the four choices…"
+//! (React UI).
+
+#[path = "common/desktop.rs"]
+mod desktop_fixture;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 
 use relay_core::config_sync::{
@@ -463,4 +466,45 @@ fn the_setting_is_off_by_default_and_a_patch_takes_all_four_choices() {
     let mut extra = all.clone();
     extra["oauth"] = json!(true);
     assert!(patch.parse(&json!({ "configSync": extra })).is_err());
+}
+
+#[test]
+fn a_desktop_switch_carries_account_as_mcp_server_into_account_bs_profile() {
+    let f = desktop_fixture::Fixture::new();
+    let events: Arc<Mutex<Vec<String>>> = Arc::default();
+    let sink = Arc::clone(&events);
+    f.manager.configure(|h| {
+        h.on_draft_event = Some(Arc::new(move |event: &str, _| {
+            sink.lock().unwrap().push(event.to_string())
+        }))
+    });
+    let a = f.account("Vertex", None);
+    let b = f.account("Alto", None); // Alto is open in Claude
+    f.manager.switch_to(&a.id, Default::default()).unwrap();
+    write(
+        &f.store.profile(&a.id).unwrap().join(".claude.json"),
+        json!({ "mcpServers": { "vertex": vertex() } }),
+        None,
+    );
+
+    // Off by default: the switch to B leaves B's profile alone.
+    f.manager.switch_to(&b.id, Default::default()).unwrap();
+    assert!(
+        !f.store
+            .profile(&b.id)
+            .unwrap()
+            .join(".claude.json")
+            .exists()
+    );
+
+    f.manager.switch_to(&a.id, Default::default()).unwrap();
+    f.store
+        .update(|s| s.settings.config_sync = Some(only(|c| c.mcp_servers = true)))
+        .unwrap();
+    f.manager.switch_to(&b.id, Default::default()).unwrap();
+    assert_eq!(
+        read_json(&f.store.profile(&b.id).unwrap().join(".claude.json"))["mcpServers"],
+        json!({ "vertex": vertex() })
+    );
+    assert!(events.lock().unwrap().iter().any(|e| e == "config-sync"));
 }

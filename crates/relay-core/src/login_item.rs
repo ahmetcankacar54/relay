@@ -36,10 +36,11 @@ pub struct LoginItemHost<'a> {
 }
 
 /// `$XDG_CONFIG_HOME/autostart/relay.desktop`, or `~/.config/autostart/relay.desktop` when the
-/// variable is unset or not absolute, as the XDG base directory spec says.
+/// variable is unset or not absolute, as the XDG base directory spec says. `has_root` is Node's
+/// `path.isAbsolute`: on Windows a leading separator counts too.
 pub fn autostart_file(env: &BTreeMap<String, String>, home: &Path) -> PathBuf {
     let config = match env.get("XDG_CONFIG_HOME") {
-        Some(configured) if !configured.is_empty() && Path::new(configured).is_absolute() => {
+        Some(configured) if !configured.is_empty() && Path::new(configured).has_root() => {
             PathBuf::from(configured)
         }
         _ => home.join(".config"),

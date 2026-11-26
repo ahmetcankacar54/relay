@@ -1,10 +1,10 @@
-//! Port of `tests/provider-usage.test.ts`: its provider-usage cases. The plan cases
-//! (`claudePlan`, `readProfileIdentity`/`authStatus`) are the Store slice's profile-identity, and
-//! the startup plan case drives `Service`.
+//! Port of `tests/provider-usage.test.ts`: its provider-usage cases and the Claude plan cases
+//! (`claudePlan`, `readProfileIdentity`/`authStatus`). The startup plan case drives `Service`.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use relay_core::profile_identity::{auth_status, claude_plan, read_profile_identity};
 use relay_core::provider_credentials::{CodexCredential, CodexCredentialKind};
 use relay_core::provider_usage::{
     ANTIGRAVITY_READ_MS, ANTIGRAVITY_SUMMARY_AGENT, AntigravityRequest, FetchFn, FetchedResponse,
@@ -14,8 +14,8 @@ use relay_core::provider_usage::{
 };
 use relay_core::shared::types::js::{date_parse, iso};
 use relay_core::shared::types::{
-    AccountAuth, AccountKind, AccountProvider, CreateAccount, ModelWindow, ModelWindowPeriod,
-    UsageIssue, UsageStatus, UsageWindow,
+    AccountAuth, AccountKind, AccountPlan, AccountProvider, CreateAccount, ModelWindow,
+    ModelWindowPeriod, UsageIssue, UsageStatus, UsageWindow,
 };
 use relay_core::store::{Store, StoreOptions};
 use relay_core::usage::{UsageLimits, UsageManager, UsageManagerDeps};
@@ -580,6 +580,81 @@ fn an_antigravity_sign_ins_google_plan_comes_from_load_code_assist_the_paid_tier
     );
     assert_eq!(
         read_antigravity_tier(&|_: &AntigravityRequest| Err("down".into()), None),
+        None
+    );
+}
+
+fn plan_of(identity: Value) -> Option<AccountPlan> {
+    claude_plan(identity.as_object().unwrap())
+}
+
+#[test]
+fn the_claude_plan_comes_from_the_sign_ins_rate_limit_tier_the_seats_before_the_organizations() {
+    assert_eq!(
+        plan_of(
+            json!({ "organizationType": "claude_team", "organizationRateLimitTier": "default_raven", "userRateLimitTier": "default_claude_max_5x" })
+        ),
+        Some(AccountPlan::Max5)
+    );
+    assert_eq!(
+        plan_of(
+            json!({ "organizationType": "claude_max", "organizationRateLimitTier": "default_claude_max_20x" })
+        ),
+        Some(AccountPlan::Max20)
+    );
+    assert_eq!(
+        plan_of(
+            json!({ "organizationType": "claude_pro", "organizationRateLimitTier": "default_claude_ai" })
+        ),
+        Some(AccountPlan::Pro)
+    );
+    assert_eq!(
+        plan_of(
+            json!({ "organizationType": "claude_team", "organizationRateLimitTier": "default_raven" })
+        ),
+        Some(AccountPlan::Team)
+    );
+    assert_eq!(plan_of(json!({ "organizationType": "claude_free" })), None);
+}
+
+#[test]
+fn the_detected_plan_is_kept_only_for_the_sign_in_its_metadata_matches() {
+    let root = tempfile::Builder::new()
+        .prefix("relay-plan-")
+        .tempdir()
+        .unwrap();
+    let org = uuid::Uuid::new_v4().to_string();
+    let identity = json!({
+        "accountUuid": uuid::Uuid::new_v4().to_string(),
+        "organizationUuid": org,
+        "emailAddress": "person@example.test",
+        "organizationType": "claude_team",
+        "organizationRateLimitTier": "default_raven",
+        "userRateLimitTier": "default_claude_max_5x",
+    });
+    std::fs::write(
+        root.path().join(".claude.json"),
+        json!({ "oauthAccount": identity }).to_string(),
+    )
+    .unwrap();
+    let metadata = read_profile_identity(root.path());
+    assert_eq!(
+        metadata.as_ref().and_then(|m| m.plan),
+        Some(AccountPlan::Max5)
+    );
+    let status = json!({ "loggedIn": true, "authMethod": "claude.ai", "email": "person@example.test", "orgId": org, "subscriptionType": "team" });
+    assert_eq!(
+        auth_status(&status, None, metadata.as_ref(), "now")
+            .unwrap()
+            .plan,
+        Some(AccountPlan::Max5)
+    );
+    let mut other = status.clone();
+    other["orgId"] = json!(uuid::Uuid::new_v4().to_string());
+    assert_eq!(
+        auth_status(&other, None, metadata.as_ref(), "now")
+            .unwrap()
+            .plan,
         None
     );
 }

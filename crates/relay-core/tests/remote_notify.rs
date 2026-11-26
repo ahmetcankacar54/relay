@@ -261,7 +261,11 @@ fn a_webhook_post_is_json_refuses_redirects_and_reports_its_status() {
             event: RemoteEventName::Test,
             ..leaky()
         },
-        &deps(None, Arc::default(), Arc::default()),
+        // A real connection: 20 ms is too tight for a busy Windows runner's first request.
+        &RemoteDeps {
+            timeout_ms: Some(2_000),
+            ..deps(None, Arc::default(), Arc::default())
+        },
     );
     assert_eq!(result, failed(None, Some("fetch failed")));
     let seen = server.requests();
@@ -286,7 +290,11 @@ fn a_timeout_is_tried_once_more_after_the_backoff_then_reported_never_thrown() {
     let result = post_remote_notice(
         target(&url, RemoteNotifyKind::Ntfy),
         &leaky(),
-        &deps(None, Arc::clone(&logs), Arc::clone(&sleeps)),
+        // Long enough for a busy runner to deliver each request before its try times out.
+        &RemoteDeps {
+            timeout_ms: Some(500),
+            ..deps(None, Arc::clone(&logs), Arc::clone(&sleeps))
+        },
     );
     assert_eq!(result, failed(None, Some("timeout")));
     assert_eq!(server.requests().len(), 2);

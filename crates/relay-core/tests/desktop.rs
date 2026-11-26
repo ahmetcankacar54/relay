@@ -1,10 +1,10 @@
 //! Port of tests/desktop.test.ts.
 //!
-//! Skipped: "50 profiles and 64-character company groups persist…" (Store's), "a host that cannot
-//! read Claude's Electron version captures nothing" (the Electron version gate is gone with the
-//! in-process draft reader, plan Phase 4). Where the TS replaces `fs.rm`/`fs.rename` to inject a
-//! failure, the Rust tests inject it through the switch's own guards (`can_proceed`, the host's
-//! process check) at the same write.
+//! Elsewhere: "50 profiles and 64-character company groups persist…" (core_store.rs). Skipped:
+//! "a host that cannot read Claude's Electron version captures nothing" (the Electron version
+//! gate is gone with the in-process draft reader, plan Phase 4). Where the TS replaces
+//! `fs.rm`/`fs.rename` to inject a failure, the Rust tests inject it through the switch's own
+//! guards (`can_proceed`, the host's process check) at the same write.
 
 #[path = "common/desktop.rs"]
 mod helpers;
