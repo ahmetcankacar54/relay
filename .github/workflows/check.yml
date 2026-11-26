@@ -58,7 +58,7 @@ jobs:
       - run: npm run test:e2e
       - name: Keep the report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-report-${{ matrix.os }}
           path: |
@@ -200,7 +200,7 @@ jobs:
           if [ -n "$failed" ]; then echo "::error::unit parity failed:$failed"; exit 1; fi
       - name: Keep the replay reports
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: parity-reports
           path: |
