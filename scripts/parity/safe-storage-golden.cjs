@@ -6,7 +6,9 @@
 // The app name defaults to "Relay Golden", so no run reads or creates the real Relay's secret.
 // On macOS the Safe Storage password comes from Chromium's mock keychain ("mock_password");
 // on Windows the key is in <tmp dir>/Local State; on Linux it is the keyring secret whose
-// application is <name> (or "peanuts" with no keyring).
+// application is <name> (or "peanuts" with no keyring). CI passes "Relay", the name the Rust
+// unseal looks up, on throwaway runners (crates/relay-core/tests/legacy_unseal.rs).
+// RELAY_GOLDEN_PASSWORD_STORE sets Chromium's --password-store on Linux ("basic" for `v10`).
 // Writes <tmp dir>/golden.bin and <tmp dir>/golden.json, then quits.
 const { app, safeStorage } = require("electron");
 const fs = require("node:fs");
@@ -27,10 +29,19 @@ fs.mkdirSync(dir, { recursive: true });
 if (process.platform === "darwin")
   app.commandLine.appendSwitch("use-mock-keychain");
 app.setName(appName);
+const passwordStore = process.env.RELAY_GOLDEN_PASSWORD_STORE;
+if (process.platform === "linux" && passwordStore)
+  app.commandLine.appendSwitch("password-store", passwordStore);
 app.setPath("userData", dir);
 
 app.whenReady().then(() => {
   app.dock?.hide();
+  // With no keyring (basic_text) Electron seals only after this opt-in, with "peanuts".
+  if (
+    process.platform === "linux" &&
+    safeStorage.getSelectedStorageBackend() === "basic_text"
+  )
+    safeStorage.setUsePlainTextEncryption(true);
   if (!safeStorage.isEncryptionAvailable()) {
     console.error("safe-storage-golden: safeStorage is unavailable.");
     app.exit(1);

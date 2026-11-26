@@ -1,6 +1,7 @@
 //! The pre-v2 vault seal (Electron safeStorage). macOS is checked against real Electron bytes
-//! (`scripts/parity/safe-storage-golden.cjs`); Windows and Linux against vectors built here in
-//! Chromium's OSCrypt layout until their CI golden runs exist.
+//! (`scripts/parity/safe-storage-golden.cjs`, mock keychain, committed); Windows and Linux against
+//! vectors built here in Chromium's OSCrypt layout, and in CI against a blob Electron writes in
+//! the same job (`system_golden_from_env`), since their keys never leave the machine.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -64,6 +65,57 @@ fn macos_golden_from_electron_opens_with_its_safe_storage_password() {
         legacy_unseal(&blob, &mac("another")),
         Err(LegacyUnsealError::Decrypt)
     );
+}
+
+/// A blob `safe-storage-golden.cjs` just wrote on this machine, opened with the system's own key
+/// source: Windows' `Local State` through DPAPI, Linux's keyring (`v11`) or "peanuts" (`v10`).
+/// `RELAY_SAFE_STORAGE_GOLDEN_DIR` is the script's folder, which is also its userData.
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+#[ignore = "needs a blob Electron wrote on this machine (CI job safe-storage-golden)"]
+fn system_golden_from_env() {
+    use relay_core::legacy_unseal::SystemLegacySeal;
+    let dir = std::path::PathBuf::from(
+        std::env::var("RELAY_SAFE_STORAGE_GOLDEN_DIR").expect("RELAY_SAFE_STORAGE_GOLDEN_DIR"),
+    );
+    let meta: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("golden.json")).unwrap()).unwrap();
+    let blob = std::fs::read(dir.join("golden.bin")).unwrap();
+    let plain = meta["plain"].as_str().unwrap();
+    #[cfg(windows)]
+    let source = {
+        assert!(blob.starts_with(b"v10"), "Windows blob prefix");
+        LegacyKeySource::windows_from_local_state(&dir.join("Local State"))
+    };
+    #[cfg(target_os = "linux")]
+    let source = {
+        let source = LegacyKeySource::linux_from_keyring(&|name| std::env::var(name).ok());
+        match meta["backend"].as_str() {
+            Some("basic_text") => assert!(blob.starts_with(b"v10"), "basic_text blob prefix"),
+            Some("gnome_libsecret") => {
+                assert!(blob.starts_with(b"v11"), "libsecret blob prefix");
+                assert!(
+                    matches!(
+                        &source,
+                        LegacyKeySource::Linux {
+                            v11_secret: Some(_)
+                        }
+                    ),
+                    "the keyring holds no secret for application {}",
+                    relay_core::legacy_unseal::LINUX_APP_NAME
+                );
+            }
+            other => panic!("unexpected backend {other:?}"),
+        }
+        source
+    };
+    assert_eq!(legacy_unseal(&blob, &source).unwrap(), plain);
+    // What vault migration uses: the same key source, read from the system on first use.
+    let seal = SystemLegacySeal::new(&dir, None);
+    assert_eq!(seal.unseal(&blob).unwrap(), plain);
+    if cfg!(windows) || blob.starts_with(b"v11") {
+        assert!(seal.available());
+    }
 }
 
 #[test]

@@ -217,3 +217,59 @@ jobs:
             rust/app-cases/replay-report.md
             rust/gateway/rust/app-cases/replay-report.md
           retention-days: 7
+  # The pre-v2 vault seal on Windows and Linux: Electron's safeStorage seals a blob, and the Rust
+  # legacy unseal opens it with the system's own key source, in the same job because the key
+  # (DPAPI, the keyring) never leaves the machine. macOS has a committed golden (mock keychain).
+  safe-storage-golden:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo test -p relay-core --test legacy_unseal --no-run
+      - name: Windows (Local State, DPAPI)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/safe-storage-golden"
+          npx electron scripts/parity/safe-storage-golden.cjs "$dir" Relay
+          cat "$dir/golden.json"
+          RELAY_SAFE_STORAGE_GOLDEN_DIR="$dir" cargo test -p relay-core --test legacy_unseal -- --ignored system_golden_from_env --exact
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb gnome-keyring dbus-x11 libsecret-tools
+          # Ubuntu 24.04's AppArmor refuses the user namespaces Chromium's sandbox uses.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # GNOME's desktop makes Chromium pick libsecret; the unlocked login keyring answers it.
+      - name: Linux v11 (Secret Service)
+        if: runner.os == 'Linux'
+        run: |
+          dbus-run-session -- bash -euo pipefail -c '
+            printf "relay-ci" | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+            export XDG_CURRENT_DESKTOP=GNOME
+            dir="$RUNNER_TEMP/safe-storage-golden-v11"
+            xvfb-run --auto-servernum npx electron scripts/parity/safe-storage-golden.cjs "$dir" Relay
+            cat "$dir/golden.json"
+            secret-tool search --all xdg:schema chrome_libsecret_os_crypt_password_v2 2>&1 | grep -v "^secret = " || true
+            RELAY_SAFE_STORAGE_GOLDEN_DIR="$dir" cargo test -p relay-core --test legacy_unseal -- --ignored system_golden_from_env --exact
+          '
+      - name: Linux v10 (--password-store=basic, "peanuts")
+        if: runner.os == 'Linux'
+        run: |
+          dir="$RUNNER_TEMP/safe-storage-golden-v10"
+          RELAY_GOLDEN_PASSWORD_STORE=basic xvfb-run --auto-servernum npx electron scripts/parity/safe-storage-golden.cjs "$dir" Relay
+          cat "$dir/golden.json"
+          RELAY_SAFE_STORAGE_GOLDEN_DIR="$dir" cargo test -p relay-core --test legacy_unseal -- --ignored system_golden_from_env --exact
