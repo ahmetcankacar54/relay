@@ -16,9 +16,17 @@ const path = require("node:path");
 
 const PLAIN = "relay-golden";
 const MOCK_PASSWORD = "mock_password";
-const dir = process.argv[2] || process.env.RELAY_GOLDEN_DIR;
+// Electron keeps Chromium switches (--no-sandbox) in argv: the operands follow this script.
+const operands = process.argv
+  .slice(
+    process.argv.findIndex(
+      (arg) => path.basename(arg) === path.basename(__filename),
+    ) + 1,
+  )
+  .filter((arg) => !arg.startsWith("--"));
+const dir = operands[0] || process.env.RELAY_GOLDEN_DIR;
 const appName =
-  process.argv[3] || process.env.RELAY_GOLDEN_APP_NAME || "Relay Golden";
+  operands[1] || process.env.RELAY_GOLDEN_APP_NAME || "Relay Golden";
 if (!dir || !path.isAbsolute(dir)) {
   console.error("safe-storage-golden: pass an absolute temp folder.");
   process.exit(2);
