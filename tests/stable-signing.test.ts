@@ -40,6 +40,8 @@ const fingerprint = createHash("sha1")
   .update(certificate)
   .digest("hex")
   .toUpperCase();
+// The signing script runs on macOS; on Windows CI its node:path joins with backslashes.
+const posix = (file: string | undefined) => file?.replaceAll("\\", "/");
 
 test("only the exact pinned, cryptographically self-signed certificate disables server timestamping", async () => {
   const local = await fs.readFile(
@@ -438,7 +440,7 @@ test("signing goes inside out: helper, CLI, widget with its own entitlements, th
   const app = "/out/Relay.app";
   const commands = signingCommands(app, { identity: "-", timestamp: "none" });
   assert.deepEqual(
-    commands.map((args: string[]) => args.at(-1)),
+    commands.map((args: string[]) => posix(args.at(-1))),
     [
       `${app}/Contents/MacOS/desktop-automation`,
       `${app}/Contents/Resources/bin/relay`,
@@ -515,7 +517,9 @@ test("an installed Relay 0.x and the 1.x that replaces it are checked for contin
     verifySigningContinuity(legacy, next, fixture.options.run).verified,
     true,
   );
-  const tested = fixture.calls.slice(before).map((call) => call.args.at(-1));
+  const tested = fixture.calls
+    .slice(before)
+    .map((call) => posix(call.args.at(-1)));
   // Each requirement is tested against the counterpart at its own layout's path.
   assert.ok(
     tested.includes(
@@ -579,7 +583,7 @@ test("arguments: one stable identity or a check-only ad-hoc build", () => {
     /40-character/,
   );
   assert.equal(
-    tauriAppBundle("/w", "x64", true),
+    posix(tauriAppBundle("/w", "x64", true)),
     "/w/target/x86_64-apple-darwin/debug/bundle/macos/Relay.app",
   );
 });
