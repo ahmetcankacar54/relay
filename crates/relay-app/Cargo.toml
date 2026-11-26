@@ -1,0 +1,75 @@
+[package]
+name = "relay-app"
+version = "1.0.0"
+description = "Relay: a menu-bar workspace for multiple Claude accounts."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# Not "Relay": relay-cli's `relay` shares the target directory, and macOS and Windows file systems
+# ignore case, so the two would be one file. The bundles still name it Relay (tauri.conf.json
+# mainBinaryName): Relay.app/Contents/MacOS/Relay and Relay.exe, as the Electron builds did.
+[[bin]]
+name = "relay-app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chrono = "0.4.45"
+indexmap = { version = "2.14.2", features = ["serde"] }
+relay-core = { path = "../relay-core" }
+relay-gateway = { path = "../relay-gateway" }
+relay-i18n = { path = "../relay-i18n" }
+rusty-leveldb = "4.0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+sys-locale = "0.3.2"
+sysinfo = "0.36.1"
+tauri = { version = "2.12", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-clipboard-manager = "2.3.3"
+tauri-plugin-deep-link = "2.4.10"
+tauri-plugin-dialog = "2.7.3"
+tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-notification = "2.4.0"
+tauri-plugin-opener = "2.5.5"
+tauri-plugin-single-instance = "2.4.5"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "time"] }
+url = "2.5.9"
+uuid = { version = "1.26.1", features = ["v4"] }
+
+[features]
+# The pages from dist/ (tauri://localhost) instead of the Vite dev server; `cargo tauri build`
+# turns it on, so does `cargo run --features custom-protocol` after `npm run build:ui`.
+custom-protocol = ["tauri/custom-protocol"]
+# Writes RELAY_SMOKE_RESULT after the main page called `snapshot`, then exits (scripts/smoke-boot.mjs).
+smoke = ["custom-protocol"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSResponder", "NSApplication", "NSRunningApplication", "NSScreen", "NSGraphics"] }
+objc2-foundation = "0.3"
+objc2-user-notifications = "0.3.2"
+swift-rs = "1.0.9"
+tauri-nspanel = "2.1.1"
+window-vibrancy = "0.8.1"
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+swift-rs = { version = "1.0.9", features = ["build"] }
+
+[target."cfg(windows)".dependencies]
+tauri-winrt-notification = "0.7.3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+notify-rust = "4.17.0"
+zbus = "5.13.2"

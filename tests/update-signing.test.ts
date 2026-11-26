@@ -207,6 +207,40 @@ test("the Homebrew cask points at the DMGs the release uploads, per architecture
   );
 });
 
+test("from 1.0 the cask links the relay CLI the Tauri app carries and needs macOS 14", () => {
+  const sums = `${hex("arm")}  Relay-1.0.0-arm64.dmg\n${hex("intel")}  Relay-1.0.0-x64.dmg\n`;
+  const tauri = caskFromSums("1.0.0", sums);
+  // The path tauri-stable-signing.mjs copies the CLI to; Homebrew links it as `relay`.
+  assert.match(
+    tauri,
+    /\n {2}app "Relay\.app"\n {2}binary "#\{appdir\}\/Relay\.app\/Contents\/Resources\/bin\/relay"\n\n {2}zap trash: \[/,
+  );
+  assert.match(tauri, /depends_on macos: :sonoma\n/);
+  assert.match(
+    tauri,
+    /"~\/Library\/Saved Application State\/dev\.relay\.workspace\.savedState",\n {4}"~\/Library\/WebKit\/dev\.relay\.workspace",\n {2}\]/,
+  );
+  // An Electron release keeps its cask as it was.
+  const electron = caskFromSums("0.29.0", sums.replaceAll("1.0.0", "0.29.0"));
+  assert.doesNotMatch(electron, /binary |WebKit|sonoma/);
+  assert.match(electron, /\n {2}app "Relay\.app"\n\n {2}zap trash: \[/);
+  assert.match(electron, /depends_on macos: :ventura\n/);
+  assert.equal(
+    tauri,
+    electron
+      .replaceAll("0.29.0", "1.0.0")
+      .replace(":ventura", ":sonoma")
+      .replace(
+        '  app "Relay.app"\n',
+        '  app "Relay.app"\n  binary "#{appdir}/Relay.app/Contents/Resources/bin/relay"\n',
+      )
+      .replace(
+        'savedState",\n',
+        'savedState",\n    "~/Library/WebKit/dev.relay.workspace",\n',
+      ),
+  );
+});
+
 test("the cask in packaging/homebrew is the renderer's output for a real release", () => {
   const cask = fs.readFileSync(
     path.join(import.meta.dirname, "../packaging/homebrew/Casks/relay.rb"),

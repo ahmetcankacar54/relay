@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "relay-windows",
+  "description": "Relay's own windows (main, menu bar panel, switch overlay) showing the bundled pages may call the two relay commands and hear their events. Sign-in and quiet renewal windows get nothing.",
+  "local": true,
+  "windows": ["main", "panel", "switch"],
+  "permissions": ["core:event:default", "allow-relay-invoke", "allow-relay-send"]
+}

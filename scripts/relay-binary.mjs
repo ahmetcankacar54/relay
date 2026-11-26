@@ -32,11 +32,15 @@ export function relayTarget(platform, arch) {
 export const relayBinaryName = (platform) =>
   platform === "win32" ? "relay.exe" : "relay";
 
-/** Where cargo leaves the release build for a platform and architecture. */
-export function relayBinary(platform, arch, base = root) {
+/**
+ * Where cargo leaves the release build for a platform and architecture. The Tauri packages build
+ * it in a target directory of its own (scripts/tauri-build.mjs CLI_TARGET_DIR): `tauri build`
+ * writes the app as target/<triple>/release/Relay, which a case-insensitive disk takes for relay.
+ */
+export function relayBinary(platform, arch, base = root, targetDir = "target") {
   return path.join(
     base,
-    "target",
+    targetDir,
     relayTarget(platform, arch),
     "release",
     relayBinaryName(platform),
@@ -48,6 +52,7 @@ export function buildRelayBinary(
   platform = process.platform,
   arch = process.arch,
   base = root,
+  targetDir = "target",
 ) {
   execFileSync(
     "cargo",
@@ -58,13 +63,15 @@ export function buildRelayBinary(
       "--release",
       "--target",
       relayTarget(platform, arch),
+      "--target-dir",
+      path.join(base, targetDir),
     ],
     {
       cwd: base,
       stdio: "inherit",
     },
   );
-  return relayBinary(platform, arch, base);
+  return relayBinary(platform, arch, base, targetDir);
 }
 
 /** electron-builder's afterPack: the binary goes to <resources>/bin, executable. */

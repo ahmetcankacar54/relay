@@ -163,7 +163,7 @@ struct DiagnosisCache {
 }
 
 pub struct Service {
-    pub store: Store,
+    pub store: Arc<Store>,
     pub runner: Runner,
     pub auth: AuthManager,
     /// Sign-ins made for the terminal: `claude auth login` in a scratch folder per account, so
@@ -191,7 +191,8 @@ impl Service {
     pub const REDIAGNOSE_MS: i64 = 20_000;
 
     pub fn new(options: ServiceOptions) -> Result<Arc<Self>, StoreError> {
-        let store = Store::open(options.root, options.store_options)?;
+        // Shared: the app's managers (Desktop, usage, auto-switch) hold the same store.
+        let store = Arc::new(Store::open(options.root, options.store_options)?);
         let emit_auth: Arc<EmitAuth> = options.emit_auth.unwrap_or_else(|| Arc::new(|_| {}));
         let open: Arc<OpenUrl> = options.open_browser.unwrap_or_else(|| Arc::new(|_| Ok(())));
         let lock = options.profile_lock;

@@ -79,6 +79,10 @@ for (const [variant, color] of [
     const name = variant === "template" ? "trayTemplate" : "tray";
     await writeFile(path.join(assets, `${name}${suffix}.png`), png);
     trayImages[variant].push({ scaleFactor, png: png.toString("base64") });
+    // The Tauri app embeds the same images as PNG files (crates/relay-app/src/tray.rs).
+    const tauriTray = path.join(root, "crates", "relay-app", "icons", "tray");
+    await mkdir(tauriTray, { recursive: true });
+    await writeFile(path.join(tauriTray, `icon-${variant}@${scaleFactor}x.png`), png);
   }
 }
 await writeFile(

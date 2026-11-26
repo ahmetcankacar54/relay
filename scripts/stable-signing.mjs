@@ -15,7 +15,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildRelayBinary } from "./relay-binary.mjs";
 
-const appIdentifier = "dev.relay.workspace";
+export const APP_IDENTIFIER = "dev.relay.workspace";
+const appIdentifier = APP_IDENTIFIER;
 /** The widget extension, inside the app; it alone is sandboxed. */
 export const WIDGET_RELATIVE = "Contents/PlugIns/RelayWidget.appex";
 export const WIDGET_ENTITLEMENTS = fileURLToPath(
@@ -28,7 +29,8 @@ export const RELAY_CLI_IDENTIFIER = `${appIdentifier}.relay-cli`;
 export const APP_ENTITLEMENTS = fileURLToPath(
   new URL("../build/entitlements.mac.plist", import.meta.url),
 );
-const permissionTargets = [
+/** The permission-relevant code of the Electron bundle; Tauri's is in tauri-stable-signing.mjs. */
+export const permissionTargets = [
   { relative: "", identifier: appIdentifier },
   ...["desktop-automation"].map((name) => ({
     relative: `Contents/Resources/app.asar.unpacked/dist-electron/${name}`,
@@ -256,9 +258,14 @@ function execute(file, args) {
   return `${result.stdout}\n${result.stderr}`;
 }
 
-/** Verifies permission-relevant binaries against the pinned public certificate. */
+/**
+ * Verifies permission-relevant binaries against the pinned public certificate. `options.targets`
+ * names another bundle layout's targets; `options.adHoc` checks a local ad-hoc build instead
+ * (no certificate, so no fingerprint and no designated requirement to read).
+ */
 export async function inspectStableSigning(bundle, fingerprint, options = {}) {
-  const pin = normalizeSigningFingerprint(fingerprint);
+  const adHoc = options.adHoc === true;
+  const pin = adHoc ? undefined : normalizeSigningFingerprint(fingerprint);
   const run = options.run || execute;
   const read = options.readFile || fs.readFile;
   const root = path.resolve(bundle);
@@ -270,7 +277,9 @@ export async function inspectStableSigning(bundle, fingerprint, options = {}) {
     // --deep is verification only. The signing library signs nested code inside out.
     run("/usr/bin/codesign", ["--verify", "--deep", "--strict", root]);
     const targets = [];
-    for (const [index, target] of permissionTargets.entries()) {
+    for (const [index, target] of (
+      options.targets ?? permissionTargets
+    ).entries()) {
       const file = path.join(root, target.relative);
       run("/usr/bin/codesign", ["--verify", "--strict", file]);
       const details = run("/usr/bin/codesign", [
@@ -280,7 +289,7 @@ export async function inspectStableSigning(bundle, fingerprint, options = {}) {
       ]);
       if (
         details.match(/^Identifier=(.+)$/m)?.[1] !== target.identifier ||
-        details.includes("Signature=adhoc") ||
+        details.includes("Signature=adhoc") !== adHoc ||
         details.includes("linker-signed") ||
         (target.infoPlist !== false &&
           details.includes("Info.plist=not bound")) ||
@@ -289,6 +298,14 @@ export async function inspectStableSigning(bundle, fingerprint, options = {}) {
         throw new Error(
           `Invalid stable signing metadata for ${target.identifier}.`,
         );
+      if (adHoc) {
+        targets.push({
+          relative: target.relative,
+          identifier: target.identifier,
+          cdHash: details.match(/^CDHash=(.+)$/m)?.[1],
+        });
+        continue;
+      }
       const prefix = path.join(directory, `certificate-${index}-`);
       run("/usr/bin/codesign", [
         "--display",
@@ -322,7 +339,12 @@ export async function inspectStableSigning(bundle, fingerprint, options = {}) {
         cdHash: details.match(/^CDHash=(.+)$/m)?.[1],
       });
     }
-    return { bundle: root, verified: true, signing: "certificate", targets };
+    return {
+      bundle: root,
+      verified: true,
+      signing: adHoc ? "ad-hoc" : "certificate",
+      targets,
+    };
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
@@ -333,8 +355,9 @@ export function verifySigningContinuity(previous, next, run = execute) {
   if (previous.bundle === next.bundle)
     throw new Error("Continuity requires two separately retained app bundles.");
   for (const prior of previous.targets) {
+    // By identity, not path: a layout change (Electron to Tauri) keeps each identifier.
     const current = next.targets.find(
-      (target) => target.relative === prior.relative,
+      (target) => target.identifier === prior.identifier,
     );
     if (
       !current ||
@@ -459,12 +482,13 @@ export function architectureFailure(arch, cause) {
   );
 }
 
-async function main() {
-  if (process.platform !== "darwin")
-    throw new Error("Stable macOS signing requires macOS.");
-  const options = parseArguments(process.argv.slice(2));
-  const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-  if (!options.identity) {
+/**
+ * The pinned identity to sign with: `fingerprint`, or config/local-signing.json's. Only an
+ * existing, valid Code Signing identity in the Keychain search list; never ad hoc.
+ */
+export async function pinnedIdentity(root, fingerprint) {
+  let pin = fingerprint;
+  if (!pin) {
     const file = path.join(root, "config/local-signing.json");
     let config;
     try {
@@ -480,9 +504,7 @@ async function main() {
     }
     if (config.version !== 1)
       throw new Error("Unsupported local signing configuration version.");
-    options.identity = normalizeSigningFingerprint(
-      config.certificateFingerprint,
-    );
+    pin = normalizeSigningFingerprint(config.certificateFingerprint);
   }
   // This command uses an existing identity. Importing a certificate or opening a
   // different signing keychain is a separate user action, never a build side effect.
@@ -500,20 +522,12 @@ async function main() {
     "-p",
     "codesigning",
   ]);
-  const identity = findPinnedSigningIdentity(listing, options.identity);
-  const prior = options.previous
-    ? await inspectStableSigning(options.previous, identity.fingerprint)
-    : undefined;
-  if (options.verify) {
-    const report = await inspectStableSigning(
-      options.verify,
-      identity.fingerprint,
-    );
-    if (prior) report.continuity = verifySigningContinuity(prior, report);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    return;
-  }
-  const timestampPolicy = publicCertificateSigningPolicy(
+  return findPinnedSigningIdentity(listing, pin);
+}
+
+/** Whether codesign asks a timestamp server: not for a self-signed certificate. */
+export function signingTimestampPolicy(identity) {
+  return publicCertificateSigningPolicy(
     execute("/usr/bin/security", [
       "find-certificate",
       "-a",
@@ -523,15 +537,19 @@ async function main() {
     ]),
     identity.fingerprint,
   );
-  const output = path.resolve(root, options.output);
+}
+
+/** `output` resolved, required to be inside the workspace's release directory, symlinks too. */
+export async function releaseOutput(root, output) {
+  const resolved = path.resolve(root, output);
   const release = path.join(root, "release");
-  if (!output.startsWith(`${release}${path.sep}`))
+  if (!resolved.startsWith(`${release}${path.sep}`))
     throw new Error(
       "Build output must be a directory inside this workspace's release directory.",
     );
   // Packaging stays inside the workspace even if an existing path is a symlink.
   const realRoot = await fs.realpath(root);
-  let existing = output;
+  let existing = resolved;
   while (true) {
     try {
       const realExisting = await fs.realpath(existing);
@@ -548,6 +566,29 @@ async function main() {
       existing = parent;
     }
   }
+  return resolved;
+}
+
+async function main() {
+  if (process.platform !== "darwin")
+    throw new Error("Stable macOS signing requires macOS.");
+  const options = parseArguments(process.argv.slice(2));
+  const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+  const identity = await pinnedIdentity(root, options.identity);
+  const prior = options.previous
+    ? await inspectStableSigning(options.previous, identity.fingerprint)
+    : undefined;
+  if (options.verify) {
+    const report = await inspectStableSigning(
+      options.verify,
+      identity.fingerprint,
+    );
+    if (prior) report.continuity = verifySigningContinuity(prior, report);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+  const timestampPolicy = signingTimestampPolicy(identity);
+  const output = await releaseOutput(root, options.output);
   const { version } = JSON.parse(
     await fs.readFile(path.join(root, "package.json"), "utf8"),
   );
@@ -631,7 +672,7 @@ async function main() {
  * no download, and the copy keeps the app's signature intact. The image itself
  * is not signed.
  */
-async function createDiskImage(bundle, image) {
+export async function createDiskImage(bundle, image) {
   const staging = await fs.mkdtemp(path.join(os.tmpdir(), "relay-dmg-"));
   try {
     execFileSync("/usr/bin/ditto", [bundle, path.join(staging, "Relay.app")]);
@@ -666,7 +707,7 @@ async function createDiskImage(bundle, image) {
  * Replace /Applications/Relay.app with the verified bundle. Keeping one install
  * location and one certificate keeps macOS permissions across updates.
  */
-function installBundle(bundle) {
+export function installBundle(bundle) {
   const target = "/Applications/Relay.app";
   const staged = "/Applications/.Relay.app.installing";
   const previous = "/Applications/.Relay.app.previous";

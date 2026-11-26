@@ -4,8 +4,9 @@ name: Release
 # (signed when the RELAY_UPDATE_SIGNING_KEY secret is set), to a DRAFT release. The signed macOS
 # DMGs need the local certificate, so they are added from the Mac with `npm run release`, which
 # re-signs the combined checksums and publishes. See docs/development.md, "Releasing".
-# A beta tag (vX.Y.Z-beta.N, scripts/release-channel.mjs) makes a pre-release draft, and
-# electron-builder writes its updater files as beta.yml and beta-linux.yml.
+# A beta tag (vX.Y.Z-beta.N, scripts/release-channel.mjs) makes a pre-release draft, and its
+# updater files are beta.yml and beta-linux.yml. A 0.x tag builds the Electron app with
+# electron-builder; v1.0.0 and later the Tauri app (crates/relay-app, scripts/tauri-build.mjs).
 on:
   push:
     tags:
@@ -67,6 +68,29 @@ jobs:
           ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
 
+      # Relay 1.0 and later is the Tauri app (crates/relay-app); a 0.x tag keeps the Electron build.
+      # The Tauri installers carry the names, and get the latest.yml / latest-linux.yml, that a 0.x
+      # install's electron-updater looks for (scripts/tauri-build.mjs, electron-update-yml.mjs).
+      - name: Pick the app shell
+        id: shell
+        run: |
+          if [[ "$TAG" == v0.* ]]; then
+            echo "tauri=false" >> "$GITHUB_OUTPUT"
+          else
+            conf=$(node -p "require('./crates/relay-app/tauri.conf.json').version")
+            if [ "v$conf" != "$TAG" ]; then
+              echo "crates/relay-app/tauri.conf.json is at $conf, not ${TAG#v}." >&2
+              exit 1
+            fi
+            echo "tauri=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tauri's Linux libraries
+        if: steps.shell.outputs.tauri == 'true' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libdbus-1-dev pkg-config
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
@@ -85,6 +109,7 @@ jobs:
           npm test
 
       - name: Build ${{ matrix.name }} assets
+        if: steps.shell.outputs.tauri != 'true'
         run: |
           npm run build
           # electron-builder's afterPack hook copies it into the app (scripts/relay-binary.mjs).
@@ -95,6 +120,15 @@ jobs:
           # No certificate on these runners: the installer and AppImage are unsigned; updates
           # are trusted through the signed SHA256SUMS.txt instead.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      # Unsigned too, for the same reason. Writes release/Relay-Setup-<v>-x64.exe and latest.yml,
+      # or release/Relay-<v>-x86_64.AppImage and latest-linux.yml (beta.yml, beta-linux.yml).
+      - name: Build ${{ matrix.name }} assets (Tauri)
+        if: steps.shell.outputs.tauri == 'true'
+        run: node scripts/tauri-build.mjs --output release
+        env:
+          # linuxdeploy, an AppImage itself, then runs without FUSE.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

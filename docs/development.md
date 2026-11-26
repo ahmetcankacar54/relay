@@ -261,6 +261,30 @@ and Linux updater files are `beta.yml` and `beta-linux.yml`, which
 `npm run release` requires instead of the `latest` ones, and no Homebrew cask is
 written. Only Relays with Settings → Updates → "Get pre-releases" on install it.
 
+From 1.0.0 the app is the Tauri build (`crates/relay-app`); a `v0.x` tag still
+builds the Electron app. The version is `crates/relay-app/tauri.conf.json`'s, and
+both the workflow and `npm run release` refuse a tag that differs from it.
+
+- Windows and Linux: `npm run tauri:build` (`scripts/tauri-build.mjs`) bundles
+  NSIS or the AppImage, renames it to the names above, and writes `latest.yml` /
+  `latest-linux.yml` (`scripts/electron-update-yml.mjs`) so a Relay 0.x's
+  electron-updater finds and installs it (a full download: there is no
+  blockmap). The relay CLI is in the app's resources, `bin/relay(.exe)`. The
+  installer is per user; its hook (`crates/relay-app/windows/installer-hooks.nsh`)
+  silently uninstalls the Electron build's per-user install first, keeping
+  `%APPDATA%\Relay`. Relay 1.x updates itself by running the installer with
+  `/S /UPDATE /R`; `/R` reopens Relay afterwards.
+- macOS: `node scripts/tauri-stable-signing.mjs` builds `Relay.app`, adds
+  `desktop-automation` (`Contents/MacOS`), the relay CLI
+  (`Contents/Resources/bin/relay`, where Relay 0.29 had it; the cask links it)
+  and the widget, signs them inside out with the pinned certificate and makes
+  `Relay-<version>-<arch>.dmg`. Same bundle id, name, certificate and DMG names,
+  so a Relay 0.x installs it in place. `--ad-hoc` builds an ad-hoc signed copy
+  for checking only (no `--install`).
+- The relay CLI is built into `target/cli`: `tauri build` writes the app as
+  `target/<triple>/<profile>/Relay`, which a case-insensitive disk takes for
+  the CLI's `relay`.
+
 How the updates are trusted:
 
 - macOS: Relay downloads the DMG for its own architecture (`process.arch`),

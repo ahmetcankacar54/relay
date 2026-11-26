@@ -7,6 +7,8 @@
  * Enforces the industry best practice:
  * 1. Pre-flight checks: clean git tree, on main branch, typecheck and test verification.
  * 2. Builds local release artifacts (signed macOS DMGs for Apple silicon and Intel, install notes).
+ *    A 1.x version builds the Tauri app (scripts/tauri-stable-signing.mjs, version from
+ *    crates/relay-app/tauri.conf.json); a 0.x one the Electron app (scripts/stable-signing.mjs).
  * 3. Writes SHA256SUMS.txt over these and the files already on the release (verified), signs it
  *    with the update signing key (SHA256SUMS.txt.sig) and renders the Homebrew cask.
  * 4. Creates the GitHub release as a DRAFT first and uploads all assets.
@@ -23,9 +25,10 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { caskFromSums, dmgName, TAP_CASK } from "./homebrew-cask.mjs";
+import { caskFromSums, dmgName, isTauriVersion, TAP_CASK } from "./homebrew-cask.mjs";
 import { releaseAssetNames, SIGNATURE_NAME, SUMS_NAME, writeReleaseSums } from "./update-signing.mjs";
 import { releaseChannel } from "./release-channel.mjs";
+import { tauriVersion } from "./tauri-build.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
@@ -46,6 +49,12 @@ const skipBuild = flags.has("--skip-build");
 const skipTests = flags.has("--skip-tests");
 const force = flags.has("--force");
 const tagName = `v${version}`;
+// Relay 1.0 is the Tauri app; 0.x releases keep the Electron build.
+const tauri = isTauriVersion(version);
+if (tauri && tauriVersion() !== version) {
+  console.error(`❌ crates/relay-app/tauri.conf.json is at ${tauriVersion()}, not ${version}.`);
+  process.exit(1);
+}
 
 console.log(`\n🚀 Starting Relay release pipeline for v${version}...`);
 
@@ -86,7 +95,7 @@ if (!skipTests) {
   console.log("\n🧪 Step 2: Running typecheck and tests...");
   try {
     run("npm", ["run", "typecheck"]);
-    run("npm", ["run", "build"]);
+    run("npm", ["run", tauri ? "build:ui" : "build"]);
     run("node", [
       "--import",
       "tsx",
@@ -95,6 +104,7 @@ if (!skipTests) {
       "tests/settings-*.test.ts",
       "tests/app-update.test.ts",
       "tests/update-signing.test.ts",
+      "tests/electron-update-yml.test.ts",
     ]);
     console.log("   ✅ Typecheck and core tests passed.");
   } catch {
@@ -114,7 +124,7 @@ const dmgPaths = ["arm64", "x64"].map((arch) => path.join(shareDir, dmgName(vers
 if (!skipBuild && process.platform === "darwin") {
   console.log(`\n📦 Step 3: Building signed macOS DMGs (Apple silicon and Intel)...`);
   run("node", [
-    path.join(root, "scripts/stable-signing.mjs"),
+    path.join(root, tauri ? "scripts/tauri-stable-signing.mjs" : "scripts/stable-signing.mjs"),
     "--dmg",
     "--arch",
     "both",

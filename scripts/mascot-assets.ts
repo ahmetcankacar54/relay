@@ -481,6 +481,19 @@ export async function writeMascot(rendered: Awaited<ReturnType<typeof renderMasc
       "export const mascotTrayFramesDark: typeof mascotTrayFrames = " +
       `${JSON.stringify(rendered.trayDark, null, 2)};\n`,
   );
+  // The Tauri app embeds the same frames as PNG files (crates/relay-app/src/tray.rs).
+  const trayDir = path.join(root, "crates/relay-app/icons/tray");
+  await mkdir(trayDir, { recursive: true });
+  for (const [tone, frames] of [
+    ["light", rendered.tray],
+    ["dark", rendered.trayDark],
+  ] as const)
+    for (const [frame, representations] of Object.entries(frames))
+      for (const { scaleFactor, png } of representations)
+        await writeFile(
+          path.join(trayDir, `mascot-${tone}-${frame}@${scaleFactor}x.png`),
+          Buffer.from(png, "base64"),
+        );
   await mkdir(path.join(root, "src/mascot"), { recursive: true });
   await writeFile(
     path.join(root, "src/mascot/panda-rig.ts"),

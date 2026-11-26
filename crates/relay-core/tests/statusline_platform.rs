@@ -228,3 +228,66 @@ fn on_windows_the_usual_folder_is_npms_in_appdata() {
         ]
     );
 }
+
+struct Bundle {
+    root: std::path::PathBuf,
+    packaged: bool,
+}
+
+impl relay_core::host::AppPaths for Bundle {
+    fn data_dir(&self) -> std::path::PathBuf {
+        self.root.join("data")
+    }
+    fn app_data_dir(&self) -> std::path::PathBuf {
+        self.root.clone()
+    }
+    fn logs_dir(&self) -> std::path::PathBuf {
+        self.root.join("logs")
+    }
+    fn temp_dir(&self) -> std::path::PathBuf {
+        self.root.join("tmp")
+    }
+    fn documents_dir(&self) -> std::path::PathBuf {
+        self.root.join("Documents")
+    }
+    fn exe_path(&self) -> std::path::PathBuf {
+        self.root.join("Relay.app/Contents/MacOS/Relay")
+    }
+    fn resources_dir(&self) -> std::path::PathBuf {
+        self.root.join("Relay.app/Contents/Resources")
+    }
+    fn is_packaged(&self) -> bool {
+        self.packaged
+    }
+    fn app_version(&self) -> String {
+        "1.0.0".into()
+    }
+}
+
+#[test]
+fn the_bundled_cli_is_bin_relay_in_the_resources_never_the_apps_own_executable() {
+    use relay_core::host::AppPaths;
+    use relay_core::relay_cli_path::bundled_relay_cli;
+    let dir = tempfile::tempdir().unwrap();
+    let bundle = Bundle {
+        root: dir.path().to_path_buf(),
+        packaged: true,
+    };
+    // The app's own executable beside it: on a case-insensitive disk `relay` would be `Relay`.
+    let exe = bundle.exe_path();
+    fs::create_dir_all(exe.parent().unwrap()).unwrap();
+    fs::write(&exe, b"app").unwrap();
+    fs::write(exe.with_file_name("relay"), b"app").unwrap();
+    assert_eq!(bundled_relay_cli(&bundle), None);
+    let name = if cfg!(windows) { "relay.exe" } else { "relay" };
+    let cli = bundle.resources_dir().join("bin").join(name);
+    fs::create_dir_all(cli.parent().unwrap()).unwrap();
+    fs::write(&cli, b"cli").unwrap();
+    assert_eq!(bundled_relay_cli(&bundle), Some(cli));
+    // A development run has no bundle.
+    let unpackaged = Bundle {
+        packaged: false,
+        ..bundle
+    };
+    assert_eq!(bundled_relay_cli(&unpackaged), None);
+}

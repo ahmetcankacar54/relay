@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Relay",
+  "mainBinaryName": "Relay",
+  "version": "1.0.0",
+  "identifier": "dev.relay.workspace",
+  "build": {
+    "frontendDist": "../../dist",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm run build:ui"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "nsis", "appimage"],
+    "publisher": "Relay",
+    "category": "DeveloperTool",
+    "shortDescription": "Switch Claude, Codex and Antigravity accounts and plan usage windows",
+    "icon": [
+      "../../assets/icon.png",
+      "../../assets/icon.icns",
+      "../../assets/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "14.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["relay"]
+      }
+    }
+  }
+}

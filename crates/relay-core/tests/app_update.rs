@@ -1055,11 +1055,14 @@ fn windows_and_linux_the_driver_downloads_and_verifies_the_installer_and_install
         .join("0.16.0")
         .join("Relay-Setup-0.16.0-x64.exe");
     assert_eq!(fs::read(&installer).unwrap(), b"installer bytes");
-    // Windows: the installer runs silently, detached; Relay quits after.
+    // Windows: the installer runs silently, detached, and reopens Relay; Relay quits after.
     driver.install().unwrap();
     assert_eq!(
         *release.launched.lock().unwrap(),
-        vec![(installer, vec!["/S".to_owned()])]
+        vec![(
+            installer,
+            ["/S", "/UPDATE", "/R"].map(str::to_owned).to_vec()
+        )]
     );
     // A second check keeps the verified download.
     let (result, _) = check(&release.stable());

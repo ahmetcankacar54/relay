@@ -18,9 +18,16 @@ export const TAP_CASK = "ahmetcankacar54/tap/relay";
 /** The DMG name stable-signing.mjs writes for an architecture (arm64 or x64). */
 export const dmgName = (version, arch) => `Relay-${version}-${arch}.dmg`;
 
+/** Relay 1.0 and later is the Tauri app: macOS 14+, with the relay CLI inside. */
+export const isTauriVersion = (version) => Number(version.split(".")[0]) >= 1;
+
+/** The relay CLI inside the Tauri app (scripts/tauri-stable-signing.mjs puts it there). */
+export const CASK_CLI = "#{appdir}/Relay.app/Contents/Resources/bin/relay";
+
 /**
  * The cask text. Both architectures when the release has an Intel DMG; Apple silicon only
- * otherwise (releases before the first x64 build).
+ * otherwise (releases before the first x64 build). From 1.0 the cask also links the relay CLI
+ * the app carries into Homebrew's bin, and needs macOS 14 like the app.
  */
 export function renderCask({ version, arm64, x64 }) {
   if (!/^\d+\.\d+\.\d+$/.test(version))
@@ -30,6 +37,7 @@ export function renderCask({ version, arm64, x64 }) {
       throw new Error(`No SHA-256 for the ${arch} DMG.`);
     return value;
   };
+  const tauri = isTauriVersion(version);
   const release =
     "https://github.com/ahmetcankacar54/relay/releases/download/v#{version}";
   const head = x64
@@ -61,10 +69,10 @@ ${head.join("\n")}
 
   # Relay updates itself from its GitHub releases.
   auto_updates true
-${x64 ? "" : "  depends_on arch: :arm64\n"}  depends_on macos: :ventura
+${x64 ? "" : "  depends_on arch: :arm64\n"}  depends_on macos: ${tauri ? ":sonoma" : ":ventura"}
 
   app "Relay.app"
-
+${tauri ? `  binary "${CASK_CLI}"\n` : ""}
   zap trash: [
     "~/Library/Application Support/Relay",
     "~/Library/Caches/dev.relay.workspace",
@@ -73,7 +81,7 @@ ${x64 ? "" : "  depends_on arch: :arm64\n"}  depends_on macos: :ventura
     "~/Library/HTTPStorages/dev.relay.workspace",
     "~/Library/Logs/Relay",
     "~/Library/Preferences/dev.relay.workspace.plist",
-    "~/Library/Saved Application State/dev.relay.workspace.savedState",
+    "~/Library/Saved Application State/dev.relay.workspace.savedState",${tauri ? `\n    "~/Library/WebKit/dev.relay.workspace",` : ""}
   ]
 
   caveats <<~EOS
