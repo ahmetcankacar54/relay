@@ -117,10 +117,11 @@ impl Drop for Finish<'_> {
             if self.kind == Holder::Operation {
                 state.others -= 1;
             }
-            state.serving += 1;
         }
-        self.lock.turn.notify_all();
+        // Told before the next place in line may start, so the listener sees this end first.
         self.lock.tell();
+        self.lock.lock_state().serving += 1;
+        self.lock.turn.notify_all();
     }
 }
 

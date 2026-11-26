@@ -430,7 +430,10 @@ fn limit_calibration_cases() {
     replay("limit-calibration", limit_calibration);
 }
 
+// Recorded on macOS, where profile paths compare without case; the recording holds that rule,
+// so it replays only there.
 #[test]
+#[cfg_attr(not(target_os = "macos"), ignore = "recorded with macOS's path rules")]
 fn statusline_cases() {
     replay("statusline", statusline);
 }
