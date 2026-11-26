@@ -1,13 +1,21 @@
-//! Port of `tests/active-account-timeline.test.ts` (the timeline's own cases).
+//! Port of `tests/active-account-timeline.test.ts`: the timeline's own cases and Desktop's
+//! `on_state` hook feeding it. The main-process wiring case reads source text (not ported).
+
+#[path = "common/desktop.rs"]
+mod desktop_fixture;
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use relay_core::active_account_timeline::{
     ACTIVE_TIMELINE_MAX_SEGMENTS, ACTIVE_TIMELINE_RETENTION_MS, ActiveAccount,
     ActiveAccountTimeline, ActiveObservation,
 };
+use relay_core::desktop::{DESKTOP_CACHE_MS, DesktopError, DesktopHost, DesktopManager};
+use relay_core::desktop_files::{json_bytes, write_bytes};
+use relay_core::shared::types::DesktopState;
 use relay_core::shared::types::js::{date_parse, iso};
 use serde_json::{Value, json};
 
@@ -647,4 +655,158 @@ fn _5_000_segments_answer_10_000_lookups_in_under_50_ms() {
             linear_account_at(&segments, *time)
         );
     }
+}
+
+// ---------------------------------------------------------------- Desktop's `on_state` hook
+
+/// A Desktop manager on empty files whose Claude runs as the fake host says, signed in to
+/// `account` (organization `org`), on a clock the test moves.
+struct DesktopFx {
+    fx: desktop_fixture::Fixture,
+    manager: Arc<DesktopManager>,
+    clock: Arc<AtomicI64>,
+}
+
+fn desktop(account: &str, org: &str) -> DesktopFx {
+    let fx = desktop_fixture::Fixture::new();
+    write_bytes(
+        &fx.root,
+        "config.json",
+        Some(&json_bytes(&json!({
+            "lastKnownAccountUuid": account,
+            "oauth:tokenCacheV2": "encrypted",
+        }))),
+    )
+    .unwrap();
+    fs::create_dir_all(fx.root.join("claude-code-sessions").join(account).join(org)).unwrap();
+    fx.set_running(true);
+    let clock = Arc::new(AtomicI64::new(1_000_000));
+    let now = Arc::clone(&clock);
+    let manager = fx.manager_with(
+        Arc::clone(&fx.host) as Arc<dyn DesktopHost>,
+        Some(Arc::new(move || now.load(Ordering::SeqCst))),
+    );
+    DesktopFx { fx, manager, clock }
+}
+
+#[derive(Debug, PartialEq)]
+struct Told {
+    running: bool,
+    account: Option<String>,
+    orgs: Vec<String>,
+}
+
+#[test]
+fn desktop_tells_on_state_about_each_fresh_reading_never_a_cached_one() {
+    let ids = ids();
+    let d = desktop(&ids.a, &ids.org_a);
+    let told: Arc<Mutex<Vec<Told>>> = Arc::default();
+    let sink = Arc::clone(&told);
+    d.manager.configure(|h| {
+        h.on_state = Some(Arc::new(move |s: &DesktopState| {
+            sink.lock().unwrap().push(Told {
+                running: s.running,
+                account: s.current_account_uuid.clone(),
+                orgs: s.organizations.clone(),
+            })
+        }))
+    });
+    let count = || told.lock().unwrap().len();
+    // Three observers sharing one reading are one fresh reading.
+    for _ in 0..3 {
+        d.manager.cached_snapshot().unwrap();
+    }
+    assert_eq!(
+        *told.lock().unwrap(),
+        [Told {
+            running: true,
+            account: Some(ids.a.clone()),
+            orgs: vec![ids.org_a.clone()],
+        }]
+    );
+    d.clock.fetch_add(DESKTOP_CACHE_MS - 1, Ordering::SeqCst);
+    d.manager.cached_snapshot().unwrap();
+    assert_eq!(count(), 1);
+    d.clock.fetch_add(1, Ordering::SeqCst);
+    d.fx.set_running(false);
+    d.manager.cached_snapshot().unwrap();
+    assert_eq!(count(), 2);
+    assert!(!told.lock().unwrap()[1].running);
+    // A decision always reads fresh, even right after a reading that is still shared.
+    d.manager.snapshot().unwrap();
+    d.manager.snapshot().unwrap();
+    assert_eq!(count(), 4);
+    // …and observers that follow it share that reading.
+    d.manager.cached_snapshot().unwrap();
+    assert_eq!(count(), 4);
+}
+
+#[test]
+fn a_failed_desktop_reading_tells_nothing() {
+    let ids = ids();
+    let d = desktop(&ids.a, &ids.org_a);
+    let told = Arc::new(AtomicI64::new(0));
+    let sink = Arc::clone(&told);
+    d.manager.configure(|h| {
+        h.on_state = Some(Arc::new(move |_: &DesktopState| {
+            sink.fetch_add(1, Ordering::SeqCst);
+        }))
+    });
+    desktop_fixture::FakeHost::set(
+        &d.fx.host.seems_hook,
+        Arc::new(|_: &desktop_fixture::FakeHost| {
+            Err(DesktopError::new("The process list could not be read."))
+        }),
+    );
+    let error = d.manager.cached_snapshot().unwrap_err();
+    assert!(error.to_string().contains("process list"), "{error}");
+    assert_eq!(told.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn a_hook_that_throws_does_not_break_the_snapshot() {
+    let ids = ids();
+    let d = desktop(&ids.a, &ids.org_a);
+    d.manager
+        .configure(|h| h.on_state = Some(Arc::new(|_: &DesktopState| panic!("timeline failed"))));
+    assert_eq!(
+        d.manager.snapshot().unwrap().current_account_uuid,
+        Some(ids.a.clone())
+    );
+    d.clock.fetch_add(5_000, Ordering::SeqCst);
+    assert_eq!(
+        d.manager.cached_snapshot().unwrap().current_account_uuid,
+        Some(ids.a.clone())
+    );
+}
+
+#[test]
+fn the_timeline_sees_desktop_through_the_manager_open_switch_and_close() {
+    let ids = ids();
+    let f = Fixture::new();
+    let timeline = Arc::new(Mutex::new(f.open()));
+    let d = desktop(&ids.a, &ids.org_a);
+    let observer = Arc::clone(&timeline);
+    d.manager.configure(|h| {
+        h.on_state = Some(Arc::new(move |s: &DesktopState| {
+            observer.lock().unwrap().observe(&ActiveObservation {
+                running: s.running,
+                current_account_uuid: s.current_account_uuid.clone(),
+                organizations: Some(s.organizations.clone()),
+            })
+        }))
+    });
+    f.set(t0());
+    d.manager.snapshot().unwrap();
+    let at = |time: f64| timeline.lock().unwrap().account_at(time);
+    assert_eq!(at(t0()).map(|a| a.account_uuid), Some(ids.a.clone()));
+    assert_eq!(at(t0()).and_then(|a| a.org_id), Some(ids.org_a.clone()));
+    f.set(t0() + MINUTE);
+    d.fx.set_running(false);
+    d.manager.snapshot().unwrap();
+    assert_eq!(at(t0() + MINUTE), None);
+    assert_eq!(
+        at(t0() + 30_000.0).map(|a| a.account_uuid),
+        Some(ids.a.clone())
+    );
 }

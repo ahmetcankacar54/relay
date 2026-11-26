@@ -98,7 +98,7 @@ pub fn safe_file(root: &Path, relative: &str) -> Result<PathBuf, DesktopFileErro
         match fs::symlink_metadata(p) {
             Ok(meta) if meta.is_symlink() => return Err(DesktopFileError::SymbolicLink),
             Ok(_) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) if crate::fs_util::is_enoent(&e) => {}
             Err(e) => return Err(e.into()),
         }
         if p == base {

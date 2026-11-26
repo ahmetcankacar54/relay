@@ -1,6 +1,7 @@
-//! Port of the `UsageManager` case of `tests/gateway-phase2.test.ts` ("an answer's windows make
-//! the account fresh…"). The other cases test the gateway (`electron/core/proxy`, relay-gateway)
-//! and the UI. `parseLiveLimits(ALLOWED)` is the gateway's; its result is written out here.
+//! Port of the relay-core cases of `tests/gateway-phase2.test.ts`: the `UsageManager` case ("an
+//! answer's windows make the account fresh…") and the token attribution of a gateway response.
+//! The other cases test the gateway (relay-gateway) and the UI. `parseLiveLimits(ALLOWED)` is the
+//! gateway's; its result is written out here.
 
 #[path = "common/usage_manager.rs"]
 mod helpers;
@@ -128,4 +129,70 @@ fn an_answers_windows_make_the_account_fresh_for_everything_that_reads_limits_wh
     );
     manager.observe(&codex.id, &five_hour(50.0));
     assert_eq!(snap(&manager, &codex.id).five_hour, None);
+}
+
+#[test]
+fn a_response_that_came_through_the_gateway_is_the_serving_accounts_whatever_its_entry_point() {
+    use relay_core::shared::types::Account;
+    use relay_core::token_attribution::{
+        Attribution, AttributionDeps, AttributionRow, TimelineAccount, attribute,
+    };
+    let accounts: Vec<Account> = ["a", "b"]
+        .iter()
+        .map(|id| {
+            let mut account = Account::new(*id, id.to_uppercase());
+            account.kind = AccountKind::Personal;
+            account.group = "default".into();
+            account
+        })
+        .collect();
+    let timeline = |_: f64| -> Option<TimelineAccount> { None };
+    let gateway = |id: &str| match id {
+        "req_a" => Some("a".to_string()),
+        "req_gone" => Some("removed".to_string()),
+        _ => None,
+    };
+    let deps = AttributionDeps {
+        timeline: &timeline,
+        samples: &[],
+        accounts: &accounts,
+        window_owner: None,
+        gateway_account: Some(&gateway),
+        index: None,
+    };
+    let row = |entrypoint: Option<&'static str>,
+               profile: Option<&'static str>,
+               request: &'static str| AttributionRow {
+        time: 1.0,
+        entrypoint,
+        profile_account_id: profile,
+        session_id: None,
+        request_id: Some(request),
+    };
+    let served = |id: &str| Attribution::Account {
+        account_id: id.into(),
+        estimated: false,
+    };
+    assert_eq!(
+        attribute(&row(Some("cli"), None, "req_a"), &deps),
+        served("a")
+    );
+    assert_eq!(
+        attribute(&row(Some("sdk-ts"), None, "req_a"), &deps),
+        served("a")
+    );
+    // Not through the gateway, or an account since removed: as before.
+    assert_eq!(
+        attribute(&row(Some("cli"), None, "req_other"), &deps),
+        Attribution::Terminal
+    );
+    assert_eq!(
+        attribute(&row(Some("cli"), None, "req_gone"), &deps),
+        Attribution::Terminal
+    );
+    // A Relay profile's own sign-in still decides first.
+    assert_eq!(
+        attribute(&row(None, Some("b"), "req_a"), &deps),
+        served("b")
+    );
 }

@@ -93,7 +93,7 @@ fn transcript_status(root: Option<&Path>, record: &JsonObject) -> Transcript {
         match probe {
             Ok(meta) if meta.is_file() && meta.len() > 0 => return Transcript::Found,
             Ok(_) => unknown = true,
-            Err(DesktopFileError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(DesktopFileError::Io(error)) if crate::fs_util::is_enoent(&error) => {}
             Err(_) => unknown = true,
         }
     }

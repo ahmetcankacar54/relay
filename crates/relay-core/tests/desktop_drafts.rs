@@ -1,6 +1,6 @@
 //! Port of `tests/desktop-drafts.test.ts`, the cases about drafts, their storage, the draft step
 //! and the draft vault. Left out:
-//! - the `planHistory`/`planHistoryDetailed` cases (`desktop_files`' merge planner, Desktop's);
+//! - the `planHistory`/`planHistoryDetailed` cases, in desktop_drafts_plan_history.rs;
 //! - the helper process (`draftJobPath`, `parseDraftJob`, `awaitHelper`, `runHelper`, the exit
 //!   half of `helperOutcome`, `electronMismatch`, the build/package/worker source-text cases):
 //!   plan Phase 4 replaced the Electron helper with an in-process LevelDB reader, so they have no

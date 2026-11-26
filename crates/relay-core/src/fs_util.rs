@@ -212,6 +212,12 @@ pub fn safe_integer(value: &serde_json::Value) -> Option<i64> {
     (-MAX..=MAX).contains(&n).then_some(n)
 }
 
+/// Node's `ENOENT`: libuv maps Windows's `ERROR_INVALID_NAME` (a name such as `C:` inside a
+/// path) to it too.
+pub fn is_enoent(error: &io::Error) -> bool {
+    error.kind() == io::ErrorKind::NotFound || (cfg!(windows) && error.raw_os_error() == Some(123))
+}
+
 /// Node's `path.resolve(path)`: absolute against the working folder, `.` and `..` folded
 /// lexically, no trailing separator, symbolic links untouched.
 pub fn resolve(path: &Path) -> PathBuf {
@@ -223,8 +229,18 @@ pub fn resolve(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in absolute.components() {
         match component {
-            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
-                out.push(component.as_os_str())
+            Component::Prefix(_) | Component::RootDir => out.push(component.as_os_str()),
+            Component::Normal(name) => {
+                // Appended, never pushed: on Windows a name such as `C:` would replace the path.
+                let text = out.as_mut_os_string();
+                if !text.is_empty()
+                    && !text
+                        .as_encoded_bytes()
+                        .ends_with(std::path::MAIN_SEPARATOR_STR.as_bytes())
+                {
+                    text.push(std::path::MAIN_SEPARATOR_STR);
+                }
+                text.push(name);
             }
             Component::CurDir => {}
             Component::ParentDir => {

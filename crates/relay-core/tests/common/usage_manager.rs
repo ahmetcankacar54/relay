@@ -27,7 +27,8 @@ pub struct Temp {
 /// `new Store(fs.realpathSync(fs.mkdtempSync(prefix)))`.
 pub fn temp_store(prefix: &str) -> Temp {
     let dir = tempfile::Builder::new().prefix(prefix).tempdir().unwrap();
-    let root = std::fs::canonicalize(dir.path()).unwrap();
+    // Node's realpath: no Windows `\\?\` prefix, so the profile is its own real path.
+    let root = relay_core::fs_util::real_path(dir.path()).unwrap();
     let store = Arc::new(Store::open(&root, StoreOptions::default()).unwrap());
     Temp { dir, root, store }
 }
