@@ -40,8 +40,9 @@ const fingerprint = createHash("sha1")
   .update(certificate)
   .digest("hex")
   .toUpperCase();
-// The signing script runs on macOS; on Windows CI its node:path joins with backslashes.
-const posix = (file: string | undefined) => file?.replaceAll("\\", "/");
+// The signing script runs on macOS; on Windows CI its node:path resolves with a drive and `\`.
+const posix = (file: string | undefined) =>
+  file?.replaceAll("\\", "/").replace(/^[A-Za-z]:/, "");
 
 test("only the exact pinned, cryptographically self-signed certificate disables server timestamping", async () => {
   const local = await fs.readFile(
