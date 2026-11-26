@@ -14,10 +14,11 @@ use relay_core::relay_paths::Platform;
 use relay_core::shared::terminal_identity::{
     TerminalCurrentState, TerminalMode, TerminalReason, TerminalResult, terminal_line,
 };
+#[cfg(unix)]
+use relay_core::terminal_identity::TerminalKeychain;
 use relay_core::terminal_identity::{
-    SignInPorts, TerminalAdoption, TerminalConfig, TerminalKeychain, TerminalRequest,
-    TerminalSwitcher, TerminalVault, adopt_terminal_sign_in, json_config, peek_terminal,
-    scratch_sign_in_ports,
+    SignInPorts, TerminalAdoption, TerminalConfig, TerminalRequest, TerminalSwitcher,
+    TerminalVault, adopt_terminal_sign_in, json_config, peek_terminal, scratch_sign_in_ports,
 };
 use serde_json::{Value, json};
 

@@ -195,6 +195,7 @@ impl Fixture {
         )
     }
 
+    #[cfg(not(windows))]
     fn model(&self) -> Option<usize> {
         self.commands
             .borrow()

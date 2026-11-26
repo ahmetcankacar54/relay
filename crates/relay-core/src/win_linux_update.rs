@@ -368,7 +368,8 @@ impl WinLinuxUpdateDriver {
             fs::copy(installer, &next)?;
             #[cfg(unix)]
             fs::set_permissions(&next, std::os::unix::fs::PermissionsExt::from_mode(0o755))?;
-            fs::File::open(&next)?.sync_all()?;
+            // Writable: Windows refuses to flush a read-only handle.
+            fs::OpenOptions::new().write(true).open(&next)?.sync_all()?;
             fs::rename(&next, &target)
         })();
         if let Err(error) = result {

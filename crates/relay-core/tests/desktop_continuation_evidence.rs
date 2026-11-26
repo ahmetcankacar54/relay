@@ -1203,6 +1203,7 @@ fn quota_stop_polling_follows_a_growing_transcript_and_refuses_a_malformed_one()
 #[test]
 fn a_known_conversations_project_folder_is_looked_up_alone_without_listing_every_folder() {
     let f = recent_fixture();
+    #[cfg(unix)]
     let projects = f.path().join("transcripts").join("projects");
     let account = f.account(&f.source.id);
     assert_eq!(f.evidence.quota_stops(&account, None).unwrap().len(), 1);

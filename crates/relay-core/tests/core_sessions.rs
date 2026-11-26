@@ -5,9 +5,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use relay_core::sessions::{
-    IndexedSession, SessionError, copy_transcript, read_transcript, scan_sessions,
-};
+#[cfg(unix)]
+use relay_core::sessions::SessionError;
+use relay_core::sessions::{IndexedSession, copy_transcript, read_transcript, scan_sessions};
 use relay_core::shared::types::js::JsMap;
 use relay_core::shared::types::{Account, AccountKind, CreateAccount};
 use relay_core::store::{Store, StoreOptions};
@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 
 struct Fixture {
     _tmp: tempfile::TempDir,
+    #[cfg(unix)]
     root: PathBuf,
     store: Store,
     a: Account,
@@ -116,6 +117,7 @@ fn fixture() -> Fixture {
     let source = scan(&store, &a, &[]).remove(0);
     Fixture {
         _tmp: tmp,
+        #[cfg(unix)]
         root,
         store,
         a,
