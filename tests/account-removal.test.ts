@@ -249,8 +249,11 @@ test("the app removes an account through one IPC handler under the Desktop lock"
     /removeAccount: \(id\) => ipcRenderer\.invoke\("relay:remove-account", id\),/,
   );
   assert.match(source("../shared/types.ts"), /removeAccount\(accountId: string\): Promise<AccountRemoved>;/);
-  // The relay CLI removes through the same function.
-  assert.match(source("../cli/src/commands/remove.ts"), /removeAccount\(account\.id, \{/);
+  // The relay CLI removes through relay-core's port of the same function.
+  assert.match(
+    source("../crates/relay-cli/src/commands/remove.rs"),
+    /use relay_core::account_removal::\{[^}]*\bremove_account\b[\s\S]*let removed = remove_account\(\s*&account\.id,/,
+  );
 });
 
 test("a stale not-logged-in check still signs the profile out, and other accounts' terminal copies stay", async (t) => {

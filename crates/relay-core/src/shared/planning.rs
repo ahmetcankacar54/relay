@@ -22,8 +22,15 @@ pub struct LocalParts {
 }
 
 impl LocalParts {
+    /// `${year}-${month}-${day}` as `Intl` prints them: the year unpadded, and a year before 1 as
+    /// its era year (0 → 1, -1 → 2), which `Date.parse` then refuses as the TS does.
     pub fn date(&self) -> String {
-        format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
+        let year = if self.year <= 0 {
+            1 - i64::from(self.year)
+        } else {
+            i64::from(self.year)
+        };
+        format!("{year}-{:02}-{:02}", self.month, self.day)
     }
 }
 
@@ -34,11 +41,11 @@ fn zone(time_zone: &str) -> Tz {
 
 /// The local parts of `time` in `time_zone`; `None` for an invalid time (where `Intl` throws).
 pub fn local_parts(time: f64, time_zone: &str) -> Option<LocalParts> {
-    if !time.is_finite() || time.abs() > 8.64e15 {
-        return None;
-    }
-    let at = chrono::Utc.timestamp_millis_opt(time.trunc() as i64).single()?;
-    let local = at.with_timezone(&zone(time_zone));
+    let offset = super::time_zones::offset_seconds(zone(time_zone), time)?;
+    let at = chrono::Utc
+        .timestamp_millis_opt(time.trunc() as i64)
+        .single()?;
+    let local = at.naive_utc() + chrono::Duration::seconds(i64::from(offset));
     Some(LocalParts {
         year: local.year(),
         month: local.month(),
@@ -51,7 +58,9 @@ pub fn local_parts(time: f64, time_zone: &str) -> Option<LocalParts> {
 
 /// `YYYY-MM-DD` of `time` in `time_zone`; `""` for an invalid time.
 pub fn local_date(time: f64, time_zone: &str) -> String {
-    local_parts(time, time_zone).map(|p| p.date()).unwrap_or_default()
+    local_parts(time, time_zone)
+        .map(|p| p.date())
+        .unwrap_or_default()
 }
 
 /// The local quarter hour (0–95) of `time` in `time_zone`; a repeated DST hour shares its slots.
@@ -69,7 +78,9 @@ fn is_date(date: &str) -> bool {
     b.len() == 10
         && b[4] == b'-'
         && b[7] == b'-'
-        && b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+        && b.iter()
+            .enumerate()
+            .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
 }
 
 /// `^([01]\d|2[0-3]):[0-5]\d$`.
@@ -77,7 +88,10 @@ pub fn is_clock(clock: &str) -> bool {
     let b = clock.as_bytes();
     b.len() == 5
         && b[2] == b':'
-        && matches!((b[0], b[1]), (b'0' | b'1', b'0'..=b'9') | (b'2', b'0'..=b'3'))
+        && matches!(
+            (b[0], b[1]),
+            (b'0' | b'1', b'0'..=b'9') | (b'2', b'0'..=b'3')
+        )
         && matches!(b[3], b'0'..=b'5')
         && b[4].is_ascii_digit()
 }
@@ -96,7 +110,9 @@ pub fn wall_time(date: &str, clock: &str, time_zone: &str) -> Option<f64> {
     let mut offsets: Vec<f64> = Vec::new();
     for delta in [-36.0, -12.0, 0.0, 12.0, 36.0] {
         let probe = nominal + delta * HOUR;
-        let Some(p) = local_parts(probe, time_zone) else { continue };
+        // Past the years `Date.parse` reads (10000 and later, before 0), the TS throws a
+        // RangeError while checking a candidate; the port answers `None`.
+        let p = local_parts(probe, time_zone)?;
         let local = date_parse(&format!(
             "{}T{:02}:{:02}:{:02}Z",
             p.date(),
@@ -105,15 +121,24 @@ pub fn wall_time(date: &str, clock: &str, time_zone: &str) -> Option<f64> {
             p.second
         ));
         let offset = local - probe;
-        if !offsets.iter().any(|o| o == &offset || (o.is_nan() && offset.is_nan())) {
+        if offset.is_nan() {
+            return None;
+        }
+        if !offsets.contains(&offset) {
             offsets.push(offset);
         }
     }
-    let matches = offsets.into_iter().map(|offset| nominal - offset).filter(|candidate| {
-        local_parts(*candidate, time_zone)
-            .is_some_and(|p| p.date() == date && format!("{:02}:{:02}", p.hour, p.minute) == clock)
-    });
-    matches.fold(None, |min: Option<f64>, t| Some(min.map_or(t, |m| m.min(t))))
+    let matches = offsets
+        .into_iter()
+        .map(|offset| nominal - offset)
+        .filter(|candidate| {
+            local_parts(*candidate, time_zone).is_some_and(|p| {
+                p.date() == date && format!("{:02}:{:02}", p.hour, p.minute) == clock
+            })
+        });
+    matches.fold(None, |min: Option<f64>, t| {
+        Some(min.map_or(t, |m| m.min(t)))
+    })
 }
 
 /// `wall_time`, or for a clock a DST change skips, the first existing quarter hour after it within
@@ -140,15 +165,40 @@ pub fn wall_time_or_next(date: &str, clock: &str, time_zone: &str) -> Option<f64
 
 /// The system's time zone when it is one Relay can plan in, else UTC.
 pub fn system_time_zone() -> String {
-    match iana_time_zone::get_timezone() {
-        Ok(zone) if valid_time_zone(&zone) => zone,
-        _ => "UTC".into(),
+    let zone = iana_time_zone::get_timezone().unwrap_or_default();
+    // `Intl` resolves every UTC alias to "UTC" (and "GMT" to "+00:00", which is no zone here).
+    const UTC_ALIASES: [&str; 14] = [
+        "UTC",
+        "Etc/UTC",
+        "Etc/GMT",
+        "GMT",
+        "Etc/Universal",
+        "Universal",
+        "Etc/Zulu",
+        "Zulu",
+        "Etc/UCT",
+        "UCT",
+        "Etc/Greenwich",
+        "Greenwich",
+        "Etc/GMT0",
+        "GMT0",
+    ];
+    if UTC_ALIASES
+        .iter()
+        .any(|alias| alias.eq_ignore_ascii_case(&zone))
+        || !valid_time_zone(&zone)
+    {
+        return "UTC".into();
     }
+    zone
 }
 
 /// Planning settings for a new registry: the defaults in the system's time zone.
 pub fn default_planning() -> PlanningSettings {
-    PlanningSettings { time_zone: system_time_zone(), ..default_planning_settings() }
+    PlanningSettings {
+        time_zone: system_time_zone(),
+        ..default_planning_settings()
+    }
 }
 
 /// `uuid:org` of the account's Claude Code sign-in, when it is signed in and agrees with its
@@ -173,7 +223,11 @@ pub fn plan_capacity(a: &Account) -> f64 {
         Some(AccountPlan::Max20) => 20.0,
         _ => {
             let weight = a.planning.as_ref().map_or(1.0, |p| p.capacity_weight);
-            if weight.is_finite() { weight.clamp(1.0, 100.0) } else { 1.0 }
+            if weight.is_finite() {
+                weight.clamp(1.0, 100.0)
+            } else {
+                1.0
+            }
         }
     }
 }

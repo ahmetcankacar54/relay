@@ -1,0 +1,1276 @@
+//! Port of `shared/error-text.ts`: backend errors in the reader's language, for the app and the
+//! relay CLI. The backend throws English (a few core errors still arrive in Turkish from older
+//! copies); the exact text is the lookup key, so never reword a thrower without changing its row.
+
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+use regex::{Captures, Regex};
+use relay_i18n::{Args, Locale, translate};
+
+/// `[backend text, message id]`, as `BACKEND_ERRORS` lists them.
+pub const BACKEND_ERRORS: &[(&str, &str)] = &[
+    (
+        "The approval in the browser came from another Claude account or workspace. Try again with this profile’s account.",
+        "errors.theApprovalInTheBrowserCame",
+    ),
+    (
+        "Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene.",
+        "errors.theApprovalInTheBrowserCame",
+    ),
+    (
+        "The terminal sign-in did not complete. Try again.",
+        "errors.theTerminalSignInDidNot",
+    ),
+    (
+        "Terminal girişi tamamlanmadı. Yeniden dene.",
+        "errors.theTerminalSignInDidNot",
+    ),
+    (
+        "Terminal sign-ins are kept on macOS and Linux only.",
+        "errors.terminalSignInsAreKeptOn",
+    ),
+    (
+        "Terminal girişleri yalnızca macOS ve Linux’ta saklanır.",
+        "errors.terminalSignInsAreKeptOn",
+    ),
+    (
+        "Save the Claude app sign-in first.",
+        "errors.saveTheClaudeAppSignIn",
+    ),
+    (
+        "Önce Claude uygulaması girişini kaydet.",
+        "errors.saveTheClaudeAppSignIn",
+    ),
+    (
+        "Claude has not finished saving this sign-in yet. Relay tries again in a moment.",
+        "errors.claudeHasNotFinishedSavingThis",
+    ),
+    (
+        "Claude bu girişi henüz kaydetmedi. Relay birazdan yeniden dener.",
+        "errors.claudeHasNotFinishedSavingThis",
+    ),
+    (
+        "This Claude sign-in holds no session, so it was not saved. Sign in to the Claude app again, wait half a minute, then save.",
+        "errors.thisClaudeSignInHoldsNo",
+    ),
+    (
+        "Bu Claude girişinde oturum yok, bu yüzden kaydedilmedi. Claude uygulamasında yeniden giriş yap, yarım dakika bekle, sonra kaydet.",
+        "errors.thisClaudeSignInHoldsNo",
+    ),
+    (
+        "The Claude app is signed out. Sign in to it first, then save.",
+        "errors.theClaudeAppIsSignedOut",
+    ),
+    (
+        "Claude uygulamasında oturum kapalı. Önce giriş yap, sonra kaydet.",
+        "errors.theClaudeAppIsSignedOut",
+    ),
+    (
+        "This account’s saved Claude sign-in has ended. Sign in to it again in Relay.",
+        "errors.thisAccountSSavedClaudeSign",
+    ),
+    (
+        "Bu hesabın kayıtlı Claude girişi sona ermiş. Relay’de hesaba yeniden giriş yap.",
+        "errors.thisAccountSSavedClaudeSign",
+    ),
+    (
+        "Relay.app is using Claude Desktop. Try again when it ends.",
+        "errors.aRelayActionIsRunningIn",
+    ),
+    (
+        "Relay.app şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.",
+        "errors.aRelayActionIsRunningIn",
+    ),
+    (
+        "A relay command in a terminal is using Claude Desktop. Try again when it ends.",
+        "errors.aRelayCommandInATerminal",
+    ),
+    (
+        "Terminaldeki bir relay komutu şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.",
+        "errors.aRelayCommandInATerminal",
+    ),
+    (
+        "Another Relay process is using Claude Desktop. Try again when it ends.",
+        "errors.anotherRelayProcessUsesTheClaude",
+    ),
+    (
+        "Başka bir Relay işlemi şu an Claude uygulamasında çalışıyor. Bitince yeniden dene.",
+        "errors.anotherRelayProcessUsesTheClaude",
+    ),
+    (
+        "Finish the Desktop operation before changing preferences.",
+        "errors.finishTheClaudeAppActionBefore",
+    ),
+    (
+        "Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.",
+        "errors.finishTheClaudeAppActionBefore",
+    ),
+    (
+        "Invalid Claude launch choice.",
+        "errors.invalidClaudeLaunchChoice",
+    ),
+    (
+        "Claude’u başlatma seçimi geçersiz.",
+        "errors.invalidClaudeLaunchChoice",
+    ),
+    (
+        "Relay is busy with the Claude app. Update when it is done.",
+        "errors.relayIsBusyWithTheClaude",
+    ),
+    (
+        "Relay Claude uygulamasında bir işlem yapıyor. Bitince güncelle.",
+        "errors.relayIsBusyWithTheClaude",
+    ),
+    (
+        "No update is ready to install.",
+        "errors.noUpdateIsReadyToInstall",
+    ),
+    (
+        "Kurulmaya hazır bir güncelleme yok.",
+        "errors.noUpdateIsReadyToInstall",
+    ),
+    (
+        "The downloaded update does not match its checksum.",
+        "errors.theDownloadedUpdateDoesNotMatch",
+    ),
+    (
+        "İndirilen güncelleme sağlama toplamıyla eşleşmiyor.",
+        "errors.theDownloadedUpdateDoesNotMatch",
+    ),
+    (
+        "The downloaded update is not signed like this Relay, so it was not installed.",
+        "errors.theDownloadedUpdateHasADifferent",
+    ),
+    (
+        "İndirilen güncelleme bu Relay gibi imzalanmamış, bu yüzden kurulmadı.",
+        "errors.theDownloadedUpdateHasADifferent",
+    ),
+    (
+        "The release lists no checksum for the update.",
+        "errors.theReleaseListsNoChecksumFor",
+    ),
+    (
+        "Sürüm, güncelleme için sağlama toplamı listelemiyor.",
+        "errors.theReleaseListsNoChecksumFor",
+    ),
+    (
+        "Relay runs from the disk image. Move it to Applications, then update.",
+        "errors.relayRunsFromTheDiskImage",
+    ),
+    (
+        "Relay disk görüntüsünden çalışıyor. Uygulamalar klasörüne taşı, sonra güncelle.",
+        "errors.relayRunsFromTheDiskImage",
+    ),
+    (
+        "Relay cannot replace itself in its folder. Download the update from the release page.",
+        "errors.relayCannotReplaceItselfInIts",
+    ),
+    (
+        "Relay kendi klasöründe kendini değiştiremiyor. Güncellemeyi sürüm sayfasından indir.",
+        "errors.relayCannotReplaceItselfInIts",
+    ),
+    (
+        "Updates are not available in this copy of Relay.",
+        "errors.updatesAreNotAvailableInThis",
+    ),
+    (
+        "Relay’in bu kopyası kendini güncelleyemez.",
+        "errors.updatesAreNotAvailableInThis",
+    ),
+    (
+        "The update feed has no usable release.",
+        "errors.theUpdateFeedHasNoUsable",
+    ),
+    (
+        "Güncelleme kaynağında kullanılabilir bir sürüm yok.",
+        "errors.theUpdateFeedHasNoUsable",
+    ),
+    ("The update is too large.", "errors.theUpdateIsTooLarge"),
+    ("Güncelleme çok büyük.", "errors.theUpdateIsTooLarge"),
+    (
+        "The update server sent too much data.",
+        "errors.theUpdateServerSentTooMuch",
+    ),
+    (
+        "Güncelleme sunucusu çok fazla veri gönderdi.",
+        "errors.theUpdateServerSentTooMuch",
+    ),
+    (
+        "This account is open in a separate Claude window. Close that window first.",
+        "errors.thisAccountIsOpenInA",
+    ),
+    (
+        "Bu hesap ayrı bir Claude penceresinde açık. Önce o pencereyi kapat.",
+        "errors.thisAccountIsOpenInA",
+    ),
+    (
+        "A separate Claude window is open, so Relay does not switch by itself.",
+        "errors.aSeparateClaudeWindowIsOpen",
+    ),
+    (
+        "Ayrı bir Claude penceresi açık, bu yüzden Relay kendiliğinden geçiş yapmaz.",
+        "errors.aSeparateClaudeWindowIsOpen",
+    ),
+    (
+        "Separate Claude windows are turned off in Settings.",
+        "errors.separateClaudeWindowsAreTurnedOff",
+    ),
+    (
+        "Ayrı Claude pencereleri Ayarlar’da kapalı.",
+        "errors.separateClaudeWindowsAreTurnedOff",
+    ),
+    (
+        "Separate Claude windows need macOS or Linux.",
+        "errors.separateClaudeWindowsNeedMacosOr",
+    ),
+    (
+        "Ayrı Claude pencereleri macOS veya Linux gerektirir.",
+        "errors.separateClaudeWindowsNeedMacosOr",
+    ),
+    (
+        "This account is already open in the Claude app. Switch the Claude app to another account first.",
+        "errors.thisAccountIsAlreadyOpenIn",
+    ),
+    (
+        "Bu hesap zaten Claude uygulamasında açık. Önce Claude uygulamasını başka bir hesaba geçir.",
+        "errors.thisAccountIsAlreadyOpenIn",
+    ),
+    (
+        "Claude did not open the separate window. Try again.",
+        "errors.claudeDidNotOpenTheSeparate",
+    ),
+    (
+        "Claude ayrı pencereyi açmadı. Yeniden dene.",
+        "errors.claudeDidNotOpenTheSeparate",
+    ),
+    (
+        "The separate window is still open. Claude may be asking about work left running there.",
+        "errors.theSeparateWindowIsStillOpen",
+    ),
+    (
+        "Ayrı pencere hâlâ açık. Claude orada çalışan işler için soru soruyor olabilir.",
+        "errors.theSeparateWindowIsStillOpen",
+    ),
+    ("Invalid menu bar title.", "errors.invalidMenuBarTitle"),
+    ("Menü çubuğu seçimi geçersiz.", "errors.invalidMenuBarTitle"),
+    (
+        "Select existing Relay accounts once each.",
+        "errors.selectExistingRelayAccountsOnceEach",
+    ),
+    (
+        "Yalnızca var olan Relay hesaplarını seç; her birini bir kez.",
+        "errors.selectExistingRelayAccountsOnceEach",
+    ),
+    (
+        "Switch to this Desktop account before syncing its history.",
+        "errors.switchTheClaudeAppToThis",
+    ),
+    (
+        "Geçmişini birleştirmeden önce Claude uygulamasında bu hesaba geç.",
+        "errors.switchTheClaudeAppToThis",
+    ),
+    (
+        "Invalid Desktop history tracking data.",
+        "errors.theHistoryDataOfTheClaude",
+    ),
+    (
+        "Claude uygulamasının geçmiş takip verisi geçersiz.",
+        "errors.theHistoryDataOfTheClaude",
+    ),
+    (
+        "Automatic Desktop switch was cancelled because its conditions changed.",
+        "errors.relayStoppedTheAutomaticSwitchBecause",
+    ),
+    (
+        "Koşullar değiştiği için otomatik geçiş iptal edildi.",
+        "errors.relayStoppedTheAutomaticSwitchBecause",
+    ),
+    (
+        "Claude opened during the Desktop switch. Restore its backup after closing Claude.",
+        "errors.theClaudeAppOpenedDuringThe",
+    ),
+    (
+        "Geçiş sırasında Claude uygulaması açıldı. Uygulamayı kapattıktan sonra yedeği geri yükle.",
+        "errors.theClaudeAppOpenedDuringThe",
+    ),
+    (
+        "This profile is connected to a different Claude account. Choose the matching Desktop account.",
+        "errors.thisProfileIsConnectedToA",
+    ),
+    (
+        "Bu profil farklı bir Claude hesabına bağlı. Claude uygulamasında eşleşen hesabı seç.",
+        "errors.thisProfileIsConnectedToA",
+    ),
+    (
+        "This profile is connected to a different Claude organization. Choose its matching Code workspace.",
+        "errors.thisProfileIsConnectedToA2",
+    ),
+    (
+        "Bu profil farklı bir Claude kuruluşuna bağlı. Eşleşen Code çalışma alanını seç.",
+        "errors.thisProfileIsConnectedToA2",
+    ),
+    (
+        "Desktop account changed during setup. Try again.",
+        "errors.theAccountInTheClaudeApp",
+    ),
+    (
+        "Kurulum sırasında Claude uygulamasındaki hesap değişti. Tekrar dene.",
+        "errors.theAccountInTheClaudeApp",
+    ),
+    (
+        "This Desktop profile is already connected.",
+        "errors.thisClaudeAppAccountIsAlready",
+    ),
+    (
+        "Claude uygulamasındaki bu hesap zaten bağlı.",
+        "errors.thisClaudeAppAccountIsAlready",
+    ),
+    (
+        "Saved Desktop sign-in is missing. Connect this account again.",
+        "errors.theSavedClaudeAppSignIn",
+    ),
+    (
+        "Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.",
+        "errors.theSavedClaudeAppSignIn",
+    ),
+    (
+        "Invalid saved Desktop sign-in.",
+        "errors.theSavedClaudeAppSignIn2",
+    ),
+    (
+        "Kayıtlı Claude uygulaması girişi geçersiz.",
+        "errors.theSavedClaudeAppSignIn2",
+    ),
+    (
+        "Claude is still running. No files were changed.",
+        "errors.theClaudeAppIsStillRunning",
+    ),
+    (
+        "Claude uygulaması hâlâ açık. Dosyalar değiştirilmedi.",
+        "errors.theClaudeAppIsStillRunning",
+    ),
+    (
+        "Desktop recovery backup is missing.",
+        "errors.theRecoveryBackupIsMissing",
+    ),
+    (
+        "Kurtarma yedeği bulunamadı.",
+        "errors.theRecoveryBackupIsMissing",
+    ),
+    ("Invalid Desktop backup.", "errors.theClaudeAppBackupIsNot"),
+    (
+        "Claude uygulaması yedeği geçersiz.",
+        "errors.theClaudeAppBackupIsNot",
+    ),
+    ("Invalid recovery path.", "errors.invalidRecoveryPath"),
+    (
+        "Kurtarma dosya yolu geçersiz.",
+        "errors.invalidRecoveryPath",
+    ),
+    ("Invalid recovery data.", "errors.invalidRecoveryData"),
+    ("Kurtarma verisi geçersiz.", "errors.invalidRecoveryData"),
+    ("Invalid Desktop path.", "errors.invalidClaudeAppPath"),
+    (
+        "Claude uygulamasındaki bir dosya yolu geçersiz.",
+        "errors.invalidClaudeAppPath",
+    ),
+    (
+        "Desktop data cannot contain symbolic links.",
+        "errors.claudeAppDataCannotContainSymbolic",
+    ),
+    (
+        "Claude uygulaması verisinde sembolik bağlantı kullanılamaz.",
+        "errors.claudeAppDataCannotContainSymbolic",
+    ),
+    (
+        "Unsupported Desktop file size or type.",
+        "errors.unsupportedClaudeAppFileSizeOr",
+    ),
+    (
+        "Claude uygulamasındaki bir dosyanın boyutu ya da türü desteklenmiyor.",
+        "errors.unsupportedClaudeAppFileSizeOr",
+    ),
+    (
+        "Unsupported Desktop data format.",
+        "errors.unsupportedClaudeAppDataFormat",
+    ),
+    (
+        "Claude uygulamasının veri biçimi desteklenmiyor.",
+        "errors.unsupportedClaudeAppDataFormat",
+    ),
+    (
+        "Unrecognized Code session format. No Desktop files changed.",
+        "errors.unknownCodeSessionFormatRelayDid",
+    ),
+    (
+        "Code oturum biçimi tanınmadı. Claude uygulaması dosyaları değiştirilmedi.",
+        "errors.unknownCodeSessionFormatRelayDid",
+    ),
+    (
+        "Unrecognized project format.",
+        "errors.unknownProjectFormat",
+    ),
+    ("Proje biçimi tanınmadı.", "errors.unknownProjectFormat"),
+    (
+        "Unrecognized project record.",
+        "errors.unknownProjectRecord",
+    ),
+    ("Proje kaydı tanınmadı.", "errors.unknownProjectRecord"),
+    (
+        "Desktop recovery is required before switching.",
+        "errors.restoreTheBackupBeforeYouSwitch",
+    ),
+    (
+        "Geçişten önce yedeğin geri yüklenmesi gerekiyor.",
+        "errors.restoreTheBackupBeforeYouSwitch",
+    ),
+    (
+        "Claude Desktop data could not be read. No files were changed.",
+        "errors.relayCannotReadTheClaudeApp",
+    ),
+    (
+        "Claude uygulaması verisi okunamadı. Dosyalar değiştirilmedi.",
+        "errors.relayCannotReadTheClaudeApp",
+    ),
+    (
+        "System encryption is unavailable.",
+        "errors.systemEncryptionIsUnavailable",
+    ),
+    (
+        "İşletim sistemi şifrelemesi kullanılamıyor.",
+        "errors.systemEncryptionIsUnavailable",
+    ),
+    (
+        "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.",
+        "errors.relayCannotFindClaudeCodeOpen",
+    ),
+    (
+        "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+        "errors.relayCannotFindClaudeCodeOpen",
+    ),
+    (
+        "This is a UI preview. Open the Relay desktop application to manage real accounts.",
+        "errors.thisIsAPreviewOpenThe",
+    ),
+    (
+        "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",
+        "errors.thisIsAPreviewOpenThe",
+    ),
+    ("You can add up to 50 accounts.", "errors.youCanAddUpTo50"),
+    ("En fazla 50 hesap eklenebilir.", "errors.youCanAddUpTo50"),
+    (
+        "Finish one of the pending usage sign-ins first.",
+        "errors.finishOneOfThePendingUsage",
+    ),
+    (
+        "Önce yarım kalan limit okuma girişlerinden birini tamamla.",
+        "errors.finishOneOfThePendingUsage",
+    ),
+    (
+        "Stop the running session for this account first.",
+        "errors.stopTheRunningSessionForThis",
+    ),
+    (
+        "Bu hesapta çalışan oturumu önce durdur.",
+        "errors.stopTheRunningSessionForThis",
+    ),
+    (
+        "The usage sign-in did not finish. Try again and approve it in the browser.",
+        "errors.theUsageSignInDidNot",
+    ),
+    (
+        "Limit okuma girişi tamamlanmadı. Yeniden dene ve tarayıcıda onayla.",
+        "errors.theUsageSignInDidNot",
+    ),
+    (
+        "The browser signed in with another Claude account; this profile belongs to its Claude app account. Switch to the right account on claude.ai or use “Open in Relay window”, then renew the sign-in.",
+        "errors.theBrowserSignedInWithAnother",
+    ),
+    (
+        "Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.",
+        "errors.theBrowserSignedInWithAnother",
+    ),
+    (
+        "This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.",
+        "errors.thisSignInBelongsToA",
+    ),
+    (
+        "Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.",
+        "errors.thisSignInBelongsToA",
+    ),
+    (
+        "The sign-in timed out. Start it again.",
+        "errors.theSignInTimedOutStart",
+    ),
+    (
+        "Giriş süresi doldu. Girişi yeniden başlat.",
+        "errors.theSignInTimedOutStart",
+    ),
+    (
+        "The usage sign-in could not be verified. Renew the usage sign-in.",
+        "errors.relayCannotVerifyTheUsageSign",
+    ),
+    (
+        "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
+        "errors.relayCannotVerifyTheUsageSign",
+    ),
+    (
+        "Could not start the usage sign-in. Check Claude Code CLI in Settings.",
+        "errors.theUsageSignInDidNot2",
+    ),
+    (
+        "Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.",
+        "errors.theUsageSignInDidNot2",
+    ),
+    (
+        "The browser approval came through, but the account could not be verified. Refresh limits; if it persists, renew the usage sign-in.",
+        "errors.theBrowserApprovalIsDoneBut",
+    ),
+    (
+        "Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
+        "errors.theBrowserApprovalIsDoneBut",
+    ),
+    (
+        "The account could not be verified. Refresh limits; if it persists, renew the usage sign-in.",
+        "errors.relayCannotVerifyTheAccountRefresh",
+    ),
+    (
+        "Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
+        "errors.relayCannotVerifyTheAccountRefresh",
+    ),
+    (
+        "The sign-in page isn’t ready yet or has expired. Start the sign-in again.",
+        "errors.theSignInPageIsNot",
+    ),
+    (
+        "Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.",
+        "errors.theSignInPageIsNot",
+    ),
+    (
+        "This sign-in attempt is no longer valid.",
+        "errors.thisSignInAttemptIsNo",
+    ),
+    (
+        "Bu giriş denemesi artık geçerli değil.",
+        "errors.thisSignInAttemptIsNo",
+    ),
+    (
+        "This sign-in attempt is not waiting for a code.",
+        "errors.thisSignInAttemptDoesNot",
+    ),
+    (
+        "Bu giriş işlemi kod beklemiyor.",
+        "errors.thisSignInAttemptDoesNot",
+    ),
+    (
+        "Paste the single-line code from the browser.",
+        "errors.pasteTheSingleLineCodeFrom",
+    ),
+    (
+        "Tarayıcının verdiği tek satırlık kodu yapıştır.",
+        "errors.pasteTheSingleLineCodeFrom",
+    ),
+    (
+        "This Desktop account is already saved in another profile.",
+        "errors.thisClaudeAppAccountIsAlready2",
+    ),
+    (
+        "Claude uygulamasındaki bu hesap başka bir profilde kayıtlı.",
+        "errors.thisClaudeAppAccountIsAlready2",
+    ),
+    (
+        "Open Claude Desktop, sign in and open the Code tab first.",
+        "errors.openTheClaudeAppSignIn",
+    ),
+    (
+        "Önce Claude uygulamasında giriş yap ve Code sekmesini aç.",
+        "errors.openTheClaudeAppSignIn",
+    ),
+    (
+        "Save the current Desktop account into a profile before adding another account.",
+        "errors.saveTheAccountOpenInThe",
+    ),
+    (
+        "Önce Claude uygulamasında açık hesabı bir profile kaydet.",
+        "errors.saveTheAccountOpenInThe",
+    ),
+    (
+        "Save the current Desktop account before switching.",
+        "errors.saveTheAccountOpenInThe2",
+    ),
+    (
+        "Geçişten önce Claude uygulamasında açık hesabı kaydet.",
+        "errors.saveTheAccountOpenInThe2",
+    ),
+    (
+        "Finish or cancel the current Desktop sign-in first.",
+        "errors.finishOrCancelTheCurrentClaude",
+    ),
+    (
+        "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
+        "errors.finishOrCancelTheCurrentClaude",
+    ),
+    (
+        "A Desktop operation is already in progress.",
+        "errors.aClaudeAppActionIsAlready",
+    ),
+    (
+        "Claude uygulamasında bir işlem sürüyor.",
+        "errors.aClaudeAppActionIsAlready",
+    ),
+    (
+        "Claude Desktop was not found on this platform.",
+        "errors.relayCannotFindTheClaudeApp",
+    ),
+    (
+        "Bu platformda Claude uygulaması bulunamadı.",
+        "errors.relayCannotFindTheClaudeApp",
+    ),
+    (
+        "Restore the interrupted Desktop switch first.",
+        "errors.restoreTheInterruptedSwitchFirst",
+    ),
+    (
+        "Önce yarım kalan geçişi geri yükle.",
+        "errors.restoreTheInterruptedSwitchFirst",
+    ),
+    (
+        "Connect this account in Claude Desktop first.",
+        "errors.connectThisAccountInTheClaude",
+    ),
+    (
+        "Önce bu hesabı Claude uygulamasında bağla.",
+        "errors.connectThisAccountInTheClaude",
+    ),
+    (
+        "Claude Desktop is not installed.",
+        "errors.theClaudeAppIsNotInstalled",
+    ),
+    (
+        "Claude uygulaması kurulu değil.",
+        "errors.theClaudeAppIsNotInstalled",
+    ),
+    (
+        "This profile belongs to another Desktop account. Create a new profile.",
+        "errors.thisProfileBelongsToAnotherClaude",
+    ),
+    (
+        "Bu profil Claude uygulamasındaki başka bir hesaba ait. Yeni bir profil oluştur.",
+        "errors.thisProfileBelongsToAnotherClaude",
+    ),
+    (
+        "Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.",
+        "errors.theClaudeAppDidNotClose",
+    ),
+    (
+        "Claude uygulaması kapanmadı. Açık çalışmanı bitirip uygulamayı kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.",
+        "errors.theClaudeAppDidNotClose",
+    ),
+    (
+        "System encryption is unavailable. Desktop sign-in was not saved.",
+        "errors.systemEncryptionIsNotAvailableRelay",
+    ),
+    (
+        "İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.",
+        "errors.systemEncryptionIsNotAvailableRelay",
+    ),
+    (
+        "Wait for the account connection refresh to finish.",
+        "errors.waitForTheUsageSignIn",
+    ),
+    (
+        "Limit okuma girişinin yenilenmesi bitene kadar bekle.",
+        "errors.waitForTheUsageSignIn",
+    ),
+    (
+        "Finish the Desktop handoff before signing in.",
+        "errors.waitForTheClaudeAppAction",
+    ),
+    (
+        "Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.",
+        "errors.waitForTheClaudeAppAction",
+    ),
+    (
+        "Finish the Desktop handoff before starting another Desktop operation.",
+        "errors.waitForTheClaudeAppAction2",
+    ),
+    (
+        "Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.",
+        "errors.waitForTheClaudeAppAction2",
+    ),
+    ("Invalid IPC source.", "errors.invalidIpcSource"),
+    ("Geçersiz IPC kaynağı.", "errors.invalidIpcSource"),
+    (
+        "The active Desktop account must be known before automatic preparation.",
+        "errors.relayMustKnowTheAccountOpen",
+    ),
+    (
+        "Otomatik hazırlıktan önce Claude uygulamasında açık hesap bilinmeli.",
+        "errors.relayMustKnowTheAccountOpen",
+    ),
+    (
+        "Desktop account changed before automatic preparation.",
+        "errors.theAccountInTheClaudeApp2",
+    ),
+    (
+        "Otomatik hazırlıktan önce Claude uygulamasındaki hesap değişti.",
+        "errors.theAccountInTheClaudeApp2",
+    ),
+    (
+        "Automatic preparation is no longer authorized.",
+        "errors.automaticPreparationIsNoLongerAllowed",
+    ),
+    (
+        "Otomatik hazırlığa artık izin yok.",
+        "errors.automaticPreparationIsNoLongerAllowed",
+    ),
+    (
+        "The selected Desktop account changed before automatic preparation.",
+        "errors.theSelectedAccountChangedBeforeAutomatic",
+    ),
+    (
+        "Otomatik hazırlıktan önce seçilen hesap değişti.",
+        "errors.theSelectedAccountChangedBeforeAutomatic",
+    ),
+    (
+        "Automatic Desktop switch was cancelled before restart.",
+        "errors.relayStoppedTheAutomaticSwitchBefore",
+    ),
+    (
+        "Otomatik geçiş, yeniden başlatmadan önce iptal edildi.",
+        "errors.relayStoppedTheAutomaticSwitchBefore",
+    ),
+    ("Missing Code record.", "errors.missingCodeRecord"),
+    ("Code kaydı bulunamadı.", "errors.missingCodeRecord"),
+    (
+        "The process list could not be read.",
+        "errors.relayCannotReadTheProcessList",
+    ),
+    (
+        "İşlem listesi okunamadı.",
+        "errors.relayCannotReadTheProcessList",
+    ),
+    (
+        "Invalid CLI authentication status.",
+        "errors.theCliSignInStatusIs",
+    ),
+    (
+        "Claude CLI giriş durumu geçersiz.",
+        "errors.theCliSignInStatusIs",
+    ),
+    (
+        "Check that the right account is open in the Claude app.",
+        "errors.makeSureThatTheCorrectAccount",
+    ),
+    (
+        "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
+        "errors.makeSureThatTheCorrectAccount",
+    ),
+    (
+        "Sending to the Claude app is not supported on this platform or CLI version.",
+        "errors.thisPlatformOrCliVersionCannot",
+    ),
+    (
+        "Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.",
+        "errors.thisPlatformOrCliVersionCannot",
+    ),
+    (
+        "Continue with the chosen account in Relay first, then send that session to the Claude app.",
+        "errors.continueWithTheSelectedAccountIn",
+    ),
+    (
+        "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.",
+        "errors.continueWithTheSelectedAccountIn",
+    ),
+    (
+        "Finish or cancel this account’s usage sign-in first.",
+        "errors.finishOrCancelThisAccountS",
+    ),
+    (
+        "Önce bu hesabın limit okuma girişini tamamla ya da iptal et.",
+        "errors.finishOrCancelThisAccountS",
+    ),
+    (
+        "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
+        "errors.thisAccountIsOnHoldRemove",
+    ),
+    (
+        "Proje klasörü bulunamadı. Klasörü yeniden seç.",
+        "errors.relayCannotFindTheProjectFolder",
+    ),
+    (
+        "Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.",
+        "errors.stopThisProjectSRunningSession",
+    ),
+    (
+        "Switch Claude Desktop to a saved account first.",
+        "errors.switchTheClaudeAppToA",
+    ),
+    (
+        "Claude uygulamasını önce kayıtlı bir hesaba geçir.",
+        "errors.switchTheClaudeAppToA",
+    ),
+    (
+        "The Claude browser extension is not supported here.",
+        "errors.theClaudeBrowserExtensionIsNot",
+    ),
+    (
+        "Claude tarayıcı eklentisi burada desteklenmiyor.",
+        "errors.theClaudeBrowserExtensionIsNot",
+    ),
+    ("Hesap bulunamadı.", "errors.accountNotFound"),
+    ("Terminal bulunamadı.", "errors.terminalNotFound"),
+    (
+        "Önce çalışan oturumu durdur.",
+        "errors.stopTheRunningSessionFirst",
+    ),
+    (
+        "En fazla 20 canlı terminal açılabilir.",
+        "errors.youCanOpenUpTo20",
+    ),
+    (
+        "Switch the Claude app to another account before removing this one.",
+        "errors.switchTheClaudeAppToAnother",
+    ),
+    (
+        "Bu hesabı kaldırmadan önce Claude uygulamasında başka bir hesaba geç.",
+        "errors.switchTheClaudeAppToAnother",
+    ),
+    (
+        "Finish or cancel this account’s Claude app sign-in before removing it.",
+        "errors.finishOrCancelThisAccountS2",
+    ),
+    (
+        "Bu hesabı kaldırmadan önce Claude uygulaması girişini tamamla ya da iptal et.",
+        "errors.finishOrCancelThisAccountS2",
+    ),
+    (
+        "Claude Code is running with this account.",
+        "errors.claudeCodeIsRunningWithThis",
+    ),
+    (
+        "Claude Code bu hesapla çalışıyor.",
+        "errors.claudeCodeIsRunningWithThis",
+    ),
+    (
+        "Another process is signing this account in or renewing its connection.",
+        "errors.anotherProcessSignsThisAccountIn",
+    ),
+    (
+        "Başka bir işlem bu hesabın girişini yapıyor ya da bağlantısını yeniliyor.",
+        "errors.anotherProcessSignsThisAccountIn",
+    ),
+    (
+        "Save this account’s Claude app sign-in first.",
+        "errors.saveThisAccountSClaudeApp",
+    ),
+    (
+        "Önce bu hesabın Claude uygulaması girişini kaydet.",
+        "errors.saveThisAccountSClaudeApp",
+    ),
+    (
+        "The Claude Code version could not be read. Check the executable.",
+        "errors.relayCannotReadTheClaudeCode",
+    ),
+    (
+        "Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.",
+        "errors.relayCannotReadTheClaudeCode",
+    ),
+    (
+        "No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay.",
+        "errors.relayCannotFindASystemKeyring",
+    ),
+    (
+        "Sistem anahtarlığı bulunamadı (Secret Service ya da KWallet), bu yüzden Claude uygulaması girişleri kaydedilemiyor. gnome-keyring ya da KWallet’i kurup kilidini aç, sonra Relay’i yeniden başlat.",
+        "errors.relayCannotFindASystemKeyring",
+    ),
+    (
+        "System encryption is unavailable, so Claude app sign-ins cannot be saved.",
+        "errors.systemEncryptionIsNotAvailableSo",
+    ),
+    (
+        "İşletim sistemi şifrelemesi kullanılamıyor, bu yüzden Claude uygulaması girişleri kaydedilemiyor.",
+        "errors.systemEncryptionIsNotAvailableSo",
+    ),
+    (
+        "Relay’s account list was written by a newer version. Update this copy of Relay before changing it.",
+        "errors.aNewerRelayVersionWroteThe",
+    ),
+    (
+        "Relay’in hesap listesini daha yeni bir sürüm yazmış. Değiştirmeden önce bu Relay kopyasını güncelle.",
+        "errors.aNewerRelayVersionWroteThe",
+    ),
+    (
+        "Relay’s account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.",
+        "errors.relay011OrOlderWrote",
+    ),
+    (
+        "Relay’in hesap listesini Relay 0.11 ya da daha eski bir sürüm yazmış. Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.",
+        "errors.relay011OrOlderWrote",
+    ),
+    (
+        "None of the old saved sign-in files could be opened, so nothing was moved. Relay tries again at its next start.",
+        "errors.relayCannotOpenAnyOfThe",
+    ),
+    (
+        "Eski kayıtlı giriş dosyalarının hiçbiri açılamadı, bu yüzden hiçbir şey taşınmadı. Relay bir sonraki açılışta yeniden dener.",
+        "errors.relayCannotOpenAnyOfThe",
+    ),
+    (
+        "The recovery backup named in journal.json could not be opened, so the saved sign-ins were not moved to the new format.",
+        "errors.relayCannotOpenTheRecoveryBackup",
+    ),
+    (
+        "journal.json’daki kurtarma yedeği açılamadı, bu yüzden kayıtlı girişler yeni biçime taşınmadı.",
+        "errors.relayCannotOpenTheRecoveryBackup",
+    ),
+    (
+        "Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.",
+        "errors.relayCannotOpenItsOldSaved",
+    ),
+    (
+        "Relay eski kayıtlı girişleri bu sefer açamadı (macOS anahtarlarına erişim izni vermedi). Hiçbir şey taşınmadı; Relay bir sonraki açılışta yeniden dener.",
+        "errors.relayCannotOpenItsOldSaved",
+    ),
+    // Core errors thrown in English since the i18n migration (electron/core, main), then their former Turkish text.
+    (
+        "The data folder cannot be a symbolic link.",
+        "errors.theDataFolderCannotBeA",
+    ),
+    (
+        "Veri klasörü sembolik bağlantı olamaz.",
+        "errors.theDataFolderCannotBeA",
+    ),
+    ("Invalid settings file.", "errors.invalidSettingsFile"),
+    ("Geçersiz ayar dosyası.", "errors.invalidSettingsFile"),
+    ("Account not found.", "errors.accountNotFound"),
+    (
+        "Another Relay process (in a terminal) is using this account. Try again when it ends.",
+        "errors.anotherRelayProcessInATerminal",
+    ),
+    (
+        "Bu hesap şu an başka bir Relay işleminde (terminalde) kullanılıyor; o bitince yeniden dene.",
+        "errors.anotherRelayProcessInATerminal",
+    ),
+    (
+        "The session path is outside the profile folder.",
+        "errors.theSessionPathIsOutside",
+    ),
+    (
+        "Oturum yolu profil klasörünün dışında.",
+        "errors.theSessionPathIsOutside",
+    ),
+    (
+        "Symbolic links are not supported in sessions.",
+        "errors.symbolicLinksAreNotSupportedIn",
+    ),
+    (
+        "Oturumlarda sembolik bağlantılar desteklenmiyor.",
+        "errors.symbolicLinksAreNotSupportedIn",
+    ),
+    (
+        "The session exceeds the preview limit.",
+        "errors.theSessionExceedsThePreview",
+    ),
+    (
+        "Oturum önizleme sınırını aşıyor.",
+        "errors.theSessionExceedsThePreview",
+    ),
+    (
+        "This session exceeds the transfer limit.",
+        "errors.thisSessionExceedsTheTransfer",
+    ),
+    (
+        "Bu oturum aktarım sınırını aşıyor.",
+        "errors.thisSessionExceedsTheTransfer",
+    ),
+    (
+        "The session is still being written. Close the running session first.",
+        "errors.theSessionIsStillBeingWritten",
+    ),
+    (
+        "Oturum hâlâ yazılıyor. Önce çalışan oturumu kapat.",
+        "errors.theSessionIsStillBeingWritten",
+    ),
+    (
+        "The session has a missing or damaged record. Close the source terminal and try again.",
+        "errors.theSessionHasAMissingOr",
+    ),
+    (
+        "Oturumda eksik veya bozuk bir kayıt var. Kaynak terminali kapatıp tekrar dene.",
+        "errors.theSessionHasAMissingOr",
+    ),
+    (
+        "The session record format is not supported.",
+        "errors.theSessionRecordFormatIsNot",
+    ),
+    (
+        "Oturum kayıt biçimi desteklenmiyor.",
+        "errors.theSessionRecordFormatIsNot",
+    ),
+    (
+        "The file holds a different session ID. The transfer stopped.",
+        "errors.theFileHoldsADifferentSession",
+    ),
+    (
+        "Dosyada farklı bir oturum kimliği bulundu. Aktarım durduruldu.",
+        "errors.theFileHoldsADifferentSession",
+    ),
+    (
+        "An empty session cannot be transferred.",
+        "errors.anEmptySessionCannotBeTransferred",
+    ),
+    (
+        "Boş oturum aktarılamaz.",
+        "errors.anEmptySessionCannotBeTransferred",
+    ),
+    (
+        "The target session folder is invalid.",
+        "errors.theTargetSessionFolderIsInvalid",
+    ),
+    (
+        "Hedef oturum klasörü geçersiz.",
+        "errors.theTargetSessionFolderIsInvalid",
+    ),
+    (
+        "This account is not a Claude account; it connects through its own provider.",
+        "errors.thisAccountIsNotAClaude",
+    ),
+    (
+        "Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.",
+        "errors.thisAccountIsNotAClaude",
+    ),
+    (
+        "This account is on hold. Remove the hold on Accounts, or select another account.",
+        "errors.thisAccountIsOnHoldRemove",
+    ),
+    (
+        "Relay cannot find the project folder. Select it again.",
+        "errors.relayCannotFindTheProjectFolder",
+    ),
+    (
+        "Stop this project’s running session on the Live tab first.",
+        "errors.stopThisProjectSRunningSession",
+    ),
+    (
+        "An imported session needs the target account confirmed.",
+        "errors.anImportedSessionNeedsTheTarget",
+    ),
+    (
+        "İçe aktarılan oturum için hedef hesap onayı gerekiyor.",
+        "errors.anImportedSessionNeedsTheTarget",
+    ),
+    (
+        "These accounts are not in the same sharing group. Work sessions can move only to accounts in the same group.",
+        "errors.theseAccountsAreNotInThe",
+    ),
+    (
+        "Bu hesaplar aynı paylaşım grubunda değil. Şirket oturumları yalnızca aynı gruptaki hesaplara aktarılabilir.",
+        "errors.theseAccountsAreNotInThe",
+    ),
+    (
+        "Only work sessions can change accounts.",
+        "errors.onlyWorkSessionsCanChangeAccounts",
+    ),
+    (
+        "Yalnızca çalışma oturumlarında hesap değiştirilebilir.",
+        "errors.onlyWorkSessionsCanChangeAccounts",
+    ),
+    (
+        "The accounts must be in the same sharing group.",
+        "errors.theAccountsMustBeInThe",
+    ),
+    (
+        "Hesaplar aynı paylaşım grubunda olmalı.",
+        "errors.theAccountsMustBeInThe",
+    ),
+    (
+        "The target account is on hold. Remove the hold first.",
+        "errors.theTargetAccountIsOnHold",
+    ),
+    (
+        "Hedef hesap beklemede. Önce beklemeyi kaldır.",
+        "errors.theTargetAccountIsOnHold",
+    ),
+    (
+        "Sign in to the target account. The current work was not stopped.",
+        "errors.signInToTheTargetAccount",
+    ),
+    (
+        "Hedef hesaba giriş yap. Mevcut çalışma durdurulmadı.",
+        "errors.signInToTheTargetAccount",
+    ),
+    (
+        "Session not found. Refresh the catalog.",
+        "errors.sessionNotFoundRefreshTheCatalog",
+    ),
+    (
+        "Oturum bulunamadı. Kataloğu yenile.",
+        "errors.sessionNotFoundRefreshTheCatalog",
+    ),
+    (
+        "This account has a sign-in in progress or this project has a live session. Stop it on the Live tab first.",
+        "errors.thisAccountHasASignIn",
+    ),
+    (
+        "Bu hesapta giriş işlemi veya bu projede canlı bir oturum var. Önce Canlı çalışma sekmesinden durdur.",
+        "errors.thisAccountHasASignIn",
+    ),
+    (
+        "You can open up to 20 live terminals.",
+        "errors.youCanOpenUpTo20",
+    ),
+    (
+        "Another Relay process is renewing this account’s connection. Try again in a moment.",
+        "errors.anotherRelayProcessIsRenewingThis",
+    ),
+    (
+        "Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.",
+        "errors.anotherRelayProcessIsRenewingThis",
+    ),
+    (
+        "Stop the running session first.",
+        "errors.stopTheRunningSessionFirst",
+    ),
+    ("Terminal not found.", "errors.terminalNotFound"),
+    (
+        "This profile needs a sign-in with a Claude subscription.",
+        "errors.thisProfileNeedsAClaudeSubscription",
+    ),
+    // Saved in an account's sign-in status by builds before 0.29, so a registry may still hold it.
+    (
+        "Bu profil Claude aboneliği ile giriş gerektiriyor.",
+        "errors.thisProfileNeedsAClaudeSubscription",
+    ),
+    (
+        "The process has not closed yet. The transfer did not start.",
+        "errors.theProcessHasNotClosedYet",
+    ),
+    (
+        "Sign in with this account first.",
+        "errors.signInWithThisAccountFirst",
+    ),
+    (
+        "This overflow upstream no longer exists.",
+        "errors.overflowUpstreamGone",
+    ),
+    (
+        "Enter this overflow upstream’s API key first.",
+        "errors.overflowUpstreamNeedsKey",
+    ),
+];
+
+/// `new Map(BACKEND_ERRORS)`: a text listed twice keeps its last id.
+static BY_TEXT: LazyLock<HashMap<&'static str, &'static str>> =
+    LazyLock::new(|| BACKEND_ERRORS.iter().copied().collect());
+
+/// A backend error with variable parts: its pattern, its message and the message's values.
+struct Pattern {
+    matcher: Regex,
+    id: &'static str,
+    params: fn(&Captures<'_>, Locale) -> Args,
+}
+
+fn group<'a>(m: &'a Captures<'_>, i: usize) -> &'a str {
+    m.get(i).map_or("", |g| g.as_str())
+}
+
+fn item(m: &Captures<'_>, _: Locale) -> Args {
+    Args::new().set("item", group(m, 1))
+}
+
+static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
+    let re = |p: &str| Regex::new(p).expect("static pattern");
+    vec![
+        // electron/core/vault-key.ts (VaultKeyError) and vault-migration.ts, around the Keychain item.
+        Pattern {
+            matcher: re(r#"^The Keychain item "([^"]+)" was not found\.$"#),
+            id: "errors.keychainItemNotFound",
+            params: item,
+        },
+        Pattern {
+            matcher: re(
+                r#"^The Keychain item "([^"]+)" could not be read\. Unlock the login keychain and try again\.$"#,
+            ),
+            id: "errors.keychainItemUnlock",
+            params: item,
+        },
+        Pattern {
+            matcher: re(r#"^The Keychain item "([^"]+)" does not hold a vault key\.$"#),
+            id: "errors.keychainItemNoVaultKey",
+            params: item,
+        },
+        Pattern {
+            matcher: re(
+                r#"(?s)^The Keychain item "([^"]+)" could not be read, so saved Claude app sign-ins cannot be opened\.(?: (.*?))?( To start over, run relay reset-vault \(npm i -g @ahmetcankacar/relay\) and save each account again\.)?$"#,
+            ),
+            id: "errors.keychainVaultUnreadable",
+            params: |m, language| {
+                let detail = group(m, 2);
+                Args::new()
+                    .set("item", group(m, 1))
+                    .set(
+                        "detail",
+                        if detail.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" {}", localize_error(detail, language))
+                        },
+                    )
+                    .set(
+                        "reset",
+                        if group(m, 3).is_empty() {
+                            String::new()
+                        } else {
+                            translate(language, "errors.keychainResetHint", &Args::new())
+                        },
+                    )
+            },
+        },
+        Pattern {
+            matcher: re(r#"(?s)^The Keychain item "([^"]+)" could not be read\. (.+)$"#),
+            id: "errors.keychainItemUnreadableDetail",
+            params: |m, language| {
+                Args::new()
+                    .set("item", group(m, 1))
+                    .set("detail", localize_error(group(m, 2), language))
+            },
+        },
+        Pattern {
+            matcher: re(r"(?s)^Relay’s saved sign-ins could not be read: (.*)$"),
+            id: "errors.savedSignInsUnreadable",
+            params: |m, language| Args::new().set("detail", localize_error(group(m, 1), language)),
+        },
+        Pattern {
+            matcher: re(
+                r"^Relay’s saved sign-ins were written by a newer version \(format ([0-9]+)\)\. Update Relay\.$",
+            ),
+            id: "errors.savedSignInsNewerFormat",
+            params: |m, _| Args::new().set("format", group(m, 1)),
+        },
+        Pattern {
+            matcher: re(
+                r"^([0-9]+) saved sign-in files? could not be opened and (?:was|were) set aside in desktop-vault/unreadable\. Save the affected accounts’ Claude app sign-ins again\.$",
+            ),
+            id: "errors.signInFilesSetAside",
+            // `Number(m[1])`: digits only, so the parse cannot fail short of overflow to infinity.
+            params: |m, _| {
+                Args::new().set("count", group(m, 1).parse::<f64>().unwrap_or(f64::INFINITY))
+            },
+        },
+    ]
+});
+
+/// `message` in `language`: a known backend error is translated, anything else is left as it is.
+pub fn localize_error(message: &str, language: Locale) -> String {
+    if let Some(id) = BY_TEXT.get(message) {
+        return translate(language, id, &Args::new());
+    }
+    for pattern in PATTERNS.iter() {
+        if let Some(m) = pattern.matcher.captures(message) {
+            return translate(language, pattern.id, &(pattern.params)(&m, language));
+        }
+    }
+    message.to_string()
+}

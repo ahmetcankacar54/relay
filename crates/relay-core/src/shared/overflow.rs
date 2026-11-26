@@ -112,9 +112,17 @@ pub struct OverflowRates {
     pub input: f64,
     #[serde(serialize_with = "js::ser_num")]
     pub output: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_read: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_write: Option<f64>,
 }
 
@@ -164,7 +172,11 @@ pub struct OverflowSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger: Option<OverflowTrigger>,
     /// Today's spend at which overflow stops; none means no cap.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub daily_cap_usd: Option<f64>,
     pub upstreams: Vec<ApiUpstream>,
 }
@@ -188,7 +200,11 @@ pub struct OverflowStatusUpstream {
 pub struct OverflowStatus {
     pub enabled: bool,
     pub trigger: OverflowTrigger,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub daily_cap_usd: Option<f64>,
     /// Overflow spend today in the planning time zone.
     #[serde(serialize_with = "js::ser_num")]
@@ -204,7 +220,9 @@ fn ser_cap<S: Serializer>(value: &Option<Option<f64>>, serializer: S) -> Result<
 }
 
 /// `Some(None)` for an explicit `null`, `None` for a missing key.
-fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<Option<T>>, D::Error> {
     Option::<T>::deserialize(d).map(Some)
 }
 
@@ -216,7 +234,12 @@ pub struct OverflowConfigureInput {
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger: Option<OverflowTrigger>,
-    #[serde(default, deserialize_with = "present", serialize_with = "ser_cap", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "present",
+        serialize_with = "ser_cap",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub daily_cap_usd: Option<Option<f64>>,
     /// Upstream ids, first tried first.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -248,7 +271,11 @@ pub struct OverflowTestResult {
     pub ok: bool,
     /// The model the upstream was asked for.
     pub model: String,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub status: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
@@ -268,31 +295,56 @@ pub fn overflow_preset(preset: ApiUpstreamPreset) -> OverflowPreset {
     use ApiUpstreamAuth::{Bearer, XApiKey};
     let (label, base_url, auth_style, model_map) = match preset {
         // The same ids as Claude Code asks for: nothing to rewrite.
-        ApiUpstreamPreset::Anthropic => ("Anthropic API", "https://api.anthropic.com", XApiKey, OverflowModelMap::default()),
+        ApiUpstreamPreset::Anthropic => (
+            "Anthropic API",
+            "https://api.anthropic.com",
+            XApiKey,
+            OverflowModelMap::default(),
+        ),
         ApiUpstreamPreset::Openrouter => (
             "OpenRouter",
             "https://openrouter.ai/api",
             Bearer,
-            OverflowModelMap::of("anthropic/claude-opus-5.5", "anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-5.5", None),
+            OverflowModelMap::of(
+                "anthropic/claude-opus-5.5",
+                "anthropic/claude-sonnet-5.5",
+                "anthropic/claude-haiku-5.5",
+                None,
+            ),
         ),
         ApiUpstreamPreset::Deepseek => (
             "DeepSeek",
             "https://api.deepseek.com/anthropic",
             XApiKey,
-            OverflowModelMap::of("deepseek-v4-pro", "deepseek-flash", "deepseek-flash", Some("deepseek-flash")),
+            OverflowModelMap::of(
+                "deepseek-v4-pro",
+                "deepseek-flash",
+                "deepseek-flash",
+                Some("deepseek-flash"),
+            ),
         ),
         // K2 closes to new users from 2026-10-31 and retires at the end of 2026.
         ApiUpstreamPreset::Kimi => (
             "Kimi",
             "https://api.moonshot.ai/anthropic",
             Bearer,
-            OverflowModelMap::of("kimi-k3.1-pro", "kimi-k3.1-pro", "kimi-k3", Some("kimi-k3.1-pro")),
+            OverflowModelMap::of(
+                "kimi-k3.1-pro",
+                "kimi-k3.1-pro",
+                "kimi-k3",
+                Some("kimi-k3.1-pro"),
+            ),
         ),
         ApiUpstreamPreset::KimiCn => (
             "Kimi (China)",
             "https://api.moonshot.cn/anthropic",
             Bearer,
-            OverflowModelMap::of("kimi-k3.1-pro", "kimi-k3.1-pro", "kimi-k3", Some("kimi-k3.1-pro")),
+            OverflowModelMap::of(
+                "kimi-k3.1-pro",
+                "kimi-k3.1-pro",
+                "kimi-k3",
+                Some("kimi-k3.1-pro"),
+            ),
         ),
         ApiUpstreamPreset::Glm => (
             "Z.ai GLM",
@@ -308,7 +360,12 @@ pub fn overflow_preset(preset: ApiUpstreamPreset) -> OverflowPreset {
         ),
         ApiUpstreamPreset::Custom => ("Custom", "", XApiKey, OverflowModelMap::default()),
     };
-    OverflowPreset { label, base_url, auth_style, model_map }
+    OverflowPreset {
+        label,
+        base_url,
+        auth_style,
+        model_map,
+    }
 }
 
 /// A model id without the `[1m]`-style suffix Claude Code adds for long context, lowercased.
@@ -344,7 +401,12 @@ pub fn overflow_model(model_map: &OverflowModelMap, requested: &str) -> String {
 }
 
 const fn rates(cache_read: f64, input: f64, output: f64) -> OverflowRates {
-    OverflowRates { input, output, cache_read: Some(cache_read), cache_write: None }
+    OverflowRates {
+        input,
+        output,
+        cache_read: Some(cache_read),
+        cache_write: None,
+    }
 }
 
 /// DeepSeek's off-peak prices; peak hours cost double.
@@ -406,15 +468,35 @@ pub fn preset_rates(preset: ApiUpstreamPreset, model: &str, at: f64) -> Option<O
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OverflowTokens {
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub input: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub output: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_read: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_write: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_write_1h: Option<f64>,
 }
 
@@ -448,7 +530,12 @@ pub fn overflow_cost(
         }
     }
     let rates = prices
-        .map(|p| OverflowRates { input: p.input, output: p.output, cache_read: None, cache_write: None })
+        .map(|p| OverflowRates {
+            input: p.input,
+            output: p.output,
+            cache_read: None,
+            cache_write: None,
+        })
         .or_else(|| preset_rates(preset, model, at))
         .or(fetched.copied())?;
     Some(
@@ -462,10 +549,16 @@ pub fn overflow_cost(
 
 /// A masked key for the page: its first characters and last four, never the rest.
 pub fn key_hint(key: &str) -> String {
+    String::from_utf16_lossy(&key_hint_units(key))
+}
+
+/// `key_hint` as the UTF-16 code units JS makes: its last four units may split a surrogate pair,
+/// which a Rust `String` cannot hold.
+pub fn key_hint_units(key: &str) -> Vec<u16> {
     let trimmed = js_trim(key);
     let units: Vec<u16> = trimmed.encode_utf16().collect();
     if units.len() <= 8 {
-        return "…".to_string();
+        return "…".encode_utf16().collect();
     }
     let letters = trimmed.bytes().take_while(u8::is_ascii_alphabetic).count();
     let head = if (2..=4).contains(&letters) && trimmed.as_bytes().get(letters) == Some(&b'-') {
@@ -473,8 +566,9 @@ pub fn key_hint(key: &str) -> String {
     } else {
         ""
     };
-    let tail = String::from_utf16_lossy(&units[units.len() - 4..]);
-    format!("{head}…{tail}")
+    let mut out: Vec<u16> = format!("{head}…").encode_utf16().collect();
+    out.extend_from_slice(&units[units.len() - 4..]);
+    out
 }
 
 /// When the local day `at` falls on (in `time_zone`) started and ends, in ms.
@@ -490,6 +584,9 @@ pub fn local_day_bounds(at: f64, time_zone: &str) -> (f64, f64) {
 /// Overflow spend in the local day `now` falls on, from the priced answers' times and costs.
 pub fn spent_today(costs: &[(f64, f64)], now: f64, time_zone: &str) -> f64 {
     let (start, end) = local_day_bounds(now, time_zone);
-    let sum = costs.iter().filter(|(at, _)| *at >= start && *at < end).fold(0.0, |sum, (_, cost)| sum + cost);
+    let sum = costs
+        .iter()
+        .filter(|(at, _)| *at >= start && *at < end)
+        .fold(0.0, |sum, (_, cost)| sum + cost);
     js::round(sum * 1e6) / 1e6
 }

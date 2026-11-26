@@ -1,0 +1,36 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/error-text.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "error-text-rs",
+  "exports": [
+    {
+      "name": "localizeError",
+      "file": "shared/error-text.ts",
+      "line": 369,
+      "params": [
+        {
+          "name": "message",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

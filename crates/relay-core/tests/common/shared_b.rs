@@ -23,17 +23,26 @@ pub fn sign_in_for(account_uuid: &str, n: u64) -> Vec<(String, String)> {
 
 /// Entries as `(&str, &str)` pairs.
 pub fn pairs(entries: &[(String, String)]) -> Vec<(&str, &str)> {
-    entries.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
+    entries
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect()
 }
 
 /// Entries as `(&str, Option<&str>)` pairs, every value present.
 pub fn some_pairs(entries: &[(String, String)]) -> Vec<(&str, Option<&str>)> {
-    entries.iter().map(|(k, v)| (k.as_str(), Some(v.as_str()))).collect()
+    entries
+        .iter()
+        .map(|(k, v)| (k.as_str(), Some(v.as_str())))
+        .collect()
 }
 
 /// `[(k, v), …]` with owned strings.
 pub fn owned(entries: &[(&str, &str)]) -> Vec<(String, String)> {
-    entries.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect()
+    entries
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect()
 }
 
 /// `Math.abs(actual - expected) < 1e-9`.

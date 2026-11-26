@@ -44,11 +44,23 @@ fn desktop_identity(account: &Account) -> Option<String> {
 /// The identity an account's recorded usage is filed under, also while it is signed out: a
 /// sign-out keeps the last verified UUID and organization.
 pub fn history_identity(account: &Account) -> Option<String> {
-    let Some(auth) = &account.auth else { return desktop_identity(account) };
+    let Some(auth) = &account.auth else {
+        return desktop_identity(account);
+    };
     let desktop = account.desktop.as_ref();
-    let uuid = auth.account_uuid.clone().or_else(|| desktop.map(|d| d.account_uuid.clone()));
-    let email = auth.email.as_ref().map(|e| super::time_zones::js_trim(e).to_lowercase());
-    let org = auth.org_id.clone().or_else(|| desktop.map(|d| d.org_id.clone())).unwrap_or_default();
+    let uuid = auth
+        .account_uuid
+        .clone()
+        .or_else(|| desktop.map(|d| d.account_uuid.clone()));
+    let email = auth
+        .email
+        .as_ref()
+        .map(|e| super::time_zones::js_trim(e).to_lowercase());
+    let org = auth
+        .org_id
+        .clone()
+        .or_else(|| desktop.map(|d| d.org_id.clone()))
+        .unwrap_or_default();
     let truthy = |v: &Option<String>| v.as_deref().is_some_and(|s| !s.is_empty());
     // Email alone proves a user, not which organization's quota was observed.
     if org.is_empty() || (!truthy(&uuid) && !truthy(&email)) {
@@ -63,7 +75,9 @@ pub fn history_identity(account: &Account) -> Option<String> {
 pub fn identity_owners(accounts: &[Account]) -> IndexMap<String, &Account> {
     let mut owner: IndexMap<String, &Account> = IndexMap::new();
     for account in accounts {
-        let Some(identity) = history_identity(account) else { continue };
+        let Some(identity) = history_identity(account) else {
+            continue;
+        };
         let logged_in = |a: &Account| a.auth.as_ref().is_some_and(|x| x.logged_in);
         match owner.get(&identity) {
             Some(current) if logged_in(current) || !logged_in(account) => {}
@@ -77,7 +91,8 @@ pub fn identity_owners(accounts: &[Account]) -> IndexMap<String, &Account> {
 
 fn normalized_window(window: Option<&UsageWindow>) -> Option<UsageWindow> {
     let window = window?;
-    if !window.used_percent.is_finite() || window.used_percent < 0.0 || window.used_percent > 100.0 {
+    if !window.used_percent.is_finite() || window.used_percent < 0.0 || window.used_percent > 100.0
+    {
         return None;
     }
     if let Some(reset) = &window.resets_at
@@ -87,7 +102,11 @@ fn normalized_window(window: Option<&UsageWindow>) -> Option<UsageWindow> {
     }
     Some(UsageWindow {
         used_percent: window.used_percent,
-        resets_at: window.resets_at.as_deref().filter(|r| !r.is_empty()).map(|r| iso(date_parse(r))),
+        resets_at: window
+            .resets_at
+            .as_deref()
+            .filter(|r| !r.is_empty())
+            .map(|r| iso(date_parse(r))),
         source: None,
         read_at: None,
     })

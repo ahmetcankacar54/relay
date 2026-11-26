@@ -1,0 +1,216 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/overflow.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "overflow-rs",
+  "exports": [
+    {
+      "name": "overflowFamily",
+      "file": "shared/overflow.ts",
+      "line": 210,
+      "params": [
+        {
+          "name": "model",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(\"opus\" | \"sonnet\" | \"haiku\") | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "overflowModel",
+      "file": "shared/overflow.ts",
+      "line": 219,
+      "params": [
+        {
+          "name": "upstream",
+          "ts_type": "Pick<ApiUpstream, \"modelMap\">",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "requested",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "deepseekPeak",
+      "file": "shared/overflow.ts",
+      "line": 242,
+      "params": [
+        {
+          "name": "at",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "presetRates",
+      "file": "shared/overflow.ts",
+      "line": 254,
+      "params": [
+        {
+          "name": "preset",
+          "ts_type": "(typeof OVERFLOW_PRESET_IDS)[number]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "model",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "at",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "OverflowRates | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "overflowCost",
+      "file": "shared/overflow.ts",
+      "line": 287,
+      "params": [
+        {
+          "name": "upstream",
+          "ts_type": "Pick<ApiUpstream, \"preset\" | \"prices\">",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "model",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "tokens",
+          "ts_type": "OverflowTokens",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "at",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "fetched",
+          "ts_type": "OverflowRates",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "number | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "keyHint",
+      "file": "shared/overflow.ts",
+      "line": 322,
+      "params": [
+        {
+          "name": "key",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "localDayBounds",
+      "file": "shared/overflow.ts",
+      "line": 330,
+      "params": [
+        {
+          "name": "at",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "timeZone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "{ start: number; end: number }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "spentToday",
+      "file": "shared/overflow.ts",
+      "line": 343,
+      "params": [
+        {
+          "name": "costs",
+          "ts_type": "readonly { at: number; cost: number }[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "timeZone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

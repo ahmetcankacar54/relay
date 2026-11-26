@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "../app/ErrorBoundary";
 import { bootI18n, I18nProvider } from "../data/i18n";
+import { applyLegacyStorage, inTauri } from "../data/tauri-bridge";
 import { api, RelayProvider } from "../data/useRelay";
 import { setMotionPaused } from "../lib/motion";
 import { RelayPrankStage } from "../pranks/RelayPrankStage";
@@ -21,9 +22,14 @@ document.body.style.overflow = "hidden";
 setMotionPaused(true);
 api.onPanelVisibility((shown) => setMotionPaused(!shown));
 
+// Under Tauri, Electron's saved window preferences come over first: the panel can open before
+// the main window (a login launch).
+const legacy = inTauri()
+  ? applyLegacyStorage().catch((error: unknown) => console.error(error))
+  : Promise.resolve();
 // The language is chosen before the first paint, so nothing shows in the wrong one. A boot that
 // fails still renders: a blank panel is worse than one in the fallback language.
-void bootI18n(api).catch((error: unknown) => console.error(error)).then(() =>
+void legacy.then(() => bootI18n(api)).catch((error: unknown) => console.error(error)).then(() =>
   createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <ErrorBoundary>

@@ -1,0 +1,17 @@
+{
+  "unit": "shared/browser-extension.ts",
+  "files": 1,
+  "fingerprint": "c487dbdaef0787e3",
+  "coverage": {
+    "lines": 388,
+    "reached": 388,
+    "files": [
+      {
+        "file": "shared/browser-extension.ts",
+        "lines": 388,
+        "reached": 388,
+        "missed": ""
+      }
+    ]
+  }
+}

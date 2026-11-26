@@ -1,0 +1,289 @@
+{"fn":"isAccountUuid","args":["0f8fad5b-d9cb-469f-a165-70867728950e"]}
+{"fn":"isAccountUuid","args":["0F8FAD5B-D9CB-469F-A165-70867728950E"]}
+{"fn":"isAccountUuid","args":["f8fad5b-d9cb-469f-a165-70867728950e"]}
+{"fn":"isAccountUuid","args":["0f8fad5b-d9cb-469f-a165-70867728950e "]}
+{"fn":"isAccountUuid","args":[" 0f8fad5b-d9cb-469f-a165-70867728950e"]}
+{"fn":"isAccountUuid","args":["x"]}
+{"fn":"isAccountUuid","args":[""]}
+{"fn":"isAccountUuid","args":[5]}
+{"fn":"isAccountUuid","args":[null]}
+{"fn":"isAccountUuid","args":[{"$undefined":true}]}
+{"fn":"isAccountUuid","args":[{}]}
+{"fn":"isAccountUuid","args":[["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"isAccountUuid","args":["0F8FAD5B-D9CB-469F-A165-70867728950G"]}
+{"fn":"isAccountUuid","args":["0f8fad5bd9cb469fa16570867728950e"]}
+{"fn":"isAccountUuid","args":["KKKKKKKK-d9cb-469f-a165-70867728950e"]}
+{"fn":"isAccountUuid","args":[]}
+{"fn":"withoutFailure","args":[{}]}
+{"fn":"withoutFailure","args":[{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001"}]}
+{"fn":"withoutFailure","args":[{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001","lastAuthFailureReason":"\"session_expired\"","startupReauthState":"{}","pairingOrgMismatch":"{}"}]}
+{"fn":"withoutFailure","args":[{"1":"c","2":"a","b":"b","lastAuthFailureReason":"x"}]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"session_expired\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"network_error\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"Timeout\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"OFFLINE now\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"service unavailable\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"   \""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\u0085\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\u00a0\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\ufeff\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\u2028\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"x\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","5"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","null"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","{}"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","[\"session_expired\"]"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","[115]"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","not json"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason",""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason"," \"session_expired\" "]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\t\"session_expired\"\n"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason"," \"session_expired\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\ud800\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\ud800network\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\udc00\\ud800\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"NETWORK\\u212a\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"netwırk\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"timeout\"x"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"ſession\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"tab\there\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"bad\\x\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"\\u12\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"a\\/b\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason","\"unterminated"]]]}
+{"fn":"sessionExpired","args":[[]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason",{"$undefined":true}],["lastAuthFailureReason","\"session_expired\""]]]}
+{"fn":"sessionExpired","args":[[["other","\"session_expired\""],["lastAuthFailureReason","\"network\""],["lastAuthFailureReason","\"session_expired\""]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason"]]]}
+{"fn":"sessionExpired","args":[[["lastAuthFailureReason",null]]]}
+{"fn":"sessionExpired","args":[{"$map":[["lastAuthFailureReason","\"session_expired\""]]}]}
+{"fn":"isSignInEntry","args":["accessToken","\"x\""]}
+{"fn":"isSignInEntry","args":["AUTH","\"x\""]}
+{"fn":"isSignInEntry","args":["account","\"x\""]}
+{"fn":"isSignInEntry","args":["userName","\"x\""]}
+{"fn":"isSignInEntry","args":["session","\"x\""]}
+{"fn":"isSignInEntry","args":["OAuth","\"x\""]}
+{"fn":"isSignInEntry","args":["credential","\"x\""]}
+{"fn":"isSignInEntry","args":["login","\"x\""]}
+{"fn":"isSignInEntry","args":["expiresAt","\"x\""]}
+{"fn":"isSignInEntry","args":["refresh","\"x\""]}
+{"fn":"isSignInEntry","args":["identity","\"x\""]}
+{"fn":"isSignInEntry","args":["organization","\"x\""]}
+{"fn":"isSignInEntry","args":["organisation","\"x\""]}
+{"fn":"isSignInEntry","args":["org","\"x\""]}
+{"fn":"isSignInEntry","args":["myOrg","\"x\""]}
+{"fn":"isSignInEntry","args":["my_org","\"x\""]}
+{"fn":"isSignInEntry","args":["my-org","\"x\""]}
+{"fn":"isSignInEntry","args":["selectedOrg","\"x\""]}
+{"fn":"isSignInEntry","args":["orgId","\"x\""]}
+{"fn":"isSignInEntry","args":["theme","\"x\""]}
+{"fn":"isSignInEntry","args":["lastActiveOrgHint","\"x\""]}
+{"fn":"isSignInEntry","args":["codeVerifier","\"x\""]}
+{"fn":"isSignInEntry","args":["signInState","\"x\""]}
+{"fn":"isSignInEntry","args":["lastAuthFailureReason","\"x\""]}
+{"fn":"isSignInEntry","args":["startupReauthState","\"x\""]}
+{"fn":"isSignInEntry","args":["pairingOrgMismatch","\"x\""]}
+{"fn":"isSignInEntry","args":["selectedModel","\"x\""]}
+{"fn":"isSignInEntry","args":["toKen","\"x\""]}
+{"fn":"isSignInEntry","args":["ſession","\"x\""]}
+{"fn":"isSignInEntry","args":["İdentity","\"x\""]}
+{"fn":"isSignInEntry","args":["ıdentity","\"x\""]}
+{"fn":"isSignInEntry","args":["ACCOUNT","\"x\""]}
+{"fn":"isSignInEntry","args":["","\"x\""]}
+{"fn":"isSignInEntry","args":["1","\"x\""]}
+{"fn":"isSignInEntry","args":["Org","\"x\""]}
+{"fn":"isSignInEntry","args":[".org","\"x\""]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"12345678\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"1234567\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"accessToken\" : \"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"ACCESS_TOKEN\":\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"refresh_token\":\t\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"id_token\":\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"idToken\":\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"idtoken\":\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"id__token\":\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\": \"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":﻿\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\": 　\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":᠎\"abcdefghij\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"😀😀😀😀\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"😀😀😀\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"😀😀😀a\"}"]}
+{"fn":"isSignInEntry","args":["theme","{\"access_token\":\"ab\"}x\"abcdefghij\""]}
+{"fn":"isSignInEntry","args":["theme","\"idtoken\":\"x\"idtoken\":\"abcdefghij\""]}
+{"fn":"isSignInEntry","args":["theme","\"idtoken\":\"idtoken\": \"abcdefghij\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oat01-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oat01-ABCDEFG\""]}
+{"fn":"isSignInEntry","args":["theme","\"SK-ANT-OAT01-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oauth99-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-o-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oat123-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oat-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-api03-abc_def-gh\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oat01-ABCKDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oaK01-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-oat١-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"sk-ant-ſid01-ABCDEFGH\""]}
+{"fn":"isSignInEntry","args":["theme","\"plain\""]}
+{"fn":"isSignInEntry","args":["theme",""]}
+{"fn":"isSignInEntry","args":["theme","{\"accessıtoken\":\"abcdefghij\"}"]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"12345678\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"1234567\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"accessToken\" : \"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"ACCESS_TOKEN\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"refresh_token\":\t\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"id_token\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"idToken\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"idtoken\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"id__token\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\": \"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":﻿\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\": 　\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":᠎\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"😀😀😀😀\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"😀😀😀\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"😀😀😀a\"}"]]]}
+{"fn":"holdsToken","args":[[["x","{\"access_token\":\"ab\"}x\"abcdefghij\""]]]}
+{"fn":"holdsToken","args":[[["x","\"idtoken\":\"x\"idtoken\":\"abcdefghij\""]]]}
+{"fn":"holdsToken","args":[[["x","\"idtoken\":\"idtoken\": \"abcdefghij\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oat01-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oat01-ABCDEFG\""]]]}
+{"fn":"holdsToken","args":[[["x","\"SK-ANT-OAT01-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oauth99-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-o-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oat123-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oat-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-api03-abc_def-gh\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oat01-ABCKDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oaK01-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-oat١-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"sk-ant-ſid01-ABCDEFGH\""]]]}
+{"fn":"holdsToken","args":[[["x","\"plain\""]]]}
+{"fn":"holdsToken","args":[[["x",""]]]}
+{"fn":"holdsToken","args":[[["x","{\"accessıtoken\":\"abcdefghij\"}"]]]}
+{"fn":"holdsToken","args":[[["accessToken","null"]]]}
+{"fn":"holdsToken","args":[[["theme","null"]]]}
+{"fn":"holdsToken","args":[[["accessToken","\"\""]]]}
+{"fn":"holdsToken","args":[[["theme","\"\""]]]}
+{"fn":"holdsToken","args":[[["accessToken","{}"]]]}
+{"fn":"holdsToken","args":[[["theme","{}"]]]}
+{"fn":"holdsToken","args":[[["accessToken","[]"]]]}
+{"fn":"holdsToken","args":[[["theme","[]"]]]}
+{"fn":"holdsToken","args":[[["accessToken","0"]]]}
+{"fn":"holdsToken","args":[[["theme","0"]]]}
+{"fn":"holdsToken","args":[[["accessToken","true"]]]}
+{"fn":"holdsToken","args":[[["theme","true"]]]}
+{"fn":"holdsToken","args":[[["accessToken","false"]]]}
+{"fn":"holdsToken","args":[[["theme","false"]]]}
+{"fn":"holdsToken","args":[[["accessToken","undefined"]]]}
+{"fn":"holdsToken","args":[[["theme","undefined"]]]}
+{"fn":"holdsToken","args":[[["accessToken",""]]]}
+{"fn":"holdsToken","args":[[["theme",""]]]}
+{"fn":"holdsToken","args":[[["accessToken","   null   "]]]}
+{"fn":"holdsToken","args":[[["theme","   null   "]]]}
+{"fn":"holdsToken","args":[[["accessToken","abcdefghijk"]]]}
+{"fn":"holdsToken","args":[[["theme","abcdefghijk"]]]}
+{"fn":"holdsToken","args":[[["accessToken","abcdefghijkl"]]]}
+{"fn":"holdsToken","args":[[["theme","abcdefghijkl"]]]}
+{"fn":"holdsToken","args":[[["accessToken"," abcdefghijk "]]]}
+{"fn":"holdsToken","args":[[["theme"," abcdefghijk "]]]}
+{"fn":"holdsToken","args":[[["accessToken","abcdefghijk"]]]}
+{"fn":"holdsToken","args":[[["theme","abcdefghijk"]]]}
+{"fn":"holdsToken","args":[[["accessToken","abcdefghijk"]]]}
+{"fn":"holdsToken","args":[[["theme","abcdefghijk"]]]}
+{"fn":"holdsToken","args":[[["accessToken"," abcdefghijk "]]]}
+{"fn":"holdsToken","args":[[["theme"," abcdefghijk "]]]}
+{"fn":"holdsToken","args":[[["accessToken","😀😀😀😀😀😀"]]]}
+{"fn":"holdsToken","args":[[["theme","😀😀😀😀😀😀"]]]}
+{"fn":"holdsToken","args":[[["accessToken","😀😀😀😀😀a"]]]}
+{"fn":"holdsToken","args":[[["theme","😀😀😀😀😀a"]]]}
+{"fn":"holdsToken","args":[[["credentials","\"abcdefghijklmn\""]]]}
+{"fn":"holdsToken","args":[[["OAUTHSTATE","\"abcdefghijklmn\""]]]}
+{"fn":"holdsToken","args":[[["toKen","\"abcdefghijklmn\""]]]}
+{"fn":"holdsToken","args":[[]]}
+{"fn":"holdsToken","args":[{"$map":[["accessToken","\"abcdefghijklmn\""]]}]}
+{"fn":"namedAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["recent","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["recent","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["recent","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["recent","[\"0F8FAD5B-D9CB-469F-A165-70867728950E\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["recent","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0F8FAD5B-D9CB-469F-A165-70867728950E"]]}
+{"fn":"namedAccount","args":[[["recent","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["not-a-uuid","0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"0F8FAD5B-D9CB-469F-A165-70867728950E\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["userId","\"7c9e6679-7425-40de-944b-e07fc1f90ae7\""]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["user_id","\"0F8FAD5B-D9CB-469F-A165-70867728950E\""]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["user-uuid","\"7c9e6679-7425-40de-944b-e07fc1f90ae7\""],["userid","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"not\""],["x","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountUuid","not json"],["x","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\" "],["x","y"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountUuid","\" 0f8fad5b-d9cb-469f-a165-70867728950e\""],["x","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["AccountUUID","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["account_Id","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["accountsId","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["myAccountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["K","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["consent","{\"0f8fad5b-d9cb-469f-a165-70867728950e\":true,\"7c9e6679-7425-40de-944b-e07fc1f90ae7\":true}"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["consent","{\"0f8fad5b-d9cb-469f-a165-70867728950e\"  : 1}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["consent","{\"0f8fad5b-d9cb-469f-a165-70867728950e\": 1}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["consent","{\"0f8fad5b-d9cb-469f-a165-70867728950e\" : 1}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["consent","{\"0f8fad5b-d9cb-469f-a165-70867728950e\"﻿: 1}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["consent","[\"0f8fad5b-d9cb-469f-a165-70867728950e\" , 1]"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["account","{\"id\":\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["profile","[\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["me","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["theMe","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["the me","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["the_me","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["identity","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["IDENTITY","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"],["İdentity","[\"0f8fad5b-d9cb-469f-a165-70867728950e\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","0f8fad5b-d9cb-469f-a165-70867728950e7c9e6679-7425-40de-944b-e07fc1f90ae7"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"namedAccount","args":[[["data","x0f8fad5b-d9cb-469f-a165-70867728950ey"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namedAccount","args":[[["x","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],[]]}
+{"fn":"namedAccount","args":[{"$map":[["x","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]]},["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["accountUuid","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]],["0F8FAD5B-D9CB-469F-A165-70867728950E"]]}
+{"fn":"namesOtherAccount","args":[[["userList","{\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\":1}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["userList","[\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"accountUuid\":\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"account_id\":\"E4EAAAF2-D142-11E1-B3E4-080027620CDD\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"userUuid\":\"0f8fad5b-d9cb-469f-a165-70867728950e\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"user-id\" : \"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"user-id\" :　\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"USERID\":\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"accountUuid\":\"x\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["state","{\"id\":\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"namesOtherAccount","args":[[["Kaccount","[\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"]"]],[]]}
+{"fn":"namesOtherAccount","args":[{"$map":[["accountUuid","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""]]},["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["accessToken","\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\""],["refreshToken","\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\""],["tokenExpiry","1800000000001"],["savedPrompts","[\"a prompt\"]"],["conversationCache","{}"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"pickSignIn","args":[[["persistedState","{\"access_token\":\"sk-ant-oat01-ABCDEFGHIJKL\",\"refresh_token\":\"sk-ant-ort01-ABCDEFGHIJKL\",\"account\":{\"uuid\":\"0F8FAD5B-D9CB-469F-A165-70867728950E\"}}"],["tabGroups","[]"],["theme","\"dark\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["lastAccountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["oauthState","\"abc\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accessToken","null"],["refreshToken","\"\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""],["accessToken","\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\""],["refreshToken","\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\""],["tokenExpiry","1800000000001"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["anonymousId","\"9f1a7d1c-0d3b-4a0e-9f86-1b5c2b1b2a01\""],["bridgeDeviceId","\"a2b0c3d4-1111-4222-8333-944455556666\""],["codeVerifier","\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ\""],["lastActiveOrgHint","\"1b4e28ba-2fa1-11d2-883f-0016d3cca427\""],["oauthState","\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ\""],["permissionConsentByAccount","{\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\":{\"a\":true},\"0f8fad5b-d9cb-469f-a165-70867728950e\":{\"a\":true},\"7c9e6679-7425-40de-944b-e07fc1f90ae7\":{\"a\":true}}"],["permissionConsentOwner","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["tokenOrg","{\"hybrid\":false,\"uuid\":\"1b4e28ba-2fa1-11d2-883f-0016d3cca427\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""],["anonymousId","\"9f1a7d1c-0d3b-4a0e-9f86-1b5c2b1b2a01\""],["bridgeDeviceId","\"a2b0c3d4-1111-4222-8333-944455556666\""],["codeVerifier","\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ\""],["lastActiveOrgHint","\"1b4e28ba-2fa1-11d2-883f-0016d3cca427\""],["oauthState","\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ\""],["permissionConsentByAccount","{\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\":{\"a\":true},\"0f8fad5b-d9cb-469f-a165-70867728950e\":{\"a\":true},\"7c9e6679-7425-40de-944b-e07fc1f90ae7\":{\"a\":true}}"],["permissionConsentOwner","\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\""],["tokenOrg","{\"hybrid\":false,\"uuid\":\"1b4e28ba-2fa1-11d2-883f-0016d3cca427\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"pickSignIn","args":[[["anonymousId","\"9f1a7d1c-0d3b-4a0e-9f86-1b5c2b1b2a01\""],["bridgeDeviceId","\"a2b0c3d4-1111-4222-8333-944455556666\""],["permissionConsentByAccount","{\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\":{\"a\":true},\"0f8fad5b-d9cb-469f-a165-70867728950e\":{\"a\":true},\"7c9e6679-7425-40de-944b-e07fc1f90ae7\":{\"a\":true}}"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["tokenOrg","{\"hybrid\":false,\"uuid\":\"1b4e28ba-2fa1-11d2-883f-0016d3cca427\"}"],["lastActiveOrgHint","\"7c9e6679-7425-40de-944b-e07fc1f90ae7\""],["codeVerifier","\"vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\""],["signInState","\"sssssssssssssssssssssssssssssssssssssssssss\""],["oauthState","\"ooooooooooooooooooooooooooooooooooooooooooo\""],["lastAuthFailureReason","\"session_expired\""],["startupReauthState","{\"terminal\":true}"],["pairingOrgMismatch","{\"org\":\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"],["selectedModel","\"claude-sonnet-4-5\""]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["notes","see 0F8FAD5B-D9CB-469F-A165-70867728950E here"],["other","nothing"],["skipped",{"$undefined":true}],["nul",null]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["2","\"sk-ant-oat01-ABCDEFGHIJ\""],["b","{\"access_token\":\"abcdefghij\"}"],["1","\"sk-ant-oat01-ABCDEFGHIJ\""],["accessToken","\"first-value-x\""],["accessToken","\"second-value-y\""]],[]]}
+{"fn":"pickSignIn","args":[[["accessToken","\"abcdefghijklmn\""],["profile","{\"id\":\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accessToken","\"abcdefghijklmn\""],["data","{\"userId\":\"e4eaaaf2-d142-11e1-b3e4-080027620cdd\"}"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accessToken","\"abcdefghijklmn\""],["data","[\"0f8fad5b-d9cb-469f-a165-70867728950e\",\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"]"]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"pickSignIn","args":[[["accessToken",{"$utf16":[34,55296,97,98,99,100,101,102,103,104,105,106,107,34]}],["x","y"]],["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[{"$map":[["accessToken","\"abcdefghijklmn\""],["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""]]},["0f8fad5b-d9cb-469f-a165-70867728950e"]]}
+{"fn":"pickSignIn","args":[[["accountUuid","\"0f8fad5b-d9cb-469f-a165-70867728950e\""],["accountUuid","\"7c9e6679-7425-40de-944b-e07fc1f90ae7\""]],["0f8fad5b-d9cb-469f-a165-70867728950e","7c9e6679-7425-40de-944b-e07fc1f90ae7"]]}
+{"fn":"sameSignIn","args":[{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001"},{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001"}]}
+{"fn":"sameSignIn","args":[{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001"},{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA2\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB2\"","tokenExpiry":"1800000000002"}]}
+{"fn":"sameSignIn","args":[{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001"},{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\""}]}
+{"fn":"sameSignIn","args":[{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\""},{"accountUuid":"\"0f8fad5b-d9cb-469f-a165-70867728950e\"","accessToken":"\"sk-ant-oat01-AAAAAAAAAAAAAAAAAAAA1\"","refreshToken":"\"sk-ant-ort01-BBBBBBBBBBBBBBBBBBBB1\"","tokenExpiry":"1800000000001"}]}
+{"fn":"sameSignIn","args":[{},{}]}
+{"fn":"sameSignIn","args":[{"a":"1","b":"2"},{"b":"2","a":"1"}]}
+{"fn":"sameSignIn","args":[{"a":"1"},{"b":"1"}]}
+{"fn":"sameSignIn","args":[{"toString":"x"},{"a":"x"}]}

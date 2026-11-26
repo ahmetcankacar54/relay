@@ -1,7 +1,9 @@
 //! The local gateway (`proxy-server.ts`): Claude and Codex clients send their requests here,
 //! and each goes to a saved account chosen by the router, with that account's sign-in.
 
-use crate::anthropic_upstream::{AnthropicUsageExtractor, DEFAULT_ANTHROPIC_URL, anthropic_headers};
+use crate::anthropic_upstream::{
+    AnthropicUsageExtractor, DEFAULT_ANTHROPIC_URL, anthropic_headers,
+};
 use crate::client_res::{ClientRes, ResponseBody, json_response, send_json_error};
 use crate::codex_upstream::{
     CodexUsageExtractor, DEFAULT_CODEX_URL, DEFAULT_OPENAI_URL, codex_headers,
@@ -24,14 +26,14 @@ use crate::proxy_status::{ByModelPick, NextPick, NextPicks};
 use crate::proxy_url::{is_loopback_host, is_tailscale_ipv4};
 use crate::types::{
     Account, ApiUpstream, ExtraUsageKind, LiveLimits, OverflowCost, OverflowRates,
-    OverflowSettings, OverflowTrigger, ProxyConfig, ProxyLoopAlarm, ProxyMetrics, ProxyPick,
-    ProxyRequestLog, ProxyRunStatus, ProxyState, Provider, UsageSnapshot,
+    OverflowSettings, OverflowTrigger, Provider, ProxyConfig, ProxyLoopAlarm, ProxyMetrics,
+    ProxyPick, ProxyRequestLog, ProxyRunStatus, ProxyState, UsageSnapshot,
 };
+use crate::upstream_common::FailureKind;
 use crate::upstream_common::{
     EarlyAnswer, ForwardSpec, UpstreamOutcome, UpstreamPool, UsageExtractor, build_target_url,
     forward_upstream, header, parse_request_url,
 };
-use crate::upstream_common::FailureKind;
 use crate::websocket_bridge::{WebSocketBridge, WebSocketBridgeOptions, reject_upgrade};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
@@ -123,7 +125,14 @@ pub fn client_of(headers: &HeaderMap) -> Option<String> {
     let agent = header(headers, "user-agent").unwrap_or("");
     if let Some(claude) = CLAUDE_AGENT.captures(agent) {
         let detail = claude.get(1).map_or("", |m| m.as_str());
-        return Some(if SDK.is_match(detail) { "agent-sdk" } else { "claude-code" }.into());
+        return Some(
+            if SDK.is_match(detail) {
+                "agent-sdk"
+            } else {
+                "claude-code"
+            }
+            .into(),
+        );
     }
     if CODEX_AGENT.is_match(agent) {
         return Some("codex".into());
@@ -492,7 +501,10 @@ impl ProxyServer {
             let config = inner.config.lock().unwrap();
             (config.host.clone(), config.port)
         };
-        let bind_host = host.trim_start_matches('[').trim_end_matches(']').to_string();
+        let bind_host = host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_string();
         let listener = match TcpListener::bind((bind_host.as_str(), port)).await {
             Ok(listener) => listener,
             Err(error) => {
@@ -576,7 +588,9 @@ impl ProxyServer {
         };
         let mut router = self.inner.router.lock().unwrap();
         router.set_strategy(config.routing_strategy);
-        router.session_cache_mut().set_ttl(config.affinity_ttl_seconds);
+        router
+            .session_cache_mut()
+            .set_ttl(config.affinity_ttl_seconds);
     }
 
     pub fn session_cache(&self) -> SessionCacheGuard<'_> {
@@ -750,7 +764,10 @@ fn is_upgrade(headers: &HeaderMap) -> bool {
             .get_all(http::header::CONNECTION)
             .iter()
             .filter_map(|v| v.to_str().ok())
-            .any(|v| v.split(',').any(|t| t.trim().eq_ignore_ascii_case("upgrade")))
+            .any(|v| {
+                v.split(',')
+                    .any(|t| t.trim().eq_ignore_ascii_case("upgrade"))
+            })
 }
 
 /// The request target as Node's `req.url` holds it.
@@ -765,7 +782,12 @@ fn raw_url(request: &Parts) -> String {
     }
 }
 
-async fn process(inner: &Arc<Inner>, request: Request<Incoming>, res: &mut ClientRes, upgrade: bool) {
+async fn process(
+    inner: &Arc<Inner>,
+    request: Request<Incoming>,
+    res: &mut ClientRes,
+    upgrade: bool,
+) {
     if upgrade {
         let response = inner.websocket_upgrade(request).await;
         match response {
@@ -845,7 +867,13 @@ async fn process(inner: &Arc<Inner>, request: Request<Incoming>, res: &mut Clien
                 match serde_json::from_slice::<Value>(&raw) {
                     Ok(value) => parsed = Some(value),
                     Err(_) => {
-                        send_json_error(res, 400, "invalid_request_error", "The body is not JSON", &[]);
+                        send_json_error(
+                            res,
+                            400,
+                            "invalid_request_error",
+                            "The body is not JSON",
+                            &[],
+                        );
                         return;
                     }
                 }
@@ -889,7 +917,9 @@ async fn process(inner: &Arc<Inner>, request: Request<Incoming>, res: &mut Clien
     }
     inner.in_flight.fetch_add(1, Ordering::AcqRel);
     let _in_flight = InFlight(&inner.in_flight);
-    inner.proxy_request(&parts, &url, body, res, &pathname).await;
+    inner
+        .proxy_request(&parts, &url, body, res, &pathname)
+        .await;
 }
 
 struct HubBridge<'a> {
@@ -949,10 +979,14 @@ impl Inner {
     }
 
     fn overflow_spent_today(&self) -> f64 {
-        let costs = self
-            .hooks
-            .overflow_costs()
-            .unwrap_or_else(|| self.own_overflow_costs.lock().unwrap().iter().copied().collect());
+        let costs = self.hooks.overflow_costs().unwrap_or_else(|| {
+            self.own_overflow_costs
+                .lock()
+                .unwrap()
+                .iter()
+                .copied()
+                .collect()
+        });
         spent_today(&costs, (self.now)(), &self.time_zone())
     }
 
@@ -1048,7 +1082,9 @@ impl Inner {
                 // A client that leaves mid-body.
                 Ok(Some(Err(_))) => return None,
                 Ok(Some(Ok(frame))) => {
-                    let Ok(data) = frame.into_data() else { continue };
+                    let Ok(data) = frame.into_data() else {
+                        continue;
+                    };
                     if chunks.len() + data.len() > MAX_BODY_BYTES {
                         send_json_error(
                             res,
@@ -1150,7 +1186,10 @@ impl Inner {
             || TRUE_FLAG.is_match(header(headers, "x-claude-code-context-compacted").unwrap_or(""));
         // The main conversation's own request: not a subagent's, nor a title or classifier call.
         let main = agent_id.is_none()
-            && matches!(request_class.as_deref(), None | Some("main") | Some("compaction"));
+            && matches!(
+                request_class.as_deref(),
+                None | Some("main") | Some("compaction")
+            );
         // A turn starts at the main conversation's first request with a new prompt id.
         let mut turn_start = false;
         if let (Some(key), Some(prompt)) = (&session_key, &prompt_id) {
@@ -1197,9 +1236,9 @@ impl Inner {
             ..Default::default()
         };
         let pick_context = PickContext {
-            cold: session_key.as_deref().is_some_and(|k| {
-                agent_id.is_none() && self.insights.lock().unwrap().is_cold(k)
-            }),
+            cold: session_key
+                .as_deref()
+                .is_some_and(|k| agent_id.is_none() && self.insights.lock().unwrap().is_cold(k)),
             turn_start,
             ..model_context()
         };
@@ -1240,9 +1279,9 @@ impl Inner {
         let mut held_on: Option<String> = None;
         let spill = self.overflow_for(pathname, target_provider);
         let to_overflow = |limited: bool| {
-            spill.as_ref().is_some_and(|s| {
-                limited || s.trigger == Some(OverflowTrigger::Unavailable)
-            })
+            spill
+                .as_ref()
+                .is_some_and(|s| limited || s.trigger == Some(OverflowTrigger::Unavailable))
         };
         let log_now = |status: u16, note: &str| {
             about.onto(ProxyRequestLog {
@@ -1287,14 +1326,44 @@ impl Inner {
                     // Nothing was forwarded and the only accounts left could not be signed in with.
                     if last_held.is_none() && !unreadable.is_empty() {
                         if to_overflow(false) {
-                            return self.serve_overflow_from(parts, url, res, &body_buffer, parsed.as_ref(), &requested_model, &about, spill.as_ref(), held_on.as_deref()).await;
+                            return self
+                                .serve_overflow_from(
+                                    parts,
+                                    url,
+                                    res,
+                                    &body_buffer,
+                                    parsed.as_ref(),
+                                    &requested_model,
+                                    &about,
+                                    spill.as_ref(),
+                                    held_on.as_deref(),
+                                )
+                                .await;
                         }
-                        self.sign_in_needed(res, target_provider, &requested_model, &unreadable, &about);
+                        self.sign_in_needed(
+                            res,
+                            target_provider,
+                            &requested_model,
+                            &unreadable,
+                            &about,
+                        );
                         return;
                     }
                     if no_provider && tried.is_empty() {
                         if to_overflow(false) {
-                            return self.serve_overflow_from(parts, url, res, &body_buffer, parsed.as_ref(), &requested_model, &about, spill.as_ref(), held_on.as_deref()).await;
+                            return self
+                                .serve_overflow_from(
+                                    parts,
+                                    url,
+                                    res,
+                                    &body_buffer,
+                                    parsed.as_ref(),
+                                    &requested_model,
+                                    &about,
+                                    spill.as_ref(),
+                                    held_on.as_deref(),
+                                )
+                                .await;
                         }
                         self.record_log(log_now(503, "no-account"));
                         send_json_error(res, 503, "api_error", &error.to_string(), &[]);
@@ -1308,13 +1377,43 @@ impl Inner {
                         if tried.is_empty() {
                             if *sign_in_only {
                                 if to_overflow(false) {
-                                    return self.serve_overflow_from(parts, url, res, &body_buffer, parsed.as_ref(), &requested_model, &about, spill.as_ref(), held_on.as_deref()).await;
+                                    return self
+                                        .serve_overflow_from(
+                                            parts,
+                                            url,
+                                            res,
+                                            &body_buffer,
+                                            parsed.as_ref(),
+                                            &requested_model,
+                                            &about,
+                                            spill.as_ref(),
+                                            held_on.as_deref(),
+                                        )
+                                        .await;
                                 }
-                                self.sign_in_needed(res, target_provider, &requested_model, &[], &about);
+                                self.sign_in_needed(
+                                    res,
+                                    target_provider,
+                                    &requested_model,
+                                    &[],
+                                    &about,
+                                );
                                 return;
                             }
                             if to_overflow(true) {
-                                return self.serve_overflow_from(parts, url, res, &body_buffer, parsed.as_ref(), &requested_model, &about, spill.as_ref(), held_on.as_deref()).await;
+                                return self
+                                    .serve_overflow_from(
+                                        parts,
+                                        url,
+                                        res,
+                                        &body_buffer,
+                                        parsed.as_ref(),
+                                        &requested_model,
+                                        &about,
+                                        spill.as_ref(),
+                                        held_on.as_deref(),
+                                    )
+                                    .await;
                             }
                             self.record_error(&error.to_string());
                             self.record_log(log_now(429, "all-limited"));
@@ -1325,14 +1424,32 @@ impl Inner {
                                 .as_deref()
                                 .map(|r| vec![("retry-after", r)])
                                 .unwrap_or_default();
-                            send_json_error(res, 429, "rate_limit_error", &error.to_string(), &extra);
+                            send_json_error(
+                                res,
+                                429,
+                                "rate_limit_error",
+                                &error.to_string(),
+                                &extra,
+                            );
                             return;
                         }
                     }
                     // Every other account was tried or is cooling down: the last answer was
                     // already held.
                     if to_overflow(last_held.is_none() || last_held == Some(429)) {
-                        return self.serve_overflow_from(parts, url, res, &body_buffer, parsed.as_ref(), &requested_model, &about, spill.as_ref(), held_on.as_deref()).await;
+                        return self
+                            .serve_overflow_from(
+                                parts,
+                                url,
+                                res,
+                                &body_buffer,
+                                parsed.as_ref(),
+                                &requested_model,
+                                &about,
+                                spill.as_ref(),
+                                held_on.as_deref(),
+                            )
+                            .await;
                     }
                     let status = last_held.unwrap_or(429);
                     self.record_log(log_now(status, "all-limited"));
@@ -1406,7 +1523,17 @@ impl Inner {
                 }
             };
             let outcome = self
-                .forward_to(&selection, &route, parts, url, res, &body_buffer, pathname, &hold_if, &on_answer)
+                .forward_to(
+                    &selection,
+                    &route,
+                    parts,
+                    url,
+                    res,
+                    &body_buffer,
+                    pathname,
+                    &hold_if,
+                    &on_answer,
+                )
                 .await;
             let Some(outcome) = outcome else { return };
             let mut pick = ProxyPick::new(selection.reason);
@@ -1477,8 +1604,8 @@ impl Inner {
                 miss,
                 error: outcome.error_message.clone(),
                 // A refusal is answered here; it does not go on to another account.
-                failover: (outcome.held && outcome.failure != Some(FailureKind::Refused))
-                    .then_some(true),
+                failover:
+                    (outcome.held && outcome.failure != Some(FailureKind::Refused)).then_some(true),
                 affinity: selection.session_affinity_hit.then_some(true),
                 pick: Some(pick),
                 note,
@@ -1520,9 +1647,27 @@ impl Inner {
         }
         // Every attempt was held: only overflow holds the last one, and takes it now.
         if last_held.is_some_and(|status| to_overflow(status == 429)) {
-            return self.serve_overflow_from(parts, url, res, &body_buffer, parsed.as_ref(), &requested_model, &about, spill.as_ref(), held_on.as_deref()).await;
+            return self
+                .serve_overflow_from(
+                    parts,
+                    url,
+                    res,
+                    &body_buffer,
+                    parsed.as_ref(),
+                    &requested_model,
+                    &about,
+                    spill.as_ref(),
+                    held_on.as_deref(),
+                )
+                .await;
         }
-        send_json_error(res, 502, "api_error", "No account could answer the request", &[]);
+        send_json_error(
+            res,
+            502,
+            "api_error",
+            "No account could answer the request",
+            &[],
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1539,8 +1684,10 @@ impl Inner {
         after: Option<&str>,
     ) {
         if let Some(settings) = settings {
-            self.serve_overflow(parts, url, res, body, parsed, requested, about, settings, after)
-                .await;
+            self.serve_overflow(
+                parts, url, res, body, parsed, requested, about, settings, after,
+            )
+            .await;
         }
     }
 
@@ -1584,11 +1731,21 @@ impl Inner {
                 return;
             }
         }
-        let mut enabled: Vec<&ApiUpstream> = settings.upstreams.iter().filter(|u| u.enabled).collect();
-        enabled.sort_by(|a, b| a.order.partial_cmp(&b.order).unwrap_or(std::cmp::Ordering::Equal));
+        let mut enabled: Vec<&ApiUpstream> =
+            settings.upstreams.iter().filter(|u| u.enabled).collect();
+        enabled.sort_by(|a, b| {
+            a.order
+                .partial_cmp(&b.order)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         let mut usable: Vec<(&ApiUpstream, String)> = Vec::new();
         for upstream in enabled {
-            match self.hooks.overflow_key(&upstream.id).await.filter(|k| !k.is_empty()) {
+            match self
+                .hooks
+                .overflow_key(&upstream.id)
+                .await
+                .filter(|k| !k.is_empty())
+            {
                 Some(key) => usable.push((upstream, key)),
                 None => self.record_error(&format!(
                     "Overflow ({}) has no saved API key",
@@ -1635,7 +1792,12 @@ impl Inner {
                 ForwardSpec {
                     method: parts.method.clone(),
                     target,
-                    headers: overflow_headers(&parts.headers, upstream.preset, upstream.auth_style, &key),
+                    headers: overflow_headers(
+                        &parts.headers,
+                        upstream.preset,
+                        upstream.auth_style,
+                        &key,
+                    ),
                     body: overflow_body(body, parsed, &model),
                     account_id: &account,
                     stats: Some(&self.stats),
@@ -1738,7 +1900,9 @@ impl Inner {
                 None => {
                     let inner = self.clone();
                     let owned = account.clone();
-                    let read = async move { inner.read_route(&owned).await }.boxed().shared();
+                    let read = async move { inner.read_route(&owned).await }
+                        .boxed()
+                        .shared();
                     resolving.insert(account.id.clone(), read.clone());
                     read
                 }
@@ -1758,12 +1922,10 @@ impl Inner {
     async fn read_route(&self, account: &Account) -> Option<Route> {
         let result = match account.provider() {
             Provider::Antigravity => self.hooks.antigravity(account).await.map(|route| {
-                route
-                    .filter(|r| !r.key.is_empty())
-                    .map(|r| Route {
-                        token: r.key.clone(),
-                        antigravity: Some(r),
-                    })
+                route.filter(|r| !r.key.is_empty()).map(|r| Route {
+                    token: r.key.clone(),
+                    antigravity: Some(r),
+                })
             }),
             // Gemini API key accounts are refused when forwarded, with a reason.
             Provider::Gemini => Ok(Some(Route {
@@ -1806,7 +1968,15 @@ impl Inner {
         self.router
             .lock()
             .unwrap()
-            .select_account(None, &usable, &snapshot.usage_map, Some(provider), tried, None, &context)
+            .select_account(
+                None,
+                &usable,
+                &snapshot.usage_map,
+                Some(provider),
+                tried,
+                None,
+                &context,
+            )
             .is_ok()
     }
 
@@ -1854,7 +2024,10 @@ impl Inner {
             if provider == Provider::Claude {
                 (
                     build_target_url(
-                        self.upstreams.anthropic_url.as_deref().unwrap_or(DEFAULT_ANTHROPIC_URL),
+                        self.upstreams
+                            .anthropic_url
+                            .as_deref()
+                            .unwrap_or(DEFAULT_ANTHROPIC_URL),
                         Some(url),
                         false,
                     ),
@@ -1873,14 +2046,17 @@ impl Inner {
                     None
                 };
                 let base = if provider == Provider::Antigravity {
-                    route
-                        .antigravity
-                        .as_ref()
-                        .map_or("", |r| r.url.as_str())
+                    route.antigravity.as_ref().map_or("", |r| r.url.as_str())
                 } else if api_key {
-                    self.upstreams.openai_url.as_deref().unwrap_or(DEFAULT_OPENAI_URL)
+                    self.upstreams
+                        .openai_url
+                        .as_deref()
+                        .unwrap_or(DEFAULT_OPENAI_URL)
                 } else {
-                    self.upstreams.codex_url.as_deref().unwrap_or(DEFAULT_CODEX_URL)
+                    self.upstreams
+                        .codex_url
+                        .as_deref()
+                        .unwrap_or(DEFAULT_CODEX_URL)
                 };
                 (
                     build_target_url(base, Some(url), true),
@@ -1946,19 +2122,18 @@ impl Inner {
                 } else {
                     DEFAULT_RATE_LIMIT_COOLDOWN_S
                 };
-                let seconds = until_reset.unwrap_or(0).max(
-                    outcome
-                        .retry_after_seconds
-                        .map_or(fallback, |s| s as i64),
-                );
+                let seconds = until_reset
+                    .unwrap_or(0)
+                    .max(outcome.retry_after_seconds.map_or(fallback, |s| s as i64));
                 if outcome.limit_scope == Some(crate::upstream_common::LimitScope::Model) {
                     if let Some(family) = family {
                         // Only this model's own limit is spent: the account's other models keep
                         // serving, and only this session, which asks for the model, moves.
-                        self.router
-                            .lock()
-                            .unwrap()
-                            .mark_model_unavailable(account_id, family, clamp(seconds));
+                        self.router.lock().unwrap().mark_model_unavailable(
+                            account_id,
+                            family,
+                            clamp(seconds),
+                        );
                         return self.extra_usage_after(account_id, outcome);
                     }
                 }
@@ -1985,12 +2160,20 @@ impl Inner {
                     .unwrap()
                     .record_extra_usage(account_id, ExtraUsageKind::Required);
                 if let Some(key) = session_key {
-                    self.router.lock().unwrap().session_cache_mut().evict_session(key);
+                    self.router
+                        .lock()
+                        .unwrap()
+                        .session_cache_mut()
+                        .evict_session(key);
                 }
             }
             Some(FailureKind::Permission) => {
                 if let Some(key) = session_key {
-                    self.router.lock().unwrap().session_cache_mut().evict_session(key);
+                    self.router
+                        .lock()
+                        .unwrap()
+                        .session_cache_mut()
+                        .evict_session(key);
                 }
             }
             Some(FailureKind::Refused) | None => {}
@@ -2034,20 +2217,28 @@ impl Inner {
             .map(|soonest| ((soonest - now) as f64 / 1000.0).ceil() as i64)
     }
 
-    async fn websocket_upgrade(self: &Arc<Self>, request: Request<Incoming>) -> Option<Response<ResponseBody>> {
+    async fn websocket_upgrade(
+        self: &Arc<Self>,
+        request: Request<Incoming>,
+    ) -> Option<Response<ResponseBody>> {
         if !self.host_allowed(header(request.headers(), "host")) {
             return Some(reject_upgrade(403, "Forbidden"));
         }
         if let Some((status, _, _)) = self.auth_failure(request.headers()) {
             return Some(reject_upgrade(
                 status,
-                if status == 401 { "Unauthorized" } else { "Forbidden" },
+                if status == 401 {
+                    "Unauthorized"
+                } else {
+                    "Forbidden"
+                },
             ));
         }
         let (mut parts, body) = request.into_parts();
         let url = alias_codex_path(&raw_url(&parts));
         match parse_request_url(Some(&url)) {
-            Ok(target) if target.pathname == "/responses" || target.pathname == "/v1/responses" => {}
+            Ok(target) if target.pathname == "/responses" || target.pathname == "/v1/responses" => {
+            }
             Ok(_) => return Some(reject_upgrade(404, "Not Found")),
             Err(_) => return Some(reject_upgrade(400, "Bad Request")),
         }

@@ -2,6 +2,9 @@
 //! Every item is a real moment of that week, found in the usage rollups, the active-account
 //! timeline and the token ledger.
 
+// `!(a > b)` is kept where the TS writes it: it is also true when either side is NaN.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use std::collections::HashSet;
 
 use indexmap::IndexMap;
@@ -115,21 +118,36 @@ pub const LOST_ITEM_KINDS: [LostItemKind; 19] = [
 ];
 
 /// Items the collection keeps secret until found once: they are surprises, not goals.
-pub const SECRET_LOST_KINDS: [LostItemKind; 3] = [LostItemKind::Boomerang, LostItemKind::Clocks, LostItemKind::Tightrope];
+pub const SECRET_LOST_KINDS: [LostItemKind; 3] = [
+    LostItemKind::Boomerang,
+    LostItemKind::Clocks,
+    LostItemKind::Tightrope,
+];
 
 literal_enum!(LostTier { Bronze = "bronze", Silver = "silver", Gold = "gold" });
 
 /// A pin's finish: how many weeks it was found in.
-pub const LOST_TIERS: [(LostTier, u32); 3] = [(LostTier::Bronze, 1), (LostTier::Silver, 3), (LostTier::Gold, 6)];
+pub const LOST_TIERS: [(LostTier, u32); 3] = [
+    (LostTier::Bronze, 1),
+    (LostTier::Silver, 3),
+    (LostTier::Gold, 6),
+];
 
 /// The finish `weeks` finds earn, or `None` before the first.
 pub fn tier_of(weeks: f64) -> Option<LostTier> {
-    LOST_TIERS.iter().filter(|(_, w)| weeks >= f64::from(*w)).map(|(t, _)| *t).last()
+    LOST_TIERS
+        .iter()
+        .rev()
+        .find(|(_, w)| weeks >= f64::from(*w))
+        .map(|(t, _)| *t)
 }
 
 /// The next finish and the weeks it needs, or `None` at gold.
 pub fn next_tier(weeks: f64) -> Option<(LostTier, u32)> {
-    LOST_TIERS.iter().find(|(_, w)| weeks < f64::from(*w)).copied()
+    LOST_TIERS
+        .iter()
+        .find(|(_, w)| weeks < f64::from(*w))
+        .copied()
 }
 
 /// What a moment used: tokens and their API value in USD, from the token ledger.
@@ -198,7 +216,10 @@ pub enum LostMoment {
     },
     /// The accounts used on `date`, busiest first.
     #[serde(rename_all = "camelCase")]
-    Scarf { date: String, account_ids: Vec<String> },
+    Scarf {
+        date: String,
+        account_ids: Vec<String>,
+    },
     /// Two accounts' five-hour windows reset `gap_minutes` apart at `at`; `count` such pairs.
     #[serde(rename_all = "camelCase")]
     Clocks {
@@ -317,7 +338,10 @@ pub struct LostItem {
 
 impl From<LostMoment> for LostItem {
     fn from(moment: LostMoment) -> Self {
-        LostItem { moment, spend: None }
+        LostItem {
+            moment,
+            spend: None,
+        }
     }
 }
 
@@ -368,7 +392,9 @@ pub struct LostFoundInput<'a> {
 
 /// The account a ledger `who` belongs to: `acct:<id>` or `est:<id>`.
 fn ledger_account(who: &str) -> Option<&str> {
-    who.strip_prefix("acct:").or_else(|| who.strip_prefix("est:")).filter(|id| !id.is_empty())
+    who.strip_prefix("acct:")
+        .or_else(|| who.strip_prefix("est:"))
+        .filter(|id| !id.is_empty())
 }
 
 /// A model id's family, as people name it: "Opus", "Sonnet", "Haiku", "Fable".
@@ -398,19 +424,49 @@ pub fn monday_of(date: &str) -> String {
 
 /// Whether a stored item has what its kind needs to be told; a shelf from another version may not.
 pub fn valid_lost_item(value: &Value) -> bool {
-    let Some(item) = value.as_object() else { return false };
-    let Some(kind) = item.get("kind").and_then(Value::as_str) else { return false };
-    let Some(kind) = LOST_ITEM_KINDS.iter().find(|k| k.as_str() == kind) else { return false };
-    let time = |key: &str| item.get(key).and_then(Value::as_str).is_some_and(|t| date_parse(t).is_finite());
+    let Some(item) = value.as_object() else {
+        return false;
+    };
+    let Some(kind) = item.get("kind").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(kind) = LOST_ITEM_KINDS.iter().find(|k| k.as_str() == kind) else {
+        return false;
+    };
+    let time = |key: &str| {
+        item.get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|t| date_parse(t).is_finite())
+    };
     let date = |key: &str| {
         item.get(key).and_then(Value::as_str).is_some_and(|d| {
-            d.len() == 10 && d.bytes().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == b'-' } else { c.is_ascii_digit() })
+            d.len() == 10
+                && d.bytes().enumerate().all(|(i, c)| {
+                    if i == 4 || i == 7 {
+                        c == b'-'
+                    } else {
+                        c.is_ascii_digit()
+                    }
+                })
         })
     };
-    let count = |key: &str| item.get(key).and_then(Value::as_f64).is_some_and(f64::is_finite);
-    let ids = |key: &str| item.get(key).and_then(Value::as_array).is_some_and(|list| list.iter().all(Value::is_string));
+    let count = |key: &str| {
+        item.get(key)
+            .and_then(Value::as_f64)
+            .is_some_and(f64::is_finite)
+    };
+    let ids = |key: &str| {
+        item.get(key)
+            .and_then(Value::as_array)
+            .is_some_and(|list| list.iter().all(Value::is_string))
+    };
     if let Some(spend) = item.get("spend") {
-        let finite = |key: &str| spend.get(key).and_then(Value::as_f64).is_some_and(f64::is_finite);
+        let finite = |key: &str| {
+            spend
+                .get(key)
+                .and_then(Value::as_f64)
+                .is_some_and(f64::is_finite)
+        };
         if !(spend.is_object() && finite("tokens") && finite("cost")) {
             return false;
         }
@@ -422,15 +478,23 @@ pub fn valid_lost_item(value: &Value) -> bool {
         LostItemKind::Hammock => date("date") && count("activeDays"),
         LostItemKind::Scales => ids("accountIds") && count("low") && count("high"),
         LostItemKind::Chest => count("cost") && count("tokens") && count("times"),
-        LostItemKind::Piggy => item.get("accountId").is_some_and(Value::is_string) && count("cost") && count("price"),
+        LostItemKind::Piggy => {
+            item.get("accountId").is_some_and(Value::is_string) && count("cost") && count("price")
+        }
         LostItemKind::Fan => ids("families"),
         LostItemKind::Boomerang => time("at") && ids("accountIds") && count("minutes"),
-        LostItemKind::Baton => time("at") && ids("accountIds") && count("minutes") && count("count"),
+        LostItemKind::Baton => {
+            time("at") && ids("accountIds") && count("minutes") && count("count")
+        }
         LostItemKind::Tally | LostItemKind::Compass => count("hours"),
         LostItemKind::Trophy => date("date") && count("tokens") && count("times"),
-        LostItemKind::Scroll | LostItemKind::Feather | LostItemKind::Teaglass => time("at") && count("hours"),
+        LostItemKind::Scroll | LostItemKind::Feather | LostItemKind::Teaglass => {
+            time("at") && count("hours")
+        }
         LostItemKind::Scarf => date("date") && ids("accountIds"),
-        LostItemKind::Clocks => time("at") && ids("accountIds") && count("gapMinutes") && count("count"),
+        LostItemKind::Clocks => {
+            time("at") && ids("accountIds") && count("gapMinutes") && count("count")
+        }
         LostItemKind::Spare => ids("accountIds") && count("hits"),
     }
 }
@@ -462,17 +526,22 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     let oldest = add_days(&latest, -7.0 * f64::from(LOST_FOUND_WEEKS - 1));
     let asked = input.week_start.filter(|w| !w.is_empty()).map(monday_of);
     let start = match asked {
-        Some(asked) if asked.as_str() >= oldest.as_str() && asked.as_str() <= latest.as_str() => asked,
+        Some(asked) if asked.as_str() >= oldest.as_str() && asked.as_str() <= latest.as_str() => {
+            asked
+        }
         _ => latest.clone(),
     };
     let end = add_days(&start, 6.0);
-    let from = wall_time(&start, "00:00", zone).unwrap_or_else(|| date_parse(&format!("{start}T00:00:00Z")));
+    let from = wall_time(&start, "00:00", zone)
+        .unwrap_or_else(|| date_parse(&format!("{start}T00:00:00Z")));
     let to = wall_time(&add_days(&start, 7.0), "00:00", zone).unwrap_or(from + 7.0 * DAY_MS);
     let within = |time: f64| time >= from && time < to;
     // An hour bucket's middle decides its local day and hour.
     let middle = |hour: f64| hour + 30.0 * MINUTE_MS;
-    let owner: IndexMap<String, String> =
-        identity_owners(accounts).into_iter().map(|(identity, account)| (identity, account.id.clone())).collect();
+    let owner: IndexMap<String, String> = identity_owners(accounts)
+        .into_iter()
+        .map(|(identity, account)| (identity, account.id.clone()))
+        .collect();
     let rollups = input.rollups;
     let hits: &[super::usage_rollups::LimitHit] = rollups.map_or(&[], |r| &r.hits);
 
@@ -485,8 +554,15 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
                 if !within(middle(time)) || !(hour.points > 0.0) {
                     continue;
                 }
-                let who = owner.get(identity).cloned().unwrap_or_else(|| identity.clone());
-                *hours.entry(time as i64).or_default().entry(who).or_insert(0.0) += hour.points;
+                let who = owner
+                    .get(identity)
+                    .cloned()
+                    .unwrap_or_else(|| identity.clone());
+                *hours
+                    .entry(time as i64)
+                    .or_default()
+                    .entry(who)
+                    .or_insert(0.0) += hour.points;
             }
         }
     }
@@ -498,11 +574,15 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     let mut found: Vec<LostMoment> = Vec::new();
 
     // Hourglass: the window that ran out soonest after it began.
-    let five_hour_hits: Vec<_> =
-        hits.iter().filter(|hit| hit.kind == LimitHitKind::FiveHour && within(date_parse(&hit.at))).collect();
+    let five_hour_hits: Vec<_> = hits
+        .iter()
+        .filter(|hit| hit.kind == LimitHitKind::FiveHour && within(date_parse(&hit.at)))
+        .collect();
     let mut hourglass: Option<(String, Option<String>, f64)> = None;
     for hit in &five_hour_hits {
-        let Some(reset_at) = hit.reset_at.as_deref().filter(|r| !r.is_empty()) else { continue };
+        let Some(reset_at) = hit.reset_at.as_deref().filter(|r| !r.is_empty()) else {
+            continue;
+        };
         let ms = date_parse(&hit.at) - (date_parse(reset_at) - FIVE_HOURS_MS);
         if !(ms > 0.0 && ms <= HOURGLASS_MAX_MS) {
             continue;
@@ -511,10 +591,18 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         if hourglass.as_ref().is_some_and(|h| minutes >= h.2) {
             continue;
         }
-        hourglass = Some((hit.at.clone(), owner.get(&hit.identity).cloned().filter(|a| !a.is_empty()), minutes));
+        hourglass = Some((
+            hit.at.clone(),
+            owner.get(&hit.identity).cloned().filter(|a| !a.is_empty()),
+            minutes,
+        ));
     }
     if let Some((at, account_id, minutes)) = hourglass {
-        found.push(LostMoment::Hourglass { at, account_id, minutes });
+        found.push(LostMoment::Hourglass {
+            at,
+            account_id,
+            minutes,
+        });
     }
 
     // Boomerang: A, then B for a few minutes, then A again, all within the week.
@@ -523,7 +611,10 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         .iter()
         .map(|s| Segment {
             account: desktop_account_for(
-                KnownDesktop { account_uuid: &s.account_uuid, org_id: s.org_id.as_deref() },
+                KnownDesktop {
+                    account_uuid: &s.account_uuid,
+                    org_id: s.org_id.as_deref(),
+                },
                 accounts,
             )
             .map(|a| a.id.clone()),
@@ -536,8 +627,10 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     let mut boomerang_minutes = f64::INFINITY;
     for i in 0..segments.len().saturating_sub(2) {
         let (a, b, c) = (&segments[i], &segments[i + 1], &segments[i + 2]);
-        let (Some(a_account), Some(b_account)) = (a.account.as_deref().filter(|x| !x.is_empty()), b.account.as_deref().filter(|x| !x.is_empty()))
-        else {
+        let (Some(a_account), Some(b_account)) = (
+            a.account.as_deref().filter(|x| !x.is_empty()),
+            b.account.as_deref().filter(|x| !x.is_empty()),
+        ) else {
             continue;
         };
         if a_account == b_account || c.account.as_deref() != Some(a_account) || !within(b.from) {
@@ -571,7 +664,9 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     let mut hand_overs: Vec<usize> = Vec::new();
     for hit in hits {
         let at = date_parse(&hit.at);
-        let Some(giver) = owner.get(&hit.identity).filter(|g| !g.is_empty()) else { continue };
+        let Some(giver) = owner.get(&hit.identity).filter(|g| !g.is_empty()) else {
+            continue;
+        };
         if !within(at) {
             continue;
         }
@@ -595,19 +690,29 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         }
         baton = Some((
             iso(segments[next].from),
-            vec![giver.clone(), segments[next].account.clone().expect("checked")],
+            vec![
+                giver.clone(),
+                segments[next].account.clone().expect("checked"),
+            ],
             minutes,
         ));
     }
     if let Some((at, account_ids, minutes)) = baton {
-        found.push(LostMoment::Baton { at, account_ids, minutes, count: hand_overs.len() as f64 });
+        found.push(LostMoment::Baton {
+            at,
+            account_ids,
+            minutes,
+            count: hand_overs.len() as f64,
+        });
     }
 
     // Trophy: the week's busiest token day, when it is also the busiest of the last 30 days.
     let day_total = |date: &str| -> f64 {
         input.ledger_days.get(date).map_or(0.0, |by_who| {
             by_who.values().fold(0.0, |sum, by_model| {
-                sum + by_model.values().fold(0.0, |s, c| s + c.input + c.output + c.cache_write + c.cache_read)
+                sum + by_model.values().fold(0.0, |s, c| {
+                    s + c.input + c.output + c.cache_write + c.cache_read
+                })
             })
         })
     };
@@ -620,8 +725,10 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         }
     }
     if let Some((date, tokens)) = &busiest {
-        let window: Vec<f64> =
-            (0..TROPHY_DAYS).map(|i| day_total(&add_days(date, -(i as f64)))).filter(|t| *t > 0.0).collect();
+        let window: Vec<f64> = (0..TROPHY_DAYS)
+            .map(|i| day_total(&add_days(date, -(i as f64))))
+            .filter(|t| *t > 0.0)
+            .collect();
         let mut sorted = window.clone();
         sort_by(&mut sorted, |a, b| b - a);
         let ordinary = sorted.get(sorted.len() / 2).copied();
@@ -630,7 +737,11 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
             _ => 0.0,
         };
         if sorted.len() > TROPHY_MIN_DAYS && sorted[0] == *tokens && times >= TROPHY_MIN_TIMES {
-            found.push(LostMoment::Trophy { date: date.clone(), tokens: *tokens, times: round(times * 10.0) / 10.0 });
+            found.push(LostMoment::Trophy {
+                date: date.clone(),
+                tokens: *tokens,
+                times: round(times * 10.0) / 10.0,
+            });
         }
     }
 
@@ -650,7 +761,10 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         }
     }
     if run_hours >= SCROLL_MIN_HOURS {
-        found.push(LostMoment::Scroll { at: iso(run_from), hours: run_hours as f64 });
+        found.push(LostMoment::Scroll {
+            at: iso(run_from),
+            hours: run_hours as f64,
+        });
     }
 
     // Scarf: the day the most accounts took a turn, three at least.
@@ -665,13 +779,18 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         }
     }
     let mut days_sorted: Vec<(&String, &IndexMap<String, f64>)> = by_day.iter().collect();
-    sort_by(&mut days_sorted, |a, b| super::types::js::compare_str(a.0, b.0));
+    sort_by(&mut days_sorted, |a, b| {
+        super::types::js::compare_str(a.0, b.0)
+    });
     let mut scarf: Option<(String, Vec<String>)> = None;
     for (date, day) in days_sorted {
         if day.len() >= 3 && day.len() > scarf.as_ref().map_or(0, |s| s.1.len()) {
             let mut list: Vec<(&String, &f64)> = day.iter().collect();
             sort_by(&mut list, |a, b| b.1 - a.1);
-            scarf = Some((date.clone(), list.into_iter().map(|(who, _)| who.clone()).collect()));
+            scarf = Some((
+                date.clone(),
+                list.into_iter().map(|(who, _)| who.clone()).collect(),
+            ));
         }
     }
     if let Some((date, account_ids)) = scarf {
@@ -680,7 +799,9 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
 
     // Tally: every day of the week had active hours, one notch a day.
     if week_days.iter().all(|date| by_day.contains_key(date)) {
-        found.push(LostMoment::Tally { hours: active_hours.len() as f64 });
+        found.push(LostMoment::Tally {
+            hours: active_hours.len() as f64,
+        });
     }
 
     // Compass: a full week of work that never ran into a limit, nor started inside one.
@@ -693,7 +814,9 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         within(at) || (at < from && until > from)
     });
     if active_hours.len() >= COMPASS_MIN_HOURS && !blocked {
-        found.push(LostMoment::Compass { hours: active_hours.len() as f64 });
+        found.push(LostMoment::Compass {
+            hours: active_hours.len() as f64,
+        });
     }
 
     // Clocks: two accounts' five-hour windows resetting close together.
@@ -725,7 +848,11 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     }
     if let Some(first) = pairs.first() {
         let gap = |p: &(usize, usize)| resets[p.1].1 - resets[p.0].1;
-        let closest = pairs.iter().skip(1).fold(*first, |best, pair| if gap(pair) < gap(&best) { *pair } else { best });
+        let closest =
+            pairs.iter().skip(1).fold(
+                *first,
+                |best, pair| if gap(pair) < gap(&best) { *pair } else { best },
+            );
         found.push(LostMoment::Clocks {
             at: iso(resets[closest.0].1),
             account_ids: vec![resets[closest.0].0.clone(), resets[closest.1].0.clone()],
@@ -754,16 +881,32 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
             .map(|a| a.id.clone())
             .collect();
         if !idle.is_empty() && !used.is_empty() {
-            found.push(LostMoment::Spare { account_ids: idle, hits: five_hour_hits.len() as f64 });
+            found.push(LostMoment::Spare {
+                account_ids: idle,
+                hits: five_hour_hits.len() as f64,
+            });
         }
     }
 
     // Feather: hours after midnight; the latest is the one nearest morning.
     let night_hour = |time: f64| local_hour(middle(time), zone);
-    let night: Vec<f64> = active_hours.iter().copied().filter(|t| night_hour(*t) < NIGHT_END_HOUR).collect();
+    let night: Vec<f64> = active_hours
+        .iter()
+        .copied()
+        .filter(|t| night_hour(*t) < NIGHT_END_HOUR)
+        .collect();
     if let Some(first) = night.first() {
-        let latest_night = night.iter().skip(1).fold(*first, |best, time| if night_hour(*time) >= night_hour(best) { *time } else { best });
-        found.push(LostMoment::Feather { at: iso(latest_night), hours: night.len() as f64 });
+        let latest_night = night.iter().skip(1).fold(*first, |best, time| {
+            if night_hour(*time) >= night_hour(best) {
+                *time
+            } else {
+                best
+            }
+        });
+        found.push(LostMoment::Feather {
+            at: iso(latest_night),
+            hours: night.len() as f64,
+        });
     }
 
     // Tea glass: hours after the night and before eight; the earliest is the one nearest dawn.
@@ -772,12 +915,21 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         .copied()
         .filter(|t| {
             let hour = night_hour(*t);
-            hour >= NIGHT_END_HOUR && hour < MORNING_END_HOUR
+            (NIGHT_END_HOUR..MORNING_END_HOUR).contains(&hour)
         })
         .collect();
     if let Some(first) = morning.first() {
-        let earliest = morning.iter().skip(1).fold(*first, |best, time| if night_hour(*time) < night_hour(best) { *time } else { best });
-        found.push(LostMoment::Teaglass { at: iso(earliest), hours: morning.len() as f64 });
+        let earliest = morning.iter().skip(1).fold(*first, |best, time| {
+            if night_hour(*time) < night_hour(best) {
+                *time
+            } else {
+                best
+            }
+        });
+        found.push(LostMoment::Teaglass {
+            at: iso(earliest),
+            hours: morning.len() as f64,
+        });
     }
 
     // What the token ledger says each moment used.
@@ -794,10 +946,15 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         LostSpend { tokens, cost }
     };
     let sum_spend = |list: &[LostSpend]| {
-        list.iter().fold(LostSpend::default(), |sum, s| LostSpend { tokens: sum.tokens + s.tokens, cost: sum.cost + s.cost })
+        list.iter().fold(LostSpend::default(), |sum, s| LostSpend {
+            tokens: sum.tokens + s.tokens,
+            cost: sum.cost + s.cost,
+        })
     };
     let week_spend = |monday: &str| {
-        let days: Vec<LostSpend> = (0..7).map(|i| day_spend(&add_days(monday, f64::from(i)))).collect();
+        let days: Vec<LostSpend> = (0..7)
+            .map(|i| day_spend(&add_days(monday, f64::from(i))))
+            .collect();
         sum_spend(&days)
     };
     let quarter_spend = |quarters: &[f64]| -> Option<LostSpend> {
@@ -825,15 +982,21 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
                 continue;
             }
             for by_slot in by_who.values() {
-                let Some(c) = by_slot.get(&slot) else { continue };
+                let Some(c) = by_slot.get(&slot) else {
+                    continue;
+                };
                 tokens += tokens_in(c.input, c.output, c.cache_write, c.cache_read);
                 cost += c.cost;
             }
         }
         Some(LostSpend { tokens, cost })
     };
-    let hour_quarters =
-        |starts: &[f64]| -> Vec<f64> { starts.iter().flat_map(|h| (0..4).map(move |q| h + f64::from(q) * QUARTER_MS)).collect() };
+    let hour_quarters = |starts: &[f64]| -> Vec<f64> {
+        starts
+            .iter()
+            .flat_map(|h| (0..4).map(move |q| h + f64::from(q) * QUARTER_MS))
+            .collect()
+    };
     let span_quarters = |from_time: f64, to_time: f64| -> Vec<f64> {
         let mut quarters = Vec::new();
         let mut time = (from_time / QUARTER_MS).floor() * QUARTER_MS;
@@ -850,24 +1013,37 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         for (identity, windows) in &rollups.windows {
             for window in windows {
                 let reset = date_parse(&window.reset_at);
-                if !within(reset) || !(window.max_percent >= TIGHTROPE_MIN_PERCENT) || window.max_percent >= 100.0 {
+                if !within(reset)
+                    || !(window.max_percent >= TIGHTROPE_MIN_PERCENT)
+                    || window.max_percent >= 100.0
+                {
                     continue;
                 }
                 let hit = hits.iter().any(|h| {
                     h.identity == *identity
                         && h.kind == LimitHitKind::FiveHour
-                        && h.reset_at.as_deref().is_some_and(|r| same_reset(r, &window.reset_at))
+                        && h.reset_at
+                            .as_deref()
+                            .is_some_and(|r| same_reset(r, &window.reset_at))
                 });
                 let percent = window.max_percent.floor();
                 if hit || tightrope.as_ref().is_some_and(|t| percent <= t.2) {
                     continue;
                 }
-                tightrope = Some((iso(reset), owner.get(identity).cloned().filter(|a| !a.is_empty()), percent));
+                tightrope = Some((
+                    iso(reset),
+                    owner.get(identity).cloned().filter(|a| !a.is_empty()),
+                    percent,
+                ));
             }
         }
     }
     if let Some((at, account_id, percent)) = tightrope {
-        found.push(LostMoment::Tightrope { at, account_id, percent });
+        found.push(LostMoment::Tightrope {
+            at,
+            account_id,
+            percent,
+        });
     }
 
     // Lantern: active on both days of the weekend, for some hours.
@@ -879,18 +1055,28 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
             date == week_days[5] || date == week_days[6]
         })
         .collect();
-    let weekend_days: HashSet<String> = weekend.iter().map(|t| local_date(middle(*t), zone)).collect();
+    let weekend_days: HashSet<String> = weekend
+        .iter()
+        .map(|t| local_date(middle(*t), zone))
+        .collect();
     if weekend_days.len() == 2 && weekend.len() >= LANTERN_MIN_HOURS {
-        found.push(LostMoment::Lantern { hours: weekend.len() as f64 });
+        found.push(LostMoment::Lantern {
+            hours: weekend.len() as f64,
+        });
     }
 
     // Hammock: a working day off between two active days, in a busy week.
     let active: Vec<bool> = week_days.iter().map(|d| by_day.contains_key(d)).collect();
     let active_days = active.iter().filter(|a| **a).count();
     if active_days >= HAMMOCK_MIN_DAYS
-        && let Some(rest) = [1, 2, 3, 4].into_iter().find(|&i| !active[i] && active[i - 1] && active[i + 1])
+        && let Some(rest) = [1, 2, 3, 4]
+            .into_iter()
+            .find(|&i| !active[i] && active[i - 1] && active[i + 1])
     {
-        found.push(LostMoment::Hammock { date: week_days[rest].clone(), active_days: active_days as f64 });
+        found.push(LostMoment::Hammock {
+            date: week_days[rest].clone(),
+            active_days: active_days as f64,
+        });
     }
 
     // Scales: two or more accounts carried nearly equal shares of the week.
@@ -904,13 +1090,19 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     }
     let share_total: f64 = shares.values().fold(0.0, |a, b| a + b);
     if shares.len() >= 2 && active_hours.len() >= SCALES_MIN_HOURS && share_total > 0.0 {
-        let mut percents: Vec<(String, f64)> =
-            shares.iter().map(|(who, points)| (who.clone(), (points / share_total) * 100.0)).collect();
+        let mut percents: Vec<(String, f64)> = shares
+            .iter()
+            .map(|(who, points)| (who.clone(), (points / share_total) * 100.0))
+            .collect();
         sort_by(&mut percents, |a, b| b.1 - a.1);
         let high = round(percents[0].1);
         let low = round(percents[percents.len() - 1].1);
         if high - low <= SCALES_MAX_SPREAD {
-            found.push(LostMoment::Scales { account_ids: percents.into_iter().map(|p| p.0).collect(), low, high });
+            found.push(LostMoment::Scales {
+                account_ids: percents.into_iter().map(|p| p.0).collect(),
+                low,
+                high,
+            });
         }
     }
 
@@ -927,7 +1119,10 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
             Some(o) if *o > 0.0 => this_week.cost / o,
             _ => 0.0,
         };
-        if earlier.len() >= CHEST_MIN_WEEKS && this_week.cost > max(earlier.iter().copied()) && times >= CHEST_MIN_TIMES {
+        if earlier.len() >= CHEST_MIN_WEEKS
+            && this_week.cost > max(earlier.iter().copied())
+            && times >= CHEST_MIN_TIMES
+        {
             found.push(LostMoment::Chest {
                 cost: round2(this_week.cost),
                 tokens: this_week.tokens,
@@ -939,9 +1134,13 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     // Piggy bank: an account's API value that week paid for its plan's month; the best is shown.
     let mut account_cost: IndexMap<String, f64> = IndexMap::new();
     for date in &week_days {
-        let Some(by_who) = input.ledger_days.get(date) else { continue };
+        let Some(by_who) = input.ledger_days.get(date) else {
+            continue;
+        };
         for (who, by_model) in by_who {
-            let Some(id) = ledger_account(who) else { continue };
+            let Some(id) = ledger_account(who) else {
+                continue;
+            };
             for c in by_model.values() {
                 *account_cost.entry(id.to_string()).or_insert(0.0) += c.cost.unwrap_or(0.0);
             }
@@ -949,8 +1148,14 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
     }
     let mut piggy: Option<(String, f64, f64)> = None;
     for (id, cost) in &account_cost {
-        let plan = accounts.iter().find(|a| a.id == *id).and_then(|a| a.planning.as_ref()).map(|p| p.plan);
-        let Some(price) = plan.and_then(plan_price) else { continue };
+        let plan = accounts
+            .iter()
+            .find(|a| a.id == *id)
+            .and_then(|a| a.planning.as_ref())
+            .map(|p| p.plan);
+        let Some(price) = plan.and_then(plan_price) else {
+            continue;
+        };
         if *cost < price {
             continue;
         }
@@ -960,14 +1165,20 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
         piggy = Some((id.clone(), round2(*cost), price));
     }
     if let Some((account_id, cost, price)) = piggy {
-        found.push(LostMoment::Piggy { account_id, cost, price });
+        found.push(LostMoment::Piggy {
+            account_id,
+            cost,
+            price,
+        });
     }
 
     // Fan: three or more model families each did a real share of the week's tokens.
     let mut families: IndexMap<String, f64> = IndexMap::new();
     let mut week_tokens = 0.0;
     for date in &week_days {
-        let Some(by_who) = input.ledger_days.get(date) else { continue };
+        let Some(by_who) = input.ledger_days.get(date) else {
+            continue;
+        };
         for by_model in by_who.values() {
             for (model, c) in by_model {
                 let tokens = tokens_in(c.input, c.output, c.cache_write, c.cache_read);
@@ -978,11 +1189,15 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
             }
         }
     }
-    let mut fan: Vec<(String, f64)> =
-        families.into_iter().filter(|(_, tokens)| week_tokens > 0.0 && tokens / week_tokens >= FAN_MIN_SHARE).collect();
+    let mut fan: Vec<(String, f64)> = families
+        .into_iter()
+        .filter(|(_, tokens)| week_tokens > 0.0 && tokens / week_tokens >= FAN_MIN_SHARE)
+        .collect();
     sort_by(&mut fan, |a, b| b.1 - a.1);
     if fan.len() >= 3 {
-        found.push(LostMoment::Fan { families: fan.into_iter().map(|f| f.0).collect() });
+        found.push(LostMoment::Fan {
+            families: fan.into_iter().map(|f| f.0).collect(),
+        });
     }
 
     let spend_of = |item: &LostMoment| -> Option<LostSpend> {
@@ -992,27 +1207,50 @@ pub fn lost_found_week(input: &LostFoundInput<'_>) -> LostFoundWeek {
                 quarter_spend(&span_quarters(at - minutes * MINUTE_MS, at))
             }
             LostMoment::Scroll { at, hours } => {
-                let starts: Vec<f64> = (0..*hours as usize).map(|i| date_parse(at) + i as f64 * HOUR_MS).collect();
+                let starts: Vec<f64> = (0..*hours as usize)
+                    .map(|i| date_parse(at) + i as f64 * HOUR_MS)
+                    .collect();
                 quarter_spend(&hour_quarters(&starts))
             }
             LostMoment::Feather { .. } => quarter_spend(&hour_quarters(&night)),
             LostMoment::Teaglass { .. } => quarter_spend(&hour_quarters(&morning)),
-            LostMoment::Lantern { .. } => Some(sum_spend(&[day_spend(&week_days[5]), day_spend(&week_days[6])])),
-            LostMoment::Trophy { date, .. } | LostMoment::Scarf { date, .. } => Some(day_spend(date)),
-            LostMoment::Tally { .. } | LostMoment::Compass { .. } | LostMoment::Scales { .. } => Some(this_week),
+            LostMoment::Lantern { .. } => Some(sum_spend(&[
+                day_spend(&week_days[5]),
+                day_spend(&week_days[6]),
+            ])),
+            LostMoment::Trophy { date, .. } | LostMoment::Scarf { date, .. } => {
+                Some(day_spend(date))
+            }
+            LostMoment::Tally { .. } | LostMoment::Compass { .. } | LostMoment::Scales { .. } => {
+                Some(this_week)
+            }
             _ => None,
         }
     };
     let mut items: Vec<LostItem> = found
         .into_iter()
         .map(|moment| {
-            let spend = spend_of(&moment).filter(|s| s.tokens > 0.0).map(|s| LostSpend { tokens: s.tokens, cost: round2(s.cost) });
+            let spend = spend_of(&moment)
+                .filter(|s| s.tokens > 0.0)
+                .map(|s| LostSpend {
+                    tokens: s.tokens,
+                    cost: round2(s.cost),
+                });
             LostItem { moment, spend }
         })
         .collect();
-    let rank = |kind: LostItemKind| LOST_ITEM_KINDS.iter().position(|k| *k == kind).unwrap_or(0) as f64;
-    sort_by(&mut items, |a, b| rank(a.moment.kind()) - rank(b.moment.kind()));
-    LostFoundWeek { start, end, latest, oldest, items }
+    let rank =
+        |kind: LostItemKind| LOST_ITEM_KINDS.iter().position(|k| *k == kind).unwrap_or(0) as f64;
+    sort_by(&mut items, |a, b| {
+        rank(a.moment.kind()) - rank(b.moment.kind())
+    });
+    LostFoundWeek {
+        start,
+        end,
+        latest,
+        oldest,
+        items,
+    }
 }
 
 /// One find: the week it was found in and what happened.
@@ -1037,7 +1275,10 @@ pub struct LostFoundCollection {
 
 /// What every week within reach left behind, by kind (`week_start` is ignored).
 pub fn lost_found_collection(input: &LostFoundInput<'_>) -> LostFoundCollection {
-    let newest = lost_found_week(&LostFoundInput { week_start: None, ..*input });
+    let newest = lost_found_week(&LostFoundInput {
+        week_start: None,
+        ..*input
+    });
     let mut found: IndexMap<LostItemKind, Vec<LostFind>> = IndexMap::new();
     let mut start = newest.latest.clone();
     while start.as_str() >= newest.oldest.as_str() {
@@ -1045,7 +1286,10 @@ pub fn lost_found_collection(input: &LostFoundInput<'_>) -> LostFoundCollection 
         let week = if start == newest.start {
             &newest
         } else {
-            other = lost_found_week(&LostFoundInput { week_start: Some(&start), ..*input });
+            other = lost_found_week(&LostFoundInput {
+                week_start: Some(&start),
+                ..*input
+            });
             &other
         };
         for item in &week.items {
@@ -1057,5 +1301,9 @@ pub fn lost_found_collection(input: &LostFoundInput<'_>) -> LostFoundCollection 
         }
         start = add_days(&start, -7.0);
     }
-    LostFoundCollection { latest: newest.latest, oldest: newest.oldest, found }
+    LostFoundCollection {
+        latest: newest.latest,
+        oldest: newest.oldest,
+        found,
+    }
 }

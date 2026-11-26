@@ -1,0 +1,132 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/browser-extension.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "browser-extension-rs",
+  "exports": [
+    {
+      "name": "browserApps",
+      "file": "shared/browser-extension.ts",
+      "line": 146,
+      "params": [
+        {
+          "name": "platform",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "readonly (typeof BROWSER_APPS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "writesBrowser",
+      "file": "shared/browser-extension.ts",
+      "line": 178,
+      "params": [
+        {
+          "name": "mode",
+          "ts_type": "(typeof EXTENSION_MODES)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "localStateProfiles",
+      "file": "shared/browser-extension.ts",
+      "line": 329,
+      "params": [
+        {
+          "name": "localState",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "{ profile: string; name: string }[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "startupRestores",
+      "file": "shared/browser-extension.ts",
+      "line": 365,
+      "params": [
+        {
+          "name": "preferences",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "chooseInstance",
+      "file": "shared/browser-extension.ts",
+      "line": 375,
+      "params": [
+        {
+          "name": "instances",
+          "ts_type": "ExtensionInstance[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "chosen",
+          "ts_type": "ExtensionTarget | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "ExtensionInstance | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "pickInstance",
+      "file": "shared/browser-extension.ts",
+      "line": 382,
+      "params": [
+        {
+          "name": "instances",
+          "ts_type": "ExtensionInstance[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "chosen",
+          "ts_type": "ExtensionTarget | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "{ instance: ExtensionInstance; picked: \"chosen\" | \"only\" | \"recent\" } | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

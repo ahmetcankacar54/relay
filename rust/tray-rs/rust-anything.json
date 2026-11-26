@@ -1,0 +1,390 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/tray.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "tray-rs",
+  "exports": [
+    {
+      "name": "trayAccountName",
+      "file": "shared/tray.ts",
+      "line": 83,
+      "params": [
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayUsageLabel",
+      "file": "shared/tray.ts",
+      "line": 99,
+      "params": [
+        {
+          "name": "accountId",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "canRequestTraySwitch",
+      "file": "shared/tray.ts",
+      "line": 140,
+      "params": [
+        {
+          "name": "snapshot",
+          "ts_type": "TraySnapshot",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "profileId",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "unavailableTrayMenu",
+      "file": "shared/tray.ts",
+      "line": 158,
+      "params": [
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "(| { type: \"separator\" }\n  | {\n      type: \"normal\" | \"checkbox\";\n      label: string;\n      enabled: boolean;\n      checked?: boolean;\n      command?: (| { type: \"show\" }\n  | { type: \"review-switch\"; profileId: string }\n  | { type: \"quit\" });\n    })[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "buildTrayMenu",
+      "file": "shared/tray.ts",
+      "line": 172,
+      "params": [
+        {
+          "name": "snapshot",
+          "ts_type": "TraySnapshot",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "(| { type: \"separator\" }\n  | {\n      type: \"normal\" | \"checkbox\";\n      label: string;\n      enabled: boolean;\n      checked?: boolean;\n      command?: (| { type: \"show\" }\n  | { type: \"review-switch\"; profileId: string }\n  | { type: \"quit\" });\n    })[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "menuBarItems",
+      "file": "shared/tray.ts",
+      "line": 253,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(\"five-hour\" | \"week\" | \"reset\" | \"tokens\" | \"cost\" | \"account\")[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayTokens",
+      "file": "shared/tray.ts",
+      "line": 323,
+      "params": [
+        {
+          "name": "tokens",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayCost",
+      "file": "shared/tray.ts",
+      "line": 336,
+      "params": [
+        {
+          "name": "cost",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "estimated",
+          "ts_type": "boolean",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayShortName",
+      "file": "shared/tray.ts",
+      "line": 378,
+      "params": [
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "max",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayResetClock",
+      "file": "shared/tray.ts",
+      "line": 387,
+      "params": [
+        {
+          "name": "resetsAt",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "timeZone",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayCountdown",
+      "file": "shared/tray.ts",
+      "line": 422,
+      "params": [
+        {
+          "name": "resetsAt",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayTooltip",
+      "file": "shared/tray.ts",
+      "line": 443,
+      "params": [
+        {
+          "name": "snapshot",
+          "ts_type": "TraySnapshot",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayTitle",
+      "file": "shared/tray.ts",
+      "line": 515,
+      "params": [
+        {
+          "name": "snapshot",
+          "ts_type": "TraySnapshot",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "menuBarPreview",
+      "file": "shared/tray.ts",
+      "line": 583,
+      "params": [
+        {
+          "name": "items",
+          "ts_type": "readonly (\"five-hour\" | \"week\" | \"reset\" | \"tokens\" | \"cost\" | \"account\")[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "name",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

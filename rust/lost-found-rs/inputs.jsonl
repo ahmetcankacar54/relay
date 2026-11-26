@@ -1,0 +1,737 @@
+{"fn": "tierOf", "args": [100]}
+{"fn": "tierOf", "args": [1000000]}
+{"fn": "tierOf", "args": [{"$num": "-Infinity"}]}
+{"fn": "tierOf", "args": [9007199254740992]}
+{"fn": "tierOf", "args": [2147483648]}
+{"fn": "tierOf", "args": [10]}
+{"fn": "tierOf", "args": [{"$num": "Infinity"}]}
+{"fn": "tierOf", "args": [{"$num": "NaN"}]}
+{"fn": "tierOf", "args": [42]}
+{"fn": "tierOf", "args": [-1]}
+{"fn": "tierOf", "args": [0.5]}
+{"fn": "tierOf", "args": [{"$num": "-0"}]}
+{"fn": "tierOf", "args": [1000]}
+{"fn": "tierOf", "args": [-2.5]}
+{"fn": "tierOf", "args": [-7.5]}
+{"fn": "tierOf", "args": [0.1]}
+{"fn": "tierOf", "args": [0.30000000000000004]}
+{"fn": "tierOf", "args": [1e+21]}
+{"fn": "tierOf", "args": [1e-07]}
+{"fn": "tierOf", "args": [5e-324]}
+{"fn": "tierOf", "args": [1.7976931348623157e+308]}
+{"fn": "nextTier", "args": [0]}
+{"fn": "nextTier", "args": [{"$num": "NaN"}]}
+{"fn": "nextTier", "args": [0.5]}
+{"fn": "nextTier", "args": [42]}
+{"fn": "nextTier", "args": [{"$num": "-Infinity"}]}
+{"fn": "nextTier", "args": [-2.5]}
+{"fn": "nextTier", "args": [{"$num": "Infinity"}]}
+{"fn": "nextTier", "args": [100]}
+{"fn": "nextTier", "args": [10]}
+{"fn": "nextTier", "args": [-1]}
+{"fn": "nextTier", "args": [{"$num": "-0"}]}
+{"fn": "nextTier", "args": [9007199254740992]}
+{"fn": "nextTier", "args": [1000000]}
+{"fn": "nextTier", "args": [1000]}
+{"fn": "nextTier", "args": [2147483648]}
+{"fn": "nextTier", "args": [-7.5]}
+{"fn": "nextTier", "args": [0.1]}
+{"fn": "nextTier", "args": [0.30000000000000004]}
+{"fn": "nextTier", "args": [1e+21]}
+{"fn": "nextTier", "args": [1e-07]}
+{"fn": "nextTier", "args": [5e-324]}
+{"fn": "nextTier", "args": [1.7976931348623157e+308]}
+{"fn": "modelFamily", "args": ["  padded  tab\tseparated"]}
+{"fn": "modelFamily", "args": ["a.b.c"]}
+{"fn": "modelFamily", "args": ["key_name-1"]}
+{"fn": "modelFamily", "args": [":"]}
+{"fn": "modelFamily", "args": [".leading"]}
+{"fn": "modelFamily", "args": ["😀"]}
+{"fn": "modelFamily", "args": ["HELLO"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["ünïcödé"]}
+{"fn": "modelFamily", "args": ["straßea"]}
+{"fn": "modelFamily", "args": ["abc"]}
+{"fn": "modelFamily", "args": ["straße"]}
+{"fn": "modelFamily", "args": ["Hello World"]}
+{"fn": "modelFamily", "args": ["tab\tseparated"]}
+{"fn": "modelFamily", "args": ["ns:key.path"]}
+{"fn": "modelFamily", "args": ["./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["hello world"]}
+{"fn": "modelFamily", "args": [""]}
+{"fn": "modelFamily", "args": ["line1\nline2{name} has {count} items"]}
+{"fn": "modelFamily", "args": ["﻿bom"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": ["line1\nline2abc"]}
+{"fn": "modelFamily", "args": ["trailing."]}
+{"fn": "modelFamily", "args": ["ab"]}
+{"fn": "modelFamily", "args": ["İstanbul"]}
+{"fn": "modelFamily", "args": ["a😀b😀c"]}
+{"fn": "modelFamily", "args": ["{name} has {count} items"]}
+{"fn": "modelFamily", "args": ["a..b"]}
+{"fn": "modelFamily", "args": ["  padded  a..b"]}
+{"fn": "modelFamily", "args": ["  padded  "]}
+{"fn": "modelFamily", "args": ["ünïcödé  padded  "]}
+{"fn": "modelFamily", "args": ["a:b:c"]}
+{"fn": "modelFamily", "args": ["Hello Worldİstanbul"]}
+{"fn": "modelFamily", "args": ["a.b.cünïcödé"]}
+{"fn": "modelFamily", "args": ["日本語のテキスト"]}
+{"fn": "modelFamily", "args": ["a"]}
+{"fn": "modelFamily", "args": ["a.b.c😀"]}
+{"fn": "modelFamily", "args": ["hello world./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["aa"]}
+{"fn": "modelFamily", "args": ["src/a/b.ts"]}
+{"fn": "modelFamily", "args": ["ns:key.pathünïcödé"]}
+{"fn": "modelFamily", "args": ["::"]}
+{"fn": "modelFamily", "args": ["é"]}
+{"fn": "modelFamily", "args": ["hello"]}
+{"fn": "modelFamily", "args": ["a.b.ca..b"]}
+{"fn": "modelFamily", "args": ["trailing.日本語のテキスト"]}
+{"fn": "modelFamily", "args": ["Hello Worldab"]}
+{"fn": "modelFamily", "args": ["key_name-1line1\nline2"]}
+{"fn": "modelFamily", "args": ["é./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["  padded  ﻿bom"]}
+{"fn": "modelFamily", "args": ["日本語のテキストkey_name-1"]}
+{"fn": "modelFamily", "args": ["line1\nline2"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣab"]}
+{"fn": "modelFamily", "args": ["helloünïcödé"]}
+{"fn": "modelFamily", "args": ["😀ünïcödé"]}
+{"fn": "modelFamily", "args": ["./x/**/*.jsoné"]}
+{"fn": "modelFamily", "args": ["straße{name} has {count} items"]}
+{"fn": "modelFamily", "args": ["﻿bom{name} has {count} items"]}
+{"fn": "modelFamily", "args": ["straßehello world"]}
+{"fn": "modelFamily", "args": ["日本語のテキストsrc/a/b.ts"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mix﻿bom"]}
+{"fn": "modelFamily", "args": ["aba:b:c"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣa:b:c"]}
+{"fn": "modelFamily", "args": ["hello😀"]}
+{"fn": "modelFamily", "args": ["Hello Worlda"]}
+{"fn": "modelFamily", "args": ["trailing.straße"]}
+{"fn": "modelFamily", "args": ["﻿boma"]}
+{"fn": "modelFamily", "args": ["日本語のテキストline1\nline2"]}
+{"fn": "modelFamily", "args": ["./x/**/*.jsonhello world"]}
+{"fn": "modelFamily", "args": ["line1\nline2a..b"]}
+{"fn": "modelFamily", "args": ["line1\nline2😀"]}
+{"fn": "modelFamily", "args": ["./x/**/*.json日本語のテキスト"]}
+{"fn": "modelFamily", "args": ["straße./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["src/a/b.tsa😀b😀c"]}
+{"fn": "modelFamily", "args": ["a😀b😀c日本語のテキスト"]}
+{"fn": "modelFamily", "args": ["a:b:cünïcödé"]}
+{"fn": "modelFamily", "args": ["aünïcödé"]}
+{"fn": "modelFamily", "args": ["﻿bom.leading"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mixa:b:c"]}
+{"fn": "modelFamily", "args": ["😀trailing."]}
+{"fn": "modelFamily", "args": ["straßestraße"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣtab\tseparated"]}
+{"fn": "modelFamily", "args": ["ns:key.patha.b.c"]}
+{"fn": "modelFamily", "args": ["straßeHELLO"]}
+{"fn": "modelFamily", "args": ["{name} has {count} itemshello world"]}
+{"fn": "modelFamily", "args": ["Hello World  padded  "]}
+{"fn": "modelFamily", "args": ["./x/**/*.jsonΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": ["hello./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["trailing.a:b:c"]}
+{"fn": "modelFamily", "args": ["tab\tseparated😀"]}
+{"fn": "modelFamily", "args": ["abctrailing."]}
+{"fn": "modelFamily", "args": [".leadingHELLO"]}
+{"fn": "modelFamily", "args": ["a:b:cab"]}
+{"fn": "modelFamily", "args": ["{name} has {count} itemsa.b.c"]}
+{"fn": "modelFamily", "args": ["src/a/b.tstab\tseparated"]}
+{"fn": "modelFamily", "args": ["HELLOns:key.path"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣkey_name-1"]}
+{"fn": "modelFamily", "args": ["HELLO  padded  "]}
+{"fn": "modelFamily", "args": ["ababc"]}
+{"fn": "modelFamily", "args": ["a.leading"]}
+{"fn": "modelFamily", "args": ["straße  padded  "]}
+{"fn": "modelFamily", "args": ["a😀b😀cΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": ["trailing.line1\nline2"]}
+{"fn": "modelFamily", "args": ["é😀"]}
+{"fn": "modelFamily", "args": ["ns:key.path  padded  "]}
+{"fn": "modelFamily", "args": ["line1\nline2tab\tseparated"]}
+{"fn": "modelFamily", "args": ["😀HELLO"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mixemoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["ab.leading"]}
+{"fn": "modelFamily", "args": ["a.b.cΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": ["trailing.a😀b😀c"]}
+{"fn": "modelFamily", "args": ["a.b.ca:b:c"]}
+{"fn": "modelFamily", "args": ["key_name-1trailing."]}
+{"fn": "modelFamily", "args": ["  padded  İstanbul"]}
+{"fn": "modelFamily", "args": ["abİstanbul"]}
+{"fn": "modelFamily", "args": ["tab\tseparateda..b"]}
+{"fn": "modelFamily", "args": ["a.b.cns:key.path"]}
+{"fn": "modelFamily", "args": ["a😀b😀chello world"]}
+{"fn": "modelFamily", "args": ["ahello"]}
+{"fn": "modelFamily", "args": ["a😀b😀cstraße"]}
+{"fn": "modelFamily", "args": ["ünïcödésrc/a/b.ts"]}
+{"fn": "modelFamily", "args": [".leading  padded  "]}
+{"fn": "modelFamily", "args": [":key_name-1"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣ.leading"]}
+{"fn": "modelFamily", "args": ["éa.b.c"]}
+{"fn": "modelFamily", "args": ["Hello Worldabc"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mixHELLO"]}
+{"fn": "modelFamily", "args": ["Hello WorldHello World"]}
+{"fn": "modelFamily", "args": ["{name} has {count} itemsabc"]}
+{"fn": "modelFamily", "args": ["hello:"]}
+{"fn": "modelFamily", "args": ["ns:key.pathİstanbul"]}
+{"fn": "modelFamily", "args": ["hello worlda.b.c"]}
+{"fn": "modelFamily", "args": ["日本語のテキストemoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["a😀b😀ckey_name-1"]}
+{"fn": "modelFamily", "args": ["src/a/b.tshello"]}
+{"fn": "modelFamily", "args": ["ns:key.path.leading"]}
+{"fn": "modelFamily", "args": ["tab\tseparated./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["trailing.a..b"]}
+{"fn": "modelFamily", "args": ["Hello Worldns:key.path"]}
+{"fn": "modelFamily", "args": ["abcİstanbul"]}
+{"fn": "modelFamily", "args": ["a:b:c./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["ns:key.path./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["hello worldsrc/a/b.ts"]}
+{"fn": "modelFamily", "args": ["a:b:ca:b:c"]}
+{"fn": "modelFamily", "args": ["abchello"]}
+{"fn": "modelFamily", "args": ["key_name-1abc"]}
+{"fn": "modelFamily", "args": ["src/a/b.tsΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": [":ns:key.path"]}
+{"fn": "modelFamily", "args": ["a:b:c  padded  "]}
+{"fn": "modelFamily", "args": ["  padded  emoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["a:b:cabc"]}
+{"fn": "modelFamily", "args": ["line1\nline2﻿bom"]}
+{"fn": "modelFamily", "args": ["abc./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["straßea..b"]}
+{"fn": "modelFamily", "args": ["hellohello world"]}
+{"fn": "modelFamily", "args": ["hello world  padded  "]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣHELLO"]}
+{"fn": "modelFamily", "args": ["hello worldab"]}
+{"fn": "modelFamily", "args": ["tab\tseparatedhello world"]}
+{"fn": "modelFamily", "args": ["  padded  Hello World"]}
+{"fn": "modelFamily", "args": ["line1\nline2a.b.c"]}
+{"fn": "modelFamily", "args": ["日本語のテキストa😀b😀c"]}
+{"fn": "modelFamily", "args": ["tab\tseparated{name} has {count} items"]}
+{"fn": "modelFamily", "args": ["a.b.ca.b.c"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mixstraße"]}
+{"fn": "modelFamily", "args": ["日本語のテキストab"]}
+{"fn": "modelFamily", "args": ["İstanbul😀"]}
+{"fn": "modelFamily", "args": ["a:b:c日本語のテキスト"]}
+{"fn": "modelFamily", "args": ["ab./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["emoji 👍🏽 mixkey_name-1"]}
+{"fn": "modelFamily", "args": ["a:b:c😀"]}
+{"fn": "modelFamily", "args": ["line1\nline2hello"]}
+{"fn": "modelFamily", "args": ["Hello Worldtrailing."]}
+{"fn": "modelFamily", "args": ["hello worldemoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["abcstraße"]}
+{"fn": "modelFamily", "args": ["a..bΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": ["a:b:ca..b"]}
+{"fn": "modelFamily", "args": ["a..bhello"]}
+{"fn": "modelFamily", "args": ["a./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["hellotrailing."]}
+{"fn": "modelFamily", "args": ["straßeemoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["trailing.ΣΊΣΥΦΟΣ"]}
+{"fn": "modelFamily", "args": ["﻿bomsrc/a/b.ts"]}
+{"fn": "modelFamily", "args": ["a.b.c日本語のテキスト"]}
+{"fn": "modelFamily", "args": ["hellotab\tseparated"]}
+{"fn": "modelFamily", "args": ["a😀b😀ca😀b😀c"]}
+{"fn": "modelFamily", "args": ["éHello World"]}
+{"fn": "modelFamily", "args": ["tab\tseparatedtrailing."]}
+{"fn": "modelFamily", "args": ["  padded  ünïcödé"]}
+{"fn": "modelFamily", "args": ["a.b.c./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["😀abc"]}
+{"fn": "modelFamily", "args": ["./x/**/*.jsonİstanbul"]}
+{"fn": "modelFamily", "args": [".leadinga:b:c"]}
+{"fn": "modelFamily", "args": [".leadingtrailing."]}
+{"fn": "modelFamily", "args": ["hello worldline1\nline2"]}
+{"fn": "modelFamily", "args": ["abcemoji 👍🏽 mix"]}
+{"fn": "modelFamily", "args": ["src/a/b.ts﻿bom"]}
+{"fn": "modelFamily", "args": ["./x/**/*.jsontab\tseparated"]}
+{"fn": "modelFamily", "args": ["ΣΊΣΥΦΟΣé"]}
+{"fn": "modelFamily", "args": ["a..b./x/**/*.json"]}
+{"fn": "modelFamily", "args": ["héllo wörld"]}
+{"fn": "modelFamily", "args": ["👍🏽 thumbs"]}
+{"fn": "modelFamily", "args": ["日本語"]}
+{"fn": "modelFamily", "args": ["ılık ırmak"]}
+{"fn": "modelFamily", "args": ["👨‍👩‍👧 family"]}
+{"fn": "modelFamily", "args": ["a b"]}
+{"fn": "modelFamily", "args": ["a😀b"]}
+{"fn": "modelFamily", "args": ["a²b x½ y①"]}
+{"fn": "modelFamily", "args": ["aⅠb Ⅻ"]}
+{"fn": "modelFamily", "args": ["a𐐀b 𝐀bc"]}
+{"fn": "modelFamily", "args": ["कि ٣٤"]}
+{"fn": "modelFamily", "args": ["Iı İi"]}
+{"fn": "modelFamily", "args": ["K K k"]}
+{"fn": "modelFamily", "args": ["ſ s S"]}
+{"fn": "modelFamily", "args": ["x‍y 👨‍👩‍👧"]}
+{"fn": "modelFamily", "args": ["a b c　d"]}
+{"fn": "modelFamily", "args": ["١٢٣ ٤٥"]}
+{"fn": "modelFamily", "args": ["𝟘𝟙 ²³"]}
+{"fn": "modelFamily", "args": ["snake_case foo-bar o'neil"]}
+{"fn": "modelFamily", "args": ["ǅungla Ǆ"]}
+{"fn": "modelFamily", "args": ["one\r\ntwo threefour"]}
+{"fn": "modelFamily", "args": ["café café"]}
+{"fn": "modelFamily", "args": ["ΣΑΣ σας ς"]}
+{"fn": "addDays", "args": ["{name} has {count} items", 0]}
+{"fn": "addDays", "args": ["hello", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["tab\tseparated", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["  padded  ", 10]}
+{"fn": "addDays", "args": ["ab", 0]}
+{"fn": "addDays", "args": ["a😀b😀c", 3]}
+{"fn": "addDays", "args": ["﻿bom", 9007199254740992]}
+{"fn": "addDays", "args": ["ab", -1]}
+{"fn": "addDays", "args": ["é", 2]}
+{"fn": "addDays", "args": ["hello:", -2.5]}
+{"fn": "addDays", "args": ["a..b", 1]}
+{"fn": "addDays", "args": ["{name} has {count} items﻿bom", 1000]}
+{"fn": "addDays", "args": ["a", -1]}
+{"fn": "addDays", "args": ["straße", 1000000]}
+{"fn": "addDays", "args": [":ünïcödé", 1000000]}
+{"fn": "addDays", "args": ["ünïcödéHello World", 9007199254740992]}
+{"fn": "addDays", "args": ["./x/**/*.json:", 3]}
+{"fn": "addDays", "args": ["./x/**/*.json", 1000]}
+{"fn": "addDays", "args": ["ns:key.path", 100]}
+{"fn": "addDays", "args": ["a", -2.5]}
+{"fn": "addDays", "args": ["😀", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["src/a/b.ts", 3]}
+{"fn": "addDays", "args": ["ns:key.pathhello", 100]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", 10]}
+{"fn": "addDays", "args": ["日本語のテキスト", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["😀", 10]}
+{"fn": "addDays", "args": ["ns:key.pathtrailing.", 1000]}
+{"fn": "addDays", "args": ["trailing.日本語のテキスト", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["a.b.c", 2]}
+{"fn": "addDays", "args": ["  padded  ns:key.path", 1000]}
+{"fn": "addDays", "args": ["a", 3]}
+{"fn": "addDays", "args": ["ns:key.pathline1\nline2", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["a😀b😀c", 0]}
+{"fn": "addDays", "args": ["", 1000000]}
+{"fn": "addDays", "args": ["", 100]}
+{"fn": "addDays", "args": ["trailing.", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["  padded  ", 42]}
+{"fn": "addDays", "args": ["HELLOab", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["./x/**/*.json", 0]}
+{"fn": "addDays", "args": ["İstanbul", -2.5]}
+{"fn": "addDays", "args": ["hello world", 0]}
+{"fn": "addDays", "args": ["日本語のテキスト", 0]}
+{"fn": "addDays", "args": ["straße", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["emoji 👍🏽 mixİstanbul", 2147483648]}
+{"fn": "addDays", "args": ["helloİstanbul", 0.5]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", -1]}
+{"fn": "addDays", "args": ["ns:key.path", -1]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["a..b", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["", 42]}
+{"fn": "addDays", "args": ["ünïcödéa..b", 1]}
+{"fn": "addDays", "args": ["emoji 👍🏽 mix", 9007199254740992]}
+{"fn": "addDays", "args": ["src/a/b.tsab", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["a😀b😀c", 1]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣemoji 👍🏽 mix", -1]}
+{"fn": "addDays", "args": ["  padded  a.b.c", 10]}
+{"fn": "addDays", "args": ["ab", 1000000]}
+{"fn": "addDays", "args": ["hello world", 100]}
+{"fn": "addDays", "args": ["a", 2147483648]}
+{"fn": "addDays", "args": ["😀日本語のテキスト", 1000]}
+{"fn": "addDays", "args": ["key_name-1abc", 3]}
+{"fn": "addDays", "args": ["  padded  straße", 9007199254740992]}
+{"fn": "addDays", "args": ["日本語のテキスト", 2]}
+{"fn": "addDays", "args": ["a", 10]}
+{"fn": "addDays", "args": ["tab\tseparated", 10]}
+{"fn": "addDays", "args": ["﻿bom", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["😀", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["ns:key.patha", 2]}
+{"fn": "addDays", "args": ["a..b", 1000000]}
+{"fn": "addDays", "args": ["key_name-1", 9007199254740992]}
+{"fn": "addDays", "args": ["HELLO", 10]}
+{"fn": "addDays", "args": ["a😀b😀c", 100]}
+{"fn": "addDays", "args": ["tab\tseparated", 1]}
+{"fn": "addDays", "args": ["Hello World", -1]}
+{"fn": "addDays", "args": [":", 1000000]}
+{"fn": "addDays", "args": ["line1\nline2", 2147483648]}
+{"fn": "addDays", "args": ["HELLO", 0.5]}
+{"fn": "addDays", "args": ["hello world", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["hello world", 9007199254740992]}
+{"fn": "addDays", "args": ["tab\tseparated", 0]}
+{"fn": "addDays", "args": ["abc", 10]}
+{"fn": "addDays", "args": ["hello", 1000000]}
+{"fn": "addDays", "args": ["straße", 2]}
+{"fn": "addDays", "args": ["İstanbul", 3]}
+{"fn": "addDays", "args": ["key_name-1", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": [".leading", 2147483648]}
+{"fn": "addDays", "args": ["ns:key.path", 1000000]}
+{"fn": "addDays", "args": ["İstanbul", -1]}
+{"fn": "addDays", "args": ["straße", 0]}
+{"fn": "addDays", "args": ["./x/**/*.json", 2]}
+{"fn": "addDays", "args": ["a.b.c", 1000]}
+{"fn": "addDays", "args": ["ünïcödé", -1]}
+{"fn": "addDays", "args": ["é", 3]}
+{"fn": "addDays", "args": ["ünïcödé", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["Hello World", 2147483648]}
+{"fn": "addDays", "args": ["😀", 2]}
+{"fn": "addDays", "args": ["{name} has {count} items", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": [":", 1]}
+{"fn": "addDays", "args": ["line1\nline2hello", 42]}
+{"fn": "addDays", "args": ["helloa😀b😀c", 10]}
+{"fn": "addDays", "args": ["ns:key.path", 1000]}
+{"fn": "addDays", "args": ["trailing.straße", 1]}
+{"fn": "addDays", "args": ["./x/**/*.json", 1000000]}
+{"fn": "addDays", "args": ["HELLO", 1000000]}
+{"fn": "addDays", "args": ["trailing.", 3]}
+{"fn": "addDays", "args": ["line1\nline2ns:key.path", 1]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", 9007199254740992]}
+{"fn": "addDays", "args": ["😀", 2147483648]}
+{"fn": "addDays", "args": [":", -1]}
+{"fn": "addDays", "args": ["straße", 1000]}
+{"fn": "addDays", "args": ["abcstraße", 9007199254740992]}
+{"fn": "addDays", "args": ["é", 10]}
+{"fn": "addDays", "args": ["key_name-1", 1000]}
+{"fn": "addDays", "args": ["a.b.c./x/**/*.json", 1000000]}
+{"fn": "addDays", "args": ["a😀b😀c", 0.5]}
+{"fn": "addDays", "args": ["src/a/b.ts", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["straße", 3]}
+{"fn": "addDays", "args": ["trailing.", -2.5]}
+{"fn": "addDays", "args": ["ab", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["HELLO", 42]}
+{"fn": "addDays", "args": ["trailing.", -1]}
+{"fn": "addDays", "args": ["key_name-1", 1000000]}
+{"fn": "addDays", "args": ["ns:key.path", 0.5]}
+{"fn": "addDays", "args": ["a", 0]}
+{"fn": "addDays", "args": ["日本語のテキスト", 1000]}
+{"fn": "addDays", "args": ["src/a/b.ts", 0.5]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", 2147483648]}
+{"fn": "addDays", "args": [".leadingstraße", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["a:b:c", 1]}
+{"fn": "addDays", "args": ["a..b", 0]}
+{"fn": "addDays", "args": [":tab\tseparated", 1]}
+{"fn": "addDays", "args": ["./x/**/*.json", 42]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", 2]}
+{"fn": "addDays", "args": ["trailing.é", 2147483648]}
+{"fn": "addDays", "args": ["atrailing.", 100]}
+{"fn": "addDays", "args": ["key_name-1abc", -2.5]}
+{"fn": "addDays", "args": ["ab", 1000]}
+{"fn": "addDays", "args": ["a:b:c", 0]}
+{"fn": "addDays", "args": ["src/a/b.ts", 1000]}
+{"fn": "addDays", "args": ["a", 100]}
+{"fn": "addDays", "args": ["abcab", 10]}
+{"fn": "addDays", "args": [".leading", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["aΣΊΣΥΦΟΣ", 1000]}
+{"fn": "addDays", "args": ["Hello World", 42]}
+{"fn": "addDays", "args": [".leading", 10]}
+{"fn": "addDays", "args": ["a", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["a😀b😀c", 42]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣa😀b😀c", 1000]}
+{"fn": "addDays", "args": ["étrailing.", 3]}
+{"fn": "addDays", "args": ["trailing.", 100]}
+{"fn": "addDays", "args": ["hello world", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["key_name-1", -2.5]}
+{"fn": "addDays", "args": ["😀", 1]}
+{"fn": "addDays", "args": ["trailing.HELLO", 1]}
+{"fn": "addDays", "args": ["line1\nline2", 10]}
+{"fn": "addDays", "args": ["line1\nline2", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["straße", 2147483648]}
+{"fn": "addDays", "args": ["Hello World", 0]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ😀", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["helloHello World", 1000000]}
+{"fn": "addDays", "args": ["hello world  padded  ", -2.5]}
+{"fn": "addDays", "args": ["日本語のテキストtrailing.", 2]}
+{"fn": "addDays", "args": ["{name} has {count} items", 3]}
+{"fn": "addDays", "args": [":", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["ns:key.pathHello World", 1]}
+{"fn": "addDays", "args": ["éns:key.path", 9007199254740992]}
+{"fn": "addDays", "args": ["emoji 👍🏽 mix", 42]}
+{"fn": "addDays", "args": ["HELLOa😀b😀c", 0]}
+{"fn": "addDays", "args": ["a:b:c", 10]}
+{"fn": "addDays", "args": ["key_name-1", 0]}
+{"fn": "addDays", "args": ["a😀b😀c", 1000000]}
+{"fn": "addDays", "args": ["ünïcödéns:key.path", 1]}
+{"fn": "addDays", "args": ["HELLO", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": [":Hello World", 9007199254740992]}
+{"fn": "addDays", "args": ["hello", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["hello world", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["a.b.c", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["hello", 1]}
+{"fn": "addDays", "args": ["hello", 2147483648]}
+{"fn": "addDays", "args": ["ab", 1]}
+{"fn": "addDays", "args": ["é", 9007199254740992]}
+{"fn": "addDays", "args": ["tab\tseparated", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": [".leading", 42]}
+{"fn": "addDays", "args": ["a..b", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["﻿bom", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["ahello world", {"$num": "-Infinity"}]}
+{"fn": "addDays", "args": ["hello world", 10]}
+{"fn": "addDays", "args": ["straße", {"$num": "-0"}]}
+{"fn": "addDays", "args": ["./x/**/*.json", -2.5]}
+{"fn": "addDays", "args": ["trailing.", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["trailing.", 1000000]}
+{"fn": "addDays", "args": ["src/a/b.ts", -2.5]}
+{"fn": "addDays", "args": ["trailing.", 2]}
+{"fn": "addDays", "args": [".leading", 100]}
+{"fn": "addDays", "args": ["a:b:c", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["", 1]}
+{"fn": "addDays", "args": ["", {"$num": "Infinity"}]}
+{"fn": "addDays", "args": ["./x/**/*.json", {"$num": "NaN"}]}
+{"fn": "addDays", "args": ["ab", 2]}
+{"fn": "addDays", "args": ["héllo wörld", 0]}
+{"fn": "addDays", "args": ["👍🏽 thumbs", 0]}
+{"fn": "addDays", "args": ["日本語", 0]}
+{"fn": "addDays", "args": ["", 0]}
+{"fn": "addDays", "args": ["é", 0]}
+{"fn": "addDays", "args": ["İstanbul", 0]}
+{"fn": "addDays", "args": ["ılık ırmak", 0]}
+{"fn": "addDays", "args": ["👨‍👩‍👧 family", 0]}
+{"fn": "addDays", "args": ["a b", 0]}
+{"fn": "addDays", "args": ["ΣΊΣΥΦΟΣ", 0]}
+{"fn": "addDays", "args": ["a😀b", 0]}
+{"fn": "addDays", "args": ["﻿bom", 0]}
+{"fn": "addDays", "args": ["a²b x½ y①", 0]}
+{"fn": "addDays", "args": ["aⅠb Ⅻ", 0]}
+{"fn": "addDays", "args": ["a𐐀b 𝐀bc", 0]}
+{"fn": "addDays", "args": ["कि ٣٤", 0]}
+{"fn": "addDays", "args": ["Iı İi", 0]}
+{"fn": "addDays", "args": ["K K k", 0]}
+{"fn": "addDays", "args": ["ſ s S", 0]}
+{"fn": "addDays", "args": ["x‍y 👨‍👩‍👧", 0]}
+{"fn": "addDays", "args": ["a b c　d", 0]}
+{"fn": "addDays", "args": ["١٢٣ ٤٥", 0]}
+{"fn": "addDays", "args": ["𝟘𝟙 ²³", 0]}
+{"fn": "addDays", "args": ["snake_case foo-bar o'neil", 0]}
+{"fn": "addDays", "args": ["ǅungla Ǆ", 0]}
+{"fn": "addDays", "args": ["one\r\ntwo threefour", 0]}
+{"fn": "addDays", "args": ["café café", 0]}
+{"fn": "addDays", "args": ["ΣΑΣ σας ς", 0]}
+{"fn": "addDays", "args": ["{name} has {count} items", -7.5]}
+{"fn": "addDays", "args": ["{name} has {count} items", 0.1]}
+{"fn": "addDays", "args": ["{name} has {count} items", 0.30000000000000004]}
+{"fn": "addDays", "args": ["{name} has {count} items", 1e+21]}
+{"fn": "addDays", "args": ["{name} has {count} items", 1e-07]}
+{"fn": "addDays", "args": ["{name} has {count} items", 5e-324]}
+{"fn": "addDays", "args": ["{name} has {count} items", 1.7976931348623157e+308]}
+{"fn": "addDays", "args": ["{name} has {count} items", 9007199254740992]}
+{"fn": "addDays", "args": ["{name} has {count} items", {"$num": "-0"}]}
+{"fn": "mondayOf", "args": ["ab"]}
+{"fn": "mondayOf", "args": ["emoji 👍🏽 mix"]}
+{"fn": "mondayOf", "args": ["abc"]}
+{"fn": "mondayOf", "args": ["a.b.c"]}
+{"fn": "mondayOf", "args": ["Hello World"]}
+{"fn": "mondayOf", "args": ["straße"]}
+{"fn": "mondayOf", "args": ["trailing.ΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["  padded  a.b.c"]}
+{"fn": "mondayOf", "args": ["src/a/b.ts"]}
+{"fn": "mondayOf", "args": ["ünïcödé"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["tab\tseparated"]}
+{"fn": "mondayOf", "args": ["ns:key.path"]}
+{"fn": "mondayOf", "args": ["a..b"]}
+{"fn": "mondayOf", "args": ["./x/**/*.json"]}
+{"fn": "mondayOf", "args": [":"]}
+{"fn": "mondayOf", "args": ["é"]}
+{"fn": "mondayOf", "args": ["a:b:c"]}
+{"fn": "mondayOf", "args": ["日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["日本語のテキストab"]}
+{"fn": "mondayOf", "args": ["ans:key.path"]}
+{"fn": "mondayOf", "args": ["hello"]}
+{"fn": "mondayOf", "args": ["a😀b😀c"]}
+{"fn": "mondayOf", "args": ["a"]}
+{"fn": "mondayOf", "args": [".leading"]}
+{"fn": "mondayOf", "args": ["hello world"]}
+{"fn": "mondayOf", "args": ["key_name-1😀"]}
+{"fn": "mondayOf", "args": ["line1\nline2"]}
+{"fn": "mondayOf", "args": ["aé"]}
+{"fn": "mondayOf", "args": ["İstanbulHello World"]}
+{"fn": "mondayOf", "args": ["trailing."]}
+{"fn": "mondayOf", "args": ["a.b.c:"]}
+{"fn": "mondayOf", "args": ["HELLO"]}
+{"fn": "mondayOf", "args": ["a😀b😀cab"]}
+{"fn": "mondayOf", "args": ["😀"]}
+{"fn": "mondayOf", "args": ["İstanbul"]}
+{"fn": "mondayOf", "args": ["a..bHello World"]}
+{"fn": "mondayOf", "args": ["  padded  "]}
+{"fn": "mondayOf", "args": ["{name} has {count} items"]}
+{"fn": "mondayOf", "args": ["a.b.cab"]}
+{"fn": "mondayOf", "args": ["ns:key.patha"]}
+{"fn": "mondayOf", "args": ["hellostraße"]}
+{"fn": "mondayOf", "args": ["emoji 👍🏽 mix😀"]}
+{"fn": "mondayOf", "args": ["﻿bom"]}
+{"fn": "mondayOf", "args": ["key_name-1"]}
+{"fn": "mondayOf", "args": ["ns:key.pathé"]}
+{"fn": "mondayOf", "args": [":tab\tseparated"]}
+{"fn": "mondayOf", "args": ["key_name-1src/a/b.ts"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["{name} has {count} itemsab"]}
+{"fn": "mondayOf", "args": [".leadingtrailing."]}
+{"fn": "mondayOf", "args": ["  padded  ünïcödé"]}
+{"fn": "mondayOf", "args": ["abΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣ.leading"]}
+{"fn": "mondayOf", "args": ["tab\tseparatedab"]}
+{"fn": "mondayOf", "args": ["{name} has {count} itemsHello World"]}
+{"fn": "mondayOf", "args": ["emoji 👍🏽 mixé"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣtrailing."]}
+{"fn": "mondayOf", "args": ["a..b:"]}
+{"fn": "mondayOf", "args": ["﻿bom.leading"]}
+{"fn": "mondayOf", "args": [""]}
+{"fn": "mondayOf", "args": ["a😀b😀ckey_name-1"]}
+{"fn": "mondayOf", "args": ["hello world﻿bom"]}
+{"fn": "mondayOf", "args": ["HELLOabc"]}
+{"fn": "mondayOf", "args": ["😀a..b"]}
+{"fn": "mondayOf", "args": ["a..bsrc/a/b.ts"]}
+{"fn": "mondayOf", "args": ["line1\nline2HELLO"]}
+{"fn": "mondayOf", "args": ["emoji 👍🏽 mixa:b:c"]}
+{"fn": "mondayOf", "args": ["src/a/b.tsab"]}
+{"fn": "mondayOf", "args": ["{name} has {count} itemsline1\nline2"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣé"]}
+{"fn": "mondayOf", "args": ["ns:key.path﻿bom"]}
+{"fn": "mondayOf", "args": ["😀ΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["a..bline1\nline2"]}
+{"fn": "mondayOf", "args": ["ns:key.path./x/**/*.json"]}
+{"fn": "mondayOf", "args": ["helloabc"]}
+{"fn": "mondayOf", "args": ["tab\tseparateda:b:c"]}
+{"fn": "mondayOf", "args": ["HELLOa.b.c"]}
+{"fn": "mondayOf", "args": ["  padded  key_name-1"]}
+{"fn": "mondayOf", "args": ["straßeé"]}
+{"fn": "mondayOf", "args": ["line1\nline2straße"]}
+{"fn": "mondayOf", "args": ["  padded  hello"]}
+{"fn": "mondayOf", "args": ["😀日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["a..b日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["straßea.b.c"]}
+{"fn": "mondayOf", "args": ["hello worlda.b.c"]}
+{"fn": "mondayOf", "args": ["日本語のテキスト日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["ns:key.pathhello world"]}
+{"fn": "mondayOf", "args": ["a😀b😀c日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["hellosrc/a/b.ts"]}
+{"fn": "mondayOf", "args": [".leadinga:b:c"]}
+{"fn": "mondayOf", "args": ["tab\tseparatedtrailing."]}
+{"fn": "mondayOf", "args": ["a日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["HELLOünïcödé"]}
+{"fn": "mondayOf", "args": ["日本語のテキストHELLO"]}
+{"fn": "mondayOf", "args": ["hello﻿bom"]}
+{"fn": "mondayOf", "args": [".leadingns:key.path"]}
+{"fn": "mondayOf", "args": ["a:b:cΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["ünïcödéünïcödé"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣ  padded  "]}
+{"fn": "mondayOf", "args": ["hellokey_name-1"]}
+{"fn": "mondayOf", "args": ["key_name-1İstanbul"]}
+{"fn": "mondayOf", "args": ["line1\nline2a😀b😀c"]}
+{"fn": "mondayOf", "args": ["a.b.ctab\tseparated"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣa:b:c"]}
+{"fn": "mondayOf", "args": ["HELLO./x/**/*.json"]}
+{"fn": "mondayOf", "args": ["{name} has {count} itemsİstanbul"]}
+{"fn": "mondayOf", "args": ["src/a/b.tsa"]}
+{"fn": "mondayOf", "args": ["  padded  ./x/**/*.json"]}
+{"fn": "mondayOf", "args": ["{name} has {count} itemsHELLO"]}
+{"fn": "mondayOf", "args": ["a..babc"]}
+{"fn": "mondayOf", "args": ["  padded  src/a/b.ts"]}
+{"fn": "mondayOf", "args": ["straße.leading"]}
+{"fn": "mondayOf", "args": ["line1\nline2tab\tseparated"]}
+{"fn": "mondayOf", "args": ["aline1\nline2"]}
+{"fn": "mondayOf", "args": ["ns:key.path{name} has {count} items"]}
+{"fn": "mondayOf", "args": ["key_name-1.leading"]}
+{"fn": "mondayOf", "args": ["İstanbula.b.c"]}
+{"fn": "mondayOf", "args": ["{name} has {count} itemsns:key.path"]}
+{"fn": "mondayOf", "args": ["helloHELLO"]}
+{"fn": "mondayOf", "args": ["日本語のテキストΣΊΣΥΦΟΣ"]}
+{"fn": "mondayOf", "args": ["key_name-1:"]}
+{"fn": "mondayOf", "args": [".leading﻿bom"]}
+{"fn": "mondayOf", "args": ["hello worldhello world"]}
+{"fn": "mondayOf", "args": ["helloa:b:c"]}
+{"fn": "mondayOf", "args": ["./x/**/*.jsonünïcödé"]}
+{"fn": "mondayOf", "args": ["ab./x/**/*.json"]}
+{"fn": "mondayOf", "args": ["hello world./x/**/*.json"]}
+{"fn": "mondayOf", "args": ["abstraße"]}
+{"fn": "mondayOf", "args": ["./x/**/*.jsonHELLO"]}
+{"fn": "mondayOf", "args": ["src/a/b.ts.leading"]}
+{"fn": "mondayOf", "args": ["helloa..b"]}
+{"fn": "mondayOf", "args": ["İstanbulé"]}
+{"fn": "mondayOf", "args": ["./x/**/*.jsonsrc/a/b.ts"]}
+{"fn": "mondayOf", "args": [".leadingabc"]}
+{"fn": "mondayOf", "args": ["tab\tseparatedtab\tseparated"]}
+{"fn": "mondayOf", "args": ["ababc"]}
+{"fn": "mondayOf", "args": ["hello worldline1\nline2"]}
+{"fn": "mondayOf", "args": [":﻿bom"]}
+{"fn": "mondayOf", "args": ["😀  padded  "]}
+{"fn": "mondayOf", "args": ["hello worldé"]}
+{"fn": "mondayOf", "args": ["emoji 👍🏽 mixline1\nline2"]}
+{"fn": "mondayOf", "args": ["﻿bomsrc/a/b.ts"]}
+{"fn": "mondayOf", "args": ["trailing.ns:key.path"]}
+{"fn": "mondayOf", "args": ["emoji 👍🏽 mixhello world"]}
+{"fn": "mondayOf", "args": [".leadingline1\nline2"]}
+{"fn": "mondayOf", "args": ["a..bhello"]}
+{"fn": "mondayOf", "args": ["tab\tseparatedkey_name-1"]}
+{"fn": "mondayOf", "args": ["Hello Worlda😀b😀c"]}
+{"fn": "mondayOf", "args": ["a..bHELLO"]}
+{"fn": "mondayOf", "args": ["abcab"]}
+{"fn": "mondayOf", "args": [".leadingtab\tseparated"]}
+{"fn": "mondayOf", "args": ["ünïcödé日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["İstanbul😀"]}
+{"fn": "mondayOf", "args": ["﻿bom日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["./x/**/*.jsontab\tseparated"]}
+{"fn": "mondayOf", "args": ["trailing.😀"]}
+{"fn": "mondayOf", "args": ["hello worlda"]}
+{"fn": "mondayOf", "args": [":a.b.c"]}
+{"fn": "mondayOf", "args": ["ns:key.pathünïcödé"]}
+{"fn": "mondayOf", "args": ["line1\nline2  padded  "]}
+{"fn": "mondayOf", "args": ["ünïcödékey_name-1"]}
+{"fn": "mondayOf", "args": ["abc:"]}
+{"fn": "mondayOf", "args": ["abhello world"]}
+{"fn": "mondayOf", "args": ["😀Hello World"]}
+{"fn": "mondayOf", "args": ["line1\nline2line1\nline2"]}
+{"fn": "mondayOf", "args": ["﻿bomkey_name-1"]}
+{"fn": "mondayOf", "args": ["helloİstanbul"]}
+{"fn": "mondayOf", "args": ["İstanbula"]}
+{"fn": "mondayOf", "args": ["hello worldab"]}
+{"fn": "mondayOf", "args": ["İstanbul.leading"]}
+{"fn": "mondayOf", "args": [":./x/**/*.json"]}
+{"fn": "mondayOf", "args": [":😀"]}
+{"fn": "mondayOf", "args": ["abc./x/**/*.json"]}
+{"fn": "mondayOf", "args": ["src/a/b.ts  padded  "]}
+{"fn": "mondayOf", "args": ["HELLO  padded  "]}
+{"fn": "mondayOf", "args": ["line1\nline2a"]}
+{"fn": "mondayOf", "args": ["tab\tseparated日本語のテキスト"]}
+{"fn": "mondayOf", "args": ["hello:"]}
+{"fn": "mondayOf", "args": ["straße{name} has {count} items"]}
+{"fn": "mondayOf", "args": ["日本語のテキストline1\nline2"]}
+{"fn": "mondayOf", "args": ["trailing.é"]}
+{"fn": "mondayOf", "args": ["ünïcödé:"]}
+{"fn": "mondayOf", "args": ["é:"]}
+{"fn": "mondayOf", "args": ["é  padded  "]}
+{"fn": "mondayOf", "args": ["é{name} has {count} items"]}
+{"fn": "mondayOf", "args": ["﻿bomé"]}
+{"fn": "mondayOf", "args": ["tab\tseparatedHello World"]}
+{"fn": "mondayOf", "args": ["a..bkey_name-1"]}
+{"fn": "mondayOf", "args": ["a😀b😀c﻿bom"]}
+{"fn": "mondayOf", "args": ["tab\tseparated﻿bom"]}
+{"fn": "mondayOf", "args": ["abca..b"]}
+{"fn": "mondayOf", "args": ["straße:"]}
+{"fn": "mondayOf", "args": ["﻿bomns:key.path"]}
+{"fn": "mondayOf", "args": ["./x/**/*.jsonHello World"]}
+{"fn": "mondayOf", "args": ["HELLOsrc/a/b.ts"]}
+{"fn": "mondayOf", "args": ["./x/**/*.json.leading"]}
+{"fn": "mondayOf", "args": ["日本語のテキストé"]}
+{"fn": "mondayOf", "args": ["aba:b:c"]}
+{"fn": "mondayOf", "args": ["ΣΊΣΥΦΟΣa.b.c"]}
+{"fn": "mondayOf", "args": ["héllo wörld"]}
+{"fn": "mondayOf", "args": ["👍🏽 thumbs"]}
+{"fn": "mondayOf", "args": ["日本語"]}
+{"fn": "mondayOf", "args": ["ılık ırmak"]}
+{"fn": "mondayOf", "args": ["👨‍👩‍👧 family"]}
+{"fn": "mondayOf", "args": ["a b"]}
+{"fn": "mondayOf", "args": ["a😀b"]}
+{"fn": "mondayOf", "args": ["a²b x½ y①"]}
+{"fn": "mondayOf", "args": ["aⅠb Ⅻ"]}
+{"fn": "mondayOf", "args": ["a𐐀b 𝐀bc"]}
+{"fn": "mondayOf", "args": ["कि ٣٤"]}
+{"fn": "mondayOf", "args": ["Iı İi"]}
+{"fn": "mondayOf", "args": ["K K k"]}
+{"fn": "mondayOf", "args": ["ſ s S"]}
+{"fn": "mondayOf", "args": ["x‍y 👨‍👩‍👧"]}
+{"fn": "mondayOf", "args": ["a b c　d"]}
+{"fn": "mondayOf", "args": ["١٢٣ ٤٥"]}
+{"fn": "mondayOf", "args": ["𝟘𝟙 ²³"]}
+{"fn": "mondayOf", "args": ["snake_case foo-bar o'neil"]}
+{"fn": "mondayOf", "args": ["ǅungla Ǆ"]}
+{"fn": "mondayOf", "args": ["one\r\ntwo threefour"]}
+{"fn": "mondayOf", "args": ["café café"]}
+{"fn": "mondayOf", "args": ["ΣΑΣ σας ς"]}
+{"fn": "validLostItem", "args": [{}]}
+{"fn": "validLostItem", "args": [0]}
+{"fn": "validLostItem", "args": ["x"]}
+{"fn": "validLostItem", "args": [true]}
+{"fn": "validLostItem", "args": [{"a": "b"}]}
+{"fn": "validLostItem", "args": [[]]}
+{"fn": "validLostItem", "args": [["a", 1]]}
+{"fn": "validLostItem", "args": [{"a": {"b": "c"}}]}
+{"fn": "validLostItem", "args": [{"2": 4, "10": 3, "zebra": 1, "apple": 2, "é": 5, "Apple": 6}]}
+{"fn": "validLostItem", "args": [{"n": 9007199254740992, "f": 1e+21, "t": 0.1, "neg": -7}]}
+{"fn": "validLostItem", "args": [[3, 1, 2]]}

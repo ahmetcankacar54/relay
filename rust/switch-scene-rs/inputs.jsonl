@@ -1,0 +1,48 @@
+{"fn": "sceneDeadline", "args": [{"stage": "hidden", "since": 1234.5, "story": 3}]}
+{"fn": "sceneDeadline", "args": [{"stage": "hidden", "since": 1234.5, "story": 3, "outcome": "switched"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "hidden", "since": 1234.5, "story": 3, "outcome": "back"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "hidden", "since": 1234.5, "story": 3, "outcome": "failed"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "leaving", "since": 1234.5, "story": 3}]}
+{"fn": "sceneDeadline", "args": [{"stage": "leaving", "since": 1234.5, "story": 3, "outcome": "switched"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "leaving", "since": 1234.5, "story": 3, "outcome": "back"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "leaving", "since": 1234.5, "story": 3, "outcome": "failed"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "waiting", "since": 1234.5, "story": 3}]}
+{"fn": "sceneDeadline", "args": [{"stage": "waiting", "since": 1234.5, "story": 3, "outcome": "switched"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "waiting", "since": 1234.5, "story": 3, "outcome": "back"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "waiting", "since": 1234.5, "story": 3, "outcome": "failed"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "stalled", "since": 1234.5, "story": 3}]}
+{"fn": "sceneDeadline", "args": [{"stage": "stalled", "since": 1234.5, "story": 3, "outcome": "switched"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "stalled", "since": 1234.5, "story": 3, "outcome": "back"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "stalled", "since": 1234.5, "story": 3, "outcome": "failed"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "returning", "since": 1234.5, "story": 3}]}
+{"fn": "sceneDeadline", "args": [{"stage": "returning", "since": 1234.5, "story": 3, "outcome": "switched"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "returning", "since": 1234.5, "story": 3, "outcome": "back"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "returning", "since": 1234.5, "story": 3, "outcome": "failed"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "closing", "since": 1234.5, "story": 3}]}
+{"fn": "sceneDeadline", "args": [{"stage": "closing", "since": 1234.5, "story": 3, "outcome": "switched"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "closing", "since": 1234.5, "story": 3, "outcome": "back"}]}
+{"fn": "sceneDeadline", "args": [{"stage": "closing", "since": 1234.5, "story": 3, "outcome": "failed"}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": true, "enabled": true, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": true, "enabled": true, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": true, "enabled": false, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": true, "enabled": false, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": false, "enabled": true, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": false, "enabled": true, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": false, "enabled": false, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"$undefined": true}, {"loaded": false, "enabled": false, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": true, "enabled": true, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": true, "enabled": true, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": true, "enabled": false, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": true, "enabled": false, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": false, "enabled": true, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": false, "enabled": true, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": false, "enabled": false, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": true}, {"loaded": false, "enabled": false, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": true, "enabled": true, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": true, "enabled": true, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": true, "enabled": false, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": true, "enabled": false, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": false, "enabled": true, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": false, "enabled": true, "panelOpen": false}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": false, "enabled": false, "panelOpen": true}]}
+{"fn": "switchWindowVisible", "args": [{"visible": false}, {"loaded": false, "enabled": false, "panelOpen": false}]}

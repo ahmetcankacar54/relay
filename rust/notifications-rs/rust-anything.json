@@ -1,0 +1,30 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/notifications.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "notifications-rs",
+  "exports": [
+    {
+      "name": "notificationSettings",
+      "file": "shared/notifications.ts",
+      "line": 18,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "Pick<RelaySettings, \"notifications\">",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Required<NotificationSettings>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

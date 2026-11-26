@@ -1,0 +1,17 @@
+{
+  "unit": "shared/tray-panel.ts",
+  "files": 1,
+  "fingerprint": "2fe5de6a1dfea871",
+  "coverage": {
+    "lines": 155,
+    "reached": 155,
+    "files": [
+      {
+        "file": "shared/tray-panel.ts",
+        "lines": 155,
+        "reached": 155,
+        "missed": ""
+      }
+    ]
+  }
+}

@@ -118,7 +118,11 @@ pub struct Account {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub planning: Option<AccountPlanning>,
     /// The used percent at which automatic switching leaves this account; missing means the global line.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub switch_at_percent: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desktop: Option<AccountDesktop>,
@@ -179,7 +183,11 @@ pub struct Run {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_key: Option<String>,
     pub status: RunStatus,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub exit_code: Option<f64>,
 }
 
@@ -352,7 +360,11 @@ pub struct AntigravityAppResult {
     pub account_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<AntigravityResultReason>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub agy_running: Option<f64>,
     #[serde(serialize_with = "ser_num")]
     pub at: f64,
@@ -362,7 +374,11 @@ pub struct AntigravityAppResult {
 #[serde(rename_all = "camelCase")]
 pub struct OpenWindow {
     pub account_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub opened_at: Option<f64>,
 }
 
@@ -407,7 +423,11 @@ pub struct UpdateState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes_url: Option<String>,
     /// Download progress, 0–1, while downloading.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub progress: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manual_reason: Option<UpdateManualReason>,
@@ -459,9 +479,17 @@ pub struct TerminalEvent {
     pub run_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub exit_code: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub sequence: Option<f64>,
 }
 
@@ -511,7 +539,11 @@ pub struct FleetContinuationState {
     pub source_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub stopped: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checked_at: Option<String>,
@@ -550,7 +582,11 @@ pub struct DesktopState {
     pub last_backup: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_capture: Option<AutoCaptureState>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub windows: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_status: Option<ProxyStatus>,
@@ -610,17 +646,41 @@ pub struct ProxyAccountStatus {
     pub email: Option<String>,
     pub active: bool,
     pub signed_in: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub quota_percent: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub reset_in_minutes: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub five_hour_percent: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub five_hour_reset_minutes: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub weekly_percent: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub weekly_reset_minutes: Option<f64>,
     pub in_pool: bool,
     #[serde(serialize_with = "ser_num")]
@@ -631,7 +691,11 @@ pub struct ProxyAccountStatus {
     pub waiting: Option<GatewayWaiting>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub full_at: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub percent_cost: Option<PercentCost>,
@@ -701,7 +765,11 @@ pub struct ProxyStatus {
     pub client_api_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing_strategy: Option<RoutingStrategy>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub affinity_ttl_seconds: Option<f64>,
     pub stats: ProxyStats,
     pub accounts: Vec<ProxyAccountStatus>,
@@ -816,7 +884,7 @@ pub struct AntigravityCallback {
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum AntigravityOAuthPoll {
     Wait,
-    Ok { result: OneClickCascadeResult },
+    Ok { result: Box<OneClickCascadeResult> },
     Error { error: String },
 }
 
@@ -1004,8 +1072,12 @@ pub struct ConfigSyncSettings {
     pub claude_md: bool,
 }
 
-pub const DEFAULT_CONFIG_SYNC: ConfigSyncSettings =
-    ConfigSyncSettings { mcp_servers: false, skills: false, settings: false, claude_md: false };
+pub const DEFAULT_CONFIG_SYNC: ConfigSyncSettings = ConfigSyncSettings {
+    mcp_servers: false,
+    skills: false,
+    settings: false,
+    claude_md: false,
+};
 
 literal_enum!(PrankLevel { Sometimes = "sometimes", Rarely = "rarely", Off = "off" });
 literal_enum!(
@@ -1089,7 +1161,11 @@ pub enum RemoteNotifyResult {
         /// Always `false`.
         ok: bool,
         reason: RemoteNotifyFailure,
-        #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            serialize_with = "ser_opt_num"
+        )]
         status: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         error: Option<String>,
@@ -1187,8 +1263,16 @@ pub fn default_planning_settings() -> PlanningSettings {
     PlanningSettings {
         auto_start: false,
         time_zone: "Europe/Istanbul".into(),
-        weekday: PlanningHours { enabled: true, start: "09:00".into(), end: "18:00".into() },
-        weekend: PlanningHours { enabled: false, start: "11:00".into(), end: "17:00".into() },
+        weekday: PlanningHours {
+            enabled: true,
+            start: "09:00".into(),
+            end: "18:00".into(),
+        },
+        weekend: PlanningHours {
+            enabled: false,
+            start: "11:00".into(),
+            end: "17:00".into(),
+        },
         accounts: Vec::new(),
         tempo: Some(TempoChoice::Auto),
         adaptive: None,
@@ -1253,7 +1337,11 @@ pub struct KeeperAdaptation {
     #[serde(serialize_with = "ser_num")]
     pub factor: f64,
     /// Pro units an hour over the last hour, when observed long enough.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub observed_rate: Option<f64>,
     /// Next window starts that differ from the plan, earliest first.
     pub schedule: Vec<ScheduledStart>,
@@ -1476,7 +1564,12 @@ pub struct UsageWindow {
 impl UsageWindow {
     /// A window `used_percent` full resetting at `resets_at`, untagged.
     pub fn new(used_percent: f64, resets_at: Option<&str>) -> Self {
-        UsageWindow { used_percent, resets_at: resets_at.map(str::to_string), source: None, read_at: None }
+        UsageWindow {
+            used_percent,
+            resets_at: resets_at.map(str::to_string),
+            source: None,
+            read_at: None,
+        }
     }
 }
 
@@ -1508,7 +1601,11 @@ pub struct ModelWindow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// The most of the weekly limit this model may take, in percent.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub weekly_share: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub period: Option<ModelWindowPeriod>,
@@ -1647,13 +1744,21 @@ literal_enum!(WindowOpened { Opened = "opened", Shown = "shown" });
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyConfigureInput {
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub port: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing_strategy: Option<RoutingStrategy>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "ser_opt_num"
+    )]
     pub affinity_ttl_seconds: Option<f64>,
     /// Account ids in pool order.
     #[serde(default, skip_serializing_if = "Option::is_none")]

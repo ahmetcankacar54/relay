@@ -64,7 +64,8 @@ fn parse_iso(text: &str) -> Option<f64> {
         return None;
     }
     let date = NaiveDate::from_ymd_opt(year as i32, month as u32, 1)?;
-    let days = date.and_hms_opt(0, 0, 0)?.and_utc().timestamp_millis() as f64 / DAY_MS + (day - 1) as f64;
+    let days =
+        date.and_hms_opt(0, 0, 0)?.and_utc().timestamp_millis() as f64 / DAY_MS + (day - 1) as f64;
     if at == b.len() {
         return Some(days * DAY_MS);
     }
@@ -95,7 +96,11 @@ fn parse_iso(text: &str) -> Option<f64> {
             millis = format!("{frac:0<3}").parse::<f64>().ok()?;
         }
     }
-    if hour > 24 || minute > 59 || second > 59 || (hour == 24 && (minute > 0 || second > 0 || millis > 0.0)) {
+    if hour > 24
+        || minute > 59
+        || second > 59
+        || (hour == 24 && (minute > 0 || second > 0 || millis > 0.0))
+    {
         return None;
     }
     let clock = ((hour * 60 + minute) * 60 + second) as f64 * 1000.0 + millis;
@@ -133,10 +138,15 @@ fn parse_iso(text: &str) -> Option<f64> {
 /// A wall time read as the machine's local time (the earlier instant when it repeats, the
 /// later offset when it is skipped, as V8 does).
 fn local_to_utc(nominal: f64) -> f64 {
-    let naive = Utc.timestamp_millis_opt(nominal as i64).single().map(|at| at.naive_utc());
+    let naive = Utc
+        .timestamp_millis_opt(nominal as i64)
+        .single()
+        .map(|at| at.naive_utc());
     let Some(naive) = naive else { return f64::NAN };
     match Local.from_local_datetime(&naive) {
-        chrono::LocalResult::Single(at) | chrono::LocalResult::Ambiguous(at, _) => at.timestamp_millis() as f64,
+        chrono::LocalResult::Single(at) | chrono::LocalResult::Ambiguous(at, _) => {
+            at.timestamp_millis() as f64
+        }
         chrono::LocalResult::None => {
             // Skipped by a DST change: V8 applies the offset from before the gap.
             let before = Local.offset_from_utc_datetime(&(naive - chrono::Duration::hours(3)));
@@ -180,10 +190,17 @@ pub fn normalize_iso(text: &str) -> Option<String> {
     let ms = date_parse(text);
     ms.is_finite().then(|| iso(ms))
 }
+
+/// `String.prototype.trim`: JavaScript's white space (Zs, tab, VT, FF, BOM) and line
+/// terminators. Unlike `char::is_whitespace`, U+0085 is not one of them.
+pub fn trim(text: &str) -> &str {
+    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
+}
+
 /// `Number(text)`: surrounding white space ignored, empty is 0, `0x`/`0o`/`0b` literals and
 /// `Infinity` read, anything else that is not a decimal literal `NaN`.
 pub fn number_value(text: &str) -> f64 {
-    let t = text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+    let t = trim(text);
     if t.is_empty() {
         return 0.0;
     }
@@ -192,18 +209,38 @@ pub fn number_value(text: &str) -> f64 {
         "-Infinity" => return f64::NEG_INFINITY,
         _ => {}
     }
-    for (prefix, radix) in [("0x", 16), ("0X", 16), ("0o", 8), ("0O", 8), ("0b", 2), ("0B", 2)] {
+    for (prefix, radix) in [
+        ("0x", 16),
+        ("0X", 16),
+        ("0o", 8),
+        ("0O", 8),
+        ("0b", 2),
+        ("0B", 2),
+    ] {
         if let Some(digits) = t.strip_prefix(prefix) {
-            return u128::from_str_radix(digits, radix).map_or(f64::NAN, |v| v as f64);
+            // Digits only: no sign, no separator, at least one.
+            if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+                return f64::NAN;
+            }
+            return u128::from_str_radix(digits, radix).map_or_else(
+                |_| {
+                    digits.chars().fold(0.0, |n, c| {
+                        n * f64::from(radix) + f64::from(c.to_digit(radix).unwrap_or(0))
+                    })
+                },
+                |v| v as f64,
+            );
         }
     }
     // Rust also reads "inf", "nan" and "infinity", which JavaScript does not.
-    if !t.bytes().all(|b| b.is_ascii_digit() || matches!(b, b'.' | b'e' | b'E' | b'+' | b'-')) {
+    if !t
+        .bytes()
+        .all(|b| b.is_ascii_digit() || matches!(b, b'.' | b'e' | b'E' | b'+' | b'-'))
+    {
         return f64::NAN;
     }
     t.parse::<f64>().unwrap_or(f64::NAN)
 }
-
 
 /// `Math.round`: halves go toward +∞.
 pub fn round(value: f64) -> f64 {
@@ -211,7 +248,12 @@ pub fn round(value: f64) -> f64 {
         return value;
     }
     let floor = value.floor();
-    if value - floor >= 0.5 { floor + 1.0 } else { floor }
+    // A value in [-0.5, 0) rounds to -0, as in JavaScript.
+    if value - floor >= 0.5 {
+        (floor + 1.0).copysign(value)
+    } else {
+        floor
+    }
 }
 
 /// `Math.min(...values)`: `Infinity` for none, `NaN` when any is.
@@ -267,7 +309,11 @@ pub fn number_string(value: f64) -> String {
         format!("0.{}{digits}", "0".repeat((-n) as usize))
     } else {
         let e = n - 1;
-        let e = if e >= 0 { format!("+{e}") } else { e.to_string() };
+        let e = if e >= 0 {
+            format!("+{e}")
+        } else {
+            e.to_string()
+        };
         if k == 1 {
             format!("{digits}e{e}")
         } else {
@@ -287,11 +333,17 @@ pub fn sort_by<T>(items: &mut Vec<T>, mut compare: impl FnMut(&T, &T) -> f64) {
     let order: Vec<usize> = {
         let mut idx: Vec<usize> = (0..taken.len()).collect();
         merge_sort(&mut idx, &mut |a, b| {
-            compare(taken[*a].as_ref().expect("present"), taken[*b].as_ref().expect("present"))
+            compare(
+                taken[*a].as_ref().expect("present"),
+                taken[*b].as_ref().expect("present"),
+            )
         });
         idx
     };
-    *items = order.into_iter().map(|i| taken[i].take().expect("each index once")).collect();
+    *items = order
+        .into_iter()
+        .map(|i| taken[i].take().expect("each index once"))
+        .collect();
 }
 
 fn merge_sort(items: &mut [usize], compare: &mut impl FnMut(&usize, &usize) -> f64) {
@@ -333,10 +385,14 @@ fn integral(value: f64) -> Option<i128> {
 }
 
 /// Serializes an `f64` as `JSON.stringify` does: integers without `.0`, `NaN`/`Infinity` as `null`.
+/// (An integer past `u64` is written as a float: serde_json has no wider integer.)
 pub fn ser_num<S: Serializer>(value: &f64, serializer: S) -> Result<S::Ok, S::Error> {
     match integral(*value) {
-        Some(i) if i == 0 => serializer.serialize_i64(0),
-        Some(i) => serializer.serialize_i128(i),
+        Some(i) => match (i64::try_from(i), u64::try_from(i)) {
+            (Ok(i), _) => serializer.serialize_i64(i),
+            (_, Ok(u)) => serializer.serialize_u64(u),
+            _ => serializer.serialize_f64(*value),
+        },
         None if !value.is_finite() => serializer.serialize_unit(),
         None => serializer.serialize_f64(*value),
     }
@@ -373,7 +429,10 @@ impl<'de> Deserialize<'de> for Num {
 
 /// Whether `key` is an array index, which a plain object lists first in ascending order.
 fn array_index(key: &str) -> Option<u32> {
-    if key.is_empty() || (key.len() > 1 && key.starts_with('0')) || !key.bytes().all(|b| b.is_ascii_digit()) {
+    if key.is_empty()
+        || (key.len() > 1 && key.starts_with('0'))
+        || !key.bytes().all(|b| b.is_ascii_digit())
+    {
         return None;
     }
     key.parse::<u32>().ok().filter(|n| *n != u32::MAX)

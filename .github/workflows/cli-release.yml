@@ -1,0 +1,97 @@
+name: CLI release
+# A `cli-v<version>` tag builds the Rust `relay` CLI for every platform, publishes the npm
+# packages (each platform package, then the @ahmetcankacar/relay shim that installs the right one)
+# and attaches the archives to the GitHub release of that tag.
+on:
+  push:
+    tags: ["cli-v*"]
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: macos-14, target: aarch64-apple-darwin }
+          - { os: macos-14, target: x86_64-apple-darwin }
+          # Both Linux targets build in cross's older images, for a lower glibc floor.
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, cross: true }
+          - {
+              os: ubuntu-latest,
+              target: aarch64-unknown-linux-gnu,
+              cross: true,
+            }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ${{ matrix.target }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: The tag names the CLI's version
+        shell: bash
+        run: |
+          version=$(node -p "require('./cli/package.json').version")
+          [ "${GITHUB_REF_NAME}" = "cli-v${version}" ] || { echo "::error::tag ${GITHUB_REF_NAME} is not cli-v${version}"; exit 1; }
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked --version 0.2.5
+      - name: Build and stage
+        run: node scripts/build-cli-packages.mjs --target ${{ matrix.target }} ${{ matrix.cross && '--cross' || '' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-${{ matrix.target }}
+          path: cli/npm/dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: cli-*
+          path: dist
+          merge-multiple: true
+      # Artifacts drop the executable bit, and with no `bin` field npm will not restore it on
+      # install: the published file must carry it. The archives kept theirs.
+      - run: chmod 755 dist/relay-*/bin/relay
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version=$(node -p "require('./dist/relay/package.json').version")
+          # A prerelease must not become what `npm i` installs.
+          tag=latest
+          case "$version" in *-*) tag=beta ;; esac
+          # Platform packages first: the shim's optional dependencies must exist when it lands.
+          # A rerun skips what an earlier run already published.
+          for pkg in dist/relay-*/ dist/relay/; do
+            name=$(node -p "require('./${pkg}package.json').name")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+            else
+              (cd "$pkg" && npm publish --access public --tag "$tag")
+            fi
+          done
+      - name: Attach the archives to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=$(case "$GITHUB_REF_NAME" in *-*) echo --prerelease ;; esac)
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" $prerelease --title "Relay CLI ${GITHUB_REF_NAME#cli-v}" --notes "Prebuilt \`relay\` binaries. Install with \`npm i -g @ahmetcankacar/relay\`, or unpack the archive for your platform."
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/relay-*.tar.gz dist/relay-*.zip

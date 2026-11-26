@@ -1,0 +1,26 @@
+{"fn":"enabledMeters","args":[{}]}
+{"fn":"enabledMeters","args":[{"meters":[]}]}
+{"fn":"enabledMeters","args":[{"meters":["copilot"]}]}
+{"fn":"enabledMeters","args":[{"meters":["gemini-cli","copilot","gemini-cli"]}]}
+{"fn":"enabledMeters","args":[{"meters":["cursor","copilot","gemini-cli"]}]}
+{"fn":"enabledMeters","args":[{"meters":["nope","Copilot"," cursor"]}]}
+{"fn":"enabledMeters","args":[{"meters":null}]}
+{"fn":"enabledMeters","args":[{"meters":{"$undefined":true}}]}
+{"fn":"enabledMeters","args":[{"meters":"copilot,cursor"}]}
+{"fn":"enabledMeters","args":[{"meters":"gemini-cli"}]}
+{"fn":"enabledMeters","args":[{"meters":""}]}
+{"fn":"enabledMeters","args":[{"meters":"x"}]}
+{"fn":"enabledMeters","args":[{"meters":5}]}
+{"fn":"enabledMeters","args":[{"meters":{"$num":"NaN"}}]}
+{"fn":"enabledMeters","args":[{"meters":true}]}
+{"fn":"enabledMeters","args":[{"meters":{}}]}
+{"fn":"enabledMeters","args":[{"meters":[1,null,{},"cursor"]}]}
+{"fn":"enabledMeters","args":[{"meters":["copilot"],"other":1}]}
+{"fn":"enabledMeters","args":[null]}
+{"fn":"enabledMeters","args":[{"$undefined":true}]}
+{"fn":"enabledMeters","args":["str"]}
+{"fn":"enabledMeters","args":[5]}
+{"fn":"enabledMeters","args":[true]}
+{"fn":"enabledMeters","args":[[]]}
+{"fn":"enabledMeters","args":[[["copilot"]]]}
+{"fn":"enabledMeters","args":[{"meters":{"includes":1}}]}

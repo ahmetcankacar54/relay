@@ -4,8 +4,8 @@
 
 use crate::model_prices::{ResponseUsage, response_cost};
 use crate::types::{
-    ApiUpstream, ApiUpstreamAuth, ApiUpstreamPreset, OverflowCost, OverflowModelMap,
-    OverflowRates, TokenTally, UserPrices,
+    ApiUpstream, ApiUpstreamAuth, ApiUpstreamPreset, OverflowCost, OverflowModelMap, OverflowRates,
+    TokenTally, UserPrices,
 };
 use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Timelike, Utc, Weekday};
 use chrono_tz::Tz;
@@ -345,7 +345,10 @@ pub fn wall_time(date: &str, clock: &str, time_zone_name: &str) -> Option<i64> {
         && clock.as_bytes()[2] == b':'
         && clock[..2].parse::<u32>().is_ok_and(|h| h < 24)
         && clock[3..].parse::<u32>().is_ok_and(|m| m < 60)
-        && clock.bytes().enumerate().all(|(i, b)| i == 2 || b.is_ascii_digit());
+        && clock
+            .bytes()
+            .enumerate()
+            .all(|(i, b)| i == 2 || b.is_ascii_digit());
     if !valid_clock || date.len() != 10 {
         return None;
     }
@@ -360,7 +363,8 @@ pub fn wall_time(date: &str, clock: &str, time_zone_name: &str) -> Option<i64> {
 /// When the local day `at` falls on (in `time_zone`) started and ends, in ms.
 pub fn local_day_bounds(at: i64, time_zone_name: &str) -> (i64, i64) {
     let today = local_date(at, time_zone_name);
-    let start = wall_time(&today, "00:00", time_zone_name).unwrap_or(at - at.rem_euclid(86_400_000));
+    let start =
+        wall_time(&today, "00:00", time_zone_name).unwrap_or(at - at.rem_euclid(86_400_000));
     // Noon tomorrow in UTC terms always lands on tomorrow's local date, whatever the offset.
     let tomorrow = local_date(start + 36 * 3_600_000, time_zone_name);
     let end = wall_time(&tomorrow, "00:00", time_zone_name).unwrap_or(start + 86_400_000);

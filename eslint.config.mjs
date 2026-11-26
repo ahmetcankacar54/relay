@@ -14,7 +14,9 @@ export default defineConfig(
       "dist-electron/",
       "release/",
       "output/",
-      "cli/dist/",
+      "cli/npm/dist/",
+      // rust-anything's generated bindings and recorders for the parity crates.
+      "rust/",
       "docs/audit-*/",
       ".claude/",
       ".superpowers/",
@@ -83,7 +85,8 @@ export default defineConfig(
     },
   },
   {
-    files: ["**/*.cjs"],
+    // The npm launcher is CommonJS (cli/package.json has no "type") so that any Node can run it.
+    files: ["**/*.cjs", "cli/launcher.js"],
     languageOptions: { sourceType: "commonjs" },
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },

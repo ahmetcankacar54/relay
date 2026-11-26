@@ -1,0 +1,17 @@
+{
+  "unit": "shared/history-policy.ts",
+  "files": 1,
+  "fingerprint": "4fe5328bb739c795",
+  "coverage": {
+    "lines": 28,
+    "reached": 28,
+    "files": [
+      {
+        "file": "shared/history-policy.ts",
+        "lines": 28,
+        "reached": 28,
+        "missed": ""
+      }
+    ]
+  }
+}

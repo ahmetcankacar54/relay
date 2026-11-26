@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::clock::now_ms;
+use crate::continuation_journal::read_private_json;
 use crate::fs_util::{create_private_dir_all, iso_timestamp, safe_integer, set_mode};
 use crate::process_lock::{LockDeps, holder_alive};
 

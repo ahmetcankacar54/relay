@@ -1,0 +1,102 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/work-hours.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "work-hours-rs",
+  "exports": [
+    {
+      "name": "shiftDate",
+      "file": "shared/work-hours.ts",
+      "line": 15,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "delta",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "isWeekend",
+      "file": "shared/work-hours.ts",
+      "line": 20,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "workInterval",
+      "file": "shared/work-hours.ts",
+      "line": 28,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "WorkInterval | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "dayStart",
+      "file": "shared/work-hours.ts",
+      "line": 45,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "zone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

@@ -10,7 +10,7 @@ output/
 config/local-signing.json
 .superpowers/
 .claude/worktrees/
-cli/dist/
+cli/npm/dist/
 .playwright-mcp/
 docs/audit-*/
 e2e/test-results/
@@ -18,3 +18,11 @@ e2e/report/
 
 # Rust build output
 /target/
+
+/crates/relay-app/gen/
+# rust-anything parity crates: build output, regenerated inputs, and the unpacked cases
+# (git keeps cases.jsonl.gz; scripts/parity/cases.mjs).
+/rust/**/target/
+/rust/**/*.node
+/rust/*-rs/test-inputs.jsonl
+/rust/*-rs/cases.jsonl

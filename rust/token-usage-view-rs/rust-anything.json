@@ -1,0 +1,72 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/token-usage-view.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "token-usage-view-rs",
+  "exports": [
+    {
+      "name": "classify",
+      "file": "shared/token-usage-view.ts",
+      "line": 134,
+      "params": [
+        {
+          "name": "who",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "Map<string, Account>",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Who",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "buildTokenUsageView",
+      "file": "shared/token-usage-view.ts",
+      "line": 167,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "TokenUsageInput",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "TokenUsageView",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "buildTokenToday",
+      "file": "shared/token-usage-view.ts",
+      "line": 266,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "Pick<TokenUsageInput, \"ledger\" | \"accounts\" | \"accountId\" | \"zone\" | \"now\">",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "TokenToday",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

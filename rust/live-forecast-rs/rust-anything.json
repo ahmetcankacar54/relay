@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/live-forecast.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "live-forecast-rs",
+  "exports": [
+    {
+      "name": "liveForecast",
+      "file": "shared/live-forecast.ts",
+      "line": 197,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "LiveInput",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Forecast | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "liveSetup",
+      "file": "shared/live-forecast.ts",
+      "line": 63,
+      "reason": "uses `LiveSetup`, which has function members"
+    }
+  ]
+}

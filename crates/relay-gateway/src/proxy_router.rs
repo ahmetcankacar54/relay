@@ -8,8 +8,8 @@ use crate::ranking::{
     rank_continuation_targets, room_units, week_band,
 };
 use crate::types::{
-    Account, AccountUsage, ProxyMoveReason, ProxyPickReason, Provider, RoutingStrategy,
-    UsageMap, UsageStatus, UsageWindow,
+    Account, AccountUsage, Provider, ProxyMoveReason, ProxyPickReason, RoutingStrategy, UsageMap,
+    UsageStatus, UsageWindow,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -179,7 +179,8 @@ fn used_for(usage: Option<&AccountUsage>, family: Option<&str>, now: i64) -> Use
     Used {
         five: used_now(usage.and_then(|u| u.five_hour.as_ref()), now),
         week: used_now(usage.and_then(|u| u.seven_day.as_ref()), now),
-        model: (!scoped.is_empty()).then(|| scoped.iter().copied().fold(f64::NEG_INFINITY, f64::max)),
+        model: (!scoped.is_empty())
+            .then(|| scoped.iter().copied().fold(f64::NEG_INFINITY, f64::max)),
     }
 }
 
@@ -190,7 +191,9 @@ fn remaining_percent(usage: Option<&AccountUsage>, family: Option<&str>, now: i6
         .into_iter()
         .flatten()
         .filter(|p| p.is_finite())
-        .fold(None, |max: Option<f64>, p| Some(max.map_or(p, |m| m.max(p))))?;
+        .fold(None, |max: Option<f64>, p| {
+            Some(max.map_or(p, |m| m.max(p)))
+        })?;
     Some((100.0 - fullest).max(0.0))
 }
 
@@ -208,7 +211,10 @@ pub fn full_until(usage: Option<&AccountUsage>, now: i64, family: Option<&str>) 
         }
     };
     if let Some(u) = usage {
-        for window in [u.five_hour.as_ref(), u.seven_day.as_ref()].into_iter().flatten() {
+        for window in [u.five_hour.as_ref(), u.seven_day.as_ref()]
+            .into_iter()
+            .flatten()
+        {
             consider(window.used_percent, window.resets_at.as_deref());
         }
     }
@@ -377,7 +383,8 @@ impl ProxyRouter {
     pub fn clear_cooldown(&mut self, account_id: &str) {
         self.cooldowns.remove(account_id);
         let prefix = format!("{account_id}:");
-        self.model_cooldowns.retain(|key, _| !key.starts_with(&prefix));
+        self.model_cooldowns
+            .retain(|key, _| !key.starts_with(&prefix));
     }
 
     /// Until when an account is out for this request, and why.
@@ -470,8 +477,7 @@ impl ProxyRouter {
                         w.model.as_deref().is_some_and(|m| !m.is_empty())
                             && w.model.as_deref() != family
                             && w.used_percent >= 100.0
-                            && w
-                                .resets_at
+                            && w.resets_at
                                 .as_deref()
                                 .filter(|r| !r.is_empty())
                                 .is_none_or(|r| parse_date(r).is_some_and(|ms| ms > now))
@@ -690,7 +696,8 @@ impl ProxyRouter {
                 _ if !bound_waits => {
                     // Its account is out for a limit: it moves on, unless only this model is
                     // out and the request is not the main conversation's.
-                    if context.main == Some(false) && self.only_this_model(&of_provider, usage_map, bound_id, family, now)
+                    if context.main == Some(false)
+                        && self.only_this_model(&of_provider, usage_map, bound_id, family, now)
                     {
                         keep_binding = true;
                     } else {

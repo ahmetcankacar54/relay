@@ -14,7 +14,12 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 /// The client headers an API-key upstream is sent; nothing else goes.
-const PASSED_HEADERS: [&str; 4] = ["content-type", "accept", "anthropic-version", "anthropic-beta"];
+const PASSED_HEADERS: [&str; 4] = [
+    "content-type",
+    "accept",
+    "anthropic-version",
+    "anthropic-beta",
+];
 const MAX_TEST_MESSAGE: usize = 200;
 const TEST_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -55,7 +60,9 @@ pub fn overflow_headers(
             for beta in value.to_str().unwrap_or("").split(',') {
                 let beta = beta.trim();
                 // Betas only a subscription's OAuth token carries; an API key is refused with them.
-                let subscription = beta.get(..6).is_some_and(|p| p.eq_ignore_ascii_case("oauth-"));
+                let subscription = beta
+                    .get(..6)
+                    .is_some_and(|p| p.eq_ignore_ascii_case("oauth-"));
                 if !beta.is_empty() && !subscription && !betas.iter().any(|b| b == beta) {
                     betas.push(beta.to_string());
                 }

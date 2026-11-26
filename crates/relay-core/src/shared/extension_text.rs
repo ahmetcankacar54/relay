@@ -43,7 +43,9 @@ pub fn extension_line(outcome: &ExtensionOutcome, locale: Locale) -> Option<Stri
             Some(R::Locked) => t("extensionText.theExtensionStorageOrTheBrowser"),
             Some(R::SchemaChanged) => t("extensionText.theBrowserCookieFormatIsNot"),
             Some(R::JournalPending) => t("extensionText.theBrowserCookieFileDidNot"),
-            Some(R::WriteFailed | R::VerifyFailed) => t("extensionText.relayCannotWriteTheExtensionSign"),
+            Some(R::WriteFailed | R::VerifyFailed) => {
+                t("extensionText.relayCannotWriteTheExtensionSign")
+            }
             Some(R::RestoreFailed) => t("extensionText.relayCannotWriteTheExtensionSign2"),
             _ => t("extensionText.relayCannotReadTheExtensionSign"),
         }),

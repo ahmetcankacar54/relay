@@ -1,0 +1,17 @@
+{
+  "unit": "shared/tr-dative.ts",
+  "files": 1,
+  "fingerprint": "3633fcb4e651eef0",
+  "coverage": {
+    "lines": 104,
+    "reached": 104,
+    "files": [
+      {
+        "file": "shared/tr-dative.ts",
+        "lines": 104,
+        "reached": 104,
+        "missed": ""
+      }
+    ]
+  }
+}

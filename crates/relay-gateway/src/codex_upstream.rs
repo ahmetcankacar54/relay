@@ -61,7 +61,11 @@ impl UsageExtractor for CodexUsageExtractor {
 
 /// The headers a Codex/OpenAI request goes with: the client's (sanitized), the bearer token,
 /// and a ChatGPT sign-in's account id.
-pub fn codex_headers(client: &HeaderMap, token: &str, chatgpt_account_id: Option<&str>) -> HeaderMap {
+pub fn codex_headers(
+    client: &HeaderMap,
+    token: &str,
+    chatgpt_account_id: Option<&str>,
+) -> HeaderMap {
     let mut headers = sanitize_request_headers(client);
     if let Ok(value) = HeaderValue::from_str(&format!("Bearer {token}")) {
         headers.insert(http::header::AUTHORIZATION, value);

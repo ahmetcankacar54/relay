@@ -160,13 +160,16 @@ fn strategy_order(
             cmp_f64(open_reset(left.usage, now), open_reset(right.usage, now))
                 .then_with(|| by_score(left, right))
         }
-        AutoSwitchStrategy::WeeklyFirst => {
-            cmp_f64(weekly_reset(left.usage, now), weekly_reset(right.usage, now))
+        AutoSwitchStrategy::WeeklyFirst => cmp_f64(
+            weekly_reset(left.usage, now),
+            weekly_reset(right.usage, now),
+        )
+        .then_with(|| by_score(left, right)),
+        AutoSwitchStrategy::ConsumeFirst => {
+            cmp_f64(left.remaining_percent, right.remaining_percent)
+                .then_with(|| cmp_f64(left.score, right.score))
                 .then_with(|| by_score(left, right))
         }
-        AutoSwitchStrategy::ConsumeFirst => cmp_f64(left.remaining_percent, right.remaining_percent)
-            .then_with(|| cmp_f64(left.score, right.score))
-            .then_with(|| by_score(left, right)),
     }
 }
 

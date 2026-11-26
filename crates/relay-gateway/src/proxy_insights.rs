@@ -4,8 +4,7 @@
 
 use crate::js::{Clock, parse_date, round, slice_units, system_clock};
 use crate::types::{
-    CacheMiss, CacheMissReason, LastMiss, LiveWindow, ProxyLoopAlarm, ProxySessionView,
-    TokenTally,
+    CacheMiss, CacheMissReason, LastMiss, LiveWindow, ProxyLoopAlarm, ProxySessionView, TokenTally,
 };
 use indexmap::{IndexMap, IndexSet};
 
@@ -260,9 +259,9 @@ impl GatewayInsights {
 
     /// Whether a session's cache has lived out its time since its last request.
     pub fn is_cold(&self, session_key: &str) -> bool {
-        self.sessions.get(session_key).is_some_and(|s| {
-            s.prefix_tokens > 0.0 && (self.now)() - s.last_at > s.ttl_ms
-        })
+        self.sessions
+            .get(session_key)
+            .is_some_and(|s| s.prefix_tokens > 0.0 && (self.now)() - s.last_at > s.ttl_ms)
     }
 
     /// The sessions heard from most recently, newest first.

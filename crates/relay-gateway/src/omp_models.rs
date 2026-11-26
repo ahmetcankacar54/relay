@@ -318,9 +318,15 @@ pub fn omp_bound(text: &str, target: &OmpTarget) -> String {
     for name in PROVIDERS {
         block.push(format!("{pad}{name}:"));
         block.push(format!("{pad}{pad}baseUrl: {}", json_string(&target.url)));
-        block.push(format!("{pad}{pad}apiKey: {}", json_string(placeholder(name))));
+        block.push(format!(
+            "{pad}{pad}apiKey: {}",
+            json_string(placeholder(name))
+        ));
         block.push(format!("{pad}{pad}headers:"));
-        block.push(format!("{pad}{pad}{pad}x-relay-key: {}", json_string(&target.key)));
+        block.push(format!(
+            "{pad}{pad}{pad}x-relay-key: {}",
+            json_string(&target.key)
+        ));
     }
     block.push(OMP_END.into());
     let added: Vec<String> = block.into_iter().map(|line| line + cr).collect();

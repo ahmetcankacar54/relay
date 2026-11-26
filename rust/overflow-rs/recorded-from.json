@@ -1,0 +1,47 @@
+{
+  "unit": "shared/overflow.ts",
+  "files": 1,
+  "fingerprint": "e3ac0276cc594f09",
+  "coverage": {
+    "lines": 2235,
+    "reached": 2041,
+    "files": [
+      {
+        "file": "shared/model-prices.ts",
+        "lines": 164,
+        "reached": 138,
+        "missed": "117-126, 139, 142, 161-174"
+      },
+      {
+        "file": "shared/overflow.ts",
+        "lines": 329,
+        "reached": 329,
+        "missed": ""
+      },
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 85,
+        "missed": "41-43, 46-47, 86-96, 99-101, 104-105, 107-115, 117-129"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      }
+    ]
+  }
+}

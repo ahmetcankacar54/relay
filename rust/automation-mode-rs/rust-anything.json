@@ -1,0 +1,54 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/automation-mode.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "automation-mode-rs",
+  "exports": [
+    {
+      "name": "automationMode",
+      "file": "shared/automation-mode.ts",
+      "line": 11,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "Pick<RelaySettings, \"autoSwitchMode\">",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "fleet",
+          "ts_type": "Pick<FleetContinuationState, \"enabled\">",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "(\"off\" | \"after-exit\" | \"quota\")",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "automationModeWrites",
+      "file": "shared/automation-mode.ts",
+      "line": 20,
+      "params": [
+        {
+          "name": "mode",
+          "ts_type": "(\"off\" | \"after-exit\" | \"quota\")",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "{\n  fleet: boolean;\n  autoSwitchMode: \"off\" | \"after-exit\";\n}",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

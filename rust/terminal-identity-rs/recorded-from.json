@@ -1,0 +1,17 @@
+{
+  "unit": "shared/terminal-identity.ts",
+  "files": 1,
+  "fingerprint": "ae32b30dc2246ddd",
+  "coverage": {
+    "lines": 145,
+    "reached": 104,
+    "files": [
+      {
+        "file": "shared/terminal-identity.ts",
+        "lines": 145,
+        "reached": 104,
+        "missed": "115-155"
+      }
+    ]
+  }
+}

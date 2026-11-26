@@ -1,6 +1,9 @@
 //! Port of `shared/limit-calibration.ts`: what one percent of an account's 5-hour window took, in
 //! API-price dollars, from the token table and the recorded usage samples.
 
+// `!(a > b)` is kept where the TS writes it: it is also true when either side is NaN.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
@@ -76,7 +79,9 @@ pub fn slot_cost_between(
             continue;
         }
         for key in who {
-            let Some(day_slots) = by_who.get(key) else { continue };
+            let Some(day_slots) = by_who.get(key) else {
+                continue;
+            };
             for (slot, counts) in day_slots {
                 let index = super::types::js::number_value(slot);
                 if index.fract() != 0.0 || !(0.0..=95.0).contains(&index) || !(counts.cost > 0.0) {
@@ -123,19 +128,29 @@ pub fn calibrate_limits(input: CalibrationInput<'_>) -> JsMap<LimitCalibration> 
     let mut by_account: IndexMap<String, Vec<Point>> = IndexMap::new();
     for sample in input.samples {
         let at = date_parse(&sample.checked_at);
-        let Some(percent) = sample.five_hour.as_ref().map(|w| w.used_percent) else { continue };
+        let Some(percent) = sample.five_hour.as_ref().map(|w| w.used_percent) else {
+            continue;
+        };
         if !at.is_finite() || at < since || at > input.now || !percent.is_finite() {
             continue;
         }
-        let reset = match sample.five_hour.as_ref().and_then(|w| w.resets_at.as_deref()).filter(|r| !r.is_empty()) {
+        let reset = match sample
+            .five_hour
+            .as_ref()
+            .and_then(|w| w.resets_at.as_deref())
+            .filter(|r| !r.is_empty())
+        {
             Some(r) => date_parse(r),
             None => f64::NAN,
         };
-        by_account.entry(sample.account_id.clone()).or_default().push(Point {
-            at,
-            percent,
-            resets_at: reset.is_finite().then_some(reset),
-        });
+        by_account
+            .entry(sample.account_id.clone())
+            .or_default()
+            .push(Point {
+                at,
+                percent,
+                resets_at: reset.is_finite().then_some(reset),
+            });
     }
     let mut out = JsMap::new();
     let mut starts = SlotStarts::new();
@@ -165,13 +180,27 @@ pub fn calibrate_limits(input: CalibrationInput<'_>) -> JsMap<LimitCalibration> 
             if rise < MIN_RISE || last.at - first.at < MIN_SPAN_MS {
                 continue;
             }
-            let spent = slot_cost_between(input.slots, &own, first.at, last.at, input.zone, &mut starts);
+            let spent = slot_cost_between(
+                input.slots,
+                &own,
+                first.at,
+                last.at,
+                input.zone,
+                &mut starts,
+            );
             // Nothing in the table while the percent rose: the use was elsewhere.
             if !(spent > 0.0) {
                 continue;
             }
             // Spending the table could not put on an account may be this account's.
-            let unplaced = slot_cost_between(input.slots, &["terminal", "unknown"], first.at, last.at, input.zone, &mut starts);
+            let unplaced = slot_cost_between(
+                input.slots,
+                &["terminal", "unknown"],
+                first.at,
+                last.at,
+                input.zone,
+                &mut starts,
+            );
             if unplaced > spent * UNPLACED_SHARE {
                 continue;
             }

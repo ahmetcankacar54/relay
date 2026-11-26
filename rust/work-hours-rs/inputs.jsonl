@@ -1,0 +1,1137 @@
+{"fn": "isWeekend", "args": ["2026-11-26"]}
+{"fn": "shiftDate", "args": ["2026-11-26", -400]}
+{"fn": "shiftDate", "args": ["2026-11-26", -31]}
+{"fn": "shiftDate", "args": ["2026-11-26", -7]}
+{"fn": "shiftDate", "args": ["2026-11-26", -1]}
+{"fn": "shiftDate", "args": ["2026-11-26", 0]}
+{"fn": "shiftDate", "args": ["2026-11-26", 1]}
+{"fn": "shiftDate", "args": ["2026-11-26", 1.5]}
+{"fn": "shiftDate", "args": ["2026-11-26", -1.5]}
+{"fn": "shiftDate", "args": ["2026-11-26", 7]}
+{"fn": "shiftDate", "args": ["2026-11-26", 30]}
+{"fn": "shiftDate", "args": ["2026-11-26", 365]}
+{"fn": "shiftDate", "args": ["2026-11-26", 0.49]}
+{"fn": "shiftDate", "args": ["2026-11-26", 0.51]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-11-26", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-11-26", "UTC"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-11-26", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-11-26", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-11-26", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-11-26", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-11-26", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-11-26", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-11-26", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-11-28"]}
+{"fn": "shiftDate", "args": ["2026-11-28", -400]}
+{"fn": "shiftDate", "args": ["2026-11-28", -31]}
+{"fn": "shiftDate", "args": ["2026-11-28", -7]}
+{"fn": "shiftDate", "args": ["2026-11-28", -1]}
+{"fn": "shiftDate", "args": ["2026-11-28", 0]}
+{"fn": "shiftDate", "args": ["2026-11-28", 1]}
+{"fn": "shiftDate", "args": ["2026-11-28", 1.5]}
+{"fn": "shiftDate", "args": ["2026-11-28", -1.5]}
+{"fn": "shiftDate", "args": ["2026-11-28", 7]}
+{"fn": "shiftDate", "args": ["2026-11-28", 30]}
+{"fn": "shiftDate", "args": ["2026-11-28", 365]}
+{"fn": "shiftDate", "args": ["2026-11-28", 0.49]}
+{"fn": "shiftDate", "args": ["2026-11-28", 0.51]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-11-28", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-11-28", "UTC"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-11-28", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-11-28", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-11-28", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-11-28", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-11-28", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-11-28", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-11-28", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-11-29"]}
+{"fn": "shiftDate", "args": ["2026-11-29", -400]}
+{"fn": "shiftDate", "args": ["2026-11-29", -31]}
+{"fn": "shiftDate", "args": ["2026-11-29", -7]}
+{"fn": "shiftDate", "args": ["2026-11-29", -1]}
+{"fn": "shiftDate", "args": ["2026-11-29", 0]}
+{"fn": "shiftDate", "args": ["2026-11-29", 1]}
+{"fn": "shiftDate", "args": ["2026-11-29", 1.5]}
+{"fn": "shiftDate", "args": ["2026-11-29", -1.5]}
+{"fn": "shiftDate", "args": ["2026-11-29", 7]}
+{"fn": "shiftDate", "args": ["2026-11-29", 30]}
+{"fn": "shiftDate", "args": ["2026-11-29", 365]}
+{"fn": "shiftDate", "args": ["2026-11-29", 0.49]}
+{"fn": "shiftDate", "args": ["2026-11-29", 0.51]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-11-29", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-11-29", "UTC"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-11-29", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-11-29", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-11-29", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-11-29", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-11-29", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-11-29", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-11-29", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-11-30"]}
+{"fn": "shiftDate", "args": ["2026-11-30", -400]}
+{"fn": "shiftDate", "args": ["2026-11-30", -31]}
+{"fn": "shiftDate", "args": ["2026-11-30", -7]}
+{"fn": "shiftDate", "args": ["2026-11-30", -1]}
+{"fn": "shiftDate", "args": ["2026-11-30", 0]}
+{"fn": "shiftDate", "args": ["2026-11-30", 1]}
+{"fn": "shiftDate", "args": ["2026-11-30", 1.5]}
+{"fn": "shiftDate", "args": ["2026-11-30", -1.5]}
+{"fn": "shiftDate", "args": ["2026-11-30", 7]}
+{"fn": "shiftDate", "args": ["2026-11-30", 30]}
+{"fn": "shiftDate", "args": ["2026-11-30", 365]}
+{"fn": "shiftDate", "args": ["2026-11-30", 0.49]}
+{"fn": "shiftDate", "args": ["2026-11-30", 0.51]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-11-30", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-11-30", "UTC"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-11-30", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-11-30", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-11-30", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-11-30", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-11-30", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-11-30", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-11-30", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-03-08"]}
+{"fn": "shiftDate", "args": ["2026-03-08", -400]}
+{"fn": "shiftDate", "args": ["2026-03-08", -31]}
+{"fn": "shiftDate", "args": ["2026-03-08", -7]}
+{"fn": "shiftDate", "args": ["2026-03-08", -1]}
+{"fn": "shiftDate", "args": ["2026-03-08", 0]}
+{"fn": "shiftDate", "args": ["2026-03-08", 1]}
+{"fn": "shiftDate", "args": ["2026-03-08", 1.5]}
+{"fn": "shiftDate", "args": ["2026-03-08", -1.5]}
+{"fn": "shiftDate", "args": ["2026-03-08", 7]}
+{"fn": "shiftDate", "args": ["2026-03-08", 30]}
+{"fn": "shiftDate", "args": ["2026-03-08", 365]}
+{"fn": "shiftDate", "args": ["2026-03-08", 0.49]}
+{"fn": "shiftDate", "args": ["2026-03-08", 0.51]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-03-08", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-03-08", "UTC"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-03-08", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-03-08", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-03-08", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-03-08", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-03-08", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-03-08", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-03-08", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-03-07"]}
+{"fn": "shiftDate", "args": ["2026-03-07", -400]}
+{"fn": "shiftDate", "args": ["2026-03-07", -31]}
+{"fn": "shiftDate", "args": ["2026-03-07", -7]}
+{"fn": "shiftDate", "args": ["2026-03-07", -1]}
+{"fn": "shiftDate", "args": ["2026-03-07", 0]}
+{"fn": "shiftDate", "args": ["2026-03-07", 1]}
+{"fn": "shiftDate", "args": ["2026-03-07", 1.5]}
+{"fn": "shiftDate", "args": ["2026-03-07", -1.5]}
+{"fn": "shiftDate", "args": ["2026-03-07", 7]}
+{"fn": "shiftDate", "args": ["2026-03-07", 30]}
+{"fn": "shiftDate", "args": ["2026-03-07", 365]}
+{"fn": "shiftDate", "args": ["2026-03-07", 0.49]}
+{"fn": "shiftDate", "args": ["2026-03-07", 0.51]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-03-07", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-03-07", "UTC"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-03-07", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-03-07", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-03-07", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-03-07", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-03-07", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-03-07", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-03-07", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-03-29"]}
+{"fn": "shiftDate", "args": ["2026-03-29", -400]}
+{"fn": "shiftDate", "args": ["2026-03-29", -31]}
+{"fn": "shiftDate", "args": ["2026-03-29", -7]}
+{"fn": "shiftDate", "args": ["2026-03-29", -1]}
+{"fn": "shiftDate", "args": ["2026-03-29", 0]}
+{"fn": "shiftDate", "args": ["2026-03-29", 1]}
+{"fn": "shiftDate", "args": ["2026-03-29", 1.5]}
+{"fn": "shiftDate", "args": ["2026-03-29", -1.5]}
+{"fn": "shiftDate", "args": ["2026-03-29", 7]}
+{"fn": "shiftDate", "args": ["2026-03-29", 30]}
+{"fn": "shiftDate", "args": ["2026-03-29", 365]}
+{"fn": "shiftDate", "args": ["2026-03-29", 0.49]}
+{"fn": "shiftDate", "args": ["2026-03-29", 0.51]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-03-29", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-03-29", "UTC"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-03-29", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-03-29", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-03-29", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-03-29", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-03-29", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-03-29", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-03-29", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-03-28"]}
+{"fn": "shiftDate", "args": ["2026-03-28", -400]}
+{"fn": "shiftDate", "args": ["2026-03-28", -31]}
+{"fn": "shiftDate", "args": ["2026-03-28", -7]}
+{"fn": "shiftDate", "args": ["2026-03-28", -1]}
+{"fn": "shiftDate", "args": ["2026-03-28", 0]}
+{"fn": "shiftDate", "args": ["2026-03-28", 1]}
+{"fn": "shiftDate", "args": ["2026-03-28", 1.5]}
+{"fn": "shiftDate", "args": ["2026-03-28", -1.5]}
+{"fn": "shiftDate", "args": ["2026-03-28", 7]}
+{"fn": "shiftDate", "args": ["2026-03-28", 30]}
+{"fn": "shiftDate", "args": ["2026-03-28", 365]}
+{"fn": "shiftDate", "args": ["2026-03-28", 0.49]}
+{"fn": "shiftDate", "args": ["2026-03-28", 0.51]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-03-28", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-03-28", "UTC"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-03-28", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-03-28", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-03-28", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-03-28", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-03-28", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-03-28", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-03-28", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-10-25"]}
+{"fn": "shiftDate", "args": ["2026-10-25", -400]}
+{"fn": "shiftDate", "args": ["2026-10-25", -31]}
+{"fn": "shiftDate", "args": ["2026-10-25", -7]}
+{"fn": "shiftDate", "args": ["2026-10-25", -1]}
+{"fn": "shiftDate", "args": ["2026-10-25", 0]}
+{"fn": "shiftDate", "args": ["2026-10-25", 1]}
+{"fn": "shiftDate", "args": ["2026-10-25", 1.5]}
+{"fn": "shiftDate", "args": ["2026-10-25", -1.5]}
+{"fn": "shiftDate", "args": ["2026-10-25", 7]}
+{"fn": "shiftDate", "args": ["2026-10-25", 30]}
+{"fn": "shiftDate", "args": ["2026-10-25", 365]}
+{"fn": "shiftDate", "args": ["2026-10-25", 0.49]}
+{"fn": "shiftDate", "args": ["2026-10-25", 0.51]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-10-25", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-10-25", "UTC"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-10-25", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-10-25", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-10-25", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-10-25", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-10-25", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-10-25", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-10-25", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-10-24"]}
+{"fn": "shiftDate", "args": ["2026-10-24", -400]}
+{"fn": "shiftDate", "args": ["2026-10-24", -31]}
+{"fn": "shiftDate", "args": ["2026-10-24", -7]}
+{"fn": "shiftDate", "args": ["2026-10-24", -1]}
+{"fn": "shiftDate", "args": ["2026-10-24", 0]}
+{"fn": "shiftDate", "args": ["2026-10-24", 1]}
+{"fn": "shiftDate", "args": ["2026-10-24", 1.5]}
+{"fn": "shiftDate", "args": ["2026-10-24", -1.5]}
+{"fn": "shiftDate", "args": ["2026-10-24", 7]}
+{"fn": "shiftDate", "args": ["2026-10-24", 30]}
+{"fn": "shiftDate", "args": ["2026-10-24", 365]}
+{"fn": "shiftDate", "args": ["2026-10-24", 0.49]}
+{"fn": "shiftDate", "args": ["2026-10-24", 0.51]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-10-24", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-10-24", "UTC"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-10-24", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-10-24", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-10-24", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-10-24", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-10-24", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-10-24", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-10-24", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-11-01"]}
+{"fn": "shiftDate", "args": ["2026-11-01", -400]}
+{"fn": "shiftDate", "args": ["2026-11-01", -31]}
+{"fn": "shiftDate", "args": ["2026-11-01", -7]}
+{"fn": "shiftDate", "args": ["2026-11-01", -1]}
+{"fn": "shiftDate", "args": ["2026-11-01", 0]}
+{"fn": "shiftDate", "args": ["2026-11-01", 1]}
+{"fn": "shiftDate", "args": ["2026-11-01", 1.5]}
+{"fn": "shiftDate", "args": ["2026-11-01", -1.5]}
+{"fn": "shiftDate", "args": ["2026-11-01", 7]}
+{"fn": "shiftDate", "args": ["2026-11-01", 30]}
+{"fn": "shiftDate", "args": ["2026-11-01", 365]}
+{"fn": "shiftDate", "args": ["2026-11-01", 0.49]}
+{"fn": "shiftDate", "args": ["2026-11-01", 0.51]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-11-01", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-11-01", "UTC"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-11-01", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-11-01", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-11-01", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-11-01", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-11-01", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-11-01", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-11-01", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-10-31"]}
+{"fn": "shiftDate", "args": ["2026-10-31", -400]}
+{"fn": "shiftDate", "args": ["2026-10-31", -31]}
+{"fn": "shiftDate", "args": ["2026-10-31", -7]}
+{"fn": "shiftDate", "args": ["2026-10-31", -1]}
+{"fn": "shiftDate", "args": ["2026-10-31", 0]}
+{"fn": "shiftDate", "args": ["2026-10-31", 1]}
+{"fn": "shiftDate", "args": ["2026-10-31", 1.5]}
+{"fn": "shiftDate", "args": ["2026-10-31", -1.5]}
+{"fn": "shiftDate", "args": ["2026-10-31", 7]}
+{"fn": "shiftDate", "args": ["2026-10-31", 30]}
+{"fn": "shiftDate", "args": ["2026-10-31", 365]}
+{"fn": "shiftDate", "args": ["2026-10-31", 0.49]}
+{"fn": "shiftDate", "args": ["2026-10-31", 0.51]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-10-31", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-10-31", "UTC"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-10-31", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-10-31", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-10-31", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-10-31", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-10-31", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-10-31", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-10-31", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-04-05"]}
+{"fn": "shiftDate", "args": ["2026-04-05", -400]}
+{"fn": "shiftDate", "args": ["2026-04-05", -31]}
+{"fn": "shiftDate", "args": ["2026-04-05", -7]}
+{"fn": "shiftDate", "args": ["2026-04-05", -1]}
+{"fn": "shiftDate", "args": ["2026-04-05", 0]}
+{"fn": "shiftDate", "args": ["2026-04-05", 1]}
+{"fn": "shiftDate", "args": ["2026-04-05", 1.5]}
+{"fn": "shiftDate", "args": ["2026-04-05", -1.5]}
+{"fn": "shiftDate", "args": ["2026-04-05", 7]}
+{"fn": "shiftDate", "args": ["2026-04-05", 30]}
+{"fn": "shiftDate", "args": ["2026-04-05", 365]}
+{"fn": "shiftDate", "args": ["2026-04-05", 0.49]}
+{"fn": "shiftDate", "args": ["2026-04-05", 0.51]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-04-05", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-04-05", "UTC"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-04-05", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-04-05", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-04-05", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-04-05", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-04-05", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-04-05", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-04-05", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-04-04"]}
+{"fn": "shiftDate", "args": ["2026-04-04", -400]}
+{"fn": "shiftDate", "args": ["2026-04-04", -31]}
+{"fn": "shiftDate", "args": ["2026-04-04", -7]}
+{"fn": "shiftDate", "args": ["2026-04-04", -1]}
+{"fn": "shiftDate", "args": ["2026-04-04", 0]}
+{"fn": "shiftDate", "args": ["2026-04-04", 1]}
+{"fn": "shiftDate", "args": ["2026-04-04", 1.5]}
+{"fn": "shiftDate", "args": ["2026-04-04", -1.5]}
+{"fn": "shiftDate", "args": ["2026-04-04", 7]}
+{"fn": "shiftDate", "args": ["2026-04-04", 30]}
+{"fn": "shiftDate", "args": ["2026-04-04", 365]}
+{"fn": "shiftDate", "args": ["2026-04-04", 0.49]}
+{"fn": "shiftDate", "args": ["2026-04-04", 0.51]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-04-04", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-04-04", "UTC"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-04-04", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-04-04", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-04-04", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-04-04", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-04-04", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-04-04", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-04-04", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-10-04"]}
+{"fn": "shiftDate", "args": ["2026-10-04", -400]}
+{"fn": "shiftDate", "args": ["2026-10-04", -31]}
+{"fn": "shiftDate", "args": ["2026-10-04", -7]}
+{"fn": "shiftDate", "args": ["2026-10-04", -1]}
+{"fn": "shiftDate", "args": ["2026-10-04", 0]}
+{"fn": "shiftDate", "args": ["2026-10-04", 1]}
+{"fn": "shiftDate", "args": ["2026-10-04", 1.5]}
+{"fn": "shiftDate", "args": ["2026-10-04", -1.5]}
+{"fn": "shiftDate", "args": ["2026-10-04", 7]}
+{"fn": "shiftDate", "args": ["2026-10-04", 30]}
+{"fn": "shiftDate", "args": ["2026-10-04", 365]}
+{"fn": "shiftDate", "args": ["2026-10-04", 0.49]}
+{"fn": "shiftDate", "args": ["2026-10-04", 0.51]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-10-04", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-10-04", "UTC"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-10-04", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-10-04", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-10-04", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-10-04", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-10-04", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-10-04", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-10-04", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-10-03"]}
+{"fn": "shiftDate", "args": ["2026-10-03", -400]}
+{"fn": "shiftDate", "args": ["2026-10-03", -31]}
+{"fn": "shiftDate", "args": ["2026-10-03", -7]}
+{"fn": "shiftDate", "args": ["2026-10-03", -1]}
+{"fn": "shiftDate", "args": ["2026-10-03", 0]}
+{"fn": "shiftDate", "args": ["2026-10-03", 1]}
+{"fn": "shiftDate", "args": ["2026-10-03", 1.5]}
+{"fn": "shiftDate", "args": ["2026-10-03", -1.5]}
+{"fn": "shiftDate", "args": ["2026-10-03", 7]}
+{"fn": "shiftDate", "args": ["2026-10-03", 30]}
+{"fn": "shiftDate", "args": ["2026-10-03", 365]}
+{"fn": "shiftDate", "args": ["2026-10-03", 0.49]}
+{"fn": "shiftDate", "args": ["2026-10-03", 0.51]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-10-03", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-10-03", "UTC"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-10-03", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-10-03", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-10-03", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-10-03", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-10-03", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-10-03", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-10-03", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2011-12-29"]}
+{"fn": "shiftDate", "args": ["2011-12-29", -400]}
+{"fn": "shiftDate", "args": ["2011-12-29", -31]}
+{"fn": "shiftDate", "args": ["2011-12-29", -7]}
+{"fn": "shiftDate", "args": ["2011-12-29", -1]}
+{"fn": "shiftDate", "args": ["2011-12-29", 0]}
+{"fn": "shiftDate", "args": ["2011-12-29", 1]}
+{"fn": "shiftDate", "args": ["2011-12-29", 1.5]}
+{"fn": "shiftDate", "args": ["2011-12-29", -1.5]}
+{"fn": "shiftDate", "args": ["2011-12-29", 7]}
+{"fn": "shiftDate", "args": ["2011-12-29", 30]}
+{"fn": "shiftDate", "args": ["2011-12-29", 365]}
+{"fn": "shiftDate", "args": ["2011-12-29", 0.49]}
+{"fn": "shiftDate", "args": ["2011-12-29", 0.51]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2011-12-29", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2011-12-29", "UTC"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2011-12-29", "America/New_York"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Europe/London"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2011-12-29", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2011-12-29", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2011-12-29", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2011-12-29", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2011-12-29", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2011-12-29", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2011-12-30"]}
+{"fn": "shiftDate", "args": ["2011-12-30", -400]}
+{"fn": "shiftDate", "args": ["2011-12-30", -31]}
+{"fn": "shiftDate", "args": ["2011-12-30", -7]}
+{"fn": "shiftDate", "args": ["2011-12-30", -1]}
+{"fn": "shiftDate", "args": ["2011-12-30", 0]}
+{"fn": "shiftDate", "args": ["2011-12-30", 1]}
+{"fn": "shiftDate", "args": ["2011-12-30", 1.5]}
+{"fn": "shiftDate", "args": ["2011-12-30", -1.5]}
+{"fn": "shiftDate", "args": ["2011-12-30", 7]}
+{"fn": "shiftDate", "args": ["2011-12-30", 30]}
+{"fn": "shiftDate", "args": ["2011-12-30", 365]}
+{"fn": "shiftDate", "args": ["2011-12-30", 0.49]}
+{"fn": "shiftDate", "args": ["2011-12-30", 0.51]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2011-12-30", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2011-12-30", "UTC"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2011-12-30", "America/New_York"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Europe/London"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2011-12-30", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2011-12-30", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2011-12-30", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2011-12-30", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2011-12-30", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2011-12-30", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2011-12-31"]}
+{"fn": "shiftDate", "args": ["2011-12-31", -400]}
+{"fn": "shiftDate", "args": ["2011-12-31", -31]}
+{"fn": "shiftDate", "args": ["2011-12-31", -7]}
+{"fn": "shiftDate", "args": ["2011-12-31", -1]}
+{"fn": "shiftDate", "args": ["2011-12-31", 0]}
+{"fn": "shiftDate", "args": ["2011-12-31", 1]}
+{"fn": "shiftDate", "args": ["2011-12-31", 1.5]}
+{"fn": "shiftDate", "args": ["2011-12-31", -1.5]}
+{"fn": "shiftDate", "args": ["2011-12-31", 7]}
+{"fn": "shiftDate", "args": ["2011-12-31", 30]}
+{"fn": "shiftDate", "args": ["2011-12-31", 365]}
+{"fn": "shiftDate", "args": ["2011-12-31", 0.49]}
+{"fn": "shiftDate", "args": ["2011-12-31", 0.51]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2011-12-31", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2011-12-31", "UTC"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2011-12-31", "America/New_York"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Europe/London"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2011-12-31", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2011-12-31", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2011-12-31", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2011-12-31", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2011-12-31", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2011-12-31", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2024-02-29"]}
+{"fn": "shiftDate", "args": ["2024-02-29", -400]}
+{"fn": "shiftDate", "args": ["2024-02-29", -31]}
+{"fn": "shiftDate", "args": ["2024-02-29", -7]}
+{"fn": "shiftDate", "args": ["2024-02-29", -1]}
+{"fn": "shiftDate", "args": ["2024-02-29", 0]}
+{"fn": "shiftDate", "args": ["2024-02-29", 1]}
+{"fn": "shiftDate", "args": ["2024-02-29", 1.5]}
+{"fn": "shiftDate", "args": ["2024-02-29", -1.5]}
+{"fn": "shiftDate", "args": ["2024-02-29", 7]}
+{"fn": "shiftDate", "args": ["2024-02-29", 30]}
+{"fn": "shiftDate", "args": ["2024-02-29", 365]}
+{"fn": "shiftDate", "args": ["2024-02-29", 0.49]}
+{"fn": "shiftDate", "args": ["2024-02-29", 0.51]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2024-02-29", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2024-02-29", "UTC"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2024-02-29", "America/New_York"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Europe/London"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2024-02-29", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2024-02-29", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2024-02-29", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2024-02-29", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2024-02-29", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2024-02-29", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-12-31"]}
+{"fn": "shiftDate", "args": ["2026-12-31", -400]}
+{"fn": "shiftDate", "args": ["2026-12-31", -31]}
+{"fn": "shiftDate", "args": ["2026-12-31", -7]}
+{"fn": "shiftDate", "args": ["2026-12-31", -1]}
+{"fn": "shiftDate", "args": ["2026-12-31", 0]}
+{"fn": "shiftDate", "args": ["2026-12-31", 1]}
+{"fn": "shiftDate", "args": ["2026-12-31", 1.5]}
+{"fn": "shiftDate", "args": ["2026-12-31", -1.5]}
+{"fn": "shiftDate", "args": ["2026-12-31", 7]}
+{"fn": "shiftDate", "args": ["2026-12-31", 30]}
+{"fn": "shiftDate", "args": ["2026-12-31", 365]}
+{"fn": "shiftDate", "args": ["2026-12-31", 0.49]}
+{"fn": "shiftDate", "args": ["2026-12-31", 0.51]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-12-31", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-12-31", "UTC"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-12-31", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-12-31", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-12-31", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-12-31", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-12-31", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-12-31", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-12-31", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-01-01"]}
+{"fn": "shiftDate", "args": ["2026-01-01", -400]}
+{"fn": "shiftDate", "args": ["2026-01-01", -31]}
+{"fn": "shiftDate", "args": ["2026-01-01", -7]}
+{"fn": "shiftDate", "args": ["2026-01-01", -1]}
+{"fn": "shiftDate", "args": ["2026-01-01", 0]}
+{"fn": "shiftDate", "args": ["2026-01-01", 1]}
+{"fn": "shiftDate", "args": ["2026-01-01", 1.5]}
+{"fn": "shiftDate", "args": ["2026-01-01", -1.5]}
+{"fn": "shiftDate", "args": ["2026-01-01", 7]}
+{"fn": "shiftDate", "args": ["2026-01-01", 30]}
+{"fn": "shiftDate", "args": ["2026-01-01", 365]}
+{"fn": "shiftDate", "args": ["2026-01-01", 0.49]}
+{"fn": "shiftDate", "args": ["2026-01-01", 0.51]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-01-01", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-01-01", "UTC"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-01-01", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-01-01", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-01-01", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-01-01", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-01-01", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-01-01", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-01-01", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-09-06"]}
+{"fn": "shiftDate", "args": ["2026-09-06", -400]}
+{"fn": "shiftDate", "args": ["2026-09-06", -31]}
+{"fn": "shiftDate", "args": ["2026-09-06", -7]}
+{"fn": "shiftDate", "args": ["2026-09-06", -1]}
+{"fn": "shiftDate", "args": ["2026-09-06", 0]}
+{"fn": "shiftDate", "args": ["2026-09-06", 1]}
+{"fn": "shiftDate", "args": ["2026-09-06", 1.5]}
+{"fn": "shiftDate", "args": ["2026-09-06", -1.5]}
+{"fn": "shiftDate", "args": ["2026-09-06", 7]}
+{"fn": "shiftDate", "args": ["2026-09-06", 30]}
+{"fn": "shiftDate", "args": ["2026-09-06", 365]}
+{"fn": "shiftDate", "args": ["2026-09-06", 0.49]}
+{"fn": "shiftDate", "args": ["2026-09-06", 0.51]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-09-06", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-09-06", "UTC"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-09-06", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-09-06", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-09-06", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-09-06", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-09-06", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-09-06", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-09-06", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-09-05"]}
+{"fn": "shiftDate", "args": ["2026-09-05", -400]}
+{"fn": "shiftDate", "args": ["2026-09-05", -31]}
+{"fn": "shiftDate", "args": ["2026-09-05", -7]}
+{"fn": "shiftDate", "args": ["2026-09-05", -1]}
+{"fn": "shiftDate", "args": ["2026-09-05", 0]}
+{"fn": "shiftDate", "args": ["2026-09-05", 1]}
+{"fn": "shiftDate", "args": ["2026-09-05", 1.5]}
+{"fn": "shiftDate", "args": ["2026-09-05", -1.5]}
+{"fn": "shiftDate", "args": ["2026-09-05", 7]}
+{"fn": "shiftDate", "args": ["2026-09-05", 30]}
+{"fn": "shiftDate", "args": ["2026-09-05", 365]}
+{"fn": "shiftDate", "args": ["2026-09-05", 0.49]}
+{"fn": "shiftDate", "args": ["2026-09-05", 0.51]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-09-05", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-09-05", "UTC"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-09-05", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-09-05", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-09-05", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-09-05", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-09-05", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-09-05", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-09-05", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-04-03"]}
+{"fn": "shiftDate", "args": ["2026-04-03", -400]}
+{"fn": "shiftDate", "args": ["2026-04-03", -31]}
+{"fn": "shiftDate", "args": ["2026-04-03", -7]}
+{"fn": "shiftDate", "args": ["2026-04-03", -1]}
+{"fn": "shiftDate", "args": ["2026-04-03", 0]}
+{"fn": "shiftDate", "args": ["2026-04-03", 1]}
+{"fn": "shiftDate", "args": ["2026-04-03", 1.5]}
+{"fn": "shiftDate", "args": ["2026-04-03", -1.5]}
+{"fn": "shiftDate", "args": ["2026-04-03", 7]}
+{"fn": "shiftDate", "args": ["2026-04-03", 30]}
+{"fn": "shiftDate", "args": ["2026-04-03", 365]}
+{"fn": "shiftDate", "args": ["2026-04-03", 0.49]}
+{"fn": "shiftDate", "args": ["2026-04-03", 0.51]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Europe/Istanbul", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Europe/London", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": true, "start": "10:00", "end": "16:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "UTC", "weekday": {"enabled": true, "start": "22:00", "end": "06:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Europe/Berlin", "weekday": {"enabled": true, "start": "02:30", "end": "03:30"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "America/New_York", "weekday": {"enabled": true, "start": "01:30", "end": "02:30"}, "weekend": {"enabled": true, "start": "02:00", "end": "02:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Australia/Lord_Howe", "weekday": {"enabled": true, "start": "00:00", "end": "23:59"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Pacific/Apia", "weekday": {"enabled": true, "start": "09:00", "end": "17:00"}, "weekend": {"enabled": true, "start": "09:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Asia/Kathmandu", "weekday": {"enabled": false, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "America/Santiago", "weekday": {"enabled": true, "start": "23:00", "end": "00:00"}, "weekend": {"enabled": true, "start": "18:00", "end": "09:00"}, "accounts": [], "tempo": "light", "adaptive": false}]}
+{"fn": "workInterval", "args": ["2026-04-03", {"autoStart": false, "timeZone": "Africa/Casablanca", "weekday": {"enabled": true, "start": "09:00", "end": "18:00"}, "weekend": {"enabled": false, "start": "11:00", "end": "17:00"}, "accounts": [], "tempo": "auto"}]}
+{"fn": "dayStart", "args": ["2026-04-03", "UTC"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Europe/Istanbul"]}
+{"fn": "dayStart", "args": ["2026-04-03", "America/New_York"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Europe/London"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Europe/Berlin"]}
+{"fn": "dayStart", "args": ["2026-04-03", "America/Los_Angeles"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Australia/Lord_Howe"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Asia/Kathmandu"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Pacific/Apia"]}
+{"fn": "dayStart", "args": ["2026-04-03", "America/Sao_Paulo"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Asia/Tokyo"]}
+{"fn": "dayStart", "args": ["2026-04-03", "America/St_Johns"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Pacific/Chatham"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Africa/Casablanca"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Asia/Calcutta"]}
+{"fn": "dayStart", "args": ["2026-04-03", "US/Eastern"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Etc/GMT+5"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Australia/Sydney"]}
+{"fn": "dayStart", "args": ["2026-04-03", "Pacific/Kiritimati"]}
+{"fn": "dayStart", "args": ["2026-04-03", "America/Santiago"]}
+{"fn": "isWeekend", "args": ["2026-02-30"]}
+{"fn": "dayStart", "args": ["2026-02-30", "UTC"]}
+{"fn": "dayStart", "args": ["2026-02-30", "America/New_York"]}
+{"fn": "isWeekend", "args": ["2026-13-01"]}
+{"fn": "dayStart", "args": ["2026-13-01", "UTC"]}
+{"fn": "dayStart", "args": ["2026-13-01", "America/New_York"]}
+{"fn": "isWeekend", "args": ["nope"]}
+{"fn": "dayStart", "args": ["nope", "UTC"]}
+{"fn": "dayStart", "args": ["nope", "America/New_York"]}
+{"fn": "isWeekend", "args": [""]}
+{"fn": "dayStart", "args": ["", "UTC"]}
+{"fn": "dayStart", "args": ["", "America/New_York"]}

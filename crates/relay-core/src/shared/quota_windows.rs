@@ -1,6 +1,7 @@
 //! Port of `shared/quota-windows.ts`: the limit windows a provider reported and the figure each
 //! account shows.
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use super::types::js::{date_parse, ser_num};
@@ -26,7 +27,12 @@ pub fn max_used_percent(u: Option<&AccountUsage>) -> Option<f64> {
 pub fn spent_model_windows(u: Option<&AccountUsage>, now: f64) -> Vec<&ModelWindow> {
     model_windows(u)
         .iter()
-        .filter(|w| w.used_percent >= 100.0 && w.resets_at.as_deref().is_none_or(|r| r.is_empty() || date_parse(r) > now))
+        .filter(|w| {
+            w.used_percent >= 100.0
+                && w.resets_at
+                    .as_deref()
+                    .is_none_or(|r| r.is_empty() || date_parse(r) > now)
+        })
         .collect()
 }
 
@@ -42,8 +48,14 @@ pub fn model_only_usage(u: Option<&AccountUsage>) -> bool {
 
 /// How full a window is now: one whose reset has passed is empty again.
 pub fn used_at(used_percent: f64, resets_at: Option<&str>, now: f64) -> f64 {
-    let reset = resets_at.filter(|r| !r.is_empty()).map_or(f64::NAN, date_parse);
-    if reset.is_finite() && reset <= now { 0.0 } else { used_percent }
+    let reset = resets_at
+        .filter(|r| !r.is_empty())
+        .map_or(f64::NAN, date_parse);
+    if reset.is_finite() && reset <= now {
+        0.0
+    } else {
+        used_percent
+    }
 }
 
 /// The limit an account's figure shows: the one that stops it first.
@@ -115,76 +127,83 @@ pub fn limit_headline(u: Option<&AccountUsage>, now: f64) -> Option<LimitHeadlin
     };
     super::types::js::sort_by(&mut candidates, |a, b| {
         let by_used = b.used_percent - a.used_percent;
-        if by_used != 0.0 && !by_used.is_nan() { by_used } else { reset_ms(a) - reset_ms(b) }
+        if by_used != 0.0 && !by_used.is_nan() {
+            by_used
+        } else {
+            reset_ms(a) - reset_ms(b)
+        }
     });
     candidates.into_iter().next()
 }
 
-/// The fullest model window of each length (Antigravity pools as five hours and a week).
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct FullestByPeriod {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub five_hour: Option<LimitHeadline>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seven_day: Option<LimitHeadline>,
-}
+/// The fullest model window of each length (Antigravity pools as five hours and a week), keyed
+/// `five_hour`/`seven_day` in the order the windows first name them, as the TS record is.
+pub type FullestByPeriod = IndexMap<ModelWindowPeriod, LimitHeadline>;
 
 /// The fullest model window of each length; windows of unknown length are left out.
 pub fn fullest_by_period(u: Option<&AccountUsage>, now: f64) -> FullestByPeriod {
-    let mut out = FullestByPeriod::default();
+    let mut out = FullestByPeriod::new();
     for w in model_windows(u) {
         let Some(period) = w.period else { continue };
         let used = used_at(w.used_percent, w.resets_at.as_deref(), now);
-        let slot = match period {
-            ModelWindowPeriod::FiveHour => &mut out.five_hour,
-            ModelWindowPeriod::SevenDay => &mut out.seven_day,
-        };
-        if slot.as_ref().is_none_or(|seen| used > seen.used_percent) {
-            *slot = Some(LimitHeadline {
-                key: w.key.clone(),
-                label: Some(w.label.clone()),
-                used_percent: used,
-                resets_at: empty_to_none(&w.resets_at),
-                model: true,
-                source: w.source,
-                read_at: empty_to_none(&w.read_at),
-            });
+        if out.get(&period).is_none_or(|seen| used > seen.used_percent) {
+            out.insert(
+                period,
+                LimitHeadline {
+                    key: w.key.clone(),
+                    label: Some(w.label.clone()),
+                    used_percent: used,
+                    resets_at: empty_to_none(&w.resets_at),
+                    model: true,
+                    source: w.source,
+                    read_at: empty_to_none(&w.read_at),
+                },
+            );
         }
     }
     out
 }
 
-/// A window as a list column shows it: its share, its reset and, for a pool, the pool's name.
+/// A window as a list column shows it: the account's own window, or for pooled usage the pool's
+/// headline (with its name), each written as the TS object it is.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ColumnWindow {
-    #[serde(serialize_with = "ser_num")]
-    pub used_percent: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub resets_at: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<LimitSource>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub read_at: Option<String>,
+#[serde(untagged)]
+pub enum ColumnWindow {
+    Pool(LimitHeadline),
+    Window(UsageWindow),
 }
 
-impl From<&UsageWindow> for ColumnWindow {
-    fn from(w: &UsageWindow) -> Self {
-        ColumnWindow {
-            used_percent: w.used_percent,
-            resets_at: w.resets_at.clone(),
-            label: None,
-            source: w.source,
-            read_at: w.read_at.clone(),
+impl ColumnWindow {
+    pub fn used_percent(&self) -> f64 {
+        match self {
+            ColumnWindow::Pool(h) => h.used_percent,
+            ColumnWindow::Window(w) => w.used_percent,
         }
     }
-}
-
-impl From<LimitHeadline> for ColumnWindow {
-    fn from(h: LimitHeadline) -> Self {
-        ColumnWindow { used_percent: h.used_percent, resets_at: h.resets_at, label: h.label, source: h.source, read_at: h.read_at }
+    pub fn resets_at(&self) -> Option<&str> {
+        match self {
+            ColumnWindow::Pool(h) => h.resets_at.as_deref(),
+            ColumnWindow::Window(w) => w.resets_at.as_deref(),
+        }
+    }
+    /// The pool's name; an account's own window has none.
+    pub fn label(&self) -> Option<&str> {
+        match self {
+            ColumnWindow::Pool(h) => h.label.as_deref(),
+            ColumnWindow::Window(_) => None,
+        }
+    }
+    pub fn source(&self) -> Option<LimitSource> {
+        match self {
+            ColumnWindow::Pool(h) => h.source,
+            ColumnWindow::Window(w) => w.source,
+        }
+    }
+    pub fn read_at(&self) -> Option<&str> {
+        match self {
+            ColumnWindow::Pool(h) => h.read_at.as_deref(),
+            ColumnWindow::Window(w) => w.read_at.as_deref(),
+        }
     }
 }
 
@@ -203,18 +222,27 @@ pub struct LimitColumns {
 pub fn limit_columns(u: Option<&AccountUsage>, now: f64) -> LimitColumns {
     if !model_only_usage(u) {
         return LimitColumns {
-            five: u.and_then(|u| u.five_hour.as_ref()).map(ColumnWindow::from),
-            week: u.and_then(|u| u.seven_day.as_ref()).map(ColumnWindow::from),
+            five: u
+                .and_then(|u| u.five_hour.clone())
+                .map(ColumnWindow::Window),
+            week: u
+                .and_then(|u| u.seven_day.clone())
+                .map(ColumnWindow::Window),
             pooled: false,
         };
     }
-    let by_period = fullest_by_period(u, now);
-    let five = match by_period.five_hour {
-        Some(h) => Some(h.into()),
-        None if by_period.seven_day.is_some() => None,
-        None => limit_headline(u, now).map(Into::into),
+    let mut by_period = fullest_by_period(u, now);
+    let week = by_period.shift_remove(&ModelWindowPeriod::SevenDay);
+    let five = match by_period.shift_remove(&ModelWindowPeriod::FiveHour) {
+        Some(h) => Some(h),
+        None if week.is_some() => None,
+        None => limit_headline(u, now),
     };
-    LimitColumns { five, week: by_period.seven_day.map(Into::into), pooled: true }
+    LimitColumns {
+        five: five.map(ColumnWindow::Pool),
+        week: week.map(ColumnWindow::Pool),
+        pooled: true,
+    }
 }
 
 /// Where a shown limit figure came from and when it was read.
@@ -228,9 +256,16 @@ pub struct LimitOrigin {
 
 /// Where a limit row's figure came from, for its tooltip: a passed reset is Relay's estimate;
 /// an untagged window takes its source from the account's sign-in.
-pub fn limit_origin(window: Option<&UsageWindow>, usage: Option<&AccountUsage>, now: f64) -> Option<LimitOrigin> {
+pub fn limit_origin(
+    window: Option<&UsageWindow>,
+    usage: Option<&AccountUsage>,
+    now: f64,
+) -> Option<LimitOrigin> {
     let window = window?;
-    let read_at = window.read_at.clone().or_else(|| usage.and_then(|u| u.checked_at.clone()));
+    let read_at = window
+        .read_at
+        .clone()
+        .or_else(|| usage.and_then(|u| u.checked_at.clone()));
     let reset = date_parse(window.resets_at.as_deref().unwrap_or(""));
     let source = if reset.is_finite() && reset <= now {
         Some(LimitSource::Estimate)
@@ -241,5 +276,8 @@ pub fn limit_origin(window: Option<&UsageWindow>, usage: Option<&AccountUsage>, 
             None => None,
         })
     }?;
-    Some(LimitOrigin { source, read_at: read_at.filter(|r| !r.is_empty()) })
+    Some(LimitOrigin {
+        source,
+        read_at: read_at.filter(|r| !r.is_empty()),
+    })
 }

@@ -1,0 +1,23 @@
+{
+  "unit": "shared/number-format.ts",
+  "files": 1,
+  "fingerprint": "e5de94dd8c52e4bb",
+  "coverage": {
+    "lines": 139,
+    "reached": 119,
+    "files": [
+      {
+        "file": "shared/i18n/locales.ts",
+        "lines": 90,
+        "reached": 70,
+        "missed": "71-81, 85-86, 90-96"
+      },
+      {
+        "file": "shared/number-format.ts",
+        "lines": 49,
+        "reached": 49,
+        "missed": ""
+      }
+    ]
+  }
+}

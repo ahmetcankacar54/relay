@@ -16,9 +16,22 @@ aes-gcm = "0.11.1"
 base64 = "0.23.1"
 cbc = "0.2.1"
 chrono = "0.4.45"
+chrono-tz = { version = "0.10.4", features = ["case-insensitive"] }
+ed25519-dalek = "3.0.0"
+flate2 = "1.1.11"
 getrandom = "0.4.3"
 hmac = "0.13.0"
+iana-time-zone = "0.1.65"
+indexmap = { version = "2.14.2", features = ["serde"] }
+memchr = "2.8.3"
 pbkdf2 = "0.13.0"
+portable-pty = "0.9.0"
+regex = "1.13.2"
+relay-i18n = { version = "0.1.0", path = "../relay-i18n" }
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "rustls-no-provider"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+rusty-leveldb = "4.0.2"
 scrypt = "0.12.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
@@ -26,7 +39,10 @@ sha1 = "0.11.0"
 sha2 = "0.11.0"
 sysinfo = "0.36.1"
 thiserror = "2.0.21"
+unicode-normalization = "0.1.26"
+url = "2.5.9"
 uuid = { version = "1.26.1", features = ["v4"] }
+webpki-roots = "1.0.12"
 
 [lints]
 workspace = true
@@ -35,10 +51,14 @@ workspace = true
 tempfile = "3.27.0"
 
 [target."cfg(windows)".dependencies]
-windows = { version = "0.62.2", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_System_Memory"] }
+windows = { version = "0.62.2", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_System_Memory", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_Security", "Win32_System_Registry"] }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-keyring = "3.6.3"
+keyring = { version = "3.6.3", features = ["windows-native", "async-secret-service", "crypto-rust", "async-io"] }
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.191"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = "0.3.2"
+objc2-service-management = { version = "0.3.2", default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation"] }

@@ -29,7 +29,11 @@ pub struct StatuslineWindow {
     #[serde(serialize_with = "js::ser_num")]
     pub used: f64,
     /// When the period renews, epoch milliseconds.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub resets_at: Option<f64>,
     /// "resets 14:30" / "14:30’da yenilenir", in the app's language and time zone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -112,7 +116,12 @@ impl StatuslineInput {
 
     /// `rate_limits[name]` (`five_hour`, `seven_day`), when it is an object.
     pub fn rate_limit(&self, name: &str) -> Option<LiveWindow> {
-        let window = self.0.get("rate_limits")?.as_object()?.get(name)?.as_object()?;
+        let window = self
+            .0
+            .get("rate_limits")?
+            .as_object()?
+            .get(name)?
+            .as_object()?;
         Some(LiveWindow {
             used_percentage: window.get("used_percentage").and_then(Value::as_f64),
             resets_at: window.get("resets_at").and_then(Value::as_f64),
@@ -156,7 +165,10 @@ pub fn claude_sign_in(text: Option<&str>) -> Option<TerminalIdentity> {
     let account = value.as_object()?.get("oauthAccount")?.as_object()?;
     let account_uuid = account.get("accountUuid")?.as_str()?;
     let org_id = account.get("organizationUuid")?.as_str()?;
-    Some(TerminalIdentity { account_uuid: account_uuid.to_lowercase(), org_id: org_id.to_lowercase() })
+    Some(TerminalIdentity {
+        account_uuid: account_uuid.to_lowercase(),
+        org_id: org_id.to_lowercase(),
+    })
 }
 
 /// Node's `path` for this platform, as far as the line needs it.
@@ -180,7 +192,11 @@ mod node_path {
         {
             let b = p.as_bytes();
             if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
-                return if b.len() >= 3 && is_sep(b[2] as char) { (&p[..3], &p[3..]) } else { (&p[..2], &p[2..]) };
+                return if b.len() >= 3 && is_sep(b[2] as char) {
+                    (&p[..3], &p[3..])
+                } else {
+                    (&p[..2], &p[2..])
+                };
             }
         }
         match p.chars().next() {
@@ -200,7 +216,9 @@ mod node_path {
         let joined = if is_absolute(p) {
             p.to_string()
         } else {
-            let cwd = std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+            let cwd = std::env::current_dir()
+                .map(|d| d.to_string_lossy().into_owned())
+                .unwrap_or_default();
             format!("{cwd}{SEP}{p}")
         };
         let (root, rest) = split_root(&joined);
@@ -221,7 +239,11 @@ mod node_path {
     fn trim_trailing(p: &str) -> &str {
         let (root, _) = split_root(p);
         let trimmed = p.trim_end_matches(is_sep);
-        if trimmed.len() < root.len() { root } else { trimmed }
+        if trimmed.len() < root.len() {
+            root
+        } else {
+            trimmed
+        }
     }
 
     /// `path.dirname(p)`.
@@ -231,7 +253,11 @@ mod node_path {
         match rest.rfind(is_sep) {
             Some(i) => {
                 let head = rest[..i].trim_end_matches(is_sep);
-                if head.is_empty() { root.to_string() } else { format!("{root}{head}") }
+                if head.is_empty() {
+                    root.to_string()
+                } else {
+                    format!("{root}{head}")
+                }
             }
             None if root.is_empty() => ".".to_string(),
             None => root.to_string(),
@@ -249,7 +275,11 @@ mod node_path {
 fn same_path(a: &str, b: &str) -> bool {
     let norm = |p: &str| {
         let resolved = node_path::resolve(p);
-        if cfg!(any(windows, target_os = "macos")) { resolved.to_lowercase() } else { resolved }
+        if cfg!(any(windows, target_os = "macos")) {
+            resolved.to_lowercase()
+        } else {
+            resolved
+        }
     };
     norm(a) == norm(b)
 }
@@ -275,18 +305,30 @@ pub fn statusline_account<'a>(
     sign_in: impl FnOnce() -> Option<TerminalIdentity>,
 ) -> StatuslineAccountMatch<'a> {
     let by_id = |id: Option<&str>| id.and_then(|id| snapshot.accounts.iter().find(|a| a.id == id));
-    let routed = input
-        .session_id()
-        .and_then(|session| by_id(snapshot.gateway.as_ref().and_then(|g| g.sessions.get(session)).map(String::as_str)));
+    let routed = input.session_id().and_then(|session| {
+        by_id(
+            snapshot
+                .gateway
+                .as_ref()
+                .and_then(|g| g.sessions.get(session))
+                .map(String::as_str),
+        )
+    });
     if let Some(account) = routed {
-        return StatuslineAccountMatch { account: Some(account), via_gateway: true };
+        return StatuslineAccountMatch {
+            account: Some(account),
+            via_gateway: true,
+        };
     }
     if let Some(dir) = config_dir.filter(|d| !d.is_empty())
         && node_path::is_absolute(dir)
         && same_path(&node_path::dirname(dir), &snapshot.profiles)
         && let Some(account) = by_id(Some(&node_path::basename(dir)))
     {
-        return StatuslineAccountMatch { account: Some(account), via_gateway: false };
+        return StatuslineAccountMatch {
+            account: Some(account),
+            via_gateway: false,
+        };
     }
     if let Some(who) = sign_in() {
         let account = snapshot.accounts.iter().find(|a| {
@@ -294,10 +336,20 @@ pub fn statusline_account<'a>(
                 .iter()
                 .any(|x| x.account_uuid == who.account_uuid && x.org_id == who.org_id)
         });
-        return StatuslineAccountMatch { account, via_gateway: false };
+        return StatuslineAccountMatch {
+            account,
+            via_gateway: false,
+        };
     }
-    let account = if snapshot.terminal_follows { by_id(snapshot.desktop_account_id.as_deref()) } else { None };
-    StatuslineAccountMatch { account, via_gateway: false }
+    let account = if snapshot.terminal_follows {
+        by_id(snapshot.desktop_account_id.as_deref())
+    } else {
+        None
+    };
+    StatuslineAccountMatch {
+        account,
+        via_gateway: false,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -328,7 +380,10 @@ fn fill(template: &str, key: &str, value: &str) -> String {
     while let Some(open) = rest.find('{') {
         out.push_str(&rest[..open]);
         let after = &rest[open + 1..];
-        let word = after.bytes().take_while(|b| b.is_ascii_alphanumeric() || *b == b'_').count();
+        let word = after
+            .bytes()
+            .take_while(|b| b.is_ascii_alphanumeric() || *b == b'_')
+            .count();
         if word > 0 && after.as_bytes().get(word) == Some(&b'}') {
             let name = &after[..word];
             if name == key {
@@ -388,7 +443,7 @@ struct FormatData {
 }
 
 #[rustfmt::skip]
-const FORMATS: [FormatData; 16] = [
+const FORMATS: [FormatData; 17] = [
     FormatData { tag: "en", percent: ("", "%"), minute: ("{} min. ago", "{} min. ago"), hour: ("{} hr. ago", "{} hr. ago"), day: ("{} day ago", "{} days ago"), group: (",", 1) },
     FormatData { tag: "en-GB", percent: ("", "%"), minute: ("{} min ago", "{} min ago"), hour: ("{} hr ago", "{} hr ago"), day: ("{} day ago", "{} days ago"), group: (",", 1) },
     FormatData { tag: "tr", percent: ("%", ""), minute: ("{} dk. önce", "{} dk. önce"), hour: ("{} sa. önce", "{} sa. önce"), day: ("{} gün önce", "{} gün önce"), group: (".", 1) },
@@ -401,6 +456,7 @@ const FORMATS: [FormatData; 16] = [
     FormatData { tag: "ko", percent: ("", "%"), minute: ("{}분 전", "{}분 전"), hour: ("{}시간 전", "{}시간 전"), day: ("{}일 전", "{}일 전"), group: (",", 1) },
     FormatData { tag: "zh-CN", percent: ("", "%"), minute: ("{}分钟前", "{}分钟前"), hour: ("{}小时前", "{}小时前"), day: ("{}天前", "{}天前"), group: (",", 1) },
     FormatData { tag: "zh-TW", percent: ("", "%"), minute: ("{} 分鐘前", "{} 分鐘前"), hour: ("{} 小時前", "{} 小時前"), day: ("{} 天前", "{} 天前"), group: (",", 1) },
+    FormatData { tag: "zh-HK", percent: ("", "%"), minute: ("{} 分鐘前", "{} 分鐘前"), hour: ("{} 小時前", "{} 小時前"), day: ("{} 日前", "{} 日前"), group: (",", 1) },
     FormatData { tag: "ru", percent: ("", "\u{a0}%"), minute: ("{} мин. назад", "{} мин. назад"), hour: ("{} ч назад", "{} ч назад"), day: ("{} дн. назад", "{} дн. назад"), group: ("\u{a0}", 1) },
     FormatData { tag: "uk", percent: ("", "%"), minute: ("{} хв тому", "{} хв тому"), hour: ("{} год тому", "{} год тому"), day: ("{} дн. тому", "{} дн. тому"), group: ("\u{a0}", 1) },
     FormatData { tag: "pl", percent: ("", "%"), minute: ("{} min temu", "{} min temu"), hour: ("{} godz. temu", "{} godz. temu"), day: ("{} dzień temu", "{} dni temu"), group: ("\u{a0}", 2) },
@@ -418,8 +474,10 @@ fn well_formed(tag: &str) -> bool {
     let Some(language) = parts.next() else {
         return false;
     };
-    let lang_ok = matches!(language.len(), 2 | 3 | 5..=8) && language.bytes().all(|b| b.is_ascii_alphabetic());
-    lang_ok && parts.all(|p| (1..=8).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_alphanumeric()))
+    let lang_ok = matches!(language.len(), 2 | 3 | 5..=8)
+        && language.bytes().all(|b| b.is_ascii_alphabetic());
+    lang_ok
+        && parts.all(|p| (1..=8).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_alphanumeric()))
 }
 
 /// The table entry for a locale tag: its language's, with the regional data Relay's own
@@ -434,16 +492,24 @@ fn resolve_format(tag: &str) -> Option<&'static FormatData> {
     let mut region = None;
     for part in parts.take_while(|p| p.len() > 1) {
         match part.len() {
-            4 if part.bytes().all(|b| b.is_ascii_alphabetic()) => script = Some(part.to_ascii_lowercase()),
+            4 if part.bytes().all(|b| b.is_ascii_alphabetic()) => {
+                script = Some(part.to_ascii_lowercase())
+            }
             2 | 3 if region.is_none() => region = Some(part.to_ascii_uppercase()),
             _ => {}
         }
     }
     Some(match language.as_str() {
         "en" if region.as_deref() == Some("GB") => format_data("en-GB"),
-        "zh" if script.as_deref() == Some("hant") || matches!(region.as_deref(), Some("TW" | "HK" | "MO")) => format_data("zh-TW"),
+        "zh" if matches!(region.as_deref(), Some("HK" | "MO")) => format_data("zh-HK"),
+        "zh" if script.as_deref() == Some("hant") || region.as_deref() == Some("TW") => {
+            format_data("zh-TW")
+        }
         "zh" => format_data("zh-CN"),
-        other => FORMATS.iter().find(|f| f.tag == other).unwrap_or(&FORMATS[0]),
+        other => FORMATS
+            .iter()
+            .find(|f| f.tag == other)
+            .unwrap_or(&FORMATS[0]),
     })
 }
 
@@ -487,7 +553,11 @@ fn age_text(data: &FormatData, ms: f64) -> String {
         (data.minute, minutes)
     } else {
         let hours = (minutes / 60.0).floor();
-        if hours < 48.0 { (data.hour, hours) } else { (data.day, (hours / 24.0).floor()) }
+        if hours < 48.0 {
+            (data.hour, hours)
+        } else {
+            (data.day, (hours / 24.0).floor())
+        }
     };
     let template = if n == 1.0 { forms.0 } else { forms.1 };
     template.replacen("{}", &grouped(n as u64, data), 1)
@@ -498,12 +568,20 @@ fn age_text(data: &FormatData, ms: f64) -> String {
 /// percentages Claude Code passes on stdin win over Relay's last read. Empty when there is
 /// nothing to show.
 pub fn render_statusline(render: StatuslineRender<'_>) -> String {
-    let StatuslineRender { snapshot, input, config_dir, sign_in, now, paint } = render;
+    let StatuslineRender {
+        snapshot,
+        input,
+        config_dir,
+        sign_in,
+        now,
+        paint,
+    } = render;
     let found = statusline_account(snapshot, input, config_dir, sign_in);
     let data = resolve_format(&snapshot.format_locale).unwrap_or(&FORMATS[0]);
     let five_hour_read = current(found.account.and_then(|a| a.five_hour.as_ref()), now);
     let week_read = current(found.account.and_then(|a| a.week.as_ref()), now);
-    let five_hour = live_used(input.rate_limit("five_hour"), now).or(five_hour_read.map(|w| w.used));
+    let five_hour =
+        live_used(input.rate_limit("five_hour"), now).or(five_hour_read.map(|w| w.used));
     let week = live_used(input.rate_limit("seven_day"), now).or(week_read.map(|w| w.used));
     let mut parts: Vec<String> = Vec::new();
     if let Some(account) = found.account {
@@ -512,7 +590,13 @@ pub fn render_statusline(render: StatuslineRender<'_>) -> String {
     if found.via_gateway {
         parts.push(snapshot.text.via_gateway.clone());
     }
-    let used = |template: &str, value: f64| fill(template, "percent", &paint(percent_style(value), &format_percent(value, data)));
+    let used = |template: &str, value: f64| {
+        fill(
+            template,
+            "percent",
+            &paint(percent_style(value), &format_percent(value, data)),
+        )
+    };
     if let Some(value) = five_hour {
         parts.push(used(&snapshot.text.five_hour, value));
     }
@@ -534,7 +618,10 @@ pub fn render_statusline(render: StatuslineRender<'_>) -> String {
     let age = now - snapshot.generated_at;
     if age > STATUSLINE_STALE_MS {
         let data = resolve_format(&snapshot.format_locale).unwrap_or_else(|| format_data("en"));
-        parts.push(paint(StatuslineStyle::Yellow, &fill(&snapshot.text.updated_ago, "age", &age_text(data, age))));
+        parts.push(paint(
+            StatuslineStyle::Yellow,
+            &fill(&snapshot.text.updated_ago, "age", &age_text(data, age)),
+        ));
     }
     parts.join(" · ")
 }

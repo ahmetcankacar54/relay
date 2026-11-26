@@ -43,17 +43,30 @@ pub fn is_weekend(date: &str) -> bool {
 /// a DST change skips moves to the first time after it.
 pub fn work_interval(date: &str, settings: &PlanningSettings) -> Option<WorkInterval> {
     let weekend = is_weekend(date);
-    let hours = if weekend { &settings.weekend } else { &settings.weekday };
+    let hours = if weekend {
+        &settings.weekend
+    } else {
+        &settings.weekday
+    };
     if !hours.enabled {
         return None;
     }
     let start = wall_time_or_next(date, &hours.start, &settings.time_zone)?;
-    let end_date = if hours.end <= hours.start { shift_date(date, 1.0) } else { date.to_string() };
+    let end_date = if hours.end <= hours.start {
+        shift_date(date, 1.0)
+    } else {
+        date.to_string()
+    };
     let end = wall_time_or_next(&end_date, &hours.end, &settings.time_zone)?;
     if end <= start {
         return None;
     }
-    Some(WorkInterval { date: date.to_string(), start, end, weekend })
+    Some(WorkInterval {
+        date: date.to_string(),
+        start,
+        end,
+        weekend,
+    })
 }
 
 /// The first existing instant of a calendar day; DST can skip midnight.

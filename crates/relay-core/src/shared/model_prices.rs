@@ -25,18 +25,38 @@ struct ModelPrice {
 }
 
 const fn rates(input: f64, write5m: f64, write1h: f64, read: f64, output: f64) -> Rates {
-    Rates { input, write5m, write1h, read, output }
+    Rates {
+        input,
+        write5m,
+        write1h,
+        read,
+        output,
+    }
 }
 
 const fn price(rates: Rates, us_geo: bool) -> ModelPrice {
-    ModelPrice { rates, fast: None, long_prompt: None, us_geo }
+    ModelPrice {
+        rates,
+        fast: None,
+        long_prompt: None,
+        us_geo,
+    }
 }
 
-const FABLE_5_2: ModelPrice = ModelPrice { fast: Some((16.0, 80.0)), ..price(rates(8.0, 10.0, 16.0, 0.2, 40.0), true) };
+const FABLE_5_2: ModelPrice = ModelPrice {
+    fast: Some((16.0, 80.0)),
+    ..price(rates(8.0, 10.0, 16.0, 0.2, 40.0), true)
+};
 const FABLE_5_1: ModelPrice = price(rates(10.0, 12.5, 20.0, 0.25, 50.0), true);
 const FABLE_5: ModelPrice = price(rates(10.0, 12.5, 20.0, 1.0, 50.0), true);
-const OPUS_5_5: ModelPrice = ModelPrice { fast: Some((8.0, 40.0)), ..price(rates(4.0, 5.0, 8.0, 0.2, 20.0), true) };
-const OPUS_5: ModelPrice = ModelPrice { fast: Some((10.0, 50.0)), ..price(rates(5.0, 6.25, 10.0, 0.5, 25.0), true) };
+const OPUS_5_5: ModelPrice = ModelPrice {
+    fast: Some((8.0, 40.0)),
+    ..price(rates(4.0, 5.0, 8.0, 0.2, 20.0), true)
+};
+const OPUS_5: ModelPrice = ModelPrice {
+    fast: Some((10.0, 50.0)),
+    ..price(rates(5.0, 6.25, 10.0, 0.5, 25.0), true)
+};
 const OPUS_4_6: ModelPrice = price(rates(5.0, 6.25, 10.0, 0.5, 25.0), true);
 const OPUS_4_5: ModelPrice = price(rates(5.0, 6.25, 10.0, 0.5, 25.0), false);
 const OPUS_4: ModelPrice = price(rates(15.0, 18.75, 30.0, 1.5, 75.0), false);
@@ -127,10 +147,8 @@ pub fn price_key(model: &str) -> Option<String> {
     lookup(bare).map(|_| bare.to_string())
 }
 
-/// JS `String.prototype.trim` (Unicode white space and line terminators).
-pub(crate) fn js_trim(text: &str) -> &str {
-    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
-}
+/// JS `String.prototype.trim`, for the modules that import it from here.
+pub(crate) use super::types::js::trim as js_trim;
 
 fn scaled(base: Rates, input: f64, output: f64) -> Rates {
     let factor = input / base.input;
@@ -156,7 +174,7 @@ pub fn response_cost(model: &str, usage: &ResponseUsage) -> Option<f64> {
     {
         r = scaled(r, input, output);
     }
-    let write1h = usage.cache_write_1h.unwrap_or(0.0).min(usage.cache_write);
+    let write1h = super::types::js::min([usage.cache_write_1h.unwrap_or(0.0), usage.cache_write]);
     let write5m = usage.cache_write - write1h;
     let cost = (usage.input * r.input
         + write5m * r.write5m
@@ -164,7 +182,11 @@ pub fn response_cost(model: &str, usage: &ResponseUsage) -> Option<f64> {
         + usage.cache_read * r.read
         + usage.output * r.output)
         / 1_000_000.0;
-    Some(if usage.geo.as_deref() == Some("us") && price.us_geo { cost * 1.1 } else { cost })
+    Some(if usage.geo.as_deref() == Some("us") && price.us_geo {
+        cost * 1.1
+    } else {
+        cost
+    })
 }
 
 /// The sums `estimate_cost` prices.
@@ -182,7 +204,10 @@ pub struct TokenCounts {
 pub fn estimate_cost(model: &str, counts: &TokenCounts) -> Option<f64> {
     let r = lookup(&price_key(model)?)?.rates;
     Some(
-        (counts.input * r.input + counts.cache_write * r.write1h + counts.cache_read * r.read + counts.output * r.output)
+        (counts.input * r.input
+            + counts.cache_write * r.write1h
+            + counts.cache_read * r.read
+            + counts.output * r.output)
             / 1_000_000.0,
     )
 }

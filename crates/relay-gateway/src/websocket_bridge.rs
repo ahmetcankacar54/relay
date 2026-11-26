@@ -111,7 +111,11 @@ impl WebSocketBridge {
         if let Ok(value) = HeaderValue::from_str(&host_header) {
             headers.insert(http::header::HOST, value);
         }
-        if let Some(Ok(value)) = options.chatgpt_account_id.as_deref().map(HeaderValue::from_str) {
+        if let Some(Ok(value)) = options
+            .chatgpt_account_id
+            .as_deref()
+            .map(HeaderValue::from_str)
+        {
             headers.insert("chatgpt-account-id", value);
         }
         if let Some(Ok(value)) = options
@@ -122,11 +126,12 @@ impl WebSocketBridge {
             headers.insert(http::header::AUTHORIZATION, value);
         }
 
-        let mut upstream = match tokio::time::timeout(CONNECT_TIMEOUT, connect(&hostname, port, tls)).await {
-            Ok(Ok(stream)) => stream,
-            // Before the upstream answers, the client is owed an HTTP error.
-            _ => return Some(reject_upgrade(502, "Bad Gateway")),
-        };
+        let mut upstream =
+            match tokio::time::timeout(CONNECT_TIMEOUT, connect(&hostname, port, tls)).await {
+                Ok(Ok(stream)) => stream,
+                // Before the upstream answers, the client is owed an HTTP error.
+                _ => return Some(reject_upgrade(502, "Bad Gateway")),
+            };
 
         let mut raw = format!(
             "{} {}{} HTTP/1.1\r\n",

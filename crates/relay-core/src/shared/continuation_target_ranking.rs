@@ -7,8 +7,11 @@ use super::types::js::{compare_str, date_parse, min, sort_by};
 use super::types::{Account, AccountUsage, AutoSwitchStrategy, UsageStatus};
 
 /// Every strategy, in the order Settings → Switching offers them; "best" is the default.
-pub const AUTO_SWITCH_STRATEGIES: [AutoSwitchStrategy; 3] =
-    [AutoSwitchStrategy::Best, AutoSwitchStrategy::WeeklyFirst, AutoSwitchStrategy::ConsumeFirst];
+pub const AUTO_SWITCH_STRATEGIES: [AutoSwitchStrategy; 3] = [
+    AutoSwitchStrategy::Best,
+    AutoSwitchStrategy::WeeklyFirst,
+    AutoSwitchStrategy::ConsumeFirst,
+];
 
 /// The used percent at which automatic switching leaves `account`: its own line when one is saved
 /// (a whole 50–100), else `fallback`.
@@ -39,8 +42,13 @@ fn remaining_quota_percent(account: &Account, usage: Option<&AccountUsage>) -> f
     if u.account_id != account.id || u.status != UsageStatus::Ready || u.stale {
         return 0.0;
     }
-    let Some(windows) = quota_windows(Some(u)) else { return 0.0 };
-    if windows.iter().any(|w| !w.used_percent.is_finite() || w.used_percent < 0.0 || w.used_percent > 100.0) {
+    let Some(windows) = quota_windows(Some(u)) else {
+        return 0.0;
+    };
+    if windows
+        .iter()
+        .any(|w| !w.used_percent.is_finite() || w.used_percent < 0.0 || w.used_percent > 100.0)
+    {
         return 0.0;
     }
     min(windows.iter().map(|w| 100.0 - w.used_percent))
@@ -70,12 +78,18 @@ fn or(a: f64, b: impl FnOnce() -> f64) -> f64 {
 
 fn by_score(left: &RankedContinuationTarget<'_>, right: &RankedContinuationTarget<'_>) -> f64 {
     or(right.score - left.score, || {
-        or(right.remaining_percent - left.remaining_percent, || compare_str(&left.account.id, &right.account.id))
+        or(right.remaining_percent - left.remaining_percent, || {
+            compare_str(&left.account.id, &right.account.id)
+        })
     })
 }
 
 fn finite_after(reset: f64, now: f64) -> f64 {
-    if reset.is_finite() && reset > now { reset } else { f64::INFINITY }
+    if reset.is_finite() && reset > now {
+        reset
+    } else {
+        f64::INFINITY
+    }
 }
 
 /// The open five-hour window's reset; a weekly window with less left binds instead (Infinity).
@@ -86,12 +100,28 @@ fn open_reset(usage: Option<&AccountUsage>, now: f64) -> f64 {
     {
         return f64::INFINITY;
     }
-    finite_after(date_parse(usage.and_then(|u| u.five_hour.as_ref()).and_then(|w| w.resets_at.as_deref()).unwrap_or("")), now)
+    finite_after(
+        date_parse(
+            usage
+                .and_then(|u| u.five_hour.as_ref())
+                .and_then(|w| w.resets_at.as_deref())
+                .unwrap_or(""),
+        ),
+        now,
+    )
 }
 
 /// The weekly period's reset, when known and ahead.
 fn weekly_reset(usage: Option<&AccountUsage>, now: f64) -> f64 {
-    finite_after(date_parse(usage.and_then(|u| u.seven_day.as_ref()).and_then(|w| w.resets_at.as_deref()).unwrap_or("")), now)
+    finite_after(
+        date_parse(
+            usage
+                .and_then(|u| u.seven_day.as_ref())
+                .and_then(|w| w.resets_at.as_deref())
+                .unwrap_or(""),
+        ),
+        now,
+    )
 }
 
 fn strategy_order(
@@ -101,20 +131,27 @@ fn strategy_order(
     now: f64,
 ) -> f64 {
     match strategy {
-        AutoSwitchStrategy::Best => or(open_reset(left.usage, now) - open_reset(right.usage, now), || by_score(left, right)),
-        AutoSwitchStrategy::WeeklyFirst => {
-            or(weekly_reset(left.usage, now) - weekly_reset(right.usage, now), || by_score(left, right))
-        }
+        AutoSwitchStrategy::Best => or(
+            open_reset(left.usage, now) - open_reset(right.usage, now),
+            || by_score(left, right),
+        ),
+        AutoSwitchStrategy::WeeklyFirst => or(
+            weekly_reset(left.usage, now) - weekly_reset(right.usage, now),
+            || by_score(left, right),
+        ),
         // The most used first; the smaller capacity first among equals, so it drains.
-        AutoSwitchStrategy::ConsumeFirst => or(left.remaining_percent - right.remaining_percent, || {
-            or(left.score - right.score, || by_score(left, right))
-        }),
+        AutoSwitchStrategy::ConsumeFirst => {
+            or(left.remaining_percent - right.remaining_percent, || {
+                or(left.score - right.score, || by_score(left, right))
+            })
+        }
     }
 }
 
 /// An account past its own switch line: automatic switching would leave it again at once.
 fn past_own_line(r: &RankedContinuationTarget<'_>) -> bool {
-    r.account.switch_at_percent.is_some() && 100.0 - r.remaining_percent >= switch_at_percent(r.account, 100.0)
+    r.account.switch_at_percent.is_some()
+        && 100.0 - r.remaining_percent >= switch_at_percent(r.account, 100.0)
 }
 
 /// Rank policy-eligible candidates. With a context: accounts with enough quota for half an hour
@@ -162,9 +199,13 @@ pub fn rank_continuation_targets<'a>(
     }
     let strategy = context.strategy.unwrap_or(AutoSwitchStrategy::Best);
     let mut passing: Vec<_> = passing_index.iter().map(|i| ranked[*i].clone()).collect();
-    sort_by(&mut passing, |l, r| strategy_order(strategy, l, r, context.now));
-    let mut rest: Vec<_> =
-        (0..ranked.len()).filter(|i| !passing_index.contains(i)).map(|i| ranked[i].clone()).collect();
+    sort_by(&mut passing, |l, r| {
+        strategy_order(strategy, l, r, context.now)
+    });
+    let mut rest: Vec<_> = (0..ranked.len())
+        .filter(|i| !passing_index.contains(i))
+        .map(|i| ranked[i].clone())
+        .collect();
     sort_by(&mut rest, by_score);
     passing.extend(rest);
     passing.extend(past);

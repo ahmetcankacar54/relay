@@ -58,7 +58,8 @@ impl Body for ResponseBody {
                         Poll::Pending => {}
                     }
                 }
-                rx.poll_recv(cx).map(|chunk| chunk.map(|b| Ok(Frame::data(b))))
+                rx.poll_recv(cx)
+                    .map(|chunk| chunk.map(|b| Ok(Frame::data(b))))
             }
         }
     }
@@ -207,7 +208,6 @@ impl ClientRes {
     }
 }
 
-
 /// A JSON error body both Anthropic and OpenAI style clients can read.
 pub fn json_error_response(
     status: u16,
@@ -215,8 +215,9 @@ pub fn json_error_response(
     message: &str,
     extra: &[(&str, &str)],
 ) -> Response<ResponseBody> {
-    let body = serde_json::json!({ "type": "error", "error": { "type": kind, "message": message } })
-        .to_string();
+    let body =
+        serde_json::json!({ "type": "error", "error": { "type": kind, "message": message } })
+            .to_string();
     let mut response = Response::new(ResponseBody::Full(None));
     *response.status_mut() = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
     let headers = response.headers_mut();

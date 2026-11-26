@@ -302,7 +302,7 @@ export function Sidebar({
       style={compact ? undefined : { width }}
     >
       {/* The traffic lights sit in this strip, which also drags the window; the toggle sits beside them. */}
-      <div className="relative h-13 w-full shrink-0 [-webkit-app-region:drag]">
+      <div data-tauri-drag-region="deep" className="relative h-13 w-full shrink-0 [-webkit-app-region:drag]">
         {!compact && toggle && <div className="absolute top-2.75 left-17.5">{toggle}</div>}
       </div>
       <nav

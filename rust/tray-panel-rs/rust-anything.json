@@ -1,0 +1,268 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/tray-panel.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "tray-panel-rs",
+  "exports": [
+    {
+      "name": "panelPosition",
+      "file": "shared/tray-panel.ts",
+      "line": 6,
+      "params": [
+        {
+          "name": "tray",
+          "ts_type": "Rect",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "workArea",
+          "ts_type": "Rect",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "size",
+          "ts_type": "{ width: number; height: number }",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "clampPanelHeight",
+      "file": "shared/tray-panel.ts",
+      "line": 13,
+      "params": [
+        {
+          "name": "height",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "workAreaHeight",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "pointerOnTray",
+      "file": "shared/tray-panel.ts",
+      "line": 37,
+      "params": [
+        {
+          "name": "tray",
+          "ts_type": "Rect | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "point",
+          "ts_type": "{ x: number; y: number }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "slack",
+          "ts_type": "number",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "panelBlurAction",
+      "file": "shared/tray-panel.ts",
+      "line": 62,
+      "params": [
+        {
+          "name": "params",
+          "ts_type": "{\n  openedAt: number;\n  now: number;\n  tray: Rect | undefined;\n  cursor: { x: number; y: number };\n}",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "\"ignore\" | \"hide-by-tray\" | \"hide\"",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "panelOffSpaceAction",
+      "file": "shared/tray-panel.ts",
+      "line": 86,
+      "params": [
+        {
+          "name": "sinceRebuild",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "\"rebuild\" | \"hide\"",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "pendingOpenDue",
+      "file": "shared/tray-panel.ts",
+      "line": 90,
+      "params": [
+        {
+          "name": "pending",
+          "ts_type": "{ at: number } | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "trayClickAction",
+      "file": "shared/tray-panel.ts",
+      "line": 94,
+      "params": [
+        {
+          "name": "panelUsable",
+          "ts_type": "boolean",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "\"toggle\" | \"menu\"",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "panelLoadState",
+      "file": "shared/tray-panel.ts",
+      "line": 116,
+      "params": [
+        {
+          "name": "prev",
+          "ts_type": "PanelLoadState",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "event",
+          "ts_type": "(\"start\" | \"finish\" | \"painted\" | \"fail\" | \"gone\")",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "PanelLoadState",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "panelRevival",
+      "file": "shared/tray-panel.ts",
+      "line": 143,
+      "params": [
+        {
+          "name": "panel",
+          "ts_type": "{\n  phase: PanelLoadState[\"phase\"];\n  /** The window exists. */\n  alive: boolean;\n  /** Its page is loading right now. */\n  pageLoading: boolean;\n  /** How long it has not been ready, in ms. */\n  unreadyFor: number;\n  /** How long ago it was last revived, in ms. */\n  sinceRevival: number;\n}",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "\"recreate\" | \"reload\" | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [
+    {
+      "name": "ToggleGuard",
+      "file": "shared/tray-panel.ts",
+      "line": 23,
+      "constructor": [],
+      "methods": [
+        {
+          "name": "shouldOpen",
+          "file": "shared/tray-panel.ts",
+          "line": 25,
+          "params": [
+            {
+              "name": "now",
+              "ts_type": "number",
+              "optional": false,
+              "rest": false
+            }
+          ],
+          "returns": "unknown",
+          "is_async": false,
+          "is_generator": false,
+          "type_params": [],
+          "uses_instanceof": false
+        },
+        {
+          "name": "hidden",
+          "file": "shared/tray-panel.ts",
+          "line": 32,
+          "params": [
+            {
+              "name": "now",
+              "ts_type": "number",
+              "optional": false,
+              "rest": false
+            },
+            {
+              "name": "byTrayClick",
+              "ts_type": "unknown",
+              "optional": true,
+              "rest": false
+            }
+          ],
+          "returns": "unknown",
+          "is_async": false,
+          "is_generator": false,
+          "type_params": [],
+          "uses_instanceof": false
+        }
+      ],
+      "blocker": null
+    }
+  ],
+  "js_only": []
+}

@@ -13,7 +13,11 @@ pub enum MeterProvider {
 }
 
 /// `METER_PROVIDERS`, in Relay's order.
-pub const METER_PROVIDERS: [MeterProvider; 3] = [MeterProvider::Copilot, MeterProvider::Cursor, MeterProvider::GeminiCli];
+pub const METER_PROVIDERS: [MeterProvider; 3] = [
+    MeterProvider::Copilot,
+    MeterProvider::Cursor,
+    MeterProvider::GeminiCli,
+];
 
 impl MeterProvider {
     pub const fn as_str(self) -> &'static str {
@@ -83,11 +87,23 @@ pub struct MeterWindow {
     pub name: MeterWindowName,
     /// A daily window (Gemini) or a billing month (Copilot, Cursor).
     pub kind: MeterWindowKind,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub used_percent: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub used: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub limit: Option<f64>,
     pub unit: MeterUnit,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -25,6 +25,8 @@ export function PageHeader({
   return (
     <header
       data-slot="toolbar"
+      // Tauri drags from the whole header but its controls, as the Electron class does.
+      data-tauri-drag-region="deep"
       className="sticky top-0 z-20 flex min-h-13 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-transparent bg-background/85 px-5 py-2 backdrop-blur-xl transition-colors select-none [-webkit-app-region:drag] group-data-scrolled/main:border-border"
     >
       {/* A long description truncates (basis 16rem) instead of pushing the actions onto a row of their own. */}

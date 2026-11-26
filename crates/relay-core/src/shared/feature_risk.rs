@@ -92,13 +92,31 @@ pub struct PolicyLink {
 /// `POLICY_LINKS[id]`.
 pub const fn policy_link(id: PolicyLinkId) -> PolicyLink {
     let (href, label) = match id {
-        PolicyLinkId::AnthropicAup => (external_links::ANTHROPIC_AUP, "featureRisk.linkAnthropicAup"),
-        PolicyLinkId::ClaudeCodeLegal => (external_links::CLAUDE_TERMS, "featureRisk.linkClaudeCodeLegal"),
-        PolicyLinkId::AntigravityFaq => (external_links::ANTIGRAVITY_TERMS, "featureRisk.linkAntigravityFaq"),
-        PolicyLinkId::AntigravityTerms => (external_links::ANTIGRAVITY_SERVICE_TERMS, "featureRisk.linkAntigravityTerms"),
-        PolicyLinkId::OpenaiSignIn => (external_links::OPENAI_SIGN_IN, "featureRisk.linkOpenaiSignIn"),
+        PolicyLinkId::AnthropicAup => (
+            external_links::ANTHROPIC_AUP,
+            "featureRisk.linkAnthropicAup",
+        ),
+        PolicyLinkId::ClaudeCodeLegal => (
+            external_links::CLAUDE_TERMS,
+            "featureRisk.linkClaudeCodeLegal",
+        ),
+        PolicyLinkId::AntigravityFaq => (
+            external_links::ANTIGRAVITY_TERMS,
+            "featureRisk.linkAntigravityFaq",
+        ),
+        PolicyLinkId::AntigravityTerms => (
+            external_links::ANTIGRAVITY_SERVICE_TERMS,
+            "featureRisk.linkAntigravityTerms",
+        ),
+        PolicyLinkId::OpenaiSignIn => (
+            external_links::OPENAI_SIGN_IN,
+            "featureRisk.linkOpenaiSignIn",
+        ),
         PolicyLinkId::GithubTerms => (external_links::GITHUB_TERMS, "featureRisk.linkGithubTerms"),
-        PolicyLinkId::GeminiCliFaq => (external_links::GEMINI_CLI_FAQ, "featureRisk.linkGeminiCliFaq"),
+        PolicyLinkId::GeminiCliFaq => (
+            external_links::GEMINI_CLI_FAQ,
+            "featureRisk.linkGeminiCliFaq",
+        ),
         PolicyLinkId::CursorTerms => (external_links::CURSOR_TERMS, "featureRisk.linkCursorTerms"),
     };
     PolicyLink { href, label }
@@ -134,55 +152,88 @@ pub struct FeatureRisk {
 pub const fn feature_risk(id: FeatureRiskId) -> FeatureRisk {
     use PolicyLinkId as L;
     use RiskLevel::{R1, R2};
-    let (level, rung, links, title, body): (RiskLevel, u32, &'static [PolicyLinkId], &str, &str) = match id {
-        FeatureRiskId::MeterCopilot => (R1, 2, &[L::GithubTerms], "featureRisk.meterCopilotTitle", "featureRisk.meterCopilotBody"),
-        FeatureRiskId::MeterGeminiCli => (
-            R1,
-            2,
-            &[L::GeminiCliFaq],
-            "featureRisk.meterGeminiCliTitle",
-            "featureRisk.meterGeminiCliBody",
-        ),
-        FeatureRiskId::MeterCursor => (R1, 2, &[L::CursorTerms], "featureRisk.meterCursorTitle", "featureRisk.meterCursorBody"),
-        FeatureRiskId::EarlyStart => (R1, 3, &[L::ClaudeCodeLegal], "featureRisk.earlyStartTitle", "featureRisk.earlyStartBody"),
-        FeatureRiskId::GatewayCodex => (R1, 4, &[L::OpenaiSignIn], "featureRisk.gatewayCodexTitle", "featureRisk.gatewayCodexBody"),
-        FeatureRiskId::GatewayClaude => (
-            R2,
-            5,
-            &[L::AnthropicAup, L::ClaudeCodeLegal],
-            "featureRisk.gatewayClaudeTitle",
-            "featureRisk.gatewayClaudeBody",
-        ),
-        FeatureRiskId::TailscaleBind => (
-            R2,
-            5,
-            &[L::AnthropicAup, L::OpenaiSignIn],
-            "featureRisk.tailscaleBindTitle",
-            "featureRisk.tailscaleBindBody",
-        ),
-        FeatureRiskId::OmpBinding => (
-            R2,
-            6,
-            &[L::AnthropicAup, L::ClaudeCodeLegal],
-            "featureRisk.ompBindingTitle",
-            "featureRisk.ompBindingBody",
-        ),
-        FeatureRiskId::AntigravityAccount => (
-            R2,
-            7,
-            &[L::AntigravityTerms, L::AntigravityFaq],
-            "featureRisk.antigravityAccountTitle",
-            "featureRisk.antigravityAccountBody",
-        ),
-        FeatureRiskId::AntigravityGateway => (
-            R2,
-            7,
-            &[L::AntigravityFaq, L::AntigravityTerms],
-            "featureRisk.antigravityGatewayTitle",
-            "featureRisk.antigravityGatewayBody",
-        ),
-    };
-    FeatureRisk { id, level, rung, links, title, body, text_version: 1 }
+    let (level, rung, links, title, body): (RiskLevel, u32, &'static [PolicyLinkId], &str, &str) =
+        match id {
+            FeatureRiskId::MeterCopilot => (
+                R1,
+                2,
+                &[L::GithubTerms],
+                "featureRisk.meterCopilotTitle",
+                "featureRisk.meterCopilotBody",
+            ),
+            FeatureRiskId::MeterGeminiCli => (
+                R1,
+                2,
+                &[L::GeminiCliFaq],
+                "featureRisk.meterGeminiCliTitle",
+                "featureRisk.meterGeminiCliBody",
+            ),
+            FeatureRiskId::MeterCursor => (
+                R1,
+                2,
+                &[L::CursorTerms],
+                "featureRisk.meterCursorTitle",
+                "featureRisk.meterCursorBody",
+            ),
+            FeatureRiskId::EarlyStart => (
+                R1,
+                3,
+                &[L::ClaudeCodeLegal],
+                "featureRisk.earlyStartTitle",
+                "featureRisk.earlyStartBody",
+            ),
+            FeatureRiskId::GatewayCodex => (
+                R1,
+                4,
+                &[L::OpenaiSignIn],
+                "featureRisk.gatewayCodexTitle",
+                "featureRisk.gatewayCodexBody",
+            ),
+            FeatureRiskId::GatewayClaude => (
+                R2,
+                5,
+                &[L::AnthropicAup, L::ClaudeCodeLegal],
+                "featureRisk.gatewayClaudeTitle",
+                "featureRisk.gatewayClaudeBody",
+            ),
+            FeatureRiskId::TailscaleBind => (
+                R2,
+                5,
+                &[L::AnthropicAup, L::OpenaiSignIn],
+                "featureRisk.tailscaleBindTitle",
+                "featureRisk.tailscaleBindBody",
+            ),
+            FeatureRiskId::OmpBinding => (
+                R2,
+                6,
+                &[L::AnthropicAup, L::ClaudeCodeLegal],
+                "featureRisk.ompBindingTitle",
+                "featureRisk.ompBindingBody",
+            ),
+            FeatureRiskId::AntigravityAccount => (
+                R2,
+                7,
+                &[L::AntigravityTerms, L::AntigravityFaq],
+                "featureRisk.antigravityAccountTitle",
+                "featureRisk.antigravityAccountBody",
+            ),
+            FeatureRiskId::AntigravityGateway => (
+                R2,
+                7,
+                &[L::AntigravityFaq, L::AntigravityTerms],
+                "featureRisk.antigravityGatewayTitle",
+                "featureRisk.antigravityGatewayBody",
+            ),
+        };
+    FeatureRisk {
+        id,
+        level,
+        rung,
+        links,
+        title,
+        body,
+        text_version: 1,
+    }
 }
 
 /// The text version each feature's risk was accepted at, by feature (insertion order kept, as
@@ -198,7 +249,10 @@ pub fn needs_risk_ack(acks: Option<&RiskAcknowledgements>, id: FeatureRiskId) ->
 }
 
 /// The features among `ids` still to accept, once each, lowest risk first.
-pub fn pending_risks(acks: Option<&RiskAcknowledgements>, ids: &[FeatureRiskId]) -> Vec<FeatureRiskId> {
+pub fn pending_risks(
+    acks: Option<&RiskAcknowledgements>,
+    ids: &[FeatureRiskId],
+) -> Vec<FeatureRiskId> {
     FEATURE_RISK_IDS
         .into_iter()
         .filter(|id| ids.contains(id) && needs_risk_ack(acks, *id))
@@ -206,7 +260,10 @@ pub fn pending_risks(acks: Option<&RiskAcknowledgements>, ids: &[FeatureRiskId])
 }
 
 /// The acknowledgements with `ids` accepted at their current text.
-pub fn acknowledge_risks(acks: Option<&RiskAcknowledgements>, ids: &[FeatureRiskId]) -> RiskAcknowledgements {
+pub fn acknowledge_risks(
+    acks: Option<&RiskAcknowledgements>,
+    ids: &[FeatureRiskId],
+) -> RiskAcknowledgements {
     let mut next = acks.cloned().unwrap_or_default();
     for &id in ids {
         next.insert(id, feature_risk(id).text_version);
@@ -223,7 +280,10 @@ pub struct PoolAccount {
 
 impl PoolAccount {
     pub fn new(id: impl Into<String>, provider: Option<&str>) -> Self {
-        Self { id: id.into(), provider: provider.map(Into::into) }
+        Self {
+            id: id.into(),
+            provider: provider.map(Into::into),
+        }
     }
 }
 
@@ -246,7 +306,10 @@ pub struct GatewayRiskConfig<'a> {
 
 /// What turning the gateway on risks: Claude and Codex always; Antigravity only when an
 /// Antigravity account is in the pool, the tailnet when it listens there, and each bound client.
-pub fn gateway_risks(config: &GatewayRiskConfig<'_>, accounts: &[PoolAccount]) -> Vec<FeatureRiskId> {
+pub fn gateway_risks(
+    config: &GatewayRiskConfig<'_>,
+    accounts: &[PoolAccount],
+) -> Vec<FeatureRiskId> {
     let mut risks = vec![FeatureRiskId::GatewayClaude, FeatureRiskId::GatewayCodex];
     if pool_has(accounts, config.excluded_account_ids, "antigravity") {
         risks.push(FeatureRiskId::AntigravityGateway);
@@ -257,7 +320,10 @@ pub fn gateway_risks(config: &GatewayRiskConfig<'_>, accounts: &[PoolAccount]) -
     for &client in config.bound_clients.unwrap_or(&[]) {
         risks.extend(client_risks(client));
     }
-    FEATURE_RISK_IDS.into_iter().filter(|id| risks.contains(id)).collect()
+    FEATURE_RISK_IDS
+        .into_iter()
+        .filter(|id| risks.contains(id))
+        .collect()
 }
 
 /// The gateway's current settings, as `proxy_patch_risks` reads them.
@@ -277,7 +343,11 @@ pub struct ProxyRiskPatch<'a> {
 
 /// What a change to the gateway's settings risks: listening on the tailnet, and, while the
 /// gateway is on, letting an Antigravity account into the pool.
-pub fn proxy_patch_risks(config: &ProxyRiskConfig<'_>, patch: &ProxyRiskPatch<'_>, accounts: &[PoolAccount]) -> Vec<FeatureRiskId> {
+pub fn proxy_patch_risks(
+    config: &ProxyRiskConfig<'_>,
+    patch: &ProxyRiskPatch<'_>,
+    accounts: &[PoolAccount],
+) -> Vec<FeatureRiskId> {
     let mut risks = Vec::new();
     if let Some(host) = patch.host
         && !is_loopback_host(js_trim(host))
@@ -307,14 +377,20 @@ pub fn client_risks(id: ProxyClientId) -> Vec<FeatureRiskId> {
 /// Adding an Antigravity account; while the gateway is on the account joins its pool as well.
 pub fn antigravity_account_risks(gateway_on: bool) -> Vec<FeatureRiskId> {
     if gateway_on {
-        vec![FeatureRiskId::AntigravityAccount, FeatureRiskId::AntigravityGateway]
+        vec![
+            FeatureRiskId::AntigravityAccount,
+            FeatureRiskId::AntigravityGateway,
+        ]
     } else {
         vec![FeatureRiskId::AntigravityAccount]
     }
 }
 
 /// A planning change risks something only when it turns early start on.
-pub fn planning_risks(before_auto_start: bool, patch_auto_start: Option<bool>) -> Vec<FeatureRiskId> {
+pub fn planning_risks(
+    before_auto_start: bool,
+    patch_auto_start: Option<bool>,
+) -> Vec<FeatureRiskId> {
     if patch_auto_start == Some(true) && !before_auto_start {
         vec![FeatureRiskId::EarlyStart]
     } else {
@@ -332,7 +408,10 @@ pub const fn meter_risk(provider: MeterProvider) -> FeatureRiskId {
 }
 
 /// The meters a settings change turns on (on in `after`, off in `before`), as their risks.
-pub fn meter_risks(before: Option<&[MeterProvider]>, after: Option<&[MeterProvider]>) -> Vec<FeatureRiskId> {
+pub fn meter_risks(
+    before: Option<&[MeterProvider]>,
+    after: Option<&[MeterProvider]>,
+) -> Vec<FeatureRiskId> {
     after
         .unwrap_or(&[])
         .iter()
@@ -367,7 +446,11 @@ pub fn enabled_risks(state: &FeaturesInUse) -> Vec<FeatureRiskId> {
         risks.push(FeatureRiskId::EarlyStart);
     }
     risks.extend(state.meters.iter().flatten().map(|&p| meter_risk(p)));
-    if state.accounts.iter().any(|a| a.provider.as_deref() == Some("antigravity")) {
+    if state
+        .accounts
+        .iter()
+        .any(|a| a.provider.as_deref() == Some("antigravity"))
+    {
         risks.push(FeatureRiskId::AntigravityAccount);
     }
     if let Some(gateway) = state.gateway.as_ref().filter(|g| g.on) {
@@ -378,7 +461,10 @@ pub fn enabled_risks(state: &FeaturesInUse) -> Vec<FeatureRiskId> {
         };
         risks.extend(gateway_risks(&config, &state.accounts));
     }
-    FEATURE_RISK_IDS.into_iter().filter(|id| risks.contains(id)).collect()
+    FEATURE_RISK_IDS
+        .into_iter()
+        .filter(|id| risks.contains(id))
+        .collect()
 }
 
 /// One call that turns a risky feature off, through the same IPC the pages use.
@@ -424,16 +510,25 @@ pub fn turn_off_steps(pending: &[FeatureRiskId], state: &FeaturesInUse) -> Vec<T
                 steps.push(TurnOffStep::Unbind { client });
             }
         }
-        if pending.contains(&FeatureRiskId::GatewayClaude) || pending.contains(&FeatureRiskId::GatewayCodex) {
+        if pending.contains(&FeatureRiskId::GatewayClaude)
+            || pending.contains(&FeatureRiskId::GatewayCodex)
+        {
             steps.push(TurnOffStep::GatewayOff);
         } else {
             if pending.contains(&FeatureRiskId::TailscaleBind) {
-                steps.push(TurnOffStep::GatewayHost { host: DEFAULT_PROXY_HOST.to_string() });
+                steps.push(TurnOffStep::GatewayHost {
+                    host: DEFAULT_PROXY_HOST.to_string(),
+                });
             }
             if pending.contains(&FeatureRiskId::AntigravityGateway) {
                 let excluded = gateway.excluded_account_ids.clone().unwrap_or_default();
                 let mut account_ids = excluded.clone();
-                account_ids.extend(antigravity.iter().filter(|id| !excluded.contains(id)).map(|id| (*id).clone()));
+                account_ids.extend(
+                    antigravity
+                        .iter()
+                        .filter(|id| !excluded.contains(id))
+                        .map(|id| (*id).clone()),
+                );
                 steps.push(TurnOffStep::Exclude { account_ids });
             }
         }
@@ -444,12 +539,18 @@ pub fn turn_off_steps(pending: &[FeatureRiskId], state: &FeaturesInUse) -> Vec<T
     let meters = state.meters.as_deref().unwrap_or(&[]);
     if meters.iter().any(|&p| pending.contains(&meter_risk(p))) {
         steps.push(TurnOffStep::Meters {
-            keep: meters.iter().copied().filter(|&p| !pending.contains(&meter_risk(p))).collect(),
+            keep: meters
+                .iter()
+                .copied()
+                .filter(|&p| !pending.contains(&meter_risk(p)))
+                .collect(),
         });
     }
     if pending.contains(&FeatureRiskId::AntigravityAccount) {
         for id in antigravity {
-            steps.push(TurnOffStep::RemoveAccount { account_id: id.clone() });
+            steps.push(TurnOffStep::RemoveAccount {
+                account_id: id.clone(),
+            });
         }
     }
     steps
@@ -475,5 +576,8 @@ pub fn require_risk_ack(
         return Ok(());
     }
     let message = message(&pending);
-    Err(RiskNotAcknowledged { ids: pending, message })
+    Err(RiskNotAcknowledged {
+        ids: pending,
+        message,
+    })
 }

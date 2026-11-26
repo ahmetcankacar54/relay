@@ -1,0 +1,162 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/lost-found.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "lost-found-rs",
+  "exports": [
+    {
+      "name": "tierOf",
+      "file": "shared/lost-found.ts",
+      "line": 100,
+      "params": [
+        {
+          "name": "weeks",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof LOST_TIERS)[number][\"tier\"] | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "nextTier",
+      "file": "shared/lost-found.ts",
+      "line": 107,
+      "params": [
+        {
+          "name": "weeks",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "modelFamily",
+      "file": "shared/lost-found.ts",
+      "line": 230,
+      "params": [
+        {
+          "name": "model",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "addDays",
+      "file": "shared/lost-found.ts",
+      "line": 236,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "days",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "mondayOf",
+      "file": "shared/lost-found.ts",
+      "line": 243,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "validLostItem",
+      "file": "shared/lost-found.ts",
+      "line": 259,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "value is (| { kind: \"hourglass\"; at: string; accountId?: string; minutes: number }\n  /** Left `accountIds[0]` for `accountIds[1]` at `at` and came back `minutes` later. */\n  | {\n      kind: \"boomerang\";\n      at: string;\n      accountIds: [string, string];\n      minutes: number;\n    }\n  /**\n   * `accountIds[0]` hit a limit and `accountIds[1]` took over `minutes` after it at `at`; `count` such\n   * hand-overs that week.\n   */\n  | {\n      kind: \"baton\";\n      at: string;\n      accountIds: [string, string];\n      minutes: number;\n      count: number;\n    }\n  /** `date` was the busiest of the last 30 days, `times` an ordinary active day of them. */\n  | { kind: \"trophy\"; date: string; tokens: number; times: number }\n  /** `hours` active hours in a row from `at`. */\n  | { kind: \"scroll\"; at: string; hours: number }\n  /** Every day of the week had active hours, `hours` in all. */\n  | { kind: \"tally\"; hours: number }\n  /** `hours` active hours and not one limit hit. */\n  | { kind: \"compass\"; hours: number }\n  /** `accountIds.length` accounts were used on `date`, busiest first. */\n  | { kind: \"scarf\"; date: string; accountIds: string[] }\n  /** Two accounts' five-hour windows reset `gapMinutes` apart at `at`; `count` such pairs that week. */\n  | {\n      kind: \"clocks\";\n      at: string;\n      accountIds: [string, string];\n      gapMinutes: number;\n      count: number;\n    }\n  /** `accountIds` were never used while other accounts hit a five-hour limit `hits` times. */\n  | { kind: \"spare\"; accountIds: string[]; hits: number }\n  /** `hours` active hours after midnight; the latest began at `at`. */\n  | { kind: \"feather\"; at: string; hours: number }\n  /** `hours` active hours early in the morning; the earliest began at `at`. */\n  | { kind: \"teaglass\"; at: string; hours: number }\n  /** A five-hour window that reset at `at` came `percent` full without a limit hit. */\n  | { kind: \"tightrope\"; at: string; accountId?: string; percent: number }\n  /** `hours` active hours over Saturday and Sunday. */\n  | { kind: \"lantern\"; hours: number }\n  /** Nothing was done on `date`, between active days, in a week of `activeDays`. */\n  | { kind: \"hammock\"; date: string; activeDays: number }\n  /** `accountIds` (busiest first) shared the week's work, from `low` to `high` percent each. */\n  | { kind: \"scales\"; accountIds: string[]; low: number; high: number }\n  /** The week's API value was the highest of the weeks before it, `times` an ordinary one. */\n  | { kind: \"chest\"; cost: number; tokens: number; times: number }\n  /** `accountId`'s API value that week, `cost`, paid for its plan's month, `price`. */\n  | { kind: \"piggy\"; accountId: string; cost: number; price: number }\n  /** Model families used that week, largest first. */\n  | { kind: \"fan\"; families: string[] }) & { spend?: LostSpend }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "lostFoundWeek",
+      "file": "shared/lost-found.ts",
+      "line": 330,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "LostFoundInput",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "LostFoundWeek",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "lostFoundCollection",
+      "file": "shared/lost-found.ts",
+      "line": 886,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "Omit<LostFoundInput, \"weekStart\">",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "LostFoundCollection",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

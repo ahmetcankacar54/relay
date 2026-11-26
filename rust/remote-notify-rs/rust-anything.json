@@ -1,0 +1,48 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/remote-notify.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "remote-notify-rs",
+  "exports": [
+    {
+      "name": "remoteNotifySettings",
+      "file": "shared/remote-notify.ts",
+      "line": 16,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "Pick<RelaySettings, \"remoteNotify\">",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "RemoteNotifySettings & { events: RemoteNotifyEvents }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "remoteNotifyUrl",
+      "file": "shared/remote-notify.ts",
+      "line": 40,
+      "params": [
+        {
+          "name": "raw",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "URL | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

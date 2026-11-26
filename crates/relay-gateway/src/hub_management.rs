@@ -85,7 +85,8 @@ impl Default for DefaultHubFetch {
 #[async_trait]
 impl HubFetch for DefaultHubFetch {
     async fn fetch(&self, request: HubRequest) -> Result<HubResponse, String> {
-        let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| e.to_string())?;
+        let method =
+            reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| e.to_string())?;
         let mut builder = self.client.request(method, &request.url);
         for (name, value) in &request.headers {
             builder = builder.header(name, value);
@@ -158,7 +159,10 @@ pub fn auth_files(accounts: &[Account]) -> Value {
             );
             file.insert("label".into(), json!(account.name));
             let auth = account.auth.as_ref();
-            if let Some(email) = auth.and_then(|a| a.email.as_deref()).filter(|e| !e.is_empty()) {
+            if let Some(email) = auth
+                .and_then(|a| a.email.as_deref())
+                .filter(|e| !e.is_empty())
+            {
                 file.insert("email".into(), json!(email));
             }
             file.insert("disabled".into(), json!(false));
@@ -228,9 +232,9 @@ pub async fn api_call(input: Option<&Value>, deps: &dyn HubDeps) -> HubAnswer {
     };
     let token = deps.credential(account).await;
     // A ChatGPT usage request needs the sign-in's token; an API key would only be refused.
-    let Some(token) = token.filter(|t| {
-        !t.is_empty() && !(provider == HubProvider::Codex && t.starts_with("sk-"))
-    }) else {
+    let Some(token) = token
+        .filter(|t| !t.is_empty() && !(provider == HubProvider::Codex && t.starts_with("sk-")))
+    else {
         return HubAnswer {
             status: 200,
             body: json!({ "status_code": 401, "body": "" }),
@@ -275,7 +279,9 @@ pub async fn api_call(input: Option<&Value>, deps: &dyn HubDeps) -> HubAnswer {
 
 /// `reset-quota`: the account may be picked again at once.
 pub fn reset_quota(input: Option<&Value>, deps: &dyn HubDeps) -> HubAnswer {
-    let index = input.and_then(|v| v.get("auth_index")).and_then(Value::as_str);
+    let index = input
+        .and_then(|v| v.get("auth_index"))
+        .and_then(Value::as_str);
     let Some(index) = index.filter(|id| deps.accounts().iter().any(|a| a.id == *id)) else {
         return error(404, "unknown account");
     };

@@ -25,24 +25,28 @@ pub fn gateway_url(host: &str, port: impl std::fmt::Display) -> String {
 /// JS `Number(text)` for one dotted part, as far as an integer check in 0–255 needs it: `None`
 /// for anything that is not a finite integer.
 fn js_integer(text: &str) -> Option<f64> {
-    let t = text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+    let t = super::model_prices::js_trim(text);
     if t.is_empty() {
         // Number("") and Number("  ") are 0.
         return Some(0.0);
     }
-    let value = if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
-        u64::from_str_radix(hex, 16).ok()? as f64
-    } else if let Some(oct) = t.strip_prefix("0o").or_else(|| t.strip_prefix("0O")) {
-        u64::from_str_radix(oct, 8).ok()? as f64
-    } else if let Some(bin) = t.strip_prefix("0b").or_else(|| t.strip_prefix("0B")) {
-        u64::from_str_radix(bin, 2).ok()? as f64
-    } else {
-        // Rust also reads "inf"/"nan" spellings JS does not; neither is an integer anyway.
-        if !t.bytes().all(|b| b.is_ascii_digit() || matches!(b, b'.' | b'e' | b'E' | b'+' | b'-')) {
-            return None;
+    for (prefixes, radix) in [(["0x", "0X"], 16), (["0o", "0O"], 8), (["0b", "0B"], 2)] {
+        if let Some(digits) = prefixes.iter().find_map(|p| t.strip_prefix(p)) {
+            // `from_str_radix` takes a sign JS does not; a value past `u64` is past 255 anyway.
+            if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+                return None;
+            }
+            return u64::from_str_radix(digits, radix).ok().map(|v| v as f64);
         }
-        t.parse::<f64>().ok()?
-    };
+    }
+    // Rust also reads "inf"/"nan" spellings JS does not; neither is an integer anyway.
+    if !t
+        .bytes()
+        .all(|b| b.is_ascii_digit() || matches!(b, b'.' | b'e' | b'E' | b'+' | b'-'))
+    {
+        return None;
+    }
+    let value = t.parse::<f64>().ok()?;
     (value.is_finite() && value.fract() == 0.0).then_some(value)
 }
 

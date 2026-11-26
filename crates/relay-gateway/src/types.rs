@@ -424,7 +424,7 @@ pub struct OverflowCost {
 }
 
 /// What the gateway page shows of the overflow: no key, only its masked end.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OverflowStatus {
     pub enabled: bool,
@@ -441,7 +441,8 @@ pub struct OverflowStatus {
     pub upstreams: Vec<OverflowUpstreamStatus>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// An upstream as the page lists it (output only: its fields, then the masked key).
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OverflowUpstreamStatus {
     #[serde(flatten)]

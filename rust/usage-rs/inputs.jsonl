@@ -1,0 +1,119 @@
+{"fn": "lastKnownUsage", "args": [{"$undefined": true}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"$undefined": true}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"$undefined": true}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"$undefined": true}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"$undefined": true}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}, "sevenDay": {"usedPercent": 10, "resetsAt": "2026-11-28T23:29:24.316Z"}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}, "sevenDay": {"usedPercent": 10, "resetsAt": "2026-11-28T23:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}, "sevenDay": {"usedPercent": 10, "resetsAt": "2026-11-28T23:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}, "sevenDay": {"usedPercent": 10, "resetsAt": "2026-11-28T23:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}, "sevenDay": {"usedPercent": 10, "resetsAt": "2026-11-28T23:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-25T23:19:24.316Z"}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-25T23:19:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-25T23:19:24.316Z"}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-25T23:19:24.316Z"}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T22:39:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-25T23:19:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:31:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:31:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:31:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:31:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:31:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:59:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:59:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:59:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:59:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:59:24.316Z", "fiveHour": {"usedPercent": 40, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z"}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z"}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z"}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "fiveHour": {"usedPercent": 40}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "fiveHour": {"usedPercent": 40}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "fiveHour": {"usedPercent": 40}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "fiveHour": {"usedPercent": 40}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "fiveHour": {"usedPercent": 40}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "rate-limited"}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "rate-limited"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "rate-limited"}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "rate-limited"}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "rate-limited"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "unavailable"}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "unavailable"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "unavailable"}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "unavailable"}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "unavailable"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "expired"}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "expired"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "expired"}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "expired"}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 40}, "issue": "expired"}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "sevenDay": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}, "connectionRenewalRequired": true}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "sevenDay": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}, "connectionRenewalRequired": true}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "sevenDay": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}, "connectionRenewalRequired": true}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "sevenDay": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}, "connectionRenewalRequired": true}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "2026-11-25T23:24:24.316Z", "sevenDay": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}, "connectionRenewalRequired": true}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "error", "stale": true, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "error", "stale": true, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "error", "stale": true, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "error", "stale": true, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "error", "stale": true, "checkedAt": "2026-11-25T23:24:24.316Z", "fiveHour": {"usedPercent": 100, "resetsAt": "2026-11-26T00:29:24.316Z"}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "not a date", "sevenDay": {"usedPercent": 55.5}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "not a date", "sevenDay": {"usedPercent": 55.5}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "not a date", "sevenDay": {"usedPercent": 55.5}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "not a date", "sevenDay": {"usedPercent": 55.5}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "not a date", "sevenDay": {"usedPercent": 55.5}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "", "fiveHour": {"usedPercent": 12}}, 1795649364316]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "", "fiveHour": {"usedPercent": 12}}, 1795649364316]}
+{"fn": "lastKnownUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "", "fiveHour": {"usedPercent": 12}}, {"$undefined": true}]}
+{"fn": "freshUsage", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "", "fiveHour": {"usedPercent": 12}}, {"$undefined": true}]}
+{"fn": "sourceExhausted", "args": [{"accountId": "a", "status": "ready", "stale": false, "checkedAt": "", "fiveHour": {"usedPercent": 12}}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"$undefined": true}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"$undefined": true}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"$undefined": true}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"$undefined": true}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 0}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 0}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 0}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 0}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 40.25, "resetsAt": "2026-11-26T00:29:24.316Z"}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 40.25, "resetsAt": "2026-11-26T00:29:24.316Z"}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 40.25, "resetsAt": "2026-11-26T00:29:24.316Z"}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 40.25, "resetsAt": "2026-11-26T00:29:24.316Z"}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 100, "resetsAt": "2026-11-25T23:29:24.315Z"}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 100, "resetsAt": "2026-11-25T23:29:24.315Z"}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 100, "resetsAt": "2026-11-25T23:29:24.315Z"}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 100, "resetsAt": "2026-11-25T23:29:24.315Z"}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 120}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 120}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 120}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 120}]}
+{"fn": "windowHolds", "args": [{"usedPercent": -5}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": -5}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": -5}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": -5}]}
+{"fn": "windowHolds", "args": [{"usedPercent": {"$num": "NaN"}}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": {"$num": "NaN"}}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": {"$num": "NaN"}}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": {"$num": "NaN"}}]}
+{"fn": "windowHolds", "args": [{"usedPercent": {"$num": "Infinity"}, "resetsAt": "2026-11-26T00:29:24.316Z"}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": {"$num": "Infinity"}, "resetsAt": "2026-11-26T00:29:24.316Z"}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": {"$num": "Infinity"}, "resetsAt": "2026-11-26T00:29:24.316Z"}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": {"$num": "Infinity"}, "resetsAt": "2026-11-26T00:29:24.316Z"}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 50, "resetsAt": ""}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 50, "resetsAt": ""}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 50, "resetsAt": ""}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 50, "resetsAt": ""}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 50, "resetsAt": "garbage"}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 50, "resetsAt": "garbage"}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 50, "resetsAt": "garbage"}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 50, "resetsAt": "garbage"}]}
+{"fn": "windowHolds", "args": [{"usedPercent": 30, "resetsAt": "2026-11-25T23:29:24.316Z"}, 1795649364316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 30, "resetsAt": "2026-11-25T23:29:24.316Z"}, 1795656564316]}
+{"fn": "windowHolds", "args": [{"usedPercent": 30, "resetsAt": "2026-11-25T23:29:24.316Z"}, {"$undefined": true}]}
+{"fn": "remaining", "args": [{"usedPercent": 30, "resetsAt": "2026-11-25T23:29:24.316Z"}]}

@@ -249,7 +249,10 @@ impl GatewayRequestLog {
             self.today_day = day;
             self.today.clear();
         }
-        let key = entry.request_class.clone().unwrap_or_else(|| "other".into());
+        let key = entry
+            .request_class
+            .clone()
+            .unwrap_or_else(|| "other".into());
         let share = self
             .today
             .entry(key.clone())
@@ -285,7 +288,10 @@ impl GatewayRequestLog {
 
     /// Adds one request. A failed write leaves the log as it was; the gateway goes on.
     pub fn record(&mut self, entry: &ProxyRequestLog) {
-        let Some(clean) = serde_json::to_value(entry).ok().and_then(|v| clean_entry(&v)) else {
+        let Some(clean) = serde_json::to_value(entry)
+            .ok()
+            .and_then(|v| clean_entry(&v))
+        else {
             return;
         };
         if let (Some(id), Some(account)) = (&clean.request_id, &clean.account_id) {

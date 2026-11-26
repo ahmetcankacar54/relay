@@ -7,13 +7,22 @@ use super::types::{RemoteNotifyEvents, RemoteNotifyKind, RemoteNotifySettings};
 
 /// `DEFAULT_REMOTE_NOTIFY`: every event on and ntfy picked, before a URL is saved.
 pub const DEFAULT_REMOTE_NOTIFY_KIND: RemoteNotifyKind = RemoteNotifyKind::Ntfy;
-pub const DEFAULT_REMOTE_NOTIFY_EVENTS: RemoteNotifyEvents = RemoteNotifyEvents { limit: true, reset: true, auto_switch: true, sign_in: true };
+pub const DEFAULT_REMOTE_NOTIFY_EVENTS: RemoteNotifyEvents = RemoteNotifyEvents {
+    limit: true,
+    reset: true,
+    auto_switch: true,
+    sign_in: true,
+};
 
 /// The saved choices over the defaults; a missing group reads as the default.
 pub fn remote_notify_settings(saved: Option<&RemoteNotifySettings>) -> RemoteNotifySettings {
     match saved {
         Some(saved) => saved.clone(),
-        None => RemoteNotifySettings { url: None, kind: DEFAULT_REMOTE_NOTIFY_KIND, events: DEFAULT_REMOTE_NOTIFY_EVENTS },
+        None => RemoteNotifySettings {
+            url: None,
+            kind: DEFAULT_REMOTE_NOTIFY_KIND,
+            events: DEFAULT_REMOTE_NOTIFY_EVENTS,
+        },
     }
 }
 
@@ -30,7 +39,10 @@ pub fn remote_notify_url(raw: Option<&str>) -> Option<Url> {
     }
     let url = Url::parse(text).ok()?;
     let hostname = url.host_str().unwrap_or("");
-    if !url.username().is_empty() || url.password().is_some_and(|p| !p.is_empty()) || hostname.is_empty() {
+    if !url.username().is_empty()
+        || url.password().is_some_and(|p| !p.is_empty())
+        || hostname.is_empty()
+    {
         return None;
     }
     match url.scheme() {

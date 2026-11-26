@@ -1,0 +1,174 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/usage.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "usage-rs",
+  "exports": [
+    {
+      "name": "freshUsage",
+      "file": "shared/usage.ts",
+      "line": 13,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "AccountUsage | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "u is AccountUsage",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "lastKnownUsage",
+      "file": "shared/usage.ts",
+      "line": 37,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "AccountUsage | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "u is AccountUsage",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "windowHolds",
+      "file": "shared/usage.ts",
+      "line": 49,
+      "params": [
+        {
+          "name": "w",
+          "ts_type": "UsageWindow | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "w is UsageWindow",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "sourceExhausted",
+      "file": "shared/usage.ts",
+      "line": 63,
+      "params": [
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "remaining",
+      "file": "shared/usage.ts",
+      "line": 83,
+      "params": [
+        {
+          "name": "w",
+          "ts_type": "UsageWindow",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "suggestedAccount",
+      "file": "shared/usage.ts",
+      "line": 91,
+      "params": [
+        {
+          "name": "active",
+          "ts_type": "Account | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "Account[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "Record<string, AccountUsage>",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "RelaySettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "rate",
+          "ts_type": "number",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

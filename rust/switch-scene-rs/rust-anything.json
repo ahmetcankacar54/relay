@@ -1,0 +1,85 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/switch-scene.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "switch-scene-rs",
+  "exports": [
+    {
+      "name": "sceneDeadline",
+      "file": "shared/switch-scene.ts",
+      "line": 52,
+      "params": [
+        {
+          "name": "state",
+          "ts_type": "SwitchSceneState",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "switchWindowVisible",
+      "file": "shared/switch-scene.ts",
+      "line": 202,
+      "params": [
+        {
+          "name": "view",
+          "ts_type": "Pick<SwitchSceneView, \"visible\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "window",
+          "ts_type": "{ loaded: boolean; enabled: boolean; panelOpen: boolean }",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "SwitchStory",
+      "file": "shared/switch-scene.ts",
+      "line": 219,
+      "reason": "class: accessor `current`"
+    },
+    {
+      "name": "pickDisguise",
+      "file": "shared/switch-scene.ts",
+      "line": 46,
+      "reason": "takes or returns a function"
+    },
+    {
+      "name": "switchScene",
+      "file": "shared/switch-scene.ts",
+      "line": 86,
+      "reason": "takes or returns a function"
+    },
+    {
+      "name": "sceneLine",
+      "file": "shared/switch-scene.ts",
+      "line": 116,
+      "reason": "takes or returns a function"
+    },
+    {
+      "name": "sceneView",
+      "file": "shared/switch-scene.ts",
+      "line": 177,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

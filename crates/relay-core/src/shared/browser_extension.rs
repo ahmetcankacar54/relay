@@ -87,11 +87,31 @@ pub struct BrowserInfo {
 
 /// `BROWSERS[app]`.
 pub const fn browser(app: BrowserApp) -> BrowserInfo {
-    const fn info(name: &'static str, bundle_id: &'static str, data_dir: &'static str, executable: &'static str, linux: Option<LinuxBrowser>) -> BrowserInfo {
-        BrowserInfo { name, bundle_id, data_dir, executable, linux }
+    const fn info(
+        name: &'static str,
+        bundle_id: &'static str,
+        data_dir: &'static str,
+        executable: &'static str,
+        linux: Option<LinuxBrowser>,
+    ) -> BrowserInfo {
+        BrowserInfo {
+            name,
+            bundle_id,
+            data_dir,
+            executable,
+            linux,
+        }
     }
-    const fn linux(data_dir: &'static str, commands: &'static [&'static str], executables: &'static [&'static str]) -> Option<LinuxBrowser> {
-        Some(LinuxBrowser { data_dir, commands, executables })
+    const fn linux(
+        data_dir: &'static str,
+        commands: &'static [&'static str],
+        executables: &'static [&'static str],
+    ) -> Option<LinuxBrowser> {
+        Some(LinuxBrowser {
+            data_dir,
+            commands,
+            executables,
+        })
     }
     match app {
         BrowserApp::Chrome => info(
@@ -99,7 +119,11 @@ pub const fn browser(app: BrowserApp) -> BrowserInfo {
             "com.google.Chrome",
             "Google/Chrome",
             "Google Chrome",
-            linux("google-chrome", &["google-chrome-stable", "google-chrome"], &["/opt/google/chrome/chrome"]),
+            linux(
+                "google-chrome",
+                &["google-chrome-stable", "google-chrome"],
+                &["/opt/google/chrome/chrome"],
+            ),
         ),
         BrowserApp::Brave => info(
             "Brave",
@@ -117,7 +141,11 @@ pub const fn browser(app: BrowserApp) -> BrowserInfo {
             "com.microsoft.edgemac",
             "Microsoft Edge",
             "Microsoft Edge",
-            linux("microsoft-edge", &["microsoft-edge-stable", "microsoft-edge"], &["/opt/microsoft/msedge/msedge"]),
+            linux(
+                "microsoft-edge",
+                &["microsoft-edge-stable", "microsoft-edge"],
+                &["/opt/microsoft/msedge/msedge"],
+            ),
         ),
         BrowserApp::Chromium => info(
             "Chromium",
@@ -139,26 +167,56 @@ pub const fn browser(app: BrowserApp) -> BrowserInfo {
             "com.vivaldi.Vivaldi",
             "Vivaldi",
             "Vivaldi",
-            linux("vivaldi", &["vivaldi-stable", "vivaldi"], &["/opt/vivaldi/vivaldi-bin"]),
+            linux(
+                "vivaldi",
+                &["vivaldi-stable", "vivaldi"],
+                &["/opt/vivaldi/vivaldi-bin"],
+            ),
         ),
-        BrowserApp::Arc => info("Arc", "company.thebrowser.Browser", "Arc/User Data", "Arc", None),
+        BrowserApp::Arc => info(
+            "Arc",
+            "company.thebrowser.Browser",
+            "Arc/User Data",
+            "Arc",
+            None,
+        ),
         BrowserApp::ChromeBeta => info(
             "Chrome Beta",
             "com.google.Chrome.beta",
             "Google/Chrome Beta",
             "Google Chrome Beta",
-            linux("google-chrome-beta", &["google-chrome-beta"], &["/opt/google/chrome-beta/chrome"]),
+            linux(
+                "google-chrome-beta",
+                &["google-chrome-beta"],
+                &["/opt/google/chrome-beta/chrome"],
+            ),
         ),
         BrowserApp::ChromeDev => info(
             "Chrome Dev",
             "com.google.Chrome.dev",
             "Google/Chrome Dev",
             "Google Chrome Dev",
-            linux("google-chrome-unstable", &["google-chrome-unstable"], &["/opt/google/chrome-unstable/chrome"]),
+            linux(
+                "google-chrome-unstable",
+                &["google-chrome-unstable"],
+                &["/opt/google/chrome-unstable/chrome"],
+            ),
         ),
-        BrowserApp::ChromeCanary => info("Chrome Canary", "com.google.Chrome.canary", "Google/Chrome Canary", "Google Chrome Canary", None),
+        BrowserApp::ChromeCanary => info(
+            "Chrome Canary",
+            "com.google.Chrome.canary",
+            "Google/Chrome Canary",
+            "Google Chrome Canary",
+            None,
+        ),
         // Dia and Comet: bundle ids and folders as reported, not yet seen on a Mac with the extension.
-        BrowserApp::Dia => info("Dia", "company.thebrowser.dia", "Dia/User Data", "Dia", None),
+        BrowserApp::Dia => info(
+            "Dia",
+            "company.thebrowser.dia",
+            "Dia/User Data",
+            "Dia",
+            None,
+        ),
         BrowserApp::Comet => info("Comet", "ai.perplexity.comet", "Comet", "Comet", None),
     }
 }
@@ -177,7 +235,9 @@ pub fn is_profile_folder(folder: &str) -> bool {
     !bytes.is_empty()
         && bytes.len() <= 64
         && bytes[0].is_ascii_alphanumeric()
-        && bytes[1..].iter().all(|&b| b.is_ascii_alphanumeric() || matches!(b, b' ' | b'.' | b'_' | b'-'))
+        && bytes[1..]
+            .iter()
+            .all(|&b| b.is_ascii_alphanumeric() || matches!(b, b' ' | b'.' | b'_' | b'-'))
 }
 
 /// Profiles the browser keeps for itself; never a user's.
@@ -197,7 +257,12 @@ pub enum ExtensionMode {
     Off,
 }
 
-pub const EXTENSION_MODES: [ExtensionMode; 4] = [ExtensionMode::Restart, ExtensionMode::Closed, ExtensionMode::Guide, ExtensionMode::Off];
+pub const EXTENSION_MODES: [ExtensionMode; 4] = [
+    ExtensionMode::Restart,
+    ExtensionMode::Closed,
+    ExtensionMode::Guide,
+    ExtensionMode::Off,
+];
 
 /// The browser profile whose extension Relay manages.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -216,7 +281,10 @@ pub struct ExtensionSetting {
 
 /// `DEFAULT_EXTENSION`: until the user picks "restart" or "closed", Relay only guides.
 pub fn default_extension() -> ExtensionSetting {
-    ExtensionSetting { mode: ExtensionMode::Guide, browser: None }
+    ExtensionSetting {
+        mode: ExtensionMode::Guide,
+        browser: None,
+    }
 }
 
 /// Modes that change a browser profile's files: the claude.ai login and the extension's sign-in.
@@ -234,7 +302,11 @@ pub struct ExtensionInstance {
     /// The extension has its storage in this profile (it was opened at least once).
     pub opened: bool,
     /// When the extension last wrote its storage in this profile (ms); the one in use is the newest.
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub used_at: Option<f64>,
 }
 
@@ -411,7 +483,10 @@ fn array_index(key: &str) -> Option<u32> {
 
 /// `Object.keys(map)` in JS order: array indices ascending, then the rest as inserted.
 pub(crate) fn js_object_keys(map: &Map<String, Value>) -> Vec<&String> {
-    let mut indices: Vec<(u32, &String)> = map.keys().filter_map(|k| array_index(k).map(|n| (n, k))).collect();
+    let mut indices: Vec<(u32, &String)> = map
+        .keys()
+        .filter_map(|k| array_index(k).map(|n| (n, k)))
+        .collect();
     indices.sort_by_key(|(n, _)| *n);
     let mut keys: Vec<&String> = indices.into_iter().map(|(_, k)| k).collect();
     keys.extend(map.keys().filter(|k| array_index(k).is_none()));
@@ -444,7 +519,11 @@ pub fn local_state_profiles(local_state: &Value) -> Vec<LocalStateProfile> {
         .map(|list| list.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
     let mut folders: Vec<&str> = Vec::new();
-    for folder in order.into_iter().filter(|x| cache.contains_key(*x)).chain(js_object_keys(cache).into_iter().map(String::as_str)) {
+    for folder in order
+        .into_iter()
+        .filter(|x| cache.contains_key(*x))
+        .chain(js_object_keys(cache).into_iter().map(String::as_str))
+    {
         if !folders.contains(&folder) {
             folders.push(folder);
         }
@@ -466,31 +545,44 @@ pub fn local_state_profiles(local_state: &Value) -> Vec<LocalStateProfile> {
                 Some(name) if !name.is_empty() => js_slice_units(name, 100),
                 _ => folder.to_string(),
             };
-            Some(LocalStateProfile { profile: folder.to_string(), name })
+            Some(LocalStateProfile {
+                profile: folder.to_string(),
+                name,
+            })
         })
         .collect()
 }
 
-fn js_trim(text: &str) -> &str {
-    super::model_prices::js_trim(text)
-}
+/// `String.prototype.trim`.
+pub(crate) use super::types::js::trim as js_trim;
 
 /// Whether a profile's `Preferences` make the browser open the last session again:
 /// `session.restore_on_startup` 1 ("continue where you left off") or 5.
 pub fn startup_restores(preferences: &Value) -> bool {
-    let value = record(record(Some(preferences)).and_then(|p| p.get("session"))).and_then(|s| s.get("restore_on_startup"));
-    value.and_then(Value::as_f64).is_some_and(|v| v == 1.0 || v == 5.0)
+    let value = record(record(Some(preferences)).and_then(|p| p.get("session")))
+        .and_then(|s| s.get("restore_on_startup"));
+    value
+        .and_then(Value::as_f64)
+        .is_some_and(|v| v == 1.0 || v == 5.0)
 }
 
 /// The instance Relay manages: the chosen one when it is found, else the only one found, else the
 /// one whose storage changed last.
-pub fn choose_instance<'a>(instances: &'a [ExtensionInstance], chosen: Option<&ExtensionTarget>) -> Option<&'a ExtensionInstance> {
+pub fn choose_instance<'a>(
+    instances: &'a [ExtensionInstance],
+    chosen: Option<&ExtensionTarget>,
+) -> Option<&'a ExtensionInstance> {
     pick_instance(instances, chosen).map(|(instance, _)| instance)
 }
 
-pub fn pick_instance<'a>(instances: &'a [ExtensionInstance], chosen: Option<&ExtensionTarget>) -> Option<(&'a ExtensionInstance, InstancePicked)> {
+pub fn pick_instance<'a>(
+    instances: &'a [ExtensionInstance],
+    chosen: Option<&ExtensionTarget>,
+) -> Option<(&'a ExtensionInstance, InstancePicked)> {
     if let Some(chosen) = chosen
-        && let Some(found) = instances.iter().find(|i| i.app == chosen.app && i.profile == chosen.profile)
+        && let Some(found) = instances
+            .iter()
+            .find(|i| i.app == chosen.app && i.profile == chosen.profile)
     {
         return Some((found, InstancePicked::Chosen));
     }

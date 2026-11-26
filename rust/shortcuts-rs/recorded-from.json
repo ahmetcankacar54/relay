@@ -1,0 +1,17 @@
+{
+  "unit": "shared/shortcuts.ts",
+  "files": 1,
+  "fingerprint": "8f98a51fdd54c285",
+  "coverage": {
+    "lines": 225,
+    "reached": 225,
+    "files": [
+      {
+        "file": "shared/shortcuts.ts",
+        "lines": 225,
+        "reached": 225,
+        "missed": ""
+      }
+    ]
+  }
+}

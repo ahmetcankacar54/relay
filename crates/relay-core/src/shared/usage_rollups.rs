@@ -1,6 +1,9 @@
 //! Port of `shared/usage-rollups.ts`: usage samples folded into hourly points, coverage,
 //! five-hour windows and limit hits, kept for 90 days.
 
+// `!(a < b)` is kept where the TS writes it: it is also true when either side is NaN.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use serde::{Deserialize, Serialize};
 
 use super::types::js::{JsMap, date_parse, iso, ser_num};
@@ -41,10 +44,11 @@ pub struct LimitHit {
     pub identity: String,
     pub kind: LimitHitKind,
     pub at: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub until: Option<String>,
+    /// Set when the hit is made; `until` is added later, so it is written after it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<String>,
 }
 
 fn version_two() -> u32 {
@@ -73,7 +77,13 @@ impl Default for UsageRollups {
 }
 
 pub fn empty_rollups() -> UsageRollups {
-    UsageRollups { version: 2, hours: JsMap::new(), windows: JsMap::new(), hits: Vec::new(), last: JsMap::new() }
+    UsageRollups {
+        version: 2,
+        hours: JsMap::new(),
+        windows: JsMap::new(),
+        hits: Vec::new(),
+        last: JsMap::new(),
+    }
 }
 
 /// The UTC hour `time` falls in, as an ISO string.
@@ -83,7 +93,12 @@ pub fn hour_key(time: f64) -> String {
 
 /// A usable five-hour window resets in (checkedAt, checkedAt + 5h].
 pub fn valid_window(sample: &UsageSample) -> bool {
-    let Some(reset) = sample.five_hour.as_ref().and_then(|w| w.resets_at.as_deref()).filter(|r| !r.is_empty()) else {
+    let Some(reset) = sample
+        .five_hour
+        .as_ref()
+        .and_then(|w| w.resets_at.as_deref())
+        .filter(|r| !r.is_empty())
+    else {
         return false;
     };
     let checked_at = date_parse(&sample.checked_at);
@@ -111,17 +126,25 @@ fn add_coverage(hours: &mut JsMap<HourRollup>, from: f64, to: f64) {
 }
 
 fn fold_hits(r: &mut UsageRollups, s: &UsageSample, t: f64) {
-    let kinds: [(LimitHitKind, Option<&UsageWindow>); 2] =
-        [(LimitHitKind::FiveHour, s.five_hour.as_ref()), (LimitHitKind::Weekly, s.seven_day.as_ref())];
+    let kinds: [(LimitHitKind, Option<&UsageWindow>); 2] = [
+        (LimitHitKind::FiveHour, s.five_hour.as_ref()),
+        (LimitHitKind::Weekly, s.seven_day.as_ref()),
+    ];
     for (kind, window) in kinds {
-        let open = r.hits.iter().rposition(|hit| hit.identity == s.identity && hit.kind == kind);
+        let open = r
+            .hits
+            .iter()
+            .rposition(|hit| hit.identity == s.identity && hit.kind == kind);
         let mut is_open = open.is_some_and(|i| r.hits[i].until.is_none());
         if is_open {
             let hit = &mut r.hits[open.expect("open")];
             // Like its window record, an open hit follows a drifting reset.
-            if let (Some(window_reset), Some(hit_reset)) =
-                (window.and_then(|w| w.resets_at.as_deref()).filter(|x| !x.is_empty()), hit.reset_at.as_deref().filter(|x| !x.is_empty()))
-                && same_reset(hit_reset, window_reset)
+            if let (Some(window_reset), Some(hit_reset)) = (
+                window
+                    .and_then(|w| w.resets_at.as_deref())
+                    .filter(|x| !x.is_empty()),
+                hit.reset_at.as_deref().filter(|x| !x.is_empty()),
+            ) && same_reset(hit_reset, window_reset)
             {
                 hit.reset_at = Some(window_reset.to_string());
             }
@@ -133,14 +156,21 @@ fn fold_hits(r: &mut UsageRollups, s: &UsageSample, t: f64) {
             if window.is_some_and(|w| w.used_percent < 100.0) || t >= reset_at {
                 // Never before it opened: after a clamp, a sample can precede the hit.
                 let until = t.min(reset_at);
-                hit.until = Some(if until < date_parse(&hit.at) { hit.at.clone() } else { iso(until) });
+                hit.until = Some(if until < date_parse(&hit.at) {
+                    hit.at.clone()
+                } else {
+                    iso(until)
+                });
                 is_open = false;
             }
         }
         let Some(window) = window else { continue };
         let pct = window.used_percent;
         // A window whose reset has already passed reports stale quota.
-        let expired = window.resets_at.as_deref().is_some_and(|r| date_parse(r) <= t);
+        let expired = window
+            .resets_at
+            .as_deref()
+            .is_some_and(|r| date_parse(r) <= t);
         if !is_open && pct >= 100.0 && !expired {
             r.hits.push(LimitHit {
                 identity: s.identity.clone(),
@@ -171,8 +201,14 @@ fn prune(r: &mut UsageRollups, now: f64) {
     }
     let identities: Vec<String> = r.windows.keys().cloned().collect();
     for identity in identities {
-        let kept: Vec<WindowRecord> =
-            r.windows.get(&identity).expect("listed").iter().filter(|w| not_before(&w.reset_at, cutoff)).cloned().collect();
+        let kept: Vec<WindowRecord> = r
+            .windows
+            .get(&identity)
+            .expect("listed")
+            .iter()
+            .filter(|w| not_before(&w.reset_at, cutoff))
+            .cloned()
+            .collect();
         if kept.is_empty() {
             r.windows.remove(&identity);
         } else {
@@ -180,7 +216,8 @@ fn prune(r: &mut UsageRollups, now: f64) {
         }
     }
     r.hits.retain(|hit| not_before(&hit.at, cutoff));
-    r.last.retain(|_, sample| !(date_parse(&sample.checked_at) < cutoff));
+    r.last
+        .retain(|_, sample| !(date_parse(&sample.checked_at) < cutoff));
 }
 
 /// Folds one sample into the rollups and returns the new rollups. Points are increases over the
@@ -222,9 +259,15 @@ fn fold_into(next: &mut UsageRollups, s: &UsageSample) {
     let hours = next.hours.entry_or_insert_with(&s.identity, JsMap::new);
     let key = hour_key(t);
     hours.entry_or_insert_with(&key, HourRollup::default);
-    let gap = prev.as_ref().map_or(f64::INFINITY, |p| t - date_parse(&p.checked_at));
+    let gap = prev
+        .as_ref()
+        .map_or(f64::INFINITY, |p| t - date_parse(&p.checked_at));
     if gap > 0.0 && gap <= MAX_USAGE_GAP_MS {
-        add_coverage(hours, date_parse(&prev.as_ref().expect("gap is finite").checked_at), t);
+        add_coverage(
+            hours,
+            date_parse(&prev.as_ref().expect("gap is finite").checked_at),
+            t,
+        );
     }
     if valid_window(s) {
         let five = s.five_hour.as_ref().expect("valid window");
@@ -232,12 +275,21 @@ fn fold_into(next: &mut UsageRollups, s: &UsageSample) {
         let pct = five.used_percent;
         let windows = next.windows.entry_or_insert_with(&s.identity, Vec::new);
         // Windows are appended in time order, so a match is almost always last.
-        let found = windows.iter().rposition(|w| same_reset(&w.reset_at, &reset));
-        let hour = next.hours.get_mut(&s.identity).and_then(|h| h.get_mut(&key)).expect("created above");
+        let found = windows
+            .iter()
+            .rposition(|w| same_reset(&w.reset_at, &reset));
+        let hour = next
+            .hours
+            .get_mut(&s.identity)
+            .and_then(|h| h.get_mut(&key))
+            .expect("created above");
         let index = match found {
             Some(i) => i,
             None => {
-                windows.push(WindowRecord { reset_at: reset.clone(), max_percent: pct });
+                windows.push(WindowRecord {
+                    reset_at: reset.clone(),
+                    max_percent: pct,
+                });
                 hour.windows += 1.0;
                 windows.len() - 1
             }
@@ -248,7 +300,13 @@ fn fold_into(next: &mut UsageRollups, s: &UsageSample) {
         let high = record.max_percent;
         if let Some(prev) = &prev
             && valid_window(prev)
-            && same_reset(prev.five_hour.as_ref().and_then(|w| w.resets_at.as_deref()).unwrap_or(""), &reset)
+            && same_reset(
+                prev.five_hour
+                    .as_ref()
+                    .and_then(|w| w.resets_at.as_deref())
+                    .unwrap_or(""),
+                &reset,
+            )
             && gap > 0.0
             && gap <= MAX_USAGE_GAP_MS
         {

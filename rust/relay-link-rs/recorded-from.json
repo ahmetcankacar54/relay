@@ -1,0 +1,17 @@
+{
+  "unit": "shared/relay-link.ts",
+  "files": 1,
+  "fingerprint": "182b2dc3a9394134",
+  "coverage": {
+    "lines": 64,
+    "reached": 64,
+    "files": [
+      {
+        "file": "shared/relay-link.ts",
+        "lines": 64,
+        "reached": 64,
+        "missed": ""
+      }
+    ]
+  }
+}

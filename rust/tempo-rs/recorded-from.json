@@ -1,0 +1,53 @@
+{
+  "unit": "shared/tempo.ts",
+  "files": 1,
+  "fingerprint": "458df03574c17569",
+  "coverage": {
+    "lines": 2132,
+    "reached": 1903,
+    "files": [
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 100,
+        "missed": "56, 89-95, 99-101, 104-105, 107-115, 122-127"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/tempo.ts",
+        "lines": 245,
+        "reached": 229,
+        "missed": "241-256"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      },
+      {
+        "file": "shared/usage-statistics.ts",
+        "lines": 97,
+        "reached": 43,
+        "missed": "19-21, 23-26, 56-77, 80-104"
+      },
+      {
+        "file": "shared/work-hours.ts",
+        "lines": 48,
+        "reached": 42,
+        "missed": "46-51"
+      }
+    ]
+  }
+}

@@ -89,15 +89,35 @@ impl Default for ProxyConfig {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyTokens {
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub input: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub output: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_read: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_write: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cache_write_1h: Option<f64>,
 }
 
@@ -128,7 +148,11 @@ pub struct ProxyRequestLog {
     pub affinity: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub ms: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_id: Option<String>,
@@ -140,7 +164,11 @@ pub struct ProxyRequestLog {
     pub agent_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tokens: Option<ProxyTokens>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub cost: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upstream: Option<String>,
@@ -233,7 +261,11 @@ pub struct LastMiss {
 pub struct MoveCost {
     #[serde(serialize_with = "js::ser_num")]
     pub dollars: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub percent: Option<f64>,
 }
 
@@ -306,7 +338,11 @@ pub struct ProxySessionState {
     pub last_active_at: f64,
     #[serde(serialize_with = "js::ser_num")]
     pub request_count: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub moved_at: Option<f64>,
 }
 
@@ -348,9 +384,17 @@ pub struct ProxyMetrics {
     pub tokens_by_account: JsMap<AccountTokenMetrics>,
     #[serde(serialize_with = "js::ser_num")]
     pub cache_hit_ratio: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub active_requests: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub prompt_cache_hits: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_account_id: Option<String>,
@@ -358,7 +402,11 @@ pub struct ProxyMetrics {
     pub extra_usage: Option<JsMap<ExtraUsage>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", serialize_with = "js::ser_opt_num")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "js::ser_opt_num"
+    )]
     pub last_error_at: Option<f64>,
 }
 
@@ -409,13 +457,21 @@ pub const LEGACY_AFFINITY_TTL_SECONDS: i64 = 300;
 pub const AFFINITY_REVISION: i64 = 1;
 
 /// A saved lifetime that equals the old default was never chosen: it moves to the new one, once.
-pub fn current_affinity_ttl(saved: Option<i64>, revision: Option<i64>) -> Option<i64> {
+///
+/// Generic over the number type: `i64` for the saved config, `f64` for TS `number` (a `NaN`
+/// revision counts as an old one, as `NaN >= 1` is false in JS).
+pub fn current_affinity_ttl<N>(saved: Option<N>, revision: Option<N>) -> Option<N>
+where
+    N: Copy + PartialOrd + From<i32>,
+{
+    // The three constants are small; `i32` is enough for every `N`.
+    let n = |value: i64| N::from(value as i32);
     let saved = saved?;
-    if revision.unwrap_or(0) >= AFFINITY_REVISION {
+    if revision.unwrap_or(n(0)) >= n(AFFINITY_REVISION) {
         return Some(saved);
     }
-    Some(if saved == LEGACY_AFFINITY_TTL_SECONDS {
-        DEFAULT_AFFINITY_TTL_SECONDS
+    Some(if saved == n(LEGACY_AFFINITY_TTL_SECONDS) {
+        n(DEFAULT_AFFINITY_TTL_SECONDS)
     } else {
         saved
     })

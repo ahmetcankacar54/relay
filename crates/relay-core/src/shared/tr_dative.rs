@@ -15,7 +15,10 @@ struct Reading {
 }
 
 const fn reading(vowel: char, ends_in_vowel: bool) -> Reading {
-    Reading { vowel, ends_in_vowel }
+    Reading {
+        vowel,
+        ends_in_vowel,
+    }
 }
 
 /// How Turkish says a digit, reduced to what the dative needs.
@@ -83,7 +86,8 @@ fn lower(c: char) -> String {
 
 /// `\p{L}` tested on a (lowercased) string: true when any of it is a letter.
 fn is_letter(text: &str) -> bool {
-    text.chars().any(|c| c.is_alphabetic() && !is_alphabetic_non_letter(c))
+    text.chars()
+        .any(|c| c.is_alphabetic() && !is_alphabetic_non_letter(c))
 }
 fn is_alphabetic_non_letter(c: char) -> bool {
     // Nl (letter numbers) and the alphabetic combining marks (Mn/Mc with Other_Alphabetic).
@@ -136,13 +140,19 @@ pub fn with_dative(name: &str) -> String {
         ends_in_vowel = found.ends_in_vowel && Some(end) == last;
         break;
     }
-    let suffix = if vowel.is_some_and(|v| BACK.contains(v)) { 'a' } else { 'e' };
+    let suffix = if vowel.is_some_and(|v| BACK.contains(v)) {
+        'a'
+    } else {
+        'e'
+    };
     let buffer = if ends_in_vowel { "y" } else { "" };
     format!("{name}{APOSTROPHE}{buffer}{suffix}")
 }
 
 /// How Turkish says 0–59 on a clock, as far as the suffix needs: the last word.
-const ONES: [&str; 10] = ["sıfır", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz"];
+const ONES: [&str; 10] = [
+    "sıfır", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz",
+];
 const TEN_WORDS: [&str; 6] = ["", "on", "yirmi", "otuz", "kırk", "elli"];
 
 fn last_word(n: u32) -> Option<&'static str> {
@@ -157,7 +167,9 @@ fn last_word(n: u32) -> Option<&'static str> {
 /// the hour when the minutes are zero, else the minutes. Anything that is not a clock comes back
 /// unchanged.
 pub fn clock_locative(clock: &str) -> String {
-    let Some((hour, minutes)) = parse_clock(clock) else { return clock.to_string() };
+    let Some((hour, minutes)) = parse_clock(clock) else {
+        return clock.to_string();
+    };
     let word = match last_word(if minutes == 0 { hour } else { minutes }) {
         Some(word) if !word.is_empty() => word,
         _ => return clock.to_string(),

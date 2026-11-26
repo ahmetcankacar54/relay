@@ -1,0 +1,115 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/tempo.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "tempo-rs",
+  "exports": [
+    {
+      "name": "presetTempo",
+      "file": "shared/tempo.ts",
+      "line": 28,
+      "params": [
+        {
+          "name": "choice",
+          "ts_type": "Exclude<(\"auto\" | \"light\" | \"medium\" | \"heavy\"), \"auto\">",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "source",
+          "ts_type": "Tempo[\"source\"]",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "days",
+          "ts_type": "Tempo[\"days\"]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "Tempo",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "fallbackTempo",
+      "file": "shared/tempo.ts",
+      "line": 43,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Tempo",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "learnTempo",
+      "file": "shared/tempo.ts",
+      "line": 62,
+      "params": [
+        {
+          "name": "arg0",
+          "ts_type": "{\n  rollups?: UsageRollups;\n  accounts: Account[];\n  settings: PlanningSettings;\n  now: number;\n}",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Tempo",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "tempoAt",
+      "file": "shared/tempo.ts",
+      "line": 226,
+      "params": [
+        {
+          "name": "tempo",
+          "ts_type": "Tempo",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "time",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "tempoRate",
+      "file": "shared/tempo.ts",
+      "line": 240,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

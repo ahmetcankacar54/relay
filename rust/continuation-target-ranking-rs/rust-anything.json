@@ -1,0 +1,84 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/continuation-target-ranking.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "continuation-target-ranking-rs",
+  "exports": [
+    {
+      "name": "switchAtPercent",
+      "file": "shared/continuation-target-ranking.ts",
+      "line": 13,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Pick<Account, \"switchAtPercent\">",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "fallback",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "continuationTargetScore",
+      "file": "shared/continuation-target-ranking.ts",
+      "line": 60,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "rankContinuationTargets",
+      "file": "shared/continuation-target-ranking.ts",
+      "line": 138,
+      "params": [
+        {
+          "name": "candidates",
+          "ts_type": "readonly ContinuationTargetCandidate[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "context",
+          "ts_type": "RankingContext",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "RankedContinuationTarget[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

@@ -1,0 +1,17 @@
+{
+  "unit": "shared/account-state.ts",
+  "files": 1,
+  "fingerprint": "f559f6122e429e78",
+  "coverage": {
+    "lines": 70,
+    "reached": 70,
+    "files": [
+      {
+        "file": "shared/account-state.ts",
+        "lines": 70,
+        "reached": 70,
+        "missed": ""
+      }
+    ]
+  }
+}

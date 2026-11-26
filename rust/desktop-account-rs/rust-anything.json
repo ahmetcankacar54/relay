@@ -1,0 +1,36 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/desktop-account.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "desktop-account-rs",
+  "exports": [
+    {
+      "name": "desktopAccountFor",
+      "file": "shared/desktop-account.ts",
+      "line": 11,
+      "params": [
+        {
+          "name": "known",
+          "ts_type": "{ accountUuid: string; orgId?: string }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "readonly Account[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Account | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

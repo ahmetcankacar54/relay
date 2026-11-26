@@ -54,13 +54,8 @@ impl ProxyStats {
         {
             return;
         }
-        self.extra_usage.insert(
-            account_id.to_string(),
-            ExtraUsage {
-                at: now_ms(),
-                kind,
-            },
-        );
+        self.extra_usage
+            .insert(account_id.to_string(), ExtraUsage { at: now_ms(), kind });
     }
 
     /// One request's outcome for the live feed; answers the entry as kept (for the request log).

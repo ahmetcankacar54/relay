@@ -26,12 +26,9 @@ import { isExternalLink } from "../shared/external-links";
 import { en } from "../shared/i18n/catalogs/en";
 import { settingsPatchSchema, settingsSchema } from "../electron/core/store";
 import { DEFAULT_SETTINGS } from "../shared/types";
-import { requireRiskConsent } from "../cli/src/risk";
-import { CliError, EXIT, type CliIO } from "../cli/src/io";
 import { I18nContext } from "../src/data/i18n";
 import { RiskConsentBody, featuresInUse } from "../src/components/RiskConsent";
-import { i18nValue, testT } from "./i18n";
-import { cliFixture } from "./cli-fixture";
+import { i18nValue } from "./i18n";
 
 const accounts = [
   { id: "c1", provider: "claude" },
@@ -368,62 +365,3 @@ test("the consent dialog shows each risk with its pages, and marks its rungs on 
   );
   assert.match(turkish, /Önceden başlatma[\s\S]*?Gri alan/);
 });
-
-function memoryIO() {
-  const err: string[] = [];
-  const io = {
-    stdout: () => {},
-    stderr: (line: string) => err.push(line),
-  } as unknown as CliIO;
-  return { io, err };
-}
-
-test("the CLI prints the risk and refuses without --yes", () => {
-  const t = testT("en");
-  const { io, err } = memoryIO();
-  assert.throws(
-    () =>
-      requireRiskConsent(io, t, DEFAULT_SETTINGS, ["gateway-claude"], false),
-    (error: unknown) =>
-      error instanceof CliError &&
-      error.code === EXIT.confirm &&
-      /--yes/.test(error.message),
-  );
-  assert.match(
-    err.join("\n"),
-    /Gateway with Claude accounts \(Against the terms\)[\s\S]*Usage Policy[\s\S]*https:\/\/www\.anthropic\.com\/legal\/aup/,
-  );
-  // With --yes the warning still shows, and the command goes ahead.
-  err.length = 0;
-  assert.doesNotThrow(() =>
-    requireRiskConsent(io, t, DEFAULT_SETTINGS, ["gateway-claude"], true),
-  );
-  assert.match(err.join("\n"), /anthropic\.com\/legal\/aup/);
-  // Accepted in Relay.app: nothing to say.
-  err.length = 0;
-  const accepted = {
-    riskAcknowledged: acknowledgeRisks({}, ["gateway-claude"]),
-  };
-  assert.doesNotThrow(() =>
-    requireRiskConsent(io, t, accepted, ["gateway-claude"], false),
-  );
-  assert.deepEqual(err, []);
-});
-
-test(
-  "relay proxy start refuses without --yes before it listens",
-  {
-    skip:
-      process.platform !== "darwin" &&
-      "macOS only: the relay CLI refuses other systems",
-  },
-  async (t) => {
-    const f = await cliFixture(t);
-    assert.equal(await f.run("proxy", "start", "--port", "1"), EXIT.confirm);
-    assert.match(
-      f.err(),
-      /Gateway with Codex accounts[\s\S]*Gateway with Claude accounts[\s\S]*--yes/,
-    );
-    assert.doesNotMatch(f.out(), /Starting Relay Proxy Gateway/);
-  },
-);

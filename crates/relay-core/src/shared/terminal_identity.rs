@@ -129,7 +129,10 @@ pub struct TerminalStatus {
 
 /// An account's identities that a terminal sign-in can belong to: its Desktop one and its own.
 /// Each pair is `(accountUuid, orgId)`; a pair with either part missing or empty is skipped.
-pub fn terminal_identities(desktop: Option<(&str, &str)>, auth: Option<(Option<&str>, Option<&str>)>) -> Vec<TerminalIdentity> {
+pub fn terminal_identities(
+    desktop: Option<(&str, &str)>,
+    auth: Option<(Option<&str>, Option<&str>)>,
+) -> Vec<TerminalIdentity> {
     let mut out: Vec<TerminalIdentity> = Vec::new();
     let mut add = |account_uuid: Option<&str>, org_id: Option<&str>| {
         let (Some(account_uuid), Some(org_id)) = (account_uuid, org_id) else {
@@ -138,7 +141,10 @@ pub fn terminal_identities(desktop: Option<(&str, &str)>, auth: Option<(Option<&
         if account_uuid.is_empty() || org_id.is_empty() {
             return;
         }
-        let id = TerminalIdentity { account_uuid: account_uuid.to_lowercase(), org_id: org_id.to_lowercase() };
+        let id = TerminalIdentity {
+            account_uuid: account_uuid.to_lowercase(),
+            org_id: org_id.to_lowercase(),
+        };
         if !out.iter().any(|x| same_identity(x, &id)) {
             out.push(id);
         }
@@ -153,18 +159,33 @@ pub fn terminal_identities(desktop: Option<(&str, &str)>, auth: Option<(Option<&
 }
 
 pub fn same_identity(a: &TerminalIdentity, b: &TerminalIdentity) -> bool {
-    a.account_uuid.to_lowercase() == b.account_uuid.to_lowercase() && a.org_id.to_lowercase() == b.org_id.to_lowercase()
+    a.account_uuid.to_lowercase() == b.account_uuid.to_lowercase()
+        && a.org_id.to_lowercase() == b.org_id.to_lowercase()
 }
 
 /// One sentence for a step's outcome; `None` when there is nothing worth saying.
-pub fn terminal_line(outcome: &TerminalOutcome, locale: Locale, name: Option<&str>) -> Option<String> {
+pub fn terminal_line(
+    outcome: &TerminalOutcome,
+    locale: Locale,
+    name: Option<&str>,
+) -> Option<String> {
     let t = |id: &str| translate(locale, id, &Args::new());
     let to = name.map_or_else(|| t("sharedTerminalIdentity.thisAccount"), str::to_string);
     let with_to = |id: &str| translate(locale, id, &Args::new().set("to", to.as_str()));
     if outcome.result == TerminalResult::Switched {
         let moved = with_to("sharedTerminalIdentity.claudeCodeInTheTerminalMoved");
-        let old = if outcome.unconfirmed == Some(true) { t("sharedTerminalIdentity.thisSignInCanBeOld") } else { String::new() };
-        return Some([moved, old].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" "));
+        let old = if outcome.unconfirmed == Some(true) {
+            t("sharedTerminalIdentity.thisSignInCanBeOld")
+        } else {
+            String::new()
+        };
+        return Some(
+            [moved, old]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
     }
     use TerminalReason as R;
     Some(match outcome.reason {
@@ -178,7 +199,9 @@ pub fn terminal_line(outcome: &TerminalOutcome, locale: Locale, name: Option<&st
         Some(R::Unreadable) => t("sharedTerminalIdentity.relayCannotReadTheClaudeCode"),
         Some(R::WriteFailed) => t("sharedTerminalIdentity.relayCannotWriteTheTerminalSign"),
         Some(R::RestoreFailed) => t("sharedTerminalIdentity.relayCannotWriteTheTerminalSign2"),
-        _ if outcome.result == TerminalResult::Failed => t("sharedTerminalIdentity.relayCannotChangeTheTerminalSign"),
+        _ if outcome.result == TerminalResult::Failed => {
+            t("sharedTerminalIdentity.relayCannotChangeTheTerminalSign")
+        }
         _ => return None,
     })
 }

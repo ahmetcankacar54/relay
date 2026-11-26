@@ -8,6 +8,7 @@
 pub mod anthropic_upstream;
 pub mod client_res;
 pub mod codex_upstream;
+pub mod credential_cache;
 pub mod hub_management;
 pub mod js;
 pub mod model_prices;
@@ -23,12 +24,13 @@ pub mod proxy_stats;
 pub mod proxy_status;
 pub mod proxy_url;
 pub mod ranking;
+pub mod sidecar;
 pub mod types;
 pub mod upstream_common;
 pub mod websocket_bridge;
 
 pub use proxy_server::{
-    AntigravityRoute, GatewayHooks, NoHooks, ProxyServer, ServerOptions, ServerStatus,
-    StartError, Upstreams, alias_codex_path, client_of,
+    AntigravityRoute, GatewayHooks, NoHooks, ProxyServer, ServerOptions, ServerStatus, StartError,
+    Upstreams, alias_codex_path, client_of,
 };
 pub use types::*;

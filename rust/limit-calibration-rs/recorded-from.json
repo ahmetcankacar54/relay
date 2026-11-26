@@ -1,0 +1,41 @@
+{
+  "unit": "shared/limit-calibration.ts",
+  "files": 1,
+  "fingerprint": "3cd67b90c551edf4",
+  "coverage": {
+    "lines": 1896,
+    "reached": 1726,
+    "files": [
+      {
+        "file": "shared/limit-calibration.ts",
+        "lines": 154,
+        "reached": 153,
+        "missed": "137"
+      },
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 84,
+        "missed": "41-43, 46-47, 56, 86-96, 99-101, 104-105, 107-115, 117-129"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      }
+    ]
+  }
+}

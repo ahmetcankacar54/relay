@@ -18,7 +18,11 @@ pub fn allowed_history_pair(source: &Account, target: &Account, settings: &Relay
     }
 }
 
-pub fn history_sources<'a>(target: &Account, accounts: &'a [Account], settings: &RelaySettings) -> Vec<&'a Account> {
+pub fn history_sources<'a>(
+    target: &Account,
+    accounts: &'a [Account],
+    settings: &RelaySettings,
+) -> Vec<&'a Account> {
     if settings.desktop_history_transfer == DesktopHistoryTransfer::Off {
         return Vec::new();
     }

@@ -1,0 +1,113 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/statusline.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "statusline-rs",
+  "exports": [
+    {
+      "name": "parseStatuslineInput",
+      "file": "shared/statusline.ts",
+      "line": 76,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "StatuslineInput",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "parseStatuslineSnapshot",
+      "file": "shared/statusline.ts",
+      "line": 89,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "StatuslineSnapshot | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "claudeSignIn",
+      "file": "shared/statusline.ts",
+      "line": 110,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "{ accountUuid: string; orgId: string } | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "renderStatuslineLine",
+      "file": "rust/statusline-rs/original.ts",
+      "line": 15,
+      "params": [
+        { "name": "snapshotText", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "inputText", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "configDir", "ts_type": "string | undefined", "optional": false, "rest": false },
+        { "name": "signIn", "ts_type": "{ accountUuid: string; orgId: string } | undefined", "optional": false, "rest": false },
+        { "name": "now", "ts_type": "number", "optional": false, "rest": false },
+        { "name": "color", "ts_type": "boolean", "optional": false, "rest": false }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "statuslineAccountId",
+      "file": "rust/statusline-rs/original.ts",
+      "line": 34,
+      "params": [
+        { "name": "snapshotText", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "inputText", "ts_type": "string", "optional": false, "rest": false },
+        { "name": "configDir", "ts_type": "string | undefined", "optional": false, "rest": false },
+        { "name": "signIn", "ts_type": "{ accountUuid: string; orgId: string } | undefined", "optional": false, "rest": false }
+      ],
+      "returns": "{ accountId?: string; viaGateway: boolean } | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "statuslineAccount",
+      "file": "shared/statusline.ts",
+      "line": 149,
+      "reason": "takes or returns a function"
+    },
+    {
+      "name": "renderStatusline",
+      "file": "shared/statusline.ts",
+      "line": 246,
+      "reason": "uses `StatuslineRender`, which has function members"
+    }
+  ]
+}

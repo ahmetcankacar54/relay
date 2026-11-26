@@ -14,30 +14,69 @@ import { RELAY_CLI_PACKAGE } from "../../shared/cli-package";
 /** The longest the login shell may take to answer; the Settings row waits for it. */
 export const LOGIN_SHELL_LOOKUP_MS = 2_000;
 
+/** The package's launcher, relative to its folder: `launcher.js` (0.2.0 on), `dist/relay.js` before. */
+const LAUNCHERS = ["launcher.js", "dist/relay.js"].map(
+  (file) => `${RELAY_CLI_PACKAGE}/${file}`,
+);
+
 /** Whether `file` is this package's relay: its launcher, or npm's shim pointing at it. */
 export function isRelayCli(file: string): boolean {
   try {
     if (!path.isAbsolute(file) || !fs.statSync(file).isFile()) return false;
     if (process.platform !== "win32") fs.accessSync(file, fs.constants.X_OK);
-    const real = fs.realpathSync(file);
-    if (real.split(path.sep).join("/").includes(`${RELAY_CLI_PACKAGE}/dist/`))
+    const real = fs.realpathSync(file).split(path.sep).join("/");
+    if (LAUNCHERS.some((launcher) => real.endsWith(`/${launcher}`)))
       return true;
     // npm's Windows shims are scripts that name the package's launcher.
     const fd = fs.openSync(file, "r");
     try {
       const head = Buffer.alloc(4096);
       const read = fs.readSync(fd, head, 0, head.length, 0);
-      return head
-        .subarray(0, read)
-        .toString("utf8")
-        .replace(/\\/g, "/")
-        .includes(`${RELAY_CLI_PACKAGE}/dist/relay.js`);
+      const text = head.subarray(0, read).toString("utf8").replace(/\\/g, "/");
+      return LAUNCHERS.some((launcher) => text.includes(launcher));
     } finally {
       fs.closeSync(fd);
     }
   } catch {
     return false;
   }
+}
+
+/**
+ * The prebuilt binary npm installed for the 0.2.0 launcher (`launcher.js` runs it), when it is
+ * found beside the package: nested in its node_modules or hoisted next to it. Claude Code runs
+ * the status line command often, so it gets the binary and no Node start. Otherwise `file`.
+ * Never on Windows, where `file` is npm's shim, the command Git Bash (Claude Code's shell) runs.
+ */
+export function relayCliBinary(
+  file: string,
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): string {
+  if (platform === "win32") return file;
+  try {
+    const real = fs.realpathSync(file);
+    if (!real.split(path.sep).join("/").endsWith(`/${LAUNCHERS[0]}`))
+      return file;
+    const scoped = `${RELAY_CLI_PACKAGE}-${platform}-${arch}`.split("/");
+    const pkg = path.dirname(real);
+    for (const dir of [
+      path.join(pkg, "node_modules", ...scoped),
+      path.join(pkg, "..", "..", ...scoped),
+    ]) {
+      const binary = path.join(dir, "bin", "relay");
+      try {
+        if (!fs.statSync(binary).isFile()) continue;
+        fs.accessSync(binary, fs.constants.X_OK);
+        return binary;
+      } catch {
+        // Not here: the next place, else the launcher.
+      }
+    }
+  } catch {
+    // Unreadable: the launcher still works.
+  }
+  return file;
 }
 
 /** Every nvm-installed Node's bin folder, newest version first. */
@@ -134,7 +173,10 @@ export async function findRelayCli(
     options.platform,
     options.systemDirs,
   ).find(isRelayCli);
-  if (found) return found;
+  const platform = options.platform ?? process.platform;
+  if (found) return relayCliBinary(found, platform);
   const shell = await (options.loginShell ?? (() => loginShellRelay(env)))();
-  return shell && isRelayCli(shell) ? shell : undefined;
+  return shell && isRelayCli(shell)
+    ? relayCliBinary(shell, platform)
+    : undefined;
 }

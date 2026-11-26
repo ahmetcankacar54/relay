@@ -31,7 +31,8 @@ bozabilir.
   `recover`, `history sync`, `reset-vault`) yalnız macOS'ta çalışır: CLI kasayı macOS Keychain
   üzerinden açar. Başka sistemlerde bu komutlar bunu söyler ve hesapları Relay.app geçirir;
   diğer tüm komutlar çalışır.
-- Node.js 22.12 veya üstü
+- `relay`'in kendisi için hiçbir şey: tek bir yerel ikili dosyadır. Aşağıdaki npm kurulumu yalnız
+  küçük başlatıcısı için Node.js 18 veya üstünü ister; sürüm arşivleri hiç Node istemez.
 - Geçiş için Claude Desktop (`/Applications/Claude.app` ya da `~/Applications/Claude.app`)
 - Limitler ve `relay run` için Claude Code CLI 2.1.296 veya üstü
 
@@ -40,6 +41,11 @@ bozabilir.
 ```bash
 npm i -g @ahmetcankacar/relay
 ```
+
+npm küçük bir başlatıcı ve isteğe bağlı bağımlılık olarak platformunuzun ikili dosyasını kurar
+(macOS arm64 ya da x64, Linux x64 ya da arm64, Windows x64). npm olmadan: GitHub'daki `cli-v<sürüm>`
+sürümünden `relay-<sürüm>-<hedef>.tar.gz` dosyasını (Windows'ta `.zip`) indirin, açın ve `relay`'i
+PATH'inize koyun.
 
 ## İlk hesap
 
@@ -132,16 +138,16 @@ Claude Code bundan sonra istem satırının altında şöyle bir satır gösteri
   5 saatlik dönemin yenileneceği zamandır.
 - **Veriyi Relay.app yazar** (veri klasöründeki `statusline.json`) ve her limit okumasında
   yeniler. Komut yalnız bu dosyayı ve Claude Code'un kendi dosyalarını okur; ağa ya da Keychain'e
-  hiç gitmez ve birkaç on milisaniyede yanıt verir. Dosya 15 dakikadan eskiyse satır
+  hiç gitmez ve birkaç milisaniyede yanıt verir. Dosya 15 dakikadan eskiyse satır
   ne kadar eski olduğunu söyler. Etiketler Relay.app'in dilindedir.
 - `--color` yüzdeleri doluluğa göre renklendirir.
 
 `relay statusline install`, `~/.claude/settings.json` içindeki `statusLine` ayarını yazar ve diğer
-ayarlara dokunmaz. Bu relay'i tam yoluyla (önce Node, sonra başlatıcısı) yazar, çünkü Claude Code
-komutu PATH'inde npm klasörü olmayabilecek bir kabukta çalıştırır. Önceden bir durum satırınız
-varsa saklanır; `relay statusline uninstall` onu geri getirir. Relay.app'te de aynı anahtar var:
-Ayarlar → Gelişmiş → Claude Code durum satırında Relay. Bulduğu `relay`'in yolunu yazar; relay
-kurulu değilken kapalı kalır ve kurulum komutunu gösterir.
+ayarlara dokunmaz. `relay` ikili dosyasının kendi tam yolunu yazar (npm başlatıcısını değil, Node
+hiç açılmaz), çünkü Claude Code komutu PATH'inde npm klasörü olmayabilecek bir kabukta çalıştırır.
+Önceden bir durum satırınız varsa saklanır; `relay statusline uninstall` onu geri getirir.
+Relay.app'te de aynı anahtar var: Ayarlar → Gelişmiş → Claude Code durum satırında Relay.
+Bulduğu `relay`'in yolunu yazar; relay kurulu değilken kapalı kalır ve kurulum komutunu gösterir.
 
 ## Komutlar
 

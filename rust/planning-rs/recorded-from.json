@@ -1,0 +1,35 @@
+{
+  "unit": "shared/planning.ts",
+  "files": 1,
+  "fingerprint": "506387e0c9efaf10",
+  "coverage": {
+    "lines": 1742,
+    "reached": 1629,
+    "files": [
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 128,
+        "missed": ""
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 72,
+        "missed": "59, 67-68, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      }
+    ]
+  }
+}

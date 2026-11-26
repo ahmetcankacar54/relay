@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use base64::engine::DecodePaddingMode;
+use base64::engine::general_purpose::{GeneralPurpose, GeneralPurposeConfig, STANDARD};
 
 pub const VAULT_KEY_SERVICE: &str = "Relay Vault Key";
 pub const VAULT_KEY_ACCOUNT: &str = "relay-vault";
@@ -111,6 +112,9 @@ pub fn read_vault_key(tool: &Path) -> Result<VaultKey, VaultKeyError> {
     );
     match run {
         ToolRun::Exited {
+            code: 0, stdout, ..
+        } => parse_key(&String::from_utf8_lossy(&stdout)),
+        ToolRun::Exited {
             code: ITEM_NOT_FOUND,
             ..
         } => Err(VaultKeyError::Missing),
@@ -172,6 +176,7 @@ pub fn load_vault_key(options: &LoadVaultKey<'_>) -> Result<VaultKey, VaultKeyEr
 #[cfg(not(target_os = "macos"))]
 mod keyring_store {
     use super::{VAULT_KEY_ACCOUNT, VAULT_KEY_SERVICE};
+    use super::{VaultKey, VaultKeyError, parse_key, random_key_text};
 
     fn entry() -> Result<keyring::Entry, VaultKeyError> {
         keyring::Entry::new(VAULT_KEY_SERVICE, VAULT_KEY_ACCOUNT).map_err(|_| VaultKeyError::Locked)

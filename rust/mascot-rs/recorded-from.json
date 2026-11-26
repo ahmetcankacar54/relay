@@ -1,0 +1,95 @@
+{
+  "unit": "shared/mascot.ts",
+  "files": 1,
+  "fingerprint": "8179d5a2b5351d2e",
+  "coverage": {
+    "lines": 5354,
+    "reached": 4770,
+    "files": [
+      {
+        "file": "shared/account-state.ts",
+        "lines": 70,
+        "reached": 37,
+        "missed": "22-27, 30-38, 41-50, 68-73, 76-77"
+      },
+      {
+        "file": "shared/continuation-target-ranking.ts",
+        "lines": 156,
+        "reached": 72,
+        "missed": "14-16, 29-53, 61-65, 79-87, 95-100, 103-106, 139-170"
+      },
+      {
+        "file": "shared/history-policy.ts",
+        "lines": 28,
+        "reached": 7,
+        "missed": "8-18, 21-30"
+      },
+      {
+        "file": "shared/i18n/catalogs/en.ts",
+        "lines": 2759,
+        "reached": 2759,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/locales.ts",
+        "lines": 90,
+        "reached": 70,
+        "missed": "71-81, 85-86, 90-96"
+      },
+      {
+        "file": "shared/i18n/translate.ts",
+        "lines": 87,
+        "reached": 41,
+        "missed": "17-19, 23-24, 29-43, 46-49, 54-63, 67-74, 95-98"
+      },
+      {
+        "file": "shared/mascot.ts",
+        "lines": 108,
+        "reached": 108,
+        "missed": ""
+      },
+      {
+        "file": "shared/percent.ts",
+        "lines": 36,
+        "reached": 23,
+        "missed": "13-20, 37-41"
+      },
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 29,
+        "missed": "10-34, 36-38, 41-43, 46-47, 52-79, 86-96, 99-101, 104-105, 107-115, 117-129"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/quota-windows.ts",
+        "lines": 154,
+        "reached": 86,
+        "missed": "25-31, 39-41, 45-47, 66-67, 77-91, 98-110, 127-137, 152-165"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      },
+      {
+        "file": "shared/usage.ts",
+        "lines": 124,
+        "reached": 49,
+        "missed": "38-46, 50-58, 64-82, 84-85, 92-127"
+      }
+    ]
+  }
+}

@@ -12,7 +12,10 @@ use super::types::js::date_parse;
 use super::types::{Account, AccountUsage, RelaySettings, UsageIssue, UsageStatus, UsageWindow};
 
 fn reset_ahead(w: Option<&UsageWindow>, now: f64) -> bool {
-    match w.and_then(|w| w.resets_at.as_deref()).filter(|r| !r.is_empty()) {
+    match w
+        .and_then(|w| w.resets_at.as_deref())
+        .filter(|r| !r.is_empty())
+    {
         Some(reset) => date_parse(reset) > now,
         None => true,
     }
@@ -21,7 +24,9 @@ fn reset_ahead(w: Option<&UsageWindow>, now: f64) -> bool {
 /// A ready reading under 35 minutes old whose windows have not reset since.
 pub fn fresh_usage(u: Option<&AccountUsage>, now: f64) -> bool {
     let Some(u) = u else { return false };
-    let Some(checked) = u.checked_at.as_deref().filter(|c| !c.is_empty()) else { return false };
+    let Some(checked) = u.checked_at.as_deref().filter(|c| !c.is_empty()) else {
+        return false;
+    };
     u.status == UsageStatus::Ready
         && !u.stale
         && now - date_parse(checked) < 35.0 * 60_000.0
@@ -59,7 +64,11 @@ pub const SOURCE_FRESH_MS: f64 = 15.0 * 60_000.0;
 pub fn source_exhausted(usage: Option<&AccountUsage>, now: f64) -> bool {
     let checked = date_parse(usage.and_then(|u| u.checked_at.as_deref()).unwrap_or(""));
     let Some(usage) = usage else { return false };
-    if usage.status != UsageStatus::Ready || usage.stale || !checked.is_finite() || now - checked > SOURCE_FRESH_MS {
+    if usage.status != UsageStatus::Ready
+        || usage.stale
+        || !checked.is_finite()
+        || now - checked > SOURCE_FRESH_MS
+    {
         return false;
     }
     usage.other_limit_reached == Some(true)
@@ -92,7 +101,10 @@ pub fn suggested_account<'a>(
     let current = usage.get(&active.id)?;
     let line = switch_at_percent(active, f64::from(settings.usage_warning_percent));
     if !settings.usage_warnings
-        || ![current.five_hour.as_ref(), current.seven_day.as_ref()].into_iter().flatten().any(|w| w.used_percent >= line)
+        || ![current.five_hour.as_ref(), current.seven_day.as_ref()]
+            .into_iter()
+            .flatten()
+            .any(|w| w.used_percent >= line)
     {
         return None;
     }
@@ -103,14 +115,28 @@ pub fn suggested_account<'a>(
             a.id != active.id
                 && allowed_history_pair(active, a, settings)
                 && a.desktop.is_some()
-                && a.cooldown_until.as_deref().filter(|c| !c.is_empty()).is_none_or(|c| date_parse(c) <= now)
+                && a.cooldown_until
+                    .as_deref()
+                    .filter(|c| !c.is_empty())
+                    .is_none_or(|c| date_parse(c) <= now)
                 && fresh_usage(usage.get(&a.id), now)
-                && max_used_percent(usage.get(&a.id)).unwrap_or(100.0) < switch_at_percent(a, warning)
+                && max_used_percent(usage.get(&a.id)).unwrap_or(100.0)
+                    < switch_at_percent(a, warning)
         })
-        .map(|a| ContinuationTargetCandidate { account: a, usage: usage.get(&a.id) })
+        .map(|a| ContinuationTargetCandidate {
+            account: a,
+            usage: usage.get(&a.id),
+        })
         .collect();
-    rank_continuation_targets(&eligible, Some(RankingContext { now, rate, strategy: settings.auto_switch_strategy }))
-        .into_iter()
-        .next()
-        .map(|r| r.account)
+    rank_continuation_targets(
+        &eligible,
+        Some(RankingContext {
+            now,
+            rate,
+            strategy: settings.auto_switch_strategy,
+        }),
+    )
+    .into_iter()
+    .next()
+    .map(|r| r.account)
 }

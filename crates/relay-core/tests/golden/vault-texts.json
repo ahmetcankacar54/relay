@@ -1,0 +1,5 @@
+{
+  "accounts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.bin": "{\"login\":\"personal\"}",
+  "backups/11111111-2222-4333-8444-555555555555.bin": "{\"backup\":\"before-switch\"}",
+  "drafts/pending.bin": "{\"drafts\":[]}"
+}

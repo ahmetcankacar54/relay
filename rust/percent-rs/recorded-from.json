@@ -1,0 +1,119 @@
+{
+  "unit": "shared/percent.ts",
+  "files": 1,
+  "fingerprint": "3e42040f3a86dc6e",
+  "coverage": {
+    "lines": 41612,
+    "reached": 41573,
+    "files": [
+      {
+        "file": "shared/i18n/catalogs/de.ts",
+        "lines": 2762,
+        "reached": 2762,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/en.ts",
+        "lines": 2759,
+        "reached": 2759,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/es.ts",
+        "lines": 2760,
+        "reached": 2760,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/fr.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/it.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/ja.ts",
+        "lines": 2759,
+        "reached": 2759,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/ko.ts",
+        "lines": 2758,
+        "reached": 2758,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/nl.ts",
+        "lines": 2760,
+        "reached": 2760,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/pl.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/pt-BR.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/ru.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/tr.ts",
+        "lines": 2754,
+        "reached": 2754,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/uk.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/zh-Hans.ts",
+        "lines": 2760,
+        "reached": 2760,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/zh-Hant.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/locales.ts",
+        "lines": 90,
+        "reached": 70,
+        "missed": "71-81, 85-86, 90-96"
+      },
+      {
+        "file": "shared/i18n/translate.ts",
+        "lines": 87,
+        "reached": 68,
+        "missed": "23-24, 37-39, 59-60, 67-74, 95-98"
+      },
+      {
+        "file": "shared/percent.ts",
+        "lines": 36,
+        "reached": 36,
+        "missed": ""
+      }
+    ]
+  }
+}

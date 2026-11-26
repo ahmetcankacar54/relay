@@ -3,7 +3,8 @@
 use super::model_prices::js_trim;
 use super::types::{ShortcutAction, ShortcutSettings};
 
-pub const SHORTCUT_ACTIONS: [ShortcutAction; 2] = [ShortcutAction::OpenPanel, ShortcutAction::SwitchToSuggested];
+pub const SHORTCUT_ACTIONS: [ShortcutAction; 2] =
+    [ShortcutAction::OpenPanel, ShortcutAction::SwitchToSuggested];
 
 /// `DEFAULT_SHORTCUTS[action]`: opening Relay gets a four-key chord (Ctrl+Alt with a letter is
 /// AltGr on Windows; with Space no layout types a character); switching is off until picked.
@@ -35,14 +36,73 @@ fn modifier(lower: &str) -> Option<&'static str> {
     })
 }
 
-const MODIFIER_ORDER: [&str; 6] = ["CommandOrControl", "Command", "Control", "Alt", "Shift", "Super"];
+const MODIFIER_ORDER: [&str; 6] = [
+    "CommandOrControl",
+    "Command",
+    "Control",
+    "Alt",
+    "Shift",
+    "Super",
+];
 
 /// Named keys, as Electron spells them.
 const NAMED_KEYS: [&str; 56] = [
-    "Space", "Tab", "Backspace", "Delete", "Insert", "Return", "Up", "Down", "Left", "Right", "Home", "End", "PageUp", "PageDown", "Escape",
-    "Plus", "PrintScreen", "num0", "num1", "num2", "num3", "num4", "num5", "num6", "num7", "num8", "num9", "numdec", "numadd", "numsub",
-    "nummult", "numdiv", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18",
-    "F19", "F20", "F21", "F22", "F23", "F24",
+    "Space",
+    "Tab",
+    "Backspace",
+    "Delete",
+    "Insert",
+    "Return",
+    "Up",
+    "Down",
+    "Left",
+    "Right",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    "Escape",
+    "Plus",
+    "PrintScreen",
+    "num0",
+    "num1",
+    "num2",
+    "num3",
+    "num4",
+    "num5",
+    "num6",
+    "num7",
+    "num8",
+    "num9",
+    "numdec",
+    "numadd",
+    "numsub",
+    "nummult",
+    "numdiv",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
 ];
 
 fn named_key(lower: &str) -> Option<String> {
@@ -51,7 +111,10 @@ fn named_key(lower: &str) -> Option<String> {
         "esc" => return Some("Escape".into()),
         _ => {}
     }
-    NAMED_KEYS.iter().find(|k| k.to_lowercase() == lower).map(|k| (*k).to_string())
+    NAMED_KEYS
+        .iter()
+        .find(|k| k.to_lowercase() == lower)
+        .map(|k| (*k).to_string())
 }
 
 const PUNCTUATION: &str = "`-=[]\\;',./";
@@ -72,7 +135,8 @@ fn key_name(text: &str) -> Option<String> {
 
 /// `/^F\d+$/`.
 fn is_function_key(key: &str) -> bool {
-    key.strip_prefix('F').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    key.strip_prefix('F')
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// `text.replace(/\+\+$/, "+Plus")`: "+" both joins and names a key.
@@ -105,7 +169,10 @@ pub fn normalize_accelerator(text: &str) -> Option<String> {
     if !strong && !is_function_key(&key) {
         return None;
     }
-    let mut out: Vec<&str> = MODIFIER_ORDER.into_iter().filter(|m| modifiers.contains(m)).collect();
+    let mut out: Vec<&str> = MODIFIER_ORDER
+        .into_iter()
+        .filter(|m| modifiers.contains(m))
+        .collect();
     out.push(&key);
     Some(out.join("+"))
 }
@@ -155,7 +222,10 @@ pub fn accelerator_from_keys(press: &KeyPress, platform: &str) -> Option<String>
     let code = press.code.as_str();
     let key = if let Some(k) = code_key(code) {
         k.to_string()
-    } else if let Some(letter) = code.strip_prefix("Key").filter(|l| l.len() == 1 && l.as_bytes()[0].is_ascii_uppercase()) {
+    } else if let Some(letter) = code
+        .strip_prefix("Key")
+        .filter(|l| l.len() == 1 && l.as_bytes()[0].is_ascii_uppercase())
+    {
         letter.to_string()
     } else if let Some(d) = code
         .strip_prefix("Digit")
@@ -169,13 +239,20 @@ pub fn accelerator_from_keys(press: &KeyPress, platform: &str) -> Option<String>
     };
     let mac = platform == "darwin";
     let flags = [
-        ((if mac { press.meta_key } else { press.ctrl_key }), "CommandOrControl"),
+        (
+            (if mac { press.meta_key } else { press.ctrl_key }),
+            "CommandOrControl",
+        ),
         (mac && press.ctrl_key, "Control"),
         (press.alt_key, "Alt"),
         (press.shift_key, "Shift"),
         (!mac && press.meta_key, "Super"),
     ];
-    let mut parts: Vec<&str> = flags.into_iter().filter(|(on, _)| *on).map(|(_, m)| m).collect();
+    let mut parts: Vec<&str> = flags
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, m)| m)
+        .collect();
     parts.push(&key);
     normalize_accelerator(&parts.join("+"))
 }
@@ -207,8 +284,19 @@ pub fn format_accelerator(accelerator: &str, platform: &str) -> String {
     let mut parts: Vec<&str> = joined.split('+').collect();
     let key = parts.pop().unwrap_or("");
     if platform == "darwin" {
-        let order = ["Control", "Alt", "Shift", "CommandOrControl", "Command", "Super"];
-        let mut out: String = order.into_iter().filter(|m| parts.contains(m)).filter_map(mac_symbol).collect();
+        let order = [
+            "Control",
+            "Alt",
+            "Shift",
+            "CommandOrControl",
+            "Command",
+            "Super",
+        ];
+        let mut out: String = order
+            .into_iter()
+            .filter(|m| parts.contains(m))
+            .filter_map(mac_symbol)
+            .collect();
         out.push_str(mac_symbol(key).unwrap_or(key));
         return out;
     }

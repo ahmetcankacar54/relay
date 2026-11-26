@@ -226,8 +226,7 @@ pub fn build_target_url(
     strip_v1: bool,
 ) -> Result<Url, BadRequestError> {
     let client = parse_request_url(raw)?;
-    let mut target =
-        Url::parse(base).map_err(|e| BadRequestError(format!("Invalid URL: {e}")))?;
+    let mut target = Url::parse(base).map_err(|e| BadRequestError(format!("Invalid URL: {e}")))?;
     let base_path = target.path().trim_end_matches('/').to_string();
     let mut path = client.pathname;
     if strip_v1 && !base_path.is_empty() {
@@ -327,8 +326,7 @@ pub fn limit_scope_of(headers: &HeaderMap) -> LimitScope {
     let general = |w: &str| GENERAL_WINDOW.is_match(w) || CLIENT_WINDOW.is_match(w);
     let model_named = |w: &str| MODEL_NAMED.is_match(w) || OI_WINDOW.is_match(w);
     if !windows.is_empty() {
-        return if !windows.iter().any(|w| general(w)) && windows.iter().all(|w| model_named(w))
-        {
+        return if !windows.iter().any(|w| general(w)) && windows.iter().all(|w| model_named(w)) {
             LimitScope::Model
         } else {
             LimitScope::Account
@@ -358,7 +356,10 @@ pub fn error_message(body: Option<&str>) -> Option<ErrorInfo> {
         return None;
     }
     Some(ErrorInfo {
-        kind: error.get("type").and_then(Value::as_str).map(str::to_string),
+        kind: error
+            .get("type")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         message: error
             .get("message")
             .and_then(Value::as_str)
@@ -466,7 +467,9 @@ pub fn classify_failure(
         }
         401 => Some(FailureKind::Auth),
         403 => {
-            let json = header(headers, "content-type").unwrap_or("").contains("json")
+            let json = header(headers, "content-type")
+                .unwrap_or("")
+                .contains("json")
                 || error.is_some();
             // Not the API's own answer (a challenge page from a proxy or CDN in front of it).
             let Some(error) = error.filter(|_| json) else {
@@ -735,7 +738,9 @@ pub async fn forward_upstream(res: &mut ClientRes, spec: ForwardSpec<'_>) -> Ups
     if res.destroyed() || res.ended() {
         return UpstreamOutcome::bare(499);
     }
-    let first_byte = spec.first_byte_timeout.unwrap_or(DEFAULT_FIRST_BYTE_TIMEOUT);
+    let first_byte = spec
+        .first_byte_timeout
+        .unwrap_or(DEFAULT_FIRST_BYTE_TIMEOUT);
     let idle = spec.idle_timeout.unwrap_or(DEFAULT_IDLE_TIMEOUT);
     let pool = spec.pool.unwrap_or_else(|| default_upstream_pool());
     let client = &pool.client;
@@ -751,7 +756,13 @@ pub async fn forward_upstream(res: &mut ClientRes, spec: ForwardSpec<'_>) -> Ups
         }
         let status = if timed_out { 504 } else { 502 };
         if !res.headers_sent() && !res.destroyed() {
-            send_json_error(res, status, "api_error", &format!("{label}: {message}"), &[]);
+            send_json_error(
+                res,
+                status,
+                "api_error",
+                &format!("{label}: {message}"),
+                &[],
+            );
         } else if !res.ended() {
             // The answer had begun: cut it, so the client sees a failure instead of a clean end.
             res.destroy();
@@ -834,7 +845,12 @@ pub async fn forward_upstream(res: &mut ClientRes, spec: ForwardSpec<'_>) -> Ups
     if !res.headers_sent() && spec.hold_if.is_some_and(|hold| hold(status_code)) {
         // Read to the end, so the connection can be reused and the body classified.
         loop {
-            match tokio::time::timeout(idle, upstream.chunk()).await {
+            let next = tokio::select! {
+                biased;
+                () = res.closed() => return UpstreamOutcome::bare(499),
+                next = tokio::time::timeout(idle, upstream.chunk()) => next,
+            };
+            match next {
                 Ok(Ok(Some(chunk))) => {
                     if is_error {
                         keep_error_body(&mut error_body, &chunk);

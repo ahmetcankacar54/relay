@@ -30,7 +30,8 @@ Desktop's local files, so a Claude Desktop update can break it.
   `recover`, `history sync`, `reset-vault`) works on macOS only: the CLI opens the vault through
   the macOS Keychain. Elsewhere those commands say so, and Relay.app switches accounts; every other
   command works.
-- Node.js 22.12 or newer
+- Nothing to run `relay` itself: it is a single native binary. The npm install below needs
+  Node.js 18 or newer, only for its small launcher; the release archives need no Node at all.
 - Claude Desktop (`/Applications/Claude.app` or `~/Applications/Claude.app`), for switching
 - For limits and `relay run`: the Claude Code CLI, version 2.1.296 or newer
 
@@ -39,6 +40,11 @@ Desktop's local files, so a Claude Desktop update can break it.
 ```bash
 npm i -g @ahmetcankacar/relay
 ```
+
+npm installs a small launcher and, as an optional dependency, the binary for your platform
+(macOS arm64 or x64, Linux x64 or arm64, Windows x64). Without npm, download
+`relay-<version>-<target>.tar.gz` (`.zip` on Windows) from the GitHub release `cli-v<version>`,
+unpack it and put `relay` on your PATH.
 
 ## First account
 
@@ -130,16 +136,17 @@ Work · 5 h 42% · week 18% · renews 14:30
   read. The time is when the 5-hour period renews.
 - **Relay.app writes the data** (`statusline.json` in its data folder) on every limit read; the
   command reads that file and Claude Code's own files only, never the network or the Keychain, and
-  answers in a few tens of milliseconds. When the file is more than 15 minutes old, the line says
+  answers in a few milliseconds. When the file is more than 15 minutes old, the line says
   how old. The labels are in Relay.app's language.
 - `--color` colors the percentages by how full they are.
 
 `relay statusline install` sets `statusLine` in `~/.claude/settings.json` and leaves every other
-setting alone. It writes this relay by absolute path (Node, then its launcher), because Claude Code
-runs the command in a shell that may not have npm's folder on its PATH. A status line you already
-had is saved, and `relay statusline uninstall` puts it back. Relay.app has the same switch:
-Settings → Advanced → Relay in Claude Code's status line. It writes the path of the `relay` it
-finds, and while none is installed it stays off and offers the install command.
+setting alone. It writes the absolute path of the `relay` binary itself (not npm's launcher, so
+Node never starts), because Claude Code runs the command in a shell that may not have npm's folder
+on its PATH. A status line you already had is saved, and `relay statusline uninstall` puts it
+back. Relay.app has the same switch: Settings → Advanced → Relay in Claude Code's status line. It
+writes the path of the `relay` it finds, and while none is installed it stays off and offers the
+install command.
 
 ## Commands
 

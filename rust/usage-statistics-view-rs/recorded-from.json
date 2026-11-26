@@ -1,0 +1,47 @@
+{
+  "unit": "shared/usage-statistics-view.ts",
+  "files": 1,
+  "fingerprint": "4598664c69f03566",
+  "coverage": {
+    "lines": 2273,
+    "reached": 2062,
+    "files": [
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 93,
+        "missed": "41-43, 46-47, 56, 86-96, 99-101, 104-105, 107-115, 124-127"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      },
+      {
+        "file": "shared/usage-statistics-view.ts",
+        "lines": 434,
+        "reached": 434,
+        "missed": ""
+      },
+      {
+        "file": "shared/usage-statistics.ts",
+        "lines": 97,
+        "reached": 46,
+        "missed": "19-21, 25, 56-77, 80-104"
+      }
+    ]
+  }
+}

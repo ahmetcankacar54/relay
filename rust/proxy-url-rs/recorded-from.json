@@ -1,0 +1,17 @@
+{
+  "unit": "shared/proxy-url.ts",
+  "files": 1,
+  "fingerprint": "bf85b90522fd1730",
+  "coverage": {
+    "lines": 20,
+    "reached": 20,
+    "files": [
+      {
+        "file": "shared/proxy-url.ts",
+        "lines": 20,
+        "reached": 20,
+        "missed": ""
+      }
+    ]
+  }
+}

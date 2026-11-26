@@ -1,7 +1,7 @@
 //! Claude requests sent with an account's OAuth token (`anthropic-upstream.ts`).
 
-use crate::upstream_common::UsageExtractor;
 use crate::types::TokenTally;
+use crate::upstream_common::UsageExtractor;
 use http::{HeaderMap, HeaderValue};
 use serde_json::Value;
 
@@ -54,7 +54,10 @@ impl UsageExtractor for AnthropicUsageExtractor {
         };
         take(&mut self.tally.input, usage.get("input_tokens"));
         take(&mut self.tally.output, usage.get("output_tokens"));
-        take(&mut self.tally.cache_read, usage.get("cache_read_input_tokens"));
+        take(
+            &mut self.tally.cache_read,
+            usage.get("cache_read_input_tokens"),
+        );
         take(
             &mut self.tally.cache_write,
             usage.get("cache_creation_input_tokens"),

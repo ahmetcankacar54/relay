@@ -65,9 +65,15 @@ impl Destination {
     /// Reads `genel` or `ayarlar/gelismis`; `None` for anything else.
     pub fn parse(text: &str) -> Option<Destination> {
         if let Some(tab) = text.strip_prefix("ayarlar/") {
-            return SETTINGS_TABS.into_iter().find(|t| t.as_str() == tab).map(Destination::Settings);
+            return SETTINGS_TABS
+                .into_iter()
+                .find(|t| t.as_str() == tab)
+                .map(Destination::Settings);
         }
-        PAGES.into_iter().find(|p| p.as_str() == text).map(Destination::Page)
+        PAGES
+            .into_iter()
+            .find(|p| p.as_str() == text)
+            .map(Destination::Page)
     }
 }
 

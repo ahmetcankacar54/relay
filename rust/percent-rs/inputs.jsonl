@@ -1,0 +1,1163 @@
+{"fn": "usedWord", "args": ["en"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "en"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "en"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "en"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "en"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "en"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "en"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "en"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "en"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "en"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "en"]}
+{"fn": "formatPercent", "args": [0, "en"]}
+{"fn": "formatUsed", "args": [0, "en"]}
+{"fn": "formatPercent", "args": [0.4, "en"]}
+{"fn": "formatUsed", "args": [0.4, "en"]}
+{"fn": "formatPercent", "args": [0.5, "en"]}
+{"fn": "formatUsed", "args": [0.5, "en"]}
+{"fn": "formatPercent", "args": [1, "en"]}
+{"fn": "formatUsed", "args": [1, "en"]}
+{"fn": "formatPercent", "args": [1.5, "en"]}
+{"fn": "formatUsed", "args": [1.5, "en"]}
+{"fn": "formatPercent", "args": [2.5, "en"]}
+{"fn": "formatUsed", "args": [2.5, "en"]}
+{"fn": "formatPercent", "args": [-0.4, "en"]}
+{"fn": "formatUsed", "args": [-0.4, "en"]}
+{"fn": "formatPercent", "args": [-0.5, "en"]}
+{"fn": "formatUsed", "args": [-0.5, "en"]}
+{"fn": "formatPercent", "args": [-1, "en"]}
+{"fn": "formatUsed", "args": [-1, "en"]}
+{"fn": "formatPercent", "args": [-2.5, "en"]}
+{"fn": "formatUsed", "args": [-2.5, "en"]}
+{"fn": "formatPercent", "args": [-150, "en"]}
+{"fn": "formatUsed", "args": [-150, "en"]}
+{"fn": "formatPercent", "args": [7, "en"]}
+{"fn": "formatUsed", "args": [7, "en"]}
+{"fn": "formatPercent", "args": [45, "en"]}
+{"fn": "formatUsed", "args": [45, "en"]}
+{"fn": "formatPercent", "args": [49.5, "en"]}
+{"fn": "formatUsed", "args": [49.5, "en"]}
+{"fn": "formatPercent", "args": [50.5, "en"]}
+{"fn": "formatUsed", "args": [50.5, "en"]}
+{"fn": "formatPercent", "args": [94, "en"]}
+{"fn": "formatUsed", "args": [94, "en"]}
+{"fn": "formatPercent", "args": [99.4, "en"]}
+{"fn": "formatUsed", "args": [99.4, "en"]}
+{"fn": "formatPercent", "args": [99.5, "en"]}
+{"fn": "formatUsed", "args": [99.5, "en"]}
+{"fn": "formatPercent", "args": [99.9, "en"]}
+{"fn": "formatUsed", "args": [99.9, "en"]}
+{"fn": "formatPercent", "args": [100, "en"]}
+{"fn": "formatUsed", "args": [100, "en"]}
+{"fn": "formatPercent", "args": [100.5, "en"]}
+{"fn": "formatUsed", "args": [100.5, "en"]}
+{"fn": "formatPercent", "args": [101, "en"]}
+{"fn": "formatUsed", "args": [101, "en"]}
+{"fn": "formatPercent", "args": [150, "en"]}
+{"fn": "formatUsed", "args": [150, "en"]}
+{"fn": "formatPercent", "args": [1000, "en"]}
+{"fn": "formatUsed", "args": [1000, "en"]}
+{"fn": "formatPercent", "args": [12345, "en"]}
+{"fn": "formatUsed", "args": [12345, "en"]}
+{"fn": "formatPercent", "args": [1e+21, "en"]}
+{"fn": "formatUsed", "args": [1e+21, "en"]}
+{"fn": "formatPercent", "args": [-1e+21, "en"]}
+{"fn": "formatUsed", "args": [-1e+21, "en"]}
+{"fn": "formatPercent", "args": [2147483648, "en"]}
+{"fn": "formatUsed", "args": [2147483648, "en"]}
+{"fn": "formatPercent", "args": [9007199254740992, "en"]}
+{"fn": "formatUsed", "args": [9007199254740992, "en"]}
+{"fn": "formatPercent", "args": [1e-07, "en"]}
+{"fn": "formatUsed", "args": [1e-07, "en"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "en"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "en"]}
+{"fn": "formatPercent", "args": [null, "en"]}
+{"fn": "formatUsed", "args": [null, "en"]}
+{"fn": "usedWord", "args": ["tr"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "tr"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "tr"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "tr"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "tr"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "tr"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "tr"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "tr"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "tr"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "tr"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "tr"]}
+{"fn": "formatPercent", "args": [0, "tr"]}
+{"fn": "formatUsed", "args": [0, "tr"]}
+{"fn": "formatPercent", "args": [0.4, "tr"]}
+{"fn": "formatUsed", "args": [0.4, "tr"]}
+{"fn": "formatPercent", "args": [0.5, "tr"]}
+{"fn": "formatUsed", "args": [0.5, "tr"]}
+{"fn": "formatPercent", "args": [1, "tr"]}
+{"fn": "formatUsed", "args": [1, "tr"]}
+{"fn": "formatPercent", "args": [1.5, "tr"]}
+{"fn": "formatUsed", "args": [1.5, "tr"]}
+{"fn": "formatPercent", "args": [2.5, "tr"]}
+{"fn": "formatUsed", "args": [2.5, "tr"]}
+{"fn": "formatPercent", "args": [-0.4, "tr"]}
+{"fn": "formatUsed", "args": [-0.4, "tr"]}
+{"fn": "formatPercent", "args": [-0.5, "tr"]}
+{"fn": "formatUsed", "args": [-0.5, "tr"]}
+{"fn": "formatPercent", "args": [-1, "tr"]}
+{"fn": "formatUsed", "args": [-1, "tr"]}
+{"fn": "formatPercent", "args": [-2.5, "tr"]}
+{"fn": "formatUsed", "args": [-2.5, "tr"]}
+{"fn": "formatPercent", "args": [-150, "tr"]}
+{"fn": "formatUsed", "args": [-150, "tr"]}
+{"fn": "formatPercent", "args": [7, "tr"]}
+{"fn": "formatUsed", "args": [7, "tr"]}
+{"fn": "formatPercent", "args": [45, "tr"]}
+{"fn": "formatUsed", "args": [45, "tr"]}
+{"fn": "formatPercent", "args": [49.5, "tr"]}
+{"fn": "formatUsed", "args": [49.5, "tr"]}
+{"fn": "formatPercent", "args": [50.5, "tr"]}
+{"fn": "formatUsed", "args": [50.5, "tr"]}
+{"fn": "formatPercent", "args": [94, "tr"]}
+{"fn": "formatUsed", "args": [94, "tr"]}
+{"fn": "formatPercent", "args": [99.4, "tr"]}
+{"fn": "formatUsed", "args": [99.4, "tr"]}
+{"fn": "formatPercent", "args": [99.5, "tr"]}
+{"fn": "formatUsed", "args": [99.5, "tr"]}
+{"fn": "formatPercent", "args": [99.9, "tr"]}
+{"fn": "formatUsed", "args": [99.9, "tr"]}
+{"fn": "formatPercent", "args": [100, "tr"]}
+{"fn": "formatUsed", "args": [100, "tr"]}
+{"fn": "formatPercent", "args": [100.5, "tr"]}
+{"fn": "formatUsed", "args": [100.5, "tr"]}
+{"fn": "formatPercent", "args": [101, "tr"]}
+{"fn": "formatUsed", "args": [101, "tr"]}
+{"fn": "formatPercent", "args": [150, "tr"]}
+{"fn": "formatUsed", "args": [150, "tr"]}
+{"fn": "formatPercent", "args": [1000, "tr"]}
+{"fn": "formatUsed", "args": [1000, "tr"]}
+{"fn": "formatPercent", "args": [12345, "tr"]}
+{"fn": "formatUsed", "args": [12345, "tr"]}
+{"fn": "formatPercent", "args": [1e+21, "tr"]}
+{"fn": "formatUsed", "args": [1e+21, "tr"]}
+{"fn": "formatPercent", "args": [-1e+21, "tr"]}
+{"fn": "formatUsed", "args": [-1e+21, "tr"]}
+{"fn": "formatPercent", "args": [2147483648, "tr"]}
+{"fn": "formatUsed", "args": [2147483648, "tr"]}
+{"fn": "formatPercent", "args": [9007199254740992, "tr"]}
+{"fn": "formatUsed", "args": [9007199254740992, "tr"]}
+{"fn": "formatPercent", "args": [1e-07, "tr"]}
+{"fn": "formatUsed", "args": [1e-07, "tr"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "tr"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "tr"]}
+{"fn": "formatPercent", "args": [null, "tr"]}
+{"fn": "formatUsed", "args": [null, "tr"]}
+{"fn": "usedWord", "args": ["de"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "de"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "de"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "de"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "de"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "de"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "de"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "de"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "de"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "de"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "de"]}
+{"fn": "formatPercent", "args": [0, "de"]}
+{"fn": "formatUsed", "args": [0, "de"]}
+{"fn": "formatPercent", "args": [0.4, "de"]}
+{"fn": "formatUsed", "args": [0.4, "de"]}
+{"fn": "formatPercent", "args": [0.5, "de"]}
+{"fn": "formatUsed", "args": [0.5, "de"]}
+{"fn": "formatPercent", "args": [1, "de"]}
+{"fn": "formatUsed", "args": [1, "de"]}
+{"fn": "formatPercent", "args": [1.5, "de"]}
+{"fn": "formatUsed", "args": [1.5, "de"]}
+{"fn": "formatPercent", "args": [2.5, "de"]}
+{"fn": "formatUsed", "args": [2.5, "de"]}
+{"fn": "formatPercent", "args": [-0.4, "de"]}
+{"fn": "formatUsed", "args": [-0.4, "de"]}
+{"fn": "formatPercent", "args": [-0.5, "de"]}
+{"fn": "formatUsed", "args": [-0.5, "de"]}
+{"fn": "formatPercent", "args": [-1, "de"]}
+{"fn": "formatUsed", "args": [-1, "de"]}
+{"fn": "formatPercent", "args": [-2.5, "de"]}
+{"fn": "formatUsed", "args": [-2.5, "de"]}
+{"fn": "formatPercent", "args": [-150, "de"]}
+{"fn": "formatUsed", "args": [-150, "de"]}
+{"fn": "formatPercent", "args": [7, "de"]}
+{"fn": "formatUsed", "args": [7, "de"]}
+{"fn": "formatPercent", "args": [45, "de"]}
+{"fn": "formatUsed", "args": [45, "de"]}
+{"fn": "formatPercent", "args": [49.5, "de"]}
+{"fn": "formatUsed", "args": [49.5, "de"]}
+{"fn": "formatPercent", "args": [50.5, "de"]}
+{"fn": "formatUsed", "args": [50.5, "de"]}
+{"fn": "formatPercent", "args": [94, "de"]}
+{"fn": "formatUsed", "args": [94, "de"]}
+{"fn": "formatPercent", "args": [99.4, "de"]}
+{"fn": "formatUsed", "args": [99.4, "de"]}
+{"fn": "formatPercent", "args": [99.5, "de"]}
+{"fn": "formatUsed", "args": [99.5, "de"]}
+{"fn": "formatPercent", "args": [99.9, "de"]}
+{"fn": "formatUsed", "args": [99.9, "de"]}
+{"fn": "formatPercent", "args": [100, "de"]}
+{"fn": "formatUsed", "args": [100, "de"]}
+{"fn": "formatPercent", "args": [100.5, "de"]}
+{"fn": "formatUsed", "args": [100.5, "de"]}
+{"fn": "formatPercent", "args": [101, "de"]}
+{"fn": "formatUsed", "args": [101, "de"]}
+{"fn": "formatPercent", "args": [150, "de"]}
+{"fn": "formatUsed", "args": [150, "de"]}
+{"fn": "formatPercent", "args": [1000, "de"]}
+{"fn": "formatUsed", "args": [1000, "de"]}
+{"fn": "formatPercent", "args": [12345, "de"]}
+{"fn": "formatUsed", "args": [12345, "de"]}
+{"fn": "formatPercent", "args": [1e+21, "de"]}
+{"fn": "formatUsed", "args": [1e+21, "de"]}
+{"fn": "formatPercent", "args": [-1e+21, "de"]}
+{"fn": "formatUsed", "args": [-1e+21, "de"]}
+{"fn": "formatPercent", "args": [2147483648, "de"]}
+{"fn": "formatUsed", "args": [2147483648, "de"]}
+{"fn": "formatPercent", "args": [9007199254740992, "de"]}
+{"fn": "formatUsed", "args": [9007199254740992, "de"]}
+{"fn": "formatPercent", "args": [1e-07, "de"]}
+{"fn": "formatUsed", "args": [1e-07, "de"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "de"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "de"]}
+{"fn": "formatPercent", "args": [null, "de"]}
+{"fn": "formatUsed", "args": [null, "de"]}
+{"fn": "usedWord", "args": ["fr"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "fr"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "fr"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "fr"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "fr"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "fr"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "fr"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "fr"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "fr"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "fr"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "fr"]}
+{"fn": "formatPercent", "args": [0, "fr"]}
+{"fn": "formatUsed", "args": [0, "fr"]}
+{"fn": "formatPercent", "args": [0.4, "fr"]}
+{"fn": "formatUsed", "args": [0.4, "fr"]}
+{"fn": "formatPercent", "args": [0.5, "fr"]}
+{"fn": "formatUsed", "args": [0.5, "fr"]}
+{"fn": "formatPercent", "args": [1, "fr"]}
+{"fn": "formatUsed", "args": [1, "fr"]}
+{"fn": "formatPercent", "args": [1.5, "fr"]}
+{"fn": "formatUsed", "args": [1.5, "fr"]}
+{"fn": "formatPercent", "args": [2.5, "fr"]}
+{"fn": "formatUsed", "args": [2.5, "fr"]}
+{"fn": "formatPercent", "args": [-0.4, "fr"]}
+{"fn": "formatUsed", "args": [-0.4, "fr"]}
+{"fn": "formatPercent", "args": [-0.5, "fr"]}
+{"fn": "formatUsed", "args": [-0.5, "fr"]}
+{"fn": "formatPercent", "args": [-1, "fr"]}
+{"fn": "formatUsed", "args": [-1, "fr"]}
+{"fn": "formatPercent", "args": [-2.5, "fr"]}
+{"fn": "formatUsed", "args": [-2.5, "fr"]}
+{"fn": "formatPercent", "args": [-150, "fr"]}
+{"fn": "formatUsed", "args": [-150, "fr"]}
+{"fn": "formatPercent", "args": [7, "fr"]}
+{"fn": "formatUsed", "args": [7, "fr"]}
+{"fn": "formatPercent", "args": [45, "fr"]}
+{"fn": "formatUsed", "args": [45, "fr"]}
+{"fn": "formatPercent", "args": [49.5, "fr"]}
+{"fn": "formatUsed", "args": [49.5, "fr"]}
+{"fn": "formatPercent", "args": [50.5, "fr"]}
+{"fn": "formatUsed", "args": [50.5, "fr"]}
+{"fn": "formatPercent", "args": [94, "fr"]}
+{"fn": "formatUsed", "args": [94, "fr"]}
+{"fn": "formatPercent", "args": [99.4, "fr"]}
+{"fn": "formatUsed", "args": [99.4, "fr"]}
+{"fn": "formatPercent", "args": [99.5, "fr"]}
+{"fn": "formatUsed", "args": [99.5, "fr"]}
+{"fn": "formatPercent", "args": [99.9, "fr"]}
+{"fn": "formatUsed", "args": [99.9, "fr"]}
+{"fn": "formatPercent", "args": [100, "fr"]}
+{"fn": "formatUsed", "args": [100, "fr"]}
+{"fn": "formatPercent", "args": [100.5, "fr"]}
+{"fn": "formatUsed", "args": [100.5, "fr"]}
+{"fn": "formatPercent", "args": [101, "fr"]}
+{"fn": "formatUsed", "args": [101, "fr"]}
+{"fn": "formatPercent", "args": [150, "fr"]}
+{"fn": "formatUsed", "args": [150, "fr"]}
+{"fn": "formatPercent", "args": [1000, "fr"]}
+{"fn": "formatUsed", "args": [1000, "fr"]}
+{"fn": "formatPercent", "args": [12345, "fr"]}
+{"fn": "formatUsed", "args": [12345, "fr"]}
+{"fn": "formatPercent", "args": [1e+21, "fr"]}
+{"fn": "formatUsed", "args": [1e+21, "fr"]}
+{"fn": "formatPercent", "args": [-1e+21, "fr"]}
+{"fn": "formatUsed", "args": [-1e+21, "fr"]}
+{"fn": "formatPercent", "args": [2147483648, "fr"]}
+{"fn": "formatUsed", "args": [2147483648, "fr"]}
+{"fn": "formatPercent", "args": [9007199254740992, "fr"]}
+{"fn": "formatUsed", "args": [9007199254740992, "fr"]}
+{"fn": "formatPercent", "args": [1e-07, "fr"]}
+{"fn": "formatUsed", "args": [1e-07, "fr"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "fr"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "fr"]}
+{"fn": "formatPercent", "args": [null, "fr"]}
+{"fn": "formatUsed", "args": [null, "fr"]}
+{"fn": "usedWord", "args": ["es"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "es"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "es"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "es"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "es"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "es"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "es"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "es"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "es"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "es"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "es"]}
+{"fn": "formatPercent", "args": [0, "es"]}
+{"fn": "formatUsed", "args": [0, "es"]}
+{"fn": "formatPercent", "args": [0.4, "es"]}
+{"fn": "formatUsed", "args": [0.4, "es"]}
+{"fn": "formatPercent", "args": [0.5, "es"]}
+{"fn": "formatUsed", "args": [0.5, "es"]}
+{"fn": "formatPercent", "args": [1, "es"]}
+{"fn": "formatUsed", "args": [1, "es"]}
+{"fn": "formatPercent", "args": [1.5, "es"]}
+{"fn": "formatUsed", "args": [1.5, "es"]}
+{"fn": "formatPercent", "args": [2.5, "es"]}
+{"fn": "formatUsed", "args": [2.5, "es"]}
+{"fn": "formatPercent", "args": [-0.4, "es"]}
+{"fn": "formatUsed", "args": [-0.4, "es"]}
+{"fn": "formatPercent", "args": [-0.5, "es"]}
+{"fn": "formatUsed", "args": [-0.5, "es"]}
+{"fn": "formatPercent", "args": [-1, "es"]}
+{"fn": "formatUsed", "args": [-1, "es"]}
+{"fn": "formatPercent", "args": [-2.5, "es"]}
+{"fn": "formatUsed", "args": [-2.5, "es"]}
+{"fn": "formatPercent", "args": [-150, "es"]}
+{"fn": "formatUsed", "args": [-150, "es"]}
+{"fn": "formatPercent", "args": [7, "es"]}
+{"fn": "formatUsed", "args": [7, "es"]}
+{"fn": "formatPercent", "args": [45, "es"]}
+{"fn": "formatUsed", "args": [45, "es"]}
+{"fn": "formatPercent", "args": [49.5, "es"]}
+{"fn": "formatUsed", "args": [49.5, "es"]}
+{"fn": "formatPercent", "args": [50.5, "es"]}
+{"fn": "formatUsed", "args": [50.5, "es"]}
+{"fn": "formatPercent", "args": [94, "es"]}
+{"fn": "formatUsed", "args": [94, "es"]}
+{"fn": "formatPercent", "args": [99.4, "es"]}
+{"fn": "formatUsed", "args": [99.4, "es"]}
+{"fn": "formatPercent", "args": [99.5, "es"]}
+{"fn": "formatUsed", "args": [99.5, "es"]}
+{"fn": "formatPercent", "args": [99.9, "es"]}
+{"fn": "formatUsed", "args": [99.9, "es"]}
+{"fn": "formatPercent", "args": [100, "es"]}
+{"fn": "formatUsed", "args": [100, "es"]}
+{"fn": "formatPercent", "args": [100.5, "es"]}
+{"fn": "formatUsed", "args": [100.5, "es"]}
+{"fn": "formatPercent", "args": [101, "es"]}
+{"fn": "formatUsed", "args": [101, "es"]}
+{"fn": "formatPercent", "args": [150, "es"]}
+{"fn": "formatUsed", "args": [150, "es"]}
+{"fn": "formatPercent", "args": [1000, "es"]}
+{"fn": "formatUsed", "args": [1000, "es"]}
+{"fn": "formatPercent", "args": [12345, "es"]}
+{"fn": "formatUsed", "args": [12345, "es"]}
+{"fn": "formatPercent", "args": [1e+21, "es"]}
+{"fn": "formatUsed", "args": [1e+21, "es"]}
+{"fn": "formatPercent", "args": [-1e+21, "es"]}
+{"fn": "formatUsed", "args": [-1e+21, "es"]}
+{"fn": "formatPercent", "args": [2147483648, "es"]}
+{"fn": "formatUsed", "args": [2147483648, "es"]}
+{"fn": "formatPercent", "args": [9007199254740992, "es"]}
+{"fn": "formatUsed", "args": [9007199254740992, "es"]}
+{"fn": "formatPercent", "args": [1e-07, "es"]}
+{"fn": "formatUsed", "args": [1e-07, "es"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "es"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "es"]}
+{"fn": "formatPercent", "args": [null, "es"]}
+{"fn": "formatUsed", "args": [null, "es"]}
+{"fn": "usedWord", "args": ["pt-BR"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "pt-BR"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "pt-BR"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "pt-BR"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "pt-BR"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "pt-BR"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "pt-BR"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "pt-BR"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "pt-BR"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "pt-BR"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "pt-BR"]}
+{"fn": "formatPercent", "args": [0, "pt-BR"]}
+{"fn": "formatUsed", "args": [0, "pt-BR"]}
+{"fn": "formatPercent", "args": [0.4, "pt-BR"]}
+{"fn": "formatUsed", "args": [0.4, "pt-BR"]}
+{"fn": "formatPercent", "args": [0.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [0.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [1, "pt-BR"]}
+{"fn": "formatUsed", "args": [1, "pt-BR"]}
+{"fn": "formatPercent", "args": [1.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [1.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [2.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [2.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [-0.4, "pt-BR"]}
+{"fn": "formatUsed", "args": [-0.4, "pt-BR"]}
+{"fn": "formatPercent", "args": [-0.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [-0.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [-1, "pt-BR"]}
+{"fn": "formatUsed", "args": [-1, "pt-BR"]}
+{"fn": "formatPercent", "args": [-2.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [-2.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [-150, "pt-BR"]}
+{"fn": "formatUsed", "args": [-150, "pt-BR"]}
+{"fn": "formatPercent", "args": [7, "pt-BR"]}
+{"fn": "formatUsed", "args": [7, "pt-BR"]}
+{"fn": "formatPercent", "args": [45, "pt-BR"]}
+{"fn": "formatUsed", "args": [45, "pt-BR"]}
+{"fn": "formatPercent", "args": [49.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [49.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [50.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [50.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [94, "pt-BR"]}
+{"fn": "formatUsed", "args": [94, "pt-BR"]}
+{"fn": "formatPercent", "args": [99.4, "pt-BR"]}
+{"fn": "formatUsed", "args": [99.4, "pt-BR"]}
+{"fn": "formatPercent", "args": [99.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [99.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [99.9, "pt-BR"]}
+{"fn": "formatUsed", "args": [99.9, "pt-BR"]}
+{"fn": "formatPercent", "args": [100, "pt-BR"]}
+{"fn": "formatUsed", "args": [100, "pt-BR"]}
+{"fn": "formatPercent", "args": [100.5, "pt-BR"]}
+{"fn": "formatUsed", "args": [100.5, "pt-BR"]}
+{"fn": "formatPercent", "args": [101, "pt-BR"]}
+{"fn": "formatUsed", "args": [101, "pt-BR"]}
+{"fn": "formatPercent", "args": [150, "pt-BR"]}
+{"fn": "formatUsed", "args": [150, "pt-BR"]}
+{"fn": "formatPercent", "args": [1000, "pt-BR"]}
+{"fn": "formatUsed", "args": [1000, "pt-BR"]}
+{"fn": "formatPercent", "args": [12345, "pt-BR"]}
+{"fn": "formatUsed", "args": [12345, "pt-BR"]}
+{"fn": "formatPercent", "args": [1e+21, "pt-BR"]}
+{"fn": "formatUsed", "args": [1e+21, "pt-BR"]}
+{"fn": "formatPercent", "args": [-1e+21, "pt-BR"]}
+{"fn": "formatUsed", "args": [-1e+21, "pt-BR"]}
+{"fn": "formatPercent", "args": [2147483648, "pt-BR"]}
+{"fn": "formatUsed", "args": [2147483648, "pt-BR"]}
+{"fn": "formatPercent", "args": [9007199254740992, "pt-BR"]}
+{"fn": "formatUsed", "args": [9007199254740992, "pt-BR"]}
+{"fn": "formatPercent", "args": [1e-07, "pt-BR"]}
+{"fn": "formatUsed", "args": [1e-07, "pt-BR"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "pt-BR"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "pt-BR"]}
+{"fn": "formatPercent", "args": [null, "pt-BR"]}
+{"fn": "formatUsed", "args": [null, "pt-BR"]}
+{"fn": "usedWord", "args": ["it"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "it"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "it"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "it"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "it"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "it"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "it"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "it"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "it"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "it"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "it"]}
+{"fn": "formatPercent", "args": [0, "it"]}
+{"fn": "formatUsed", "args": [0, "it"]}
+{"fn": "formatPercent", "args": [0.4, "it"]}
+{"fn": "formatUsed", "args": [0.4, "it"]}
+{"fn": "formatPercent", "args": [0.5, "it"]}
+{"fn": "formatUsed", "args": [0.5, "it"]}
+{"fn": "formatPercent", "args": [1, "it"]}
+{"fn": "formatUsed", "args": [1, "it"]}
+{"fn": "formatPercent", "args": [1.5, "it"]}
+{"fn": "formatUsed", "args": [1.5, "it"]}
+{"fn": "formatPercent", "args": [2.5, "it"]}
+{"fn": "formatUsed", "args": [2.5, "it"]}
+{"fn": "formatPercent", "args": [-0.4, "it"]}
+{"fn": "formatUsed", "args": [-0.4, "it"]}
+{"fn": "formatPercent", "args": [-0.5, "it"]}
+{"fn": "formatUsed", "args": [-0.5, "it"]}
+{"fn": "formatPercent", "args": [-1, "it"]}
+{"fn": "formatUsed", "args": [-1, "it"]}
+{"fn": "formatPercent", "args": [-2.5, "it"]}
+{"fn": "formatUsed", "args": [-2.5, "it"]}
+{"fn": "formatPercent", "args": [-150, "it"]}
+{"fn": "formatUsed", "args": [-150, "it"]}
+{"fn": "formatPercent", "args": [7, "it"]}
+{"fn": "formatUsed", "args": [7, "it"]}
+{"fn": "formatPercent", "args": [45, "it"]}
+{"fn": "formatUsed", "args": [45, "it"]}
+{"fn": "formatPercent", "args": [49.5, "it"]}
+{"fn": "formatUsed", "args": [49.5, "it"]}
+{"fn": "formatPercent", "args": [50.5, "it"]}
+{"fn": "formatUsed", "args": [50.5, "it"]}
+{"fn": "formatPercent", "args": [94, "it"]}
+{"fn": "formatUsed", "args": [94, "it"]}
+{"fn": "formatPercent", "args": [99.4, "it"]}
+{"fn": "formatUsed", "args": [99.4, "it"]}
+{"fn": "formatPercent", "args": [99.5, "it"]}
+{"fn": "formatUsed", "args": [99.5, "it"]}
+{"fn": "formatPercent", "args": [99.9, "it"]}
+{"fn": "formatUsed", "args": [99.9, "it"]}
+{"fn": "formatPercent", "args": [100, "it"]}
+{"fn": "formatUsed", "args": [100, "it"]}
+{"fn": "formatPercent", "args": [100.5, "it"]}
+{"fn": "formatUsed", "args": [100.5, "it"]}
+{"fn": "formatPercent", "args": [101, "it"]}
+{"fn": "formatUsed", "args": [101, "it"]}
+{"fn": "formatPercent", "args": [150, "it"]}
+{"fn": "formatUsed", "args": [150, "it"]}
+{"fn": "formatPercent", "args": [1000, "it"]}
+{"fn": "formatUsed", "args": [1000, "it"]}
+{"fn": "formatPercent", "args": [12345, "it"]}
+{"fn": "formatUsed", "args": [12345, "it"]}
+{"fn": "formatPercent", "args": [1e+21, "it"]}
+{"fn": "formatUsed", "args": [1e+21, "it"]}
+{"fn": "formatPercent", "args": [-1e+21, "it"]}
+{"fn": "formatUsed", "args": [-1e+21, "it"]}
+{"fn": "formatPercent", "args": [2147483648, "it"]}
+{"fn": "formatUsed", "args": [2147483648, "it"]}
+{"fn": "formatPercent", "args": [9007199254740992, "it"]}
+{"fn": "formatUsed", "args": [9007199254740992, "it"]}
+{"fn": "formatPercent", "args": [1e-07, "it"]}
+{"fn": "formatUsed", "args": [1e-07, "it"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "it"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "it"]}
+{"fn": "formatPercent", "args": [null, "it"]}
+{"fn": "formatUsed", "args": [null, "it"]}
+{"fn": "usedWord", "args": ["ja"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "ja"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "ja"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "ja"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "ja"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "ja"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "ja"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "ja"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "ja"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "ja"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "ja"]}
+{"fn": "formatPercent", "args": [0, "ja"]}
+{"fn": "formatUsed", "args": [0, "ja"]}
+{"fn": "formatPercent", "args": [0.4, "ja"]}
+{"fn": "formatUsed", "args": [0.4, "ja"]}
+{"fn": "formatPercent", "args": [0.5, "ja"]}
+{"fn": "formatUsed", "args": [0.5, "ja"]}
+{"fn": "formatPercent", "args": [1, "ja"]}
+{"fn": "formatUsed", "args": [1, "ja"]}
+{"fn": "formatPercent", "args": [1.5, "ja"]}
+{"fn": "formatUsed", "args": [1.5, "ja"]}
+{"fn": "formatPercent", "args": [2.5, "ja"]}
+{"fn": "formatUsed", "args": [2.5, "ja"]}
+{"fn": "formatPercent", "args": [-0.4, "ja"]}
+{"fn": "formatUsed", "args": [-0.4, "ja"]}
+{"fn": "formatPercent", "args": [-0.5, "ja"]}
+{"fn": "formatUsed", "args": [-0.5, "ja"]}
+{"fn": "formatPercent", "args": [-1, "ja"]}
+{"fn": "formatUsed", "args": [-1, "ja"]}
+{"fn": "formatPercent", "args": [-2.5, "ja"]}
+{"fn": "formatUsed", "args": [-2.5, "ja"]}
+{"fn": "formatPercent", "args": [-150, "ja"]}
+{"fn": "formatUsed", "args": [-150, "ja"]}
+{"fn": "formatPercent", "args": [7, "ja"]}
+{"fn": "formatUsed", "args": [7, "ja"]}
+{"fn": "formatPercent", "args": [45, "ja"]}
+{"fn": "formatUsed", "args": [45, "ja"]}
+{"fn": "formatPercent", "args": [49.5, "ja"]}
+{"fn": "formatUsed", "args": [49.5, "ja"]}
+{"fn": "formatPercent", "args": [50.5, "ja"]}
+{"fn": "formatUsed", "args": [50.5, "ja"]}
+{"fn": "formatPercent", "args": [94, "ja"]}
+{"fn": "formatUsed", "args": [94, "ja"]}
+{"fn": "formatPercent", "args": [99.4, "ja"]}
+{"fn": "formatUsed", "args": [99.4, "ja"]}
+{"fn": "formatPercent", "args": [99.5, "ja"]}
+{"fn": "formatUsed", "args": [99.5, "ja"]}
+{"fn": "formatPercent", "args": [99.9, "ja"]}
+{"fn": "formatUsed", "args": [99.9, "ja"]}
+{"fn": "formatPercent", "args": [100, "ja"]}
+{"fn": "formatUsed", "args": [100, "ja"]}
+{"fn": "formatPercent", "args": [100.5, "ja"]}
+{"fn": "formatUsed", "args": [100.5, "ja"]}
+{"fn": "formatPercent", "args": [101, "ja"]}
+{"fn": "formatUsed", "args": [101, "ja"]}
+{"fn": "formatPercent", "args": [150, "ja"]}
+{"fn": "formatUsed", "args": [150, "ja"]}
+{"fn": "formatPercent", "args": [1000, "ja"]}
+{"fn": "formatUsed", "args": [1000, "ja"]}
+{"fn": "formatPercent", "args": [12345, "ja"]}
+{"fn": "formatUsed", "args": [12345, "ja"]}
+{"fn": "formatPercent", "args": [1e+21, "ja"]}
+{"fn": "formatUsed", "args": [1e+21, "ja"]}
+{"fn": "formatPercent", "args": [-1e+21, "ja"]}
+{"fn": "formatUsed", "args": [-1e+21, "ja"]}
+{"fn": "formatPercent", "args": [2147483648, "ja"]}
+{"fn": "formatUsed", "args": [2147483648, "ja"]}
+{"fn": "formatPercent", "args": [9007199254740992, "ja"]}
+{"fn": "formatUsed", "args": [9007199254740992, "ja"]}
+{"fn": "formatPercent", "args": [1e-07, "ja"]}
+{"fn": "formatUsed", "args": [1e-07, "ja"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "ja"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "ja"]}
+{"fn": "formatPercent", "args": [null, "ja"]}
+{"fn": "formatUsed", "args": [null, "ja"]}
+{"fn": "usedWord", "args": ["ko"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "ko"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "ko"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "ko"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "ko"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "ko"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "ko"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "ko"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "ko"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "ko"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "ko"]}
+{"fn": "formatPercent", "args": [0, "ko"]}
+{"fn": "formatUsed", "args": [0, "ko"]}
+{"fn": "formatPercent", "args": [0.4, "ko"]}
+{"fn": "formatUsed", "args": [0.4, "ko"]}
+{"fn": "formatPercent", "args": [0.5, "ko"]}
+{"fn": "formatUsed", "args": [0.5, "ko"]}
+{"fn": "formatPercent", "args": [1, "ko"]}
+{"fn": "formatUsed", "args": [1, "ko"]}
+{"fn": "formatPercent", "args": [1.5, "ko"]}
+{"fn": "formatUsed", "args": [1.5, "ko"]}
+{"fn": "formatPercent", "args": [2.5, "ko"]}
+{"fn": "formatUsed", "args": [2.5, "ko"]}
+{"fn": "formatPercent", "args": [-0.4, "ko"]}
+{"fn": "formatUsed", "args": [-0.4, "ko"]}
+{"fn": "formatPercent", "args": [-0.5, "ko"]}
+{"fn": "formatUsed", "args": [-0.5, "ko"]}
+{"fn": "formatPercent", "args": [-1, "ko"]}
+{"fn": "formatUsed", "args": [-1, "ko"]}
+{"fn": "formatPercent", "args": [-2.5, "ko"]}
+{"fn": "formatUsed", "args": [-2.5, "ko"]}
+{"fn": "formatPercent", "args": [-150, "ko"]}
+{"fn": "formatUsed", "args": [-150, "ko"]}
+{"fn": "formatPercent", "args": [7, "ko"]}
+{"fn": "formatUsed", "args": [7, "ko"]}
+{"fn": "formatPercent", "args": [45, "ko"]}
+{"fn": "formatUsed", "args": [45, "ko"]}
+{"fn": "formatPercent", "args": [49.5, "ko"]}
+{"fn": "formatUsed", "args": [49.5, "ko"]}
+{"fn": "formatPercent", "args": [50.5, "ko"]}
+{"fn": "formatUsed", "args": [50.5, "ko"]}
+{"fn": "formatPercent", "args": [94, "ko"]}
+{"fn": "formatUsed", "args": [94, "ko"]}
+{"fn": "formatPercent", "args": [99.4, "ko"]}
+{"fn": "formatUsed", "args": [99.4, "ko"]}
+{"fn": "formatPercent", "args": [99.5, "ko"]}
+{"fn": "formatUsed", "args": [99.5, "ko"]}
+{"fn": "formatPercent", "args": [99.9, "ko"]}
+{"fn": "formatUsed", "args": [99.9, "ko"]}
+{"fn": "formatPercent", "args": [100, "ko"]}
+{"fn": "formatUsed", "args": [100, "ko"]}
+{"fn": "formatPercent", "args": [100.5, "ko"]}
+{"fn": "formatUsed", "args": [100.5, "ko"]}
+{"fn": "formatPercent", "args": [101, "ko"]}
+{"fn": "formatUsed", "args": [101, "ko"]}
+{"fn": "formatPercent", "args": [150, "ko"]}
+{"fn": "formatUsed", "args": [150, "ko"]}
+{"fn": "formatPercent", "args": [1000, "ko"]}
+{"fn": "formatUsed", "args": [1000, "ko"]}
+{"fn": "formatPercent", "args": [12345, "ko"]}
+{"fn": "formatUsed", "args": [12345, "ko"]}
+{"fn": "formatPercent", "args": [1e+21, "ko"]}
+{"fn": "formatUsed", "args": [1e+21, "ko"]}
+{"fn": "formatPercent", "args": [-1e+21, "ko"]}
+{"fn": "formatUsed", "args": [-1e+21, "ko"]}
+{"fn": "formatPercent", "args": [2147483648, "ko"]}
+{"fn": "formatUsed", "args": [2147483648, "ko"]}
+{"fn": "formatPercent", "args": [9007199254740992, "ko"]}
+{"fn": "formatUsed", "args": [9007199254740992, "ko"]}
+{"fn": "formatPercent", "args": [1e-07, "ko"]}
+{"fn": "formatUsed", "args": [1e-07, "ko"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "ko"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "ko"]}
+{"fn": "formatPercent", "args": [null, "ko"]}
+{"fn": "formatUsed", "args": [null, "ko"]}
+{"fn": "usedWord", "args": ["zh-Hans"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "zh-Hans"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "zh-Hans"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "zh-Hans"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "zh-Hans"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "zh-Hans"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "zh-Hans"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "zh-Hans"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "zh-Hans"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "zh-Hans"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "zh-Hans"]}
+{"fn": "formatPercent", "args": [0, "zh-Hans"]}
+{"fn": "formatUsed", "args": [0, "zh-Hans"]}
+{"fn": "formatPercent", "args": [0.4, "zh-Hans"]}
+{"fn": "formatUsed", "args": [0.4, "zh-Hans"]}
+{"fn": "formatPercent", "args": [0.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [0.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [1, "zh-Hans"]}
+{"fn": "formatUsed", "args": [1, "zh-Hans"]}
+{"fn": "formatPercent", "args": [1.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [1.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [2.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [2.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [-0.4, "zh-Hans"]}
+{"fn": "formatUsed", "args": [-0.4, "zh-Hans"]}
+{"fn": "formatPercent", "args": [-0.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [-0.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [-1, "zh-Hans"]}
+{"fn": "formatUsed", "args": [-1, "zh-Hans"]}
+{"fn": "formatPercent", "args": [-2.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [-2.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [-150, "zh-Hans"]}
+{"fn": "formatUsed", "args": [-150, "zh-Hans"]}
+{"fn": "formatPercent", "args": [7, "zh-Hans"]}
+{"fn": "formatUsed", "args": [7, "zh-Hans"]}
+{"fn": "formatPercent", "args": [45, "zh-Hans"]}
+{"fn": "formatUsed", "args": [45, "zh-Hans"]}
+{"fn": "formatPercent", "args": [49.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [49.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [50.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [50.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [94, "zh-Hans"]}
+{"fn": "formatUsed", "args": [94, "zh-Hans"]}
+{"fn": "formatPercent", "args": [99.4, "zh-Hans"]}
+{"fn": "formatUsed", "args": [99.4, "zh-Hans"]}
+{"fn": "formatPercent", "args": [99.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [99.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [99.9, "zh-Hans"]}
+{"fn": "formatUsed", "args": [99.9, "zh-Hans"]}
+{"fn": "formatPercent", "args": [100, "zh-Hans"]}
+{"fn": "formatUsed", "args": [100, "zh-Hans"]}
+{"fn": "formatPercent", "args": [100.5, "zh-Hans"]}
+{"fn": "formatUsed", "args": [100.5, "zh-Hans"]}
+{"fn": "formatPercent", "args": [101, "zh-Hans"]}
+{"fn": "formatUsed", "args": [101, "zh-Hans"]}
+{"fn": "formatPercent", "args": [150, "zh-Hans"]}
+{"fn": "formatUsed", "args": [150, "zh-Hans"]}
+{"fn": "formatPercent", "args": [1000, "zh-Hans"]}
+{"fn": "formatUsed", "args": [1000, "zh-Hans"]}
+{"fn": "formatPercent", "args": [12345, "zh-Hans"]}
+{"fn": "formatUsed", "args": [12345, "zh-Hans"]}
+{"fn": "formatPercent", "args": [1e+21, "zh-Hans"]}
+{"fn": "formatUsed", "args": [1e+21, "zh-Hans"]}
+{"fn": "formatPercent", "args": [-1e+21, "zh-Hans"]}
+{"fn": "formatUsed", "args": [-1e+21, "zh-Hans"]}
+{"fn": "formatPercent", "args": [2147483648, "zh-Hans"]}
+{"fn": "formatUsed", "args": [2147483648, "zh-Hans"]}
+{"fn": "formatPercent", "args": [9007199254740992, "zh-Hans"]}
+{"fn": "formatUsed", "args": [9007199254740992, "zh-Hans"]}
+{"fn": "formatPercent", "args": [1e-07, "zh-Hans"]}
+{"fn": "formatUsed", "args": [1e-07, "zh-Hans"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "zh-Hans"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "zh-Hans"]}
+{"fn": "formatPercent", "args": [null, "zh-Hans"]}
+{"fn": "formatUsed", "args": [null, "zh-Hans"]}
+{"fn": "usedWord", "args": ["zh-Hant"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "zh-Hant"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "zh-Hant"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "zh-Hant"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "zh-Hant"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "zh-Hant"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "zh-Hant"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "zh-Hant"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "zh-Hant"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "zh-Hant"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "zh-Hant"]}
+{"fn": "formatPercent", "args": [0, "zh-Hant"]}
+{"fn": "formatUsed", "args": [0, "zh-Hant"]}
+{"fn": "formatPercent", "args": [0.4, "zh-Hant"]}
+{"fn": "formatUsed", "args": [0.4, "zh-Hant"]}
+{"fn": "formatPercent", "args": [0.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [0.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [1, "zh-Hant"]}
+{"fn": "formatUsed", "args": [1, "zh-Hant"]}
+{"fn": "formatPercent", "args": [1.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [1.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [2.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [2.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [-0.4, "zh-Hant"]}
+{"fn": "formatUsed", "args": [-0.4, "zh-Hant"]}
+{"fn": "formatPercent", "args": [-0.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [-0.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [-1, "zh-Hant"]}
+{"fn": "formatUsed", "args": [-1, "zh-Hant"]}
+{"fn": "formatPercent", "args": [-2.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [-2.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [-150, "zh-Hant"]}
+{"fn": "formatUsed", "args": [-150, "zh-Hant"]}
+{"fn": "formatPercent", "args": [7, "zh-Hant"]}
+{"fn": "formatUsed", "args": [7, "zh-Hant"]}
+{"fn": "formatPercent", "args": [45, "zh-Hant"]}
+{"fn": "formatUsed", "args": [45, "zh-Hant"]}
+{"fn": "formatPercent", "args": [49.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [49.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [50.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [50.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [94, "zh-Hant"]}
+{"fn": "formatUsed", "args": [94, "zh-Hant"]}
+{"fn": "formatPercent", "args": [99.4, "zh-Hant"]}
+{"fn": "formatUsed", "args": [99.4, "zh-Hant"]}
+{"fn": "formatPercent", "args": [99.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [99.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [99.9, "zh-Hant"]}
+{"fn": "formatUsed", "args": [99.9, "zh-Hant"]}
+{"fn": "formatPercent", "args": [100, "zh-Hant"]}
+{"fn": "formatUsed", "args": [100, "zh-Hant"]}
+{"fn": "formatPercent", "args": [100.5, "zh-Hant"]}
+{"fn": "formatUsed", "args": [100.5, "zh-Hant"]}
+{"fn": "formatPercent", "args": [101, "zh-Hant"]}
+{"fn": "formatUsed", "args": [101, "zh-Hant"]}
+{"fn": "formatPercent", "args": [150, "zh-Hant"]}
+{"fn": "formatUsed", "args": [150, "zh-Hant"]}
+{"fn": "formatPercent", "args": [1000, "zh-Hant"]}
+{"fn": "formatUsed", "args": [1000, "zh-Hant"]}
+{"fn": "formatPercent", "args": [12345, "zh-Hant"]}
+{"fn": "formatUsed", "args": [12345, "zh-Hant"]}
+{"fn": "formatPercent", "args": [1e+21, "zh-Hant"]}
+{"fn": "formatUsed", "args": [1e+21, "zh-Hant"]}
+{"fn": "formatPercent", "args": [-1e+21, "zh-Hant"]}
+{"fn": "formatUsed", "args": [-1e+21, "zh-Hant"]}
+{"fn": "formatPercent", "args": [2147483648, "zh-Hant"]}
+{"fn": "formatUsed", "args": [2147483648, "zh-Hant"]}
+{"fn": "formatPercent", "args": [9007199254740992, "zh-Hant"]}
+{"fn": "formatUsed", "args": [9007199254740992, "zh-Hant"]}
+{"fn": "formatPercent", "args": [1e-07, "zh-Hant"]}
+{"fn": "formatUsed", "args": [1e-07, "zh-Hant"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "zh-Hant"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "zh-Hant"]}
+{"fn": "formatPercent", "args": [null, "zh-Hant"]}
+{"fn": "formatUsed", "args": [null, "zh-Hant"]}
+{"fn": "usedWord", "args": ["ru"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "ru"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "ru"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "ru"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "ru"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "ru"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "ru"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "ru"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "ru"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "ru"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "ru"]}
+{"fn": "formatPercent", "args": [0, "ru"]}
+{"fn": "formatUsed", "args": [0, "ru"]}
+{"fn": "formatPercent", "args": [0.4, "ru"]}
+{"fn": "formatUsed", "args": [0.4, "ru"]}
+{"fn": "formatPercent", "args": [0.5, "ru"]}
+{"fn": "formatUsed", "args": [0.5, "ru"]}
+{"fn": "formatPercent", "args": [1, "ru"]}
+{"fn": "formatUsed", "args": [1, "ru"]}
+{"fn": "formatPercent", "args": [1.5, "ru"]}
+{"fn": "formatUsed", "args": [1.5, "ru"]}
+{"fn": "formatPercent", "args": [2.5, "ru"]}
+{"fn": "formatUsed", "args": [2.5, "ru"]}
+{"fn": "formatPercent", "args": [-0.4, "ru"]}
+{"fn": "formatUsed", "args": [-0.4, "ru"]}
+{"fn": "formatPercent", "args": [-0.5, "ru"]}
+{"fn": "formatUsed", "args": [-0.5, "ru"]}
+{"fn": "formatPercent", "args": [-1, "ru"]}
+{"fn": "formatUsed", "args": [-1, "ru"]}
+{"fn": "formatPercent", "args": [-2.5, "ru"]}
+{"fn": "formatUsed", "args": [-2.5, "ru"]}
+{"fn": "formatPercent", "args": [-150, "ru"]}
+{"fn": "formatUsed", "args": [-150, "ru"]}
+{"fn": "formatPercent", "args": [7, "ru"]}
+{"fn": "formatUsed", "args": [7, "ru"]}
+{"fn": "formatPercent", "args": [45, "ru"]}
+{"fn": "formatUsed", "args": [45, "ru"]}
+{"fn": "formatPercent", "args": [49.5, "ru"]}
+{"fn": "formatUsed", "args": [49.5, "ru"]}
+{"fn": "formatPercent", "args": [50.5, "ru"]}
+{"fn": "formatUsed", "args": [50.5, "ru"]}
+{"fn": "formatPercent", "args": [94, "ru"]}
+{"fn": "formatUsed", "args": [94, "ru"]}
+{"fn": "formatPercent", "args": [99.4, "ru"]}
+{"fn": "formatUsed", "args": [99.4, "ru"]}
+{"fn": "formatPercent", "args": [99.5, "ru"]}
+{"fn": "formatUsed", "args": [99.5, "ru"]}
+{"fn": "formatPercent", "args": [99.9, "ru"]}
+{"fn": "formatUsed", "args": [99.9, "ru"]}
+{"fn": "formatPercent", "args": [100, "ru"]}
+{"fn": "formatUsed", "args": [100, "ru"]}
+{"fn": "formatPercent", "args": [100.5, "ru"]}
+{"fn": "formatUsed", "args": [100.5, "ru"]}
+{"fn": "formatPercent", "args": [101, "ru"]}
+{"fn": "formatUsed", "args": [101, "ru"]}
+{"fn": "formatPercent", "args": [150, "ru"]}
+{"fn": "formatUsed", "args": [150, "ru"]}
+{"fn": "formatPercent", "args": [1000, "ru"]}
+{"fn": "formatUsed", "args": [1000, "ru"]}
+{"fn": "formatPercent", "args": [12345, "ru"]}
+{"fn": "formatUsed", "args": [12345, "ru"]}
+{"fn": "formatPercent", "args": [1e+21, "ru"]}
+{"fn": "formatUsed", "args": [1e+21, "ru"]}
+{"fn": "formatPercent", "args": [-1e+21, "ru"]}
+{"fn": "formatUsed", "args": [-1e+21, "ru"]}
+{"fn": "formatPercent", "args": [2147483648, "ru"]}
+{"fn": "formatUsed", "args": [2147483648, "ru"]}
+{"fn": "formatPercent", "args": [9007199254740992, "ru"]}
+{"fn": "formatUsed", "args": [9007199254740992, "ru"]}
+{"fn": "formatPercent", "args": [1e-07, "ru"]}
+{"fn": "formatUsed", "args": [1e-07, "ru"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "ru"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "ru"]}
+{"fn": "formatPercent", "args": [null, "ru"]}
+{"fn": "formatUsed", "args": [null, "ru"]}
+{"fn": "usedWord", "args": ["uk"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "uk"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "uk"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "uk"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "uk"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "uk"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "uk"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "uk"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "uk"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "uk"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "uk"]}
+{"fn": "formatPercent", "args": [0, "uk"]}
+{"fn": "formatUsed", "args": [0, "uk"]}
+{"fn": "formatPercent", "args": [0.4, "uk"]}
+{"fn": "formatUsed", "args": [0.4, "uk"]}
+{"fn": "formatPercent", "args": [0.5, "uk"]}
+{"fn": "formatUsed", "args": [0.5, "uk"]}
+{"fn": "formatPercent", "args": [1, "uk"]}
+{"fn": "formatUsed", "args": [1, "uk"]}
+{"fn": "formatPercent", "args": [1.5, "uk"]}
+{"fn": "formatUsed", "args": [1.5, "uk"]}
+{"fn": "formatPercent", "args": [2.5, "uk"]}
+{"fn": "formatUsed", "args": [2.5, "uk"]}
+{"fn": "formatPercent", "args": [-0.4, "uk"]}
+{"fn": "formatUsed", "args": [-0.4, "uk"]}
+{"fn": "formatPercent", "args": [-0.5, "uk"]}
+{"fn": "formatUsed", "args": [-0.5, "uk"]}
+{"fn": "formatPercent", "args": [-1, "uk"]}
+{"fn": "formatUsed", "args": [-1, "uk"]}
+{"fn": "formatPercent", "args": [-2.5, "uk"]}
+{"fn": "formatUsed", "args": [-2.5, "uk"]}
+{"fn": "formatPercent", "args": [-150, "uk"]}
+{"fn": "formatUsed", "args": [-150, "uk"]}
+{"fn": "formatPercent", "args": [7, "uk"]}
+{"fn": "formatUsed", "args": [7, "uk"]}
+{"fn": "formatPercent", "args": [45, "uk"]}
+{"fn": "formatUsed", "args": [45, "uk"]}
+{"fn": "formatPercent", "args": [49.5, "uk"]}
+{"fn": "formatUsed", "args": [49.5, "uk"]}
+{"fn": "formatPercent", "args": [50.5, "uk"]}
+{"fn": "formatUsed", "args": [50.5, "uk"]}
+{"fn": "formatPercent", "args": [94, "uk"]}
+{"fn": "formatUsed", "args": [94, "uk"]}
+{"fn": "formatPercent", "args": [99.4, "uk"]}
+{"fn": "formatUsed", "args": [99.4, "uk"]}
+{"fn": "formatPercent", "args": [99.5, "uk"]}
+{"fn": "formatUsed", "args": [99.5, "uk"]}
+{"fn": "formatPercent", "args": [99.9, "uk"]}
+{"fn": "formatUsed", "args": [99.9, "uk"]}
+{"fn": "formatPercent", "args": [100, "uk"]}
+{"fn": "formatUsed", "args": [100, "uk"]}
+{"fn": "formatPercent", "args": [100.5, "uk"]}
+{"fn": "formatUsed", "args": [100.5, "uk"]}
+{"fn": "formatPercent", "args": [101, "uk"]}
+{"fn": "formatUsed", "args": [101, "uk"]}
+{"fn": "formatPercent", "args": [150, "uk"]}
+{"fn": "formatUsed", "args": [150, "uk"]}
+{"fn": "formatPercent", "args": [1000, "uk"]}
+{"fn": "formatUsed", "args": [1000, "uk"]}
+{"fn": "formatPercent", "args": [12345, "uk"]}
+{"fn": "formatUsed", "args": [12345, "uk"]}
+{"fn": "formatPercent", "args": [1e+21, "uk"]}
+{"fn": "formatUsed", "args": [1e+21, "uk"]}
+{"fn": "formatPercent", "args": [-1e+21, "uk"]}
+{"fn": "formatUsed", "args": [-1e+21, "uk"]}
+{"fn": "formatPercent", "args": [2147483648, "uk"]}
+{"fn": "formatUsed", "args": [2147483648, "uk"]}
+{"fn": "formatPercent", "args": [9007199254740992, "uk"]}
+{"fn": "formatUsed", "args": [9007199254740992, "uk"]}
+{"fn": "formatPercent", "args": [1e-07, "uk"]}
+{"fn": "formatUsed", "args": [1e-07, "uk"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "uk"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "uk"]}
+{"fn": "formatPercent", "args": [null, "uk"]}
+{"fn": "formatUsed", "args": [null, "uk"]}
+{"fn": "usedWord", "args": ["pl"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "pl"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "pl"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "pl"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "pl"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "pl"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "pl"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "pl"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "pl"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "pl"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "pl"]}
+{"fn": "formatPercent", "args": [0, "pl"]}
+{"fn": "formatUsed", "args": [0, "pl"]}
+{"fn": "formatPercent", "args": [0.4, "pl"]}
+{"fn": "formatUsed", "args": [0.4, "pl"]}
+{"fn": "formatPercent", "args": [0.5, "pl"]}
+{"fn": "formatUsed", "args": [0.5, "pl"]}
+{"fn": "formatPercent", "args": [1, "pl"]}
+{"fn": "formatUsed", "args": [1, "pl"]}
+{"fn": "formatPercent", "args": [1.5, "pl"]}
+{"fn": "formatUsed", "args": [1.5, "pl"]}
+{"fn": "formatPercent", "args": [2.5, "pl"]}
+{"fn": "formatUsed", "args": [2.5, "pl"]}
+{"fn": "formatPercent", "args": [-0.4, "pl"]}
+{"fn": "formatUsed", "args": [-0.4, "pl"]}
+{"fn": "formatPercent", "args": [-0.5, "pl"]}
+{"fn": "formatUsed", "args": [-0.5, "pl"]}
+{"fn": "formatPercent", "args": [-1, "pl"]}
+{"fn": "formatUsed", "args": [-1, "pl"]}
+{"fn": "formatPercent", "args": [-2.5, "pl"]}
+{"fn": "formatUsed", "args": [-2.5, "pl"]}
+{"fn": "formatPercent", "args": [-150, "pl"]}
+{"fn": "formatUsed", "args": [-150, "pl"]}
+{"fn": "formatPercent", "args": [7, "pl"]}
+{"fn": "formatUsed", "args": [7, "pl"]}
+{"fn": "formatPercent", "args": [45, "pl"]}
+{"fn": "formatUsed", "args": [45, "pl"]}
+{"fn": "formatPercent", "args": [49.5, "pl"]}
+{"fn": "formatUsed", "args": [49.5, "pl"]}
+{"fn": "formatPercent", "args": [50.5, "pl"]}
+{"fn": "formatUsed", "args": [50.5, "pl"]}
+{"fn": "formatPercent", "args": [94, "pl"]}
+{"fn": "formatUsed", "args": [94, "pl"]}
+{"fn": "formatPercent", "args": [99.4, "pl"]}
+{"fn": "formatUsed", "args": [99.4, "pl"]}
+{"fn": "formatPercent", "args": [99.5, "pl"]}
+{"fn": "formatUsed", "args": [99.5, "pl"]}
+{"fn": "formatPercent", "args": [99.9, "pl"]}
+{"fn": "formatUsed", "args": [99.9, "pl"]}
+{"fn": "formatPercent", "args": [100, "pl"]}
+{"fn": "formatUsed", "args": [100, "pl"]}
+{"fn": "formatPercent", "args": [100.5, "pl"]}
+{"fn": "formatUsed", "args": [100.5, "pl"]}
+{"fn": "formatPercent", "args": [101, "pl"]}
+{"fn": "formatUsed", "args": [101, "pl"]}
+{"fn": "formatPercent", "args": [150, "pl"]}
+{"fn": "formatUsed", "args": [150, "pl"]}
+{"fn": "formatPercent", "args": [1000, "pl"]}
+{"fn": "formatUsed", "args": [1000, "pl"]}
+{"fn": "formatPercent", "args": [12345, "pl"]}
+{"fn": "formatUsed", "args": [12345, "pl"]}
+{"fn": "formatPercent", "args": [1e+21, "pl"]}
+{"fn": "formatUsed", "args": [1e+21, "pl"]}
+{"fn": "formatPercent", "args": [-1e+21, "pl"]}
+{"fn": "formatUsed", "args": [-1e+21, "pl"]}
+{"fn": "formatPercent", "args": [2147483648, "pl"]}
+{"fn": "formatUsed", "args": [2147483648, "pl"]}
+{"fn": "formatPercent", "args": [9007199254740992, "pl"]}
+{"fn": "formatUsed", "args": [9007199254740992, "pl"]}
+{"fn": "formatPercent", "args": [1e-07, "pl"]}
+{"fn": "formatUsed", "args": [1e-07, "pl"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "pl"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "pl"]}
+{"fn": "formatPercent", "args": [null, "pl"]}
+{"fn": "formatUsed", "args": [null, "pl"]}
+{"fn": "usedWord", "args": ["nl"]}
+{"fn": "formatPercent", "args": [{"$undefined": true}, "nl"]}
+{"fn": "formatUsed", "args": [{"$undefined": true}, "nl"]}
+{"fn": "formatPercent", "args": [{"$num": "NaN"}, "nl"]}
+{"fn": "formatUsed", "args": [{"$num": "NaN"}, "nl"]}
+{"fn": "formatPercent", "args": [{"$num": "Infinity"}, "nl"]}
+{"fn": "formatUsed", "args": [{"$num": "Infinity"}, "nl"]}
+{"fn": "formatPercent", "args": [{"$num": "-Infinity"}, "nl"]}
+{"fn": "formatUsed", "args": [{"$num": "-Infinity"}, "nl"]}
+{"fn": "formatPercent", "args": [{"$num": "-0"}, "nl"]}
+{"fn": "formatUsed", "args": [{"$num": "-0"}, "nl"]}
+{"fn": "formatPercent", "args": [0, "nl"]}
+{"fn": "formatUsed", "args": [0, "nl"]}
+{"fn": "formatPercent", "args": [0.4, "nl"]}
+{"fn": "formatUsed", "args": [0.4, "nl"]}
+{"fn": "formatPercent", "args": [0.5, "nl"]}
+{"fn": "formatUsed", "args": [0.5, "nl"]}
+{"fn": "formatPercent", "args": [1, "nl"]}
+{"fn": "formatUsed", "args": [1, "nl"]}
+{"fn": "formatPercent", "args": [1.5, "nl"]}
+{"fn": "formatUsed", "args": [1.5, "nl"]}
+{"fn": "formatPercent", "args": [2.5, "nl"]}
+{"fn": "formatUsed", "args": [2.5, "nl"]}
+{"fn": "formatPercent", "args": [-0.4, "nl"]}
+{"fn": "formatUsed", "args": [-0.4, "nl"]}
+{"fn": "formatPercent", "args": [-0.5, "nl"]}
+{"fn": "formatUsed", "args": [-0.5, "nl"]}
+{"fn": "formatPercent", "args": [-1, "nl"]}
+{"fn": "formatUsed", "args": [-1, "nl"]}
+{"fn": "formatPercent", "args": [-2.5, "nl"]}
+{"fn": "formatUsed", "args": [-2.5, "nl"]}
+{"fn": "formatPercent", "args": [-150, "nl"]}
+{"fn": "formatUsed", "args": [-150, "nl"]}
+{"fn": "formatPercent", "args": [7, "nl"]}
+{"fn": "formatUsed", "args": [7, "nl"]}
+{"fn": "formatPercent", "args": [45, "nl"]}
+{"fn": "formatUsed", "args": [45, "nl"]}
+{"fn": "formatPercent", "args": [49.5, "nl"]}
+{"fn": "formatUsed", "args": [49.5, "nl"]}
+{"fn": "formatPercent", "args": [50.5, "nl"]}
+{"fn": "formatUsed", "args": [50.5, "nl"]}
+{"fn": "formatPercent", "args": [94, "nl"]}
+{"fn": "formatUsed", "args": [94, "nl"]}
+{"fn": "formatPercent", "args": [99.4, "nl"]}
+{"fn": "formatUsed", "args": [99.4, "nl"]}
+{"fn": "formatPercent", "args": [99.5, "nl"]}
+{"fn": "formatUsed", "args": [99.5, "nl"]}
+{"fn": "formatPercent", "args": [99.9, "nl"]}
+{"fn": "formatUsed", "args": [99.9, "nl"]}
+{"fn": "formatPercent", "args": [100, "nl"]}
+{"fn": "formatUsed", "args": [100, "nl"]}
+{"fn": "formatPercent", "args": [100.5, "nl"]}
+{"fn": "formatUsed", "args": [100.5, "nl"]}
+{"fn": "formatPercent", "args": [101, "nl"]}
+{"fn": "formatUsed", "args": [101, "nl"]}
+{"fn": "formatPercent", "args": [150, "nl"]}
+{"fn": "formatUsed", "args": [150, "nl"]}
+{"fn": "formatPercent", "args": [1000, "nl"]}
+{"fn": "formatUsed", "args": [1000, "nl"]}
+{"fn": "formatPercent", "args": [12345, "nl"]}
+{"fn": "formatUsed", "args": [12345, "nl"]}
+{"fn": "formatPercent", "args": [1e+21, "nl"]}
+{"fn": "formatUsed", "args": [1e+21, "nl"]}
+{"fn": "formatPercent", "args": [-1e+21, "nl"]}
+{"fn": "formatUsed", "args": [-1e+21, "nl"]}
+{"fn": "formatPercent", "args": [2147483648, "nl"]}
+{"fn": "formatUsed", "args": [2147483648, "nl"]}
+{"fn": "formatPercent", "args": [9007199254740992, "nl"]}
+{"fn": "formatUsed", "args": [9007199254740992, "nl"]}
+{"fn": "formatPercent", "args": [1e-07, "nl"]}
+{"fn": "formatUsed", "args": [1e-07, "nl"]}
+{"fn": "formatPercent", "args": [0.49999999999999994, "nl"]}
+{"fn": "formatUsed", "args": [0.49999999999999994, "nl"]}
+{"fn": "formatPercent", "args": [null, "nl"]}
+{"fn": "formatUsed", "args": [null, "nl"]}
+{"fn": "percentUsed", "args": [{"$undefined": true}]}
+{"fn": "percentUsed", "args": [{"$num": "NaN"}]}
+{"fn": "percentUsed", "args": [{"$num": "Infinity"}]}
+{"fn": "percentUsed", "args": [{"$num": "-Infinity"}]}
+{"fn": "percentUsed", "args": [{"$num": "-0"}]}
+{"fn": "percentUsed", "args": [0]}
+{"fn": "percentUsed", "args": [0.4]}
+{"fn": "percentUsed", "args": [0.5]}
+{"fn": "percentUsed", "args": [1]}
+{"fn": "percentUsed", "args": [1.5]}
+{"fn": "percentUsed", "args": [2.5]}
+{"fn": "percentUsed", "args": [-0.4]}
+{"fn": "percentUsed", "args": [-0.5]}
+{"fn": "percentUsed", "args": [-1]}
+{"fn": "percentUsed", "args": [-2.5]}
+{"fn": "percentUsed", "args": [-150]}
+{"fn": "percentUsed", "args": [7]}
+{"fn": "percentUsed", "args": [45]}
+{"fn": "percentUsed", "args": [49.5]}
+{"fn": "percentUsed", "args": [50.5]}
+{"fn": "percentUsed", "args": [94]}
+{"fn": "percentUsed", "args": [99.4]}
+{"fn": "percentUsed", "args": [99.5]}
+{"fn": "percentUsed", "args": [99.9]}
+{"fn": "percentUsed", "args": [100]}
+{"fn": "percentUsed", "args": [100.5]}
+{"fn": "percentUsed", "args": [101]}
+{"fn": "percentUsed", "args": [150]}
+{"fn": "percentUsed", "args": [1000]}
+{"fn": "percentUsed", "args": [12345]}
+{"fn": "percentUsed", "args": [1e+21]}
+{"fn": "percentUsed", "args": [-1e+21]}
+{"fn": "percentUsed", "args": [2147483648]}
+{"fn": "percentUsed", "args": [9007199254740992]}
+{"fn": "percentUsed", "args": [1e-07]}
+{"fn": "percentUsed", "args": [0.49999999999999994]}
+{"fn": "percentUsed", "args": [null]}
+{"fn": "percentUsed", "args": []}

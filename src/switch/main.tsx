@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { SwitchSceneView } from "../../shared/switch-scene";
 import { ErrorBoundary } from "../app/ErrorBoundary";
 import { adoptLocale } from "../data/i18n";
+import { inTauri, tauriSwitchApi } from "../data/tauri-bridge";
 import { SwitchStage } from "./SwitchStage";
 import "../styles/theme.css";
 
@@ -14,7 +15,8 @@ document.documentElement.dataset.density = "compact";
 function SwitchWindow() {
   const [view, setView] = useState<SwitchSceneView>();
   useEffect(() => {
-    const api = window.relaySwitch;
+    // Phase 6: drop the window.relay fallback
+    const api = window.relaySwitch ?? (inTauri() ? tauriSwitchApi() : undefined);
     if (!api) return;
     const off = api.onScene((next) => {
       // The error screen speaks the language main draws the scene in.

@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "settings": {
+    "appearance": "system",
+    "proxy": {
+      "enabled": false,
+      "port": 8317,
+      "host": "127.0.0.1",
+      "affinityTtlSeconds": 3600,
+      "routingStrategy": "soonest-reset"
+    },
+    "planning": {
+      "autoStart": false,
+      "timeZone": "Europe/Istanbul",
+      "weekday": {
+        "enabled": true,
+        "start": "09:00",
+        "end": "18:00"
+      },
+      "weekend": {
+        "enabled": false,
+        "start": "11:00",
+        "end": "17:00"
+      },
+      "accounts": [],
+      "tempo": "auto"
+    },
+    "usageRefreshMinutes": 5,
+    "usageWarningPercent": 90,
+    "usageWarnings": true,
+    "suggestAccounts": true,
+    "desktopHistoryTransfer": "same-group",
+    "desktopHistoryAccounts": [],
+    "autoSwitchMode": "off",
+    "autoSwitchAccounts": [],
+    "historyPolicyVersion": 2,
+    "launchAtLogin": false,
+    "updateChannel": "stable",
+    "autoSwitchStrategy": "best",
+    "configSync": {
+      "mcpServers": false,
+      "skills": false,
+      "settings": false,
+      "claudeMd": false
+    },
+    "riskAcknowledged": {}
+  },
+  "accounts": [
+    {
+      "id": "ad0f8bf1-75d4-4ac6-9fea-a8fdaae0ea8a",
+      "name": "Personal",
+      "kind": "personal",
+      "group": "personal",
+      "color": "terra",
+      "createdAt": "2026-11-25T23:00:07.121Z",
+      "provider": "claude"
+    },
+    {
+      "id": "7e56a86a-5732-4e42-b77c-2e969b00cdb1",
+      "name": "Work",
+      "kind": "work",
+      "group": "work:Acme",
+      "color": "olive",
+      "createdAt": "2026-11-25T23:00:07.169Z",
+      "provider": "claude"
+    },
+    {
+      "id": "20c94ebc-25bb-4205-98bd-357c6b1543e1",
+      "name": "Codex",
+      "kind": "personal",
+      "group": "personal",
+      "color": "blue",
+      "createdAt": "2026-11-25T23:00:07.193Z",
+      "provider": "codex"
+    }
+  ],
+  "pinned": [],
+  "importEnabled": false,
+  "lineage": {},
+  "autoSwitchCompleted": {},
+  "schema": 8
+}

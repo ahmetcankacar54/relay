@@ -1,0 +1,17 @@
+{
+  "unit": "shared/usage-statistics.ts",
+  "files": 1,
+  "fingerprint": "e9df7d2058c235a2",
+  "coverage": {
+    "lines": 97,
+    "reached": 86,
+    "files": [
+      {
+        "file": "shared/usage-statistics.ts",
+        "lines": 97,
+        "reached": 86,
+        "missed": "45-54, 70"
+      }
+    ]
+  }
+}

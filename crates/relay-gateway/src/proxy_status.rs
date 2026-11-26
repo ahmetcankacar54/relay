@@ -8,8 +8,9 @@ use crate::proxy_router::Cooldown;
 use crate::proxy_url::{GATEWAY_HOST_ERROR, gateway_host_allowed, is_loopback_host};
 use crate::types::{
     Account, AccountTokenMetrics, AccountUsage, ApiUpstream, ExtraUsageKind, MoveCost,
-    OverflowSettings, OverflowStatus, ProxyClassShare, ProxyConfig, ProxyLoopAlarm, ProxyMetrics,
-    ProxyPickReason, ProxyRequestLog, ProxySessionView, RoutingStrategy, UsageMap, UsageWindow,
+    OverflowSettings, OverflowStatus, OverflowTrigger, OverflowUpstreamStatus, ProxyClassShare,
+    ProxyConfig, ProxyLoopAlarm, ProxyMetrics, ProxyPickReason, ProxyRequestLog, ProxySessionView,
+    RoutingStrategy, UsageMap, UsageWindow,
 };
 use base64::Engine;
 use indexmap::IndexMap;
@@ -60,13 +61,16 @@ pub fn overflow_url_allowed(value: &str) -> bool {
 
 static MODEL_ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9._:/~@+\[\]-]+$").unwrap());
-static UPSTREAM_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{1,64}$").unwrap());
+static UPSTREAM_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{1,64}$").unwrap());
 static KEY_TEXT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[\x21-\x7e]+$").unwrap());
 
 type Checked<T> = Result<T, String>;
 
 fn object<'a>(value: &'a Value, what: &str) -> Checked<&'a serde_json::Map<String, Value>> {
-    value.as_object().ok_or_else(|| format!("{what}: expected an object"))
+    value
+        .as_object()
+        .ok_or_else(|| format!("{what}: expected an object"))
 }
 
 fn strict(map: &serde_json::Map<String, Value>, known: &[&str], what: &str) -> Checked<()> {
@@ -157,7 +161,10 @@ fn upstream_body(map: &serde_json::Map<String, Value>) -> Checked<serde_json::Ma
         Value::String(trimmed_text(map.get("label"), 1, 40, "label")?),
     );
     out.insert("preset".into(), preset(map.get("preset"))?);
-    out.insert("baseUrl".into(), Value::String(base_url(map.get("baseUrl"))?));
+    out.insert(
+        "baseUrl".into(),
+        Value::String(base_url(map.get("baseUrl"))?),
+    );
     out.insert("authStyle".into(), auth_style(map.get("authStyle"))?);
     out.insert("modelMap".into(), model_map(map.get("modelMap"))?);
     out.insert(
@@ -176,7 +183,14 @@ pub fn parse_api_upstream(value: &Value) -> Checked<ApiUpstream> {
     strict(
         map,
         &[
-            "id", "label", "preset", "baseUrl", "authStyle", "modelMap", "enabled", "order",
+            "id",
+            "label",
+            "preset",
+            "baseUrl",
+            "authStyle",
+            "modelMap",
+            "enabled",
+            "order",
             "prices",
         ],
         "upstream",
@@ -198,12 +212,17 @@ pub fn parse_api_upstream(value: &Value) -> Checked<ApiUpstream> {
 /// The overflow setup as proxy-pool.json keeps it (`overflowSettingsSchema`).
 pub fn parse_overflow_settings(value: &Value) -> Checked<OverflowSettings> {
     let map = object(value, "overflow")?;
-    strict(map, &["enabled", "trigger", "dailyCapUsd", "upstreams"], "overflow")?;
+    strict(
+        map,
+        &["enabled", "trigger", "dailyCapUsd", "upstreams"],
+        "overflow",
+    )?;
     let enabled = boolean(map.get("enabled"), "enabled")?;
     let trigger = match map.get("trigger") {
         None => None,
         Some(t) => Some(
-            serde_json::from_value(t.clone()).map_err(|_| "trigger: expected limited or unavailable")?,
+            serde_json::from_value(t.clone())
+                .map_err(|_| "trigger: expected limited or unavailable")?,
         ),
     };
     let daily_cap_usd = match map.get("dailyCapUsd") {
@@ -248,7 +267,9 @@ pub struct ProxyExtras {
 
 fn string_list(value: Option<&Value>, what: &str) -> Checked<Option<Vec<String>>> {
     let Some(value) = value else { return Ok(None) };
-    let items = value.as_array().ok_or_else(|| format!("{what}: expected an array"))?;
+    let items = value
+        .as_array()
+        .ok_or_else(|| format!("{what}: expected an array"))?;
     if items.len() > 200 {
         return Err(format!("{what}: at most 200"));
     }
@@ -302,7 +323,9 @@ pub fn parse_proxy_extras(value: &Value) -> Checked<ProxyExtras> {
         subagent_overflow,
         affinity_revision,
         client_bindings,
-        overflow: map.get("overflow").and_then(|o| parse_overflow_settings(o).ok()),
+        overflow: map
+            .get("overflow")
+            .and_then(|o| parse_overflow_settings(o).ok()),
     })
 }
 
@@ -320,10 +343,10 @@ pub struct ProxyConfigurePatch {
 
 fn id_list(value: Option<&Value>, what: &str) -> Checked<Option<Vec<String>>> {
     let list = string_list(value, what)?;
-    if list
-        .as_ref()
-        .is_some_and(|l| l.iter().any(|id| id.is_empty() || crate::js::units(id) > 128))
-    {
+    if list.as_ref().is_some_and(|l| {
+        l.iter()
+            .any(|id| id.is_empty() || crate::js::units(id) > 128)
+    }) {
         return Err(format!("{what}: ids are 1–128 characters"));
     }
     Ok(list)
@@ -362,7 +385,10 @@ pub fn parse_proxy_configure_patch(value: &Value) -> Checked<ProxyConfigurePatch
         host,
         routing_strategy: map
             .get("routingStrategy")
-            .map(|v| serde_json::from_value(v.clone()).map_err(|_| "routingStrategy: unknown".to_string()))
+            .map(|v| {
+                serde_json::from_value(v.clone())
+                    .map_err(|_| "routingStrategy: unknown".to_string())
+            })
             .transpose()?,
         affinity_ttl_seconds: map
             .get("affinityTtlSeconds")
@@ -389,7 +415,11 @@ pub struct OverflowConfigurePatch {
 
 pub fn parse_overflow_configure_patch(value: &Value) -> Checked<OverflowConfigurePatch> {
     let map = object(value, "patch")?;
-    strict(map, &["enabled", "trigger", "dailyCapUsd", "order"], "patch")?;
+    strict(
+        map,
+        &["enabled", "trigger", "dailyCapUsd", "order"],
+        "patch",
+    )?;
     let order = match map.get("order") {
         None => None,
         Some(v) => {
@@ -411,7 +441,10 @@ pub fn parse_overflow_configure_patch(value: &Value) -> Checked<OverflowConfigur
         }
     };
     Ok(OverflowConfigurePatch {
-        enabled: map.get("enabled").map(|v| boolean(Some(v), "enabled")).transpose()?,
+        enabled: map
+            .get("enabled")
+            .map(|v| boolean(Some(v), "enabled"))
+            .transpose()?,
         trigger: map
             .get("trigger")
             .map(|v| serde_json::from_value(v.clone()).map_err(|_| "trigger: unknown".to_string()))
@@ -419,7 +452,13 @@ pub fn parse_overflow_configure_patch(value: &Value) -> Checked<OverflowConfigur
         daily_cap_usd: match map.get("dailyCapUsd") {
             None => None,
             Some(Value::Null) => Some(None),
-            Some(v) => Some(Some(number_in(Some(v), 0.01, 10_000.0, false, "dailyCapUsd")?)),
+            Some(v) => Some(Some(number_in(
+                Some(v),
+                0.01,
+                10_000.0,
+                false,
+                "dailyCapUsd",
+            )?)),
         },
         order,
     })
@@ -439,7 +478,14 @@ pub fn parse_overflow_upstream_input(value: &Value) -> Checked<OverflowUpstreamI
     strict(
         map,
         &[
-            "id", "key", "label", "preset", "baseUrl", "authStyle", "modelMap", "enabled",
+            "id",
+            "key",
+            "label",
+            "preset",
+            "baseUrl",
+            "authStyle",
+            "modelMap",
+            "enabled",
             "prices",
         ],
         "upstream",
@@ -472,7 +518,10 @@ pub fn parse_overflow_upstream_input(value: &Value) -> Checked<OverflowUpstreamI
 
 /// Every account in the pool's order: the saved order first, then the rest as the registry
 /// lists them. Ids of removed accounts are ignored.
-pub fn ordered_accounts<'a>(accounts: &'a [Account], account_order: Option<&[String]>) -> Vec<&'a Account> {
+pub fn ordered_accounts<'a>(
+    accounts: &'a [Account],
+    account_order: Option<&[String]>,
+) -> Vec<&'a Account> {
     let rank: IndexMap<&str, usize> = account_order
         .unwrap_or(&[])
         .iter()
@@ -523,7 +572,12 @@ fn minutes_until(iso: Option<&str>, now: i64) -> Option<i64> {
 
 fn windows_of(usage: Option<&AccountUsage>) -> Vec<&UsageWindow> {
     usage
-        .map(|u| [u.five_hour.as_ref(), u.seven_day.as_ref()].into_iter().flatten().collect())
+        .map(|u| {
+            [u.five_hour.as_ref(), u.seven_day.as_ref()]
+                .into_iter()
+                .flatten()
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -607,6 +661,37 @@ pub fn with_move_cost(
             .map(|r| round(dollars / r * 100.0) / 100.0),
     });
     view
+}
+
+/// The overflow as the page shows it (`overflowStatus` in `gateway.ts`): today's spend in the
+/// planning day, and each key masked (`hints`: upstream id → `key_hint`).
+pub fn overflow_status(
+    overflow: &OverflowSettings,
+    spent_today_usd: f64,
+    hints: &std::collections::HashMap<String, String>,
+) -> OverflowStatus {
+    let mut upstreams = overflow.upstreams.clone();
+    upstreams.sort_by(|a, b| {
+        a.order
+            .partial_cmp(&b.order)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    OverflowStatus {
+        enabled: overflow.enabled,
+        trigger: overflow.trigger.unwrap_or(OverflowTrigger::Limited),
+        daily_cap_usd: overflow.daily_cap_usd,
+        spent_today_usd,
+        cap_reached: overflow
+            .daily_cap_usd
+            .is_some_and(|cap| spent_today_usd >= cap),
+        upstreams: upstreams
+            .into_iter()
+            .map(|upstream| OverflowUpstreamStatus {
+                key_hint: hints.get(&upstream.id).filter(|h| !h.is_empty()).cloned(),
+                upstream,
+            })
+            .collect(),
+    }
 }
 
 /// Percents an answer reported this recently count as live.
@@ -716,7 +801,7 @@ pub struct NextPick {
 pub type NextPicks = IndexMap<String, NextPick>;
 
 /// `ProxyStatus`: what the Proxy Gateway page shows.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyStatus {
     pub running: bool,
@@ -781,7 +866,13 @@ pub struct StatusInput<'a> {
 }
 
 impl<'a> StatusInput<'a> {
-    pub fn new(running: bool, config: &'a ProxyConfig, accounts: &'a [Account], usage: &'a UsageMap, now: i64) -> Self {
+    pub fn new(
+        running: bool,
+        config: &'a ProxyConfig,
+        accounts: &'a [Account],
+        usage: &'a UsageMap,
+        now: i64,
+    ) -> Self {
         StatusInput {
             running,
             config,
@@ -809,7 +900,12 @@ impl<'a> StatusInput<'a> {
 pub fn build_proxy_status(input: StatusInput<'_>) -> ProxyStatus {
     let config = input.config;
     let metrics = input.metrics;
-    let excluded: HashSet<String> = config.excluded_account_ids.iter().flatten().cloned().collect();
+    let excluded: HashSet<String> = config
+        .excluded_account_ids
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
     let empty = IndexMap::new();
     let calibrations = input.calibrations.unwrap_or(&empty);
     let accounts = ordered_accounts(input.accounts, config.account_order.as_deref())
@@ -851,12 +947,16 @@ pub fn build_proxy_status(input: StatusInput<'_>) -> ProxyStatus {
                 signed_in: account.auth.as_ref().is_some_and(|a| a.logged_in),
                 quota_percent: quota_percent(usage),
                 reset_in_minutes: reset_in_minutes(usage, input.now),
-                five_hour_percent: clamp_percent(usage.and_then(|u| Some(u.five_hour.as_ref()?.used_percent))),
+                five_hour_percent: clamp_percent(
+                    usage.and_then(|u| Some(u.five_hour.as_ref()?.used_percent)),
+                ),
                 five_hour_reset_minutes: minutes_until(
                     usage.and_then(|u| u.five_hour.as_ref()?.resets_at.as_deref()),
                     input.now,
                 ),
-                weekly_percent: clamp_percent(usage.and_then(|u| Some(u.seven_day.as_ref()?.used_percent))),
+                weekly_percent: clamp_percent(
+                    usage.and_then(|u| Some(u.seven_day.as_ref()?.used_percent)),
+                ),
                 weekly_reset_minutes: minutes_until(
                     usage.and_then(|u| u.seven_day.as_ref()?.resets_at.as_deref()),
                     input.now,
@@ -921,9 +1021,7 @@ pub fn build_proxy_status(input: StatusInput<'_>) -> ProxyStatus {
         sessions,
         alarms,
         class_share: input.class_share.filter(|c| !c.is_empty()),
-        next_pick: input
-            .next_pick
-            .filter(|p| input.running && !p.is_empty()),
+        next_pick: input.next_pick.filter(|p| input.running && !p.is_empty()),
         overflow: input.overflow,
     }
 }

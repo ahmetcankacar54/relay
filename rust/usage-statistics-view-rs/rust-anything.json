@@ -1,0 +1,60 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/usage-statistics-view.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "usage-statistics-view-rs",
+  "exports": [
+    {
+      "name": "inWorkHours",
+      "file": "shared/usage-statistics-view.ts",
+      "line": 81,
+      "params": [
+        {
+          "name": "weekday",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "hour",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "hours",
+          "ts_type": "StatisticsInput[\"hours\"]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "buildStatisticsView",
+      "file": "shared/usage-statistics-view.ts",
+      "line": 185,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "StatisticsInput",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "UsageStatisticsView",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

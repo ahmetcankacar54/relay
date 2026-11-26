@@ -11,7 +11,10 @@ fn parts(version: &str) -> Option<[f64; 3]> {
     let bytes = version.as_bytes();
     // Read the digits from `at`; `None` when there are none.
     let digits = |at: usize| {
-        let end = bytes[at..].iter().position(|b| !b.is_ascii_digit()).map_or(bytes.len(), |n| at + n);
+        let end = bytes[at..]
+            .iter()
+            .position(|b| !b.is_ascii_digit())
+            .map_or(bytes.len(), |n| at + n);
         (end > at).then_some(end)
     };
     for start in 0..bytes.len() {

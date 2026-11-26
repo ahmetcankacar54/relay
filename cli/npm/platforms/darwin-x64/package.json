@@ -1,0 +1,26 @@
+{
+  "name": "@ahmetcankacar/relay-darwin-x64",
+  "description": "The darwin-x64 binary of @ahmetcankacar/relay. Install @ahmetcankacar/relay instead.",
+  "license": "MIT",
+  "author": "Ahmet Can Kacar",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmetcankacar54/relay.git",
+    "directory": "cli"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "preferUnplugged": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

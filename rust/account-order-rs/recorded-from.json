@@ -1,0 +1,17 @@
+{
+  "unit": "shared/account-order.ts",
+  "files": 1,
+  "fingerprint": "042927ed23bb2139",
+  "coverage": {
+    "lines": 23,
+    "reached": 23,
+    "files": [
+      {
+        "file": "shared/account-order.ts",
+        "lines": 23,
+        "reached": 23,
+        "missed": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+[package]
+name = "parity-args"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "Reads the JSON arguments rust-anything's napi bridges pass as typed serde values"
+
+[dependencies]
+serde = "1"
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip", "unbounded_depth"] }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace]
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
