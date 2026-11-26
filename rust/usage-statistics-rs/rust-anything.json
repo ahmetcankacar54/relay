@@ -1,0 +1,79 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/usage-statistics.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "usage-statistics-rs",
+  "exports": [
+    {
+      "name": "usageIdentity",
+      "file": "shared/usage-statistics.ts",
+      "line": 18,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "historyIdentity",
+      "file": "shared/usage-statistics.ts",
+      "line": 32,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "usageSample",
+      "file": "shared/usage-statistics.ts",
+      "line": 79,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "UsageSample | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "identityOwners",
+      "file": "shared/usage-statistics.ts",
+      "line": 44,
+      "reason": "returns a Map, which the binary wire cannot carry (it arrives as a plain object)"
+    }
+  ]
+}

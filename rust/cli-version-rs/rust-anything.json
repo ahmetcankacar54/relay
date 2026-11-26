@@ -1,0 +1,48 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/cli-version.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "cli-version-rs",
+  "exports": [
+    {
+      "name": "meetsCliMinimum",
+      "file": "shared/cli-version.ts",
+      "line": 28,
+      "params": [
+        {
+          "name": "version",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "readsUsage",
+      "file": "shared/cli-version.ts",
+      "line": 32,
+      "params": [
+        {
+          "name": "version",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

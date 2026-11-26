@@ -112,7 +112,7 @@ function sources(dir: string, out: string[] = []) {
   }
   return out;
 }
-const code = ["src", "shared", "electron", "cli/src"].flatMap((d) => sources(path.join(ROOT, d)));
+const code = ["src", "shared", "electron"].flatMap((d) => sources(path.join(ROOT, d)));
 
 test("no inline Turkish/English pairs or language forks are left", () => {
   const pair = /\bt\(\s*["`][^"`]*["`]\s*,\s*["`]/;

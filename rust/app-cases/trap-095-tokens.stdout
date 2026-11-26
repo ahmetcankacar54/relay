@@ -1,0 +1,14 @@
+Token usage · last 7 days (Europe/Istanbul)
+Total 592.7k · input 5.3k · output 13.4k · cache write 21k · cache read 553k · API value $9.93
+
+Day         Work    Personal  Unknown account  Terminal outside Relay  Total   API value
+2026-11-26  —       129.6k    —                10.1k                   139.7k  $4.62
+2026-11-25  360.6k  ≈22.3k    —                —                       382.9k  $2.70
+2026-11-24  —       —         —                —                       0       $0.00
+2026-11-23  —       69.9k     210              —                       70.1k   $2.61
+2026-11-22  —       —         —                —                       0       $0.00
+2026-11-21  —       —         —                —                       0       $0.00
+2026-11-20  —       —         —                —                       0       $0.00
+
+Exact account matching has been kept since 2026-10-01; earlier days were estimated from Relay’s limit samples (≈).
+API value: Anthropic API list prices (2026-11-11); separate from the subscription’s price.

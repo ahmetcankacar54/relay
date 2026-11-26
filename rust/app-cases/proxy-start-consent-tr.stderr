@@ -1,0 +1,8 @@
+! Codex hesaplarıyla ağ geçidi (Gri alan)
+  OpenAI, yerel ve açık kaynak uygulamalara ChatGPT ile giriş yapılmasına izin veriyor. Başka araçların isteklerini bir ChatGPT hesap havuzundan geçirmek hesap paylaşımına yaklaşır ve OpenAI bunu kısıtlayabilir.
+  OpenAI: ChatGPT ile giriş: https://help.openai.com/en/articles/20001542
+! Claude hesaplarıyla ağ geçidi (Koşullara aykırı)
+  Relay resmi değil. Anthropic'in 12 Kasım 2026'dan beri geçerli Kullanım Politikası, istekleri tüketici abonelikleri üzerinden yönlendiren veya kullanılan istemciyi farklı gösteren hizmetleri yasaklıyor. Ağ geçidi bunu Claude hesaplarıyla yapar; Anthropic onu kullanan bir hesabı kısıtlayabilir veya askıya alabilir.
+  Anthropic Kullanım Politikası: https://www.anthropic.com/legal/aup
+  Claude Code hukuk ve uyum: https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use
+relay: Hiçbir şey başlatılmadı. Bu riski kabul etmek için komutu --yes ile yeniden çalıştır.

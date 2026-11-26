@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["switch", "Work", "--yes"]
+env.add.RELAY_PARITY_SCENARIO = "profile-lock"
+status.code = 3
+fs.sandbox = true

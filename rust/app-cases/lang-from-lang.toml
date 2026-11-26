@@ -1,0 +1,6 @@
+bin.name = "relay"
+args = ["status"]
+env.add.RELAY_PARITY_ENV_LANG = "tr_TR.UTF-8"
+env.add.RELAY_PARITY_ENV_RELAY_LANG = ""
+status.code = 0
+fs.sandbox = true

@@ -1,0 +1,72 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/history-policy.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "history-policy-rs",
+  "exports": [
+    {
+      "name": "allowedHistoryPair",
+      "file": "shared/history-policy.ts",
+      "line": 7,
+      "params": [
+        {
+          "name": "source",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "target",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "RelaySettings",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "historySources",
+      "file": "shared/history-policy.ts",
+      "line": 20,
+      "params": [
+        {
+          "name": "target",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "Account[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "RelaySettings",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Account[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

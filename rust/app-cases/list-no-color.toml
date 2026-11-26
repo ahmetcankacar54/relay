@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["list", "--no-color"]
+status.code = 0
+fs.sandbox = true

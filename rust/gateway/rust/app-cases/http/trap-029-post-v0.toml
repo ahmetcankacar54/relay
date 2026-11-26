@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/v0/h%C3%A9llo%20w%C3%B6rld/api-call"
+body = '{"auth_index": "nobody", "url": "https://api.anthropic.com/api/oauth/usage"}'
+
+[request.headers]
+content-type = "application/json"
+x-relay-key = "relay-fixture-client-key-0123456789abcdef"
+
+[response]
+status = 404
+
+[response.headers]
+content-type = "application/json"

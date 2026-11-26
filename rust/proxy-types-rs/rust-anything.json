@@ -1,0 +1,36 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/proxy-types.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "proxy-types-rs",
+  "exports": [
+    {
+      "name": "currentAffinityTtl",
+      "file": "shared/proxy-types.ts",
+      "line": 228,
+      "params": [
+        {
+          "name": "saved",
+          "ts_type": "number | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "revision",
+          "ts_type": "number | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

@@ -1,0 +1,17 @@
+{
+  "unit": "shared/external-links.ts",
+  "files": 1,
+  "fingerprint": "b6db1c31ffa0f3d4",
+  "coverage": {
+    "lines": 28,
+    "reached": 28,
+    "files": [
+      {
+        "file": "shared/external-links.ts",
+        "lines": 28,
+        "reached": 28,
+        "missed": ""
+      }
+    ]
+  }
+}

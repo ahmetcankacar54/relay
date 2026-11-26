@@ -1,0 +1,42 @@
+{"fn": "switchAtPercent", "args": [{}, 90]}
+{"fn": "switchAtPercent", "args": [{}, 100]}
+{"fn": "switchAtPercent", "args": [{}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 49}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 49}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 49}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 50}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 50}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 50}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 50.5}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 50.5}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 50.5}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 75}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 75}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 75}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 90}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 90}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 90}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 100}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 100}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 100}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 100.5}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 100.5}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 100.5}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 101}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 101}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 101}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": -1}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": -1}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": -1}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 0}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 0}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": 0}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "NaN"}}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "NaN"}}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "NaN"}}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "Infinity"}}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "Infinity"}}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "Infinity"}}, 85]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "-0"}}, 90]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "-0"}}, 100]}
+{"fn": "switchAtPercent", "args": [{"switchAtPercent": {"$num": "-0"}}, 85]}

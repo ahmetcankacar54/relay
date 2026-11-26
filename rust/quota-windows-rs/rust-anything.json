@@ -1,0 +1,216 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/quota-windows.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "quota-windows-rs",
+  "exports": [
+    {
+      "name": "quotaWindows",
+      "file": "shared/quota-windows.ts",
+      "line": 10,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"fiveHour\" | \"sevenDay\"> | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "UsageWindow[] | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "maxUsedPercent",
+      "file": "shared/quota-windows.ts",
+      "line": 17,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"fiveHour\" | \"sevenDay\"> | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "spentModelWindows",
+      "file": "shared/quota-windows.ts",
+      "line": 24,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"modelWindows\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "ModelWindow[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "modelOnlyUsage",
+      "file": "shared/quota-windows.ts",
+      "line": 38,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"modelWindows\"> | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "usedAt",
+      "file": "shared/quota-windows.ts",
+      "line": 44,
+      "params": [
+        {
+          "name": "window",
+          "ts_type": "UsageWindow",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "limitHeadline",
+      "file": "shared/quota-windows.ts",
+      "line": 76,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"fiveHour\" | \"sevenDay\" | \"modelWindows\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "LimitHeadline | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "fullestByPeriod",
+      "file": "shared/quota-windows.ts",
+      "line": 97,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"modelWindows\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Partial<Record<\"five_hour\" | \"seven_day\", LimitHeadline>>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "limitColumns",
+      "file": "shared/quota-windows.ts",
+      "line": 126,
+      "params": [
+        {
+          "name": "u",
+          "ts_type": "Pick<AccountUsage, \"fiveHour\" | \"sevenDay\" | \"modelWindows\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "{ five?: ColumnWindow; week?: ColumnWindow; pooled: boolean }",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "limitOrigin",
+      "file": "shared/quota-windows.ts",
+      "line": 151,
+      "params": [
+        {
+          "name": "window",
+          "ts_type": "Pick<UsageWindow, \"resetsAt\" | \"source\" | \"readAt\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "Pick<AccountUsage, \"source\" | \"checkedAt\"> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "LimitOrigin | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

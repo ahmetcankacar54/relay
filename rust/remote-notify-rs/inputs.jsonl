@@ -1,0 +1,50 @@
+{"fn":"remoteNotifyUrl","args":["https://ntfy.sh/relay-alto"]}
+{"fn":"remoteNotifyUrl","args":["https://example.com/hooks/relay?x=1"]}
+{"fn":"remoteNotifyUrl","args":["http://localhost:8080/relay"]}
+{"fn":"remoteNotifyUrl","args":["http://127.0.0.1/relay"]}
+{"fn":"remoteNotifyUrl","args":["http://[::1]:2586/relay"]}
+{"fn":"remoteNotifyUrl","args":["  https://ntfy.sh/relay  "]}
+{"fn":"remoteNotifyUrl","args":[""]}
+{"fn":"remoteNotifyUrl","args":["ntfy.sh/relay"]}
+{"fn":"remoteNotifyUrl","args":["http://example.com/relay"]}
+{"fn":"remoteNotifyUrl","args":["http://192.168.1.10/relay"]}
+{"fn":"remoteNotifyUrl","args":["ftp://example.com/relay"]}
+{"fn":"remoteNotifyUrl","args":["javascript:alert(1)"]}
+{"fn":"remoteNotifyUrl","args":["https://user:secret@example.com/hook"]}
+{"fn":"remoteNotifyUrl","args":["https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}
+{"fn":"remoteNotifyUrl","args":["https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}
+{"fn":"remoteNotifyUrl","args":["https://:pw@example.com/"]}
+{"fn":"remoteNotifyUrl","args":["https://user@example.com/"]}
+{"fn":"remoteNotifyUrl","args":["https://user:@example.com/"]}
+{"fn":"remoteNotifyUrl","args":["   "]}
+{"fn":"remoteNotifyUrl","args":["\t\n"]}
+{"fn":"remoteNotifyUrl","args":["https://EXAMPLE.com/Path"]}
+{"fn":"remoteNotifyUrl","args":["http://LOCALHOST/x"]}
+{"fn":"remoteNotifyUrl","args":["http://localhost.:80/x"]}
+{"fn":"remoteNotifyUrl","args":["http://127.1/x"]}
+{"fn":"remoteNotifyUrl","args":["http://0x7f.0.0.1/x"]}
+{"fn":"remoteNotifyUrl","args":["https://ex ample.com"]}
+{"fn":"remoteNotifyUrl","args":["https://ntfy.sh"]}
+{"fn":"remoteNotifyUrl","args":["https:ntfy.sh/x"]}
+{"fn":"remoteNotifyUrl","args":["https://ntfy.sh/ü?q=ş#frag"]}
+{"fn":"remoteNotifyUrl","args":["https://xn--n3h.com/"]}
+{"fn":"remoteNotifyUrl","args":["https://☃.com/"]}
+{"fn":"remoteNotifyUrl","args":["file:///etc/passwd"]}
+{"fn":"remoteNotifyUrl","args":["http://[::1]/"]}
+{"fn":"remoteNotifyUrl","args":["http://[0:0:0:0:0:0:0:1]/"]}
+{"fn":"remoteNotifyUrl","args":["https://[::1]/"]}
+{"fn":"remoteNotifyUrl","args":[" https://ntfy.sh/ "]}
+{"fn":"remoteNotifyUrl","args":["﻿https://ntfy.sh/"]}
+{"fn":"remoteNotifyUrl","args":["https://ntfy.sh:443/x"]}
+{"fn":"remoteNotifyUrl","args":["http://localhost:80/x"]}
+{"fn":"remoteNotifyUrl","args":["https://a.b/%zz"]}
+{"fn":"remoteNotifyUrl","args":["https://a.b/../c/./d"]}
+{"fn":"remoteNotifyUrl","args":[]}
+{"fn":"remoteNotifySettings","args":[{}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":{"kind":"webhook","events":{"limit":true,"reset":false,"autoSwitch":true,"signIn":false}}}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":{"url":"https://ntfy.sh/x","kind":"ntfy","events":{"limit":false,"reset":false,"autoSwitch":false,"signIn":false}}}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":{"events":{"limit":false},"url":"https://ntfy.sh/x"}}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":{"kind":"webhook"}}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":null}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":{}}]}
+{"fn":"remoteNotifySettings","args":[{"remoteNotify":{"events":{},"kind":"ntfy"}}]}

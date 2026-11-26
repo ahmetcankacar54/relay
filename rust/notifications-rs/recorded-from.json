@@ -1,0 +1,17 @@
+{
+  "unit": "shared/notifications.ts",
+  "files": 1,
+  "fingerprint": "ced59b7257995066",
+  "coverage": {
+    "lines": 20,
+    "reached": 20,
+    "files": [
+      {
+        "file": "shared/notifications.ts",
+        "lines": 20,
+        "reached": 20,
+        "missed": ""
+      }
+    ]
+  }
+}

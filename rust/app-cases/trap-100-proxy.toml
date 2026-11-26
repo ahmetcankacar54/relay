@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["proxy", "👍🏽 thumbs"]
+status.code = 2
+fs.sandbox = true

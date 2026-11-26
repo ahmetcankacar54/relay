@@ -1,0 +1,4 @@
+   Name      Provider  Kind         Claude app            Usage sign-in
+*  Personal  CLAUDE    personal     personal@example.com  signed in
+   Work      CLAUDE    work · Acme  work@acme.example     signed in
+   Codex     CODEX     personal     —                     signed in

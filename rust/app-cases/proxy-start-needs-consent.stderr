@@ -1,0 +1,8 @@
+! Gateway with Codex accounts (Grey area)
+  OpenAI allows signing in to local and open-source apps with ChatGPT. Sending other tools' requests through a pool of ChatGPT accounts comes close to sharing an account, and OpenAI may limit it.
+  OpenAI: Sign in with ChatGPT: https://help.openai.com/en/articles/20001542
+! Gateway with Claude accounts (Against the terms)
+  Relay is unofficial. Anthropic's Usage Policy, in force from 12 November 2026, forbids services that route requests through consumer subscriptions or misrepresent the client in use. The gateway does this with Claude accounts, and Anthropic may limit or suspend an account that uses it.
+  Anthropic Usage Policy: https://www.anthropic.com/legal/aup
+  Claude Code legal and compliance: https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use
+relay: Nothing was started. Run the command again with --yes to accept this risk.

@@ -1,0 +1,9 @@
+target/
+*.node
+pkg/
+.rust-anything/
+*.so
+*.pyd
+__pycache__/
+# Rewritten by `record --from-tests`; diff and gate read cases.jsonl.
+test-inputs.jsonl

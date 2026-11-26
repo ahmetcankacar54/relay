@@ -32,6 +32,7 @@ import {
   shouldPoll,
 } from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
+import { inTauri, tauriRelayApi } from "./tauri-bridge";
 
 export { relayAction, RelayContext, useRelay, type Relay };
 
@@ -71,7 +72,12 @@ function deferredApi(load: () => Promise<RelayAPI>): RelayAPI {
   });
 }
 
-const injected = typeof window === "undefined" ? undefined : window.relay;
+// Electron's preload API, else the Tauri bridge (src/data/tauri-bridge.ts).
+// Phase 6: drop the window.relay fallback
+const injected =
+  typeof window === "undefined"
+    ? undefined
+    : (window.relay ?? (inTauri() ? tauriRelayApi() : undefined));
 // The browser preview's sample data (`npm run dev:ui`) is development only. A built app always
 // has the preload's API, and its bundle carries no sample data.
 export const api: RelayAPI =

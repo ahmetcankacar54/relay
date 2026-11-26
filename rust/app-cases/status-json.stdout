@@ -1,0 +1,18 @@
+{
+  "desktop": {
+    "installed": false,
+    "running": false,
+    "account": {
+      "id": "[..]",
+      "name": "Personal",
+      "orgId": "[..]",
+      "accountUuid": "[..]"
+    },
+    "recoveryRequired": false
+  },
+  "relay": {
+    "appRunning": false,
+    "vault": "ready",
+    "historyMode": "all"
+  }
+}

@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["history", "mode", "héllo wörld", "--accounts", "Personal,Work"]
+status.code = 2
+fs.sandbox = true

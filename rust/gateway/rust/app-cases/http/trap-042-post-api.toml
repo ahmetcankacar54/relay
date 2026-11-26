@@ -1,0 +1,13 @@
+[request]
+method = "POST"
+path = "/api/hello"
+body = """
+naïve café 👍🏽
+second line
+"""
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

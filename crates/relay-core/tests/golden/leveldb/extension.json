@@ -1,0 +1,23 @@
+{
+  "before": {
+    "accountUuid": "\"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\"",
+    "accessToken": "\"ACCESS-golden-1\"",
+    "refreshToken": "\"REFRESH-golden-1\"",
+    "tokenExpiry": "1900000000001",
+    "lastAuthFailureReason": "\"session_expired\"",
+    "savedPrompts": "[\"ğüşİ — ✓\"]",
+    "other": "1"
+  },
+  "signIn": {
+    "accountUuid": "\"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\"",
+    "accessToken": "\"ACCESS-golden-2\"",
+    "refreshToken": "\"REFRESH-golden-2\""
+  },
+  "after": {
+    "accessToken": "\"ACCESS-golden-2\"",
+    "accountUuid": "\"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\"",
+    "other": "1",
+    "refreshToken": "\"REFRESH-golden-2\"",
+    "savedPrompts": "[\"ğüşİ — ✓\"]"
+  }
+}

@@ -1,0 +1,44 @@
+{"fn": "hourKey", "args": [10]}
+{"fn": "hourKey", "args": [0.5]}
+{"fn": "hourKey", "args": [0]}
+{"fn": "hourKey", "args": [1]}
+{"fn": "hourKey", "args": [-1]}
+{"fn": "hourKey", "args": [100]}
+{"fn": "hourKey", "args": [1000]}
+{"fn": "hourKey", "args": [42]}
+{"fn": "hourKey", "args": [{"$num": "NaN"}]}
+{"fn": "hourKey", "args": [{"$num": "-Infinity"}]}
+{"fn": "hourKey", "args": [2]}
+{"fn": "hourKey", "args": [{"$num": "-0"}]}
+{"fn": "hourKey", "args": [{"$num": "Infinity"}]}
+{"fn": "hourKey", "args": [9007199254740992]}
+{"fn": "hourKey", "args": [2147483648]}
+{"fn": "hourKey", "args": [1000000]}
+{"fn": "hourKey", "args": [3]}
+{"fn": "hourKey", "args": [-2.5]}
+{"fn": "hourKey", "args": [-7.5]}
+{"fn": "hourKey", "args": [0.1]}
+{"fn": "hourKey", "args": [0.30000000000000004]}
+{"fn": "hourKey", "args": [1e+21]}
+{"fn": "hourKey", "args": [1e-07]}
+{"fn": "hourKey", "args": [5e-324]}
+{"fn": "hourKey", "args": [1.7976931348623157e+308]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:29:24.316Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:29:24.317Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:30:24.315Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:31:24.315Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:31:24.316Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:31:24.317Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:32:24.316Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:27:24.316Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-25T23:27:24.315Z"]}
+{"fn": "sameReset", "args": ["2026-11-25T23:29:24.316Z", "2026-11-26T00:29:24.316Z"]}
+{"fn": "sameReset", "args": ["2026-11-26T03:00:00+03:00", "2026-11-26T00:01:00Z"]}
+{"fn": "sameReset", "args": ["2026-11-26T03:00:00+03:00", "2026-11-26T00:03:00Z"]}
+{"fn": "sameReset", "args": ["2026-11-26T00:00:00Z", "2026-11-26T00:02:00.000Z"]}
+{"fn": "sameReset", "args": ["2026-11-26T00:00:00.5Z", "2026-11-26T00:02:00.4Z"]}
+{"fn": "sameReset", "args": ["Thu, 26 Nov 2026 00:00:00 GMT", "2026-11-26T00:01:30Z"]}
+{"fn": "sameReset", "args": ["2026-11-26", "2026-11-26T00:02:00Z"]}
+{"fn": "sameReset", "args": ["", "2026-11-26T00:00:00Z"]}
+{"fn": "sameReset", "args": ["", ""]}
+{"fn": "sameReset", "args": ["2026-02-30T00:00:00Z", "2026-03-02T00:00:00Z"]}

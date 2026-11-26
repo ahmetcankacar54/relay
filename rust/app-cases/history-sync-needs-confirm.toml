@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["history", "sync"]
+status.code = 4
+fs.sandbox = true

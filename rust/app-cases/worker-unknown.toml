@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["__worker", "00000000-0000-4000-8000-000000000000"]
+status.code = 2
+fs.sandbox = true

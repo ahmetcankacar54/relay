@@ -1,0 +1,60 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/account-order.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "account-order-rs",
+  "exports": [
+    {
+      "name": "roomUnits",
+      "file": "shared/account-order.ts",
+      "line": 18,
+      "params": [
+        {
+          "name": "remainingPercent",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "capacity",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "weekBand",
+      "file": "shared/account-order.ts",
+      "line": 25,
+      "params": [
+        {
+          "name": "weekEnds",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "earliest",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

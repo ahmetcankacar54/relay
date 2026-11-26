@@ -1,0 +1,11 @@
+✓ platform     darwin arm64
+✗ claude-app   The Claude app was not found
+✓ claude-cli   [..]/bin/claude · 2.1.300 (Claude Code)
+✓ data-folder  [..]/relay
+✓ vault        ready
+✓ key          "Relay Vault Key" is readable in the Keychain
+✓ relay-app    not installed (not needed)
+✓ lock         free
+! desktop      pending sign-in: relay add --resume / --cancel
+✓ gui-session  macOS desktop session
+✓ automation   macOS asks for the Automation permission the first time a terminal quits Claude. If it was refused: System Settings → Privacy & Security → Automation → your terminal app → Claude.

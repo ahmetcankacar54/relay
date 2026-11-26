@@ -1,0 +1,168 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/time-zones.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "time-zones-rs",
+  "exports": [
+    {
+      "name": "validTimeZone",
+      "file": "shared/time-zones.ts",
+      "line": 57,
+      "params": [
+        {
+          "name": "zone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "timeZoneCity",
+      "file": "shared/time-zones.ts",
+      "line": 74,
+      "params": [
+        {
+          "name": "zone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "timeZoneOffset",
+      "file": "shared/time-zones.ts",
+      "line": 79,
+      "params": [
+        {
+          "name": "zone",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "buildTimeZoneCatalog",
+      "file": "shared/time-zones.ts",
+      "line": 105,
+      "params": [
+        {
+          "name": "supported",
+          "ts_type": "readonly string[]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "foldTimeZoneSearch",
+      "file": "shared/time-zones.ts",
+      "line": 130,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "timeZoneOptions",
+      "file": "shared/time-zones.ts",
+      "line": 148,
+      "params": [
+        {
+          "name": "current",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "catalog",
+          "ts_type": "readonly string[]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "{\n  zone: string;\n  city: string;\n  offset: string;\n  common: boolean;\n}[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "filterTimeZones",
+      "file": "shared/time-zones.ts",
+      "line": 165,
+      "params": [
+        {
+          "name": "options",
+          "ts_type": "readonly {\n  zone: string;\n  city: string;\n  offset: string;\n  common: boolean;\n}[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "query",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "{\n  zone: string;\n  city: string;\n  offset: string;\n  common: boolean;\n}[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

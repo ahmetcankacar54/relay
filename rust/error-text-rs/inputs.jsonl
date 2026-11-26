@@ -1,0 +1,1045 @@
+{"fn":"localizeError","args":["The approval in the browser came from another Claude account or workspace. Try again with this profile’s account.","en"]}
+{"fn":"localizeError","args":["The approval in the browser came from another Claude account or workspace. Try again with this profile’s account.","tr"]}
+{"fn":"localizeError","args":["The approval in the browser came from another Claude account or workspace. Try again with this profile’s account.","en"]}
+{"fn":"localizeError","args":["Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene.","en"]}
+{"fn":"localizeError","args":["The terminal sign-in did not complete. Try again.","de"]}
+{"fn":"localizeError","args":["The terminal sign-in did not complete. Try again.","tr"]}
+{"fn":"localizeError","args":["The terminal sign-in did not complete. Try again.","en"]}
+{"fn":"localizeError","args":["Terminal girişi tamamlanmadı. Yeniden dene.","fr"]}
+{"fn":"localizeError","args":["Terminal girişi tamamlanmadı. Yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Terminal girişi tamamlanmadı. Yeniden dene.","en"]}
+{"fn":"localizeError","args":["Terminal sign-ins are kept on macOS and Linux only.","es"]}
+{"fn":"localizeError","args":["Terminal sign-ins are kept on macOS and Linux only.","tr"]}
+{"fn":"localizeError","args":["Terminal sign-ins are kept on macOS and Linux only.","en"]}
+{"fn":"localizeError","args":["Terminal girişleri yalnızca macOS ve Linux’ta saklanır.","pt-BR"]}
+{"fn":"localizeError","args":["Terminal girişleri yalnızca macOS ve Linux’ta saklanır.","tr"]}
+{"fn":"localizeError","args":["Terminal girişleri yalnızca macOS ve Linux’ta saklanır.","en"]}
+{"fn":"localizeError","args":["Save the Claude app sign-in first.","it"]}
+{"fn":"localizeError","args":["Save the Claude app sign-in first.","tr"]}
+{"fn":"localizeError","args":["Save the Claude app sign-in first.","en"]}
+{"fn":"localizeError","args":["Önce Claude uygulaması girişini kaydet.","ja"]}
+{"fn":"localizeError","args":["Önce Claude uygulaması girişini kaydet.","tr"]}
+{"fn":"localizeError","args":["Önce Claude uygulaması girişini kaydet.","en"]}
+{"fn":"localizeError","args":["Claude has not finished saving this sign-in yet. Relay tries again in a moment.","ko"]}
+{"fn":"localizeError","args":["Claude has not finished saving this sign-in yet. Relay tries again in a moment.","tr"]}
+{"fn":"localizeError","args":["Claude has not finished saving this sign-in yet. Relay tries again in a moment.","en"]}
+{"fn":"localizeError","args":["Claude bu girişi henüz kaydetmedi. Relay birazdan yeniden dener.","zh-Hans"]}
+{"fn":"localizeError","args":["Claude bu girişi henüz kaydetmedi. Relay birazdan yeniden dener.","tr"]}
+{"fn":"localizeError","args":["Claude bu girişi henüz kaydetmedi. Relay birazdan yeniden dener.","en"]}
+{"fn":"localizeError","args":["This Claude sign-in holds no session, so it was not saved. Sign in to the Claude app again, wait half a minute, then save.","zh-Hant"]}
+{"fn":"localizeError","args":["This Claude sign-in holds no session, so it was not saved. Sign in to the Claude app again, wait half a minute, then save.","tr"]}
+{"fn":"localizeError","args":["This Claude sign-in holds no session, so it was not saved. Sign in to the Claude app again, wait half a minute, then save.","en"]}
+{"fn":"localizeError","args":["Bu Claude girişinde oturum yok, bu yüzden kaydedilmedi. Claude uygulamasında yeniden giriş yap, yarım dakika bekle, sonra kaydet.","ru"]}
+{"fn":"localizeError","args":["Bu Claude girişinde oturum yok, bu yüzden kaydedilmedi. Claude uygulamasında yeniden giriş yap, yarım dakika bekle, sonra kaydet.","tr"]}
+{"fn":"localizeError","args":["Bu Claude girişinde oturum yok, bu yüzden kaydedilmedi. Claude uygulamasında yeniden giriş yap, yarım dakika bekle, sonra kaydet.","en"]}
+{"fn":"localizeError","args":["The Claude app is signed out. Sign in to it first, then save.","uk"]}
+{"fn":"localizeError","args":["The Claude app is signed out. Sign in to it first, then save.","tr"]}
+{"fn":"localizeError","args":["The Claude app is signed out. Sign in to it first, then save.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasında oturum kapalı. Önce giriş yap, sonra kaydet.","pl"]}
+{"fn":"localizeError","args":["Claude uygulamasında oturum kapalı. Önce giriş yap, sonra kaydet.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasında oturum kapalı. Önce giriş yap, sonra kaydet.","en"]}
+{"fn":"localizeError","args":["This account’s saved Claude sign-in has ended. Sign in to it again in Relay.","nl"]}
+{"fn":"localizeError","args":["This account’s saved Claude sign-in has ended. Sign in to it again in Relay.","tr"]}
+{"fn":"localizeError","args":["This account’s saved Claude sign-in has ended. Sign in to it again in Relay.","en"]}
+{"fn":"localizeError","args":["Bu hesabın kayıtlı Claude girişi sona ermiş. Relay’de hesaba yeniden giriş yap.","en"]}
+{"fn":"localizeError","args":["Bu hesabın kayıtlı Claude girişi sona ermiş. Relay’de hesaba yeniden giriş yap.","tr"]}
+{"fn":"localizeError","args":["Bu hesabın kayıtlı Claude girişi sona ermiş. Relay’de hesaba yeniden giriş yap.","en"]}
+{"fn":"localizeError","args":["Relay.app is using Claude Desktop. Try again when it ends.","tr"]}
+{"fn":"localizeError","args":["Relay.app is using Claude Desktop. Try again when it ends.","tr"]}
+{"fn":"localizeError","args":["Relay.app is using Claude Desktop. Try again when it ends.","en"]}
+{"fn":"localizeError","args":["Relay.app şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.","de"]}
+{"fn":"localizeError","args":["Relay.app şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Relay.app şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.","en"]}
+{"fn":"localizeError","args":["A relay command in a terminal is using Claude Desktop. Try again when it ends.","fr"]}
+{"fn":"localizeError","args":["A relay command in a terminal is using Claude Desktop. Try again when it ends.","tr"]}
+{"fn":"localizeError","args":["A relay command in a terminal is using Claude Desktop. Try again when it ends.","en"]}
+{"fn":"localizeError","args":["Terminaldeki bir relay komutu şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.","es"]}
+{"fn":"localizeError","args":["Terminaldeki bir relay komutu şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Terminaldeki bir relay komutu şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.","en"]}
+{"fn":"localizeError","args":["Another Relay process is using Claude Desktop. Try again when it ends.","pt-BR"]}
+{"fn":"localizeError","args":["Another Relay process is using Claude Desktop. Try again when it ends.","tr"]}
+{"fn":"localizeError","args":["Another Relay process is using Claude Desktop. Try again when it ends.","en"]}
+{"fn":"localizeError","args":["Başka bir Relay işlemi şu an Claude uygulamasında çalışıyor. Bitince yeniden dene.","it"]}
+{"fn":"localizeError","args":["Başka bir Relay işlemi şu an Claude uygulamasında çalışıyor. Bitince yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Başka bir Relay işlemi şu an Claude uygulamasında çalışıyor. Bitince yeniden dene.","en"]}
+{"fn":"localizeError","args":["Finish the Desktop operation before changing preferences.","ja"]}
+{"fn":"localizeError","args":["Finish the Desktop operation before changing preferences.","tr"]}
+{"fn":"localizeError","args":["Finish the Desktop operation before changing preferences.","en"]}
+{"fn":"localizeError","args":["Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.","ko"]}
+{"fn":"localizeError","args":["Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.","tr"]}
+{"fn":"localizeError","args":["Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.","en"]}
+{"fn":"localizeError","args":["Invalid Claude launch choice.","zh-Hans"]}
+{"fn":"localizeError","args":["Invalid Claude launch choice.","tr"]}
+{"fn":"localizeError","args":["Invalid Claude launch choice.","en"]}
+{"fn":"localizeError","args":["Claude’u başlatma seçimi geçersiz.","zh-Hant"]}
+{"fn":"localizeError","args":["Claude’u başlatma seçimi geçersiz.","tr"]}
+{"fn":"localizeError","args":["Claude’u başlatma seçimi geçersiz.","en"]}
+{"fn":"localizeError","args":["Relay is busy with the Claude app. Update when it is done.","ru"]}
+{"fn":"localizeError","args":["Relay is busy with the Claude app. Update when it is done.","tr"]}
+{"fn":"localizeError","args":["Relay is busy with the Claude app. Update when it is done.","en"]}
+{"fn":"localizeError","args":["Relay Claude uygulamasında bir işlem yapıyor. Bitince güncelle.","uk"]}
+{"fn":"localizeError","args":["Relay Claude uygulamasında bir işlem yapıyor. Bitince güncelle.","tr"]}
+{"fn":"localizeError","args":["Relay Claude uygulamasında bir işlem yapıyor. Bitince güncelle.","en"]}
+{"fn":"localizeError","args":["No update is ready to install.","pl"]}
+{"fn":"localizeError","args":["No update is ready to install.","tr"]}
+{"fn":"localizeError","args":["No update is ready to install.","en"]}
+{"fn":"localizeError","args":["Kurulmaya hazır bir güncelleme yok.","nl"]}
+{"fn":"localizeError","args":["Kurulmaya hazır bir güncelleme yok.","tr"]}
+{"fn":"localizeError","args":["Kurulmaya hazır bir güncelleme yok.","en"]}
+{"fn":"localizeError","args":["The downloaded update does not match its checksum.","en"]}
+{"fn":"localizeError","args":["The downloaded update does not match its checksum.","tr"]}
+{"fn":"localizeError","args":["The downloaded update does not match its checksum.","en"]}
+{"fn":"localizeError","args":["İndirilen güncelleme sağlama toplamıyla eşleşmiyor.","tr"]}
+{"fn":"localizeError","args":["İndirilen güncelleme sağlama toplamıyla eşleşmiyor.","tr"]}
+{"fn":"localizeError","args":["İndirilen güncelleme sağlama toplamıyla eşleşmiyor.","en"]}
+{"fn":"localizeError","args":["The downloaded update is not signed like this Relay, so it was not installed.","de"]}
+{"fn":"localizeError","args":["The downloaded update is not signed like this Relay, so it was not installed.","tr"]}
+{"fn":"localizeError","args":["The downloaded update is not signed like this Relay, so it was not installed.","en"]}
+{"fn":"localizeError","args":["İndirilen güncelleme bu Relay gibi imzalanmamış, bu yüzden kurulmadı.","fr"]}
+{"fn":"localizeError","args":["İndirilen güncelleme bu Relay gibi imzalanmamış, bu yüzden kurulmadı.","tr"]}
+{"fn":"localizeError","args":["İndirilen güncelleme bu Relay gibi imzalanmamış, bu yüzden kurulmadı.","en"]}
+{"fn":"localizeError","args":["The release lists no checksum for the update.","es"]}
+{"fn":"localizeError","args":["The release lists no checksum for the update.","tr"]}
+{"fn":"localizeError","args":["The release lists no checksum for the update.","en"]}
+{"fn":"localizeError","args":["Sürüm, güncelleme için sağlama toplamı listelemiyor.","pt-BR"]}
+{"fn":"localizeError","args":["Sürüm, güncelleme için sağlama toplamı listelemiyor.","tr"]}
+{"fn":"localizeError","args":["Sürüm, güncelleme için sağlama toplamı listelemiyor.","en"]}
+{"fn":"localizeError","args":["Relay runs from the disk image. Move it to Applications, then update.","it"]}
+{"fn":"localizeError","args":["Relay runs from the disk image. Move it to Applications, then update.","tr"]}
+{"fn":"localizeError","args":["Relay runs from the disk image. Move it to Applications, then update.","en"]}
+{"fn":"localizeError","args":["Relay disk görüntüsünden çalışıyor. Uygulamalar klasörüne taşı, sonra güncelle.","ja"]}
+{"fn":"localizeError","args":["Relay disk görüntüsünden çalışıyor. Uygulamalar klasörüne taşı, sonra güncelle.","tr"]}
+{"fn":"localizeError","args":["Relay disk görüntüsünden çalışıyor. Uygulamalar klasörüne taşı, sonra güncelle.","en"]}
+{"fn":"localizeError","args":["Relay cannot replace itself in its folder. Download the update from the release page.","ko"]}
+{"fn":"localizeError","args":["Relay cannot replace itself in its folder. Download the update from the release page.","tr"]}
+{"fn":"localizeError","args":["Relay cannot replace itself in its folder. Download the update from the release page.","en"]}
+{"fn":"localizeError","args":["Relay kendi klasöründe kendini değiştiremiyor. Güncellemeyi sürüm sayfasından indir.","zh-Hans"]}
+{"fn":"localizeError","args":["Relay kendi klasöründe kendini değiştiremiyor. Güncellemeyi sürüm sayfasından indir.","tr"]}
+{"fn":"localizeError","args":["Relay kendi klasöründe kendini değiştiremiyor. Güncellemeyi sürüm sayfasından indir.","en"]}
+{"fn":"localizeError","args":["Updates are not available in this copy of Relay.","zh-Hant"]}
+{"fn":"localizeError","args":["Updates are not available in this copy of Relay.","tr"]}
+{"fn":"localizeError","args":["Updates are not available in this copy of Relay.","en"]}
+{"fn":"localizeError","args":["Relay’in bu kopyası kendini güncelleyemez.","ru"]}
+{"fn":"localizeError","args":["Relay’in bu kopyası kendini güncelleyemez.","tr"]}
+{"fn":"localizeError","args":["Relay’in bu kopyası kendini güncelleyemez.","en"]}
+{"fn":"localizeError","args":["The update feed has no usable release.","uk"]}
+{"fn":"localizeError","args":["The update feed has no usable release.","tr"]}
+{"fn":"localizeError","args":["The update feed has no usable release.","en"]}
+{"fn":"localizeError","args":["Güncelleme kaynağında kullanılabilir bir sürüm yok.","pl"]}
+{"fn":"localizeError","args":["Güncelleme kaynağında kullanılabilir bir sürüm yok.","tr"]}
+{"fn":"localizeError","args":["Güncelleme kaynağında kullanılabilir bir sürüm yok.","en"]}
+{"fn":"localizeError","args":["The update is too large.","nl"]}
+{"fn":"localizeError","args":["The update is too large.","tr"]}
+{"fn":"localizeError","args":["The update is too large.","en"]}
+{"fn":"localizeError","args":["Güncelleme çok büyük.","en"]}
+{"fn":"localizeError","args":["Güncelleme çok büyük.","tr"]}
+{"fn":"localizeError","args":["Güncelleme çok büyük.","en"]}
+{"fn":"localizeError","args":["The update server sent too much data.","tr"]}
+{"fn":"localizeError","args":["The update server sent too much data.","tr"]}
+{"fn":"localizeError","args":["The update server sent too much data.","en"]}
+{"fn":"localizeError","args":["Güncelleme sunucusu çok fazla veri gönderdi.","de"]}
+{"fn":"localizeError","args":["Güncelleme sunucusu çok fazla veri gönderdi.","tr"]}
+{"fn":"localizeError","args":["Güncelleme sunucusu çok fazla veri gönderdi.","en"]}
+{"fn":"localizeError","args":["This account is open in a separate Claude window. Close that window first.","fr"]}
+{"fn":"localizeError","args":["This account is open in a separate Claude window. Close that window first.","tr"]}
+{"fn":"localizeError","args":["This account is open in a separate Claude window. Close that window first.","en"]}
+{"fn":"localizeError","args":["Bu hesap ayrı bir Claude penceresinde açık. Önce o pencereyi kapat.","es"]}
+{"fn":"localizeError","args":["Bu hesap ayrı bir Claude penceresinde açık. Önce o pencereyi kapat.","tr"]}
+{"fn":"localizeError","args":["Bu hesap ayrı bir Claude penceresinde açık. Önce o pencereyi kapat.","en"]}
+{"fn":"localizeError","args":["A separate Claude window is open, so Relay does not switch by itself.","pt-BR"]}
+{"fn":"localizeError","args":["A separate Claude window is open, so Relay does not switch by itself.","tr"]}
+{"fn":"localizeError","args":["A separate Claude window is open, so Relay does not switch by itself.","en"]}
+{"fn":"localizeError","args":["Ayrı bir Claude penceresi açık, bu yüzden Relay kendiliğinden geçiş yapmaz.","it"]}
+{"fn":"localizeError","args":["Ayrı bir Claude penceresi açık, bu yüzden Relay kendiliğinden geçiş yapmaz.","tr"]}
+{"fn":"localizeError","args":["Ayrı bir Claude penceresi açık, bu yüzden Relay kendiliğinden geçiş yapmaz.","en"]}
+{"fn":"localizeError","args":["Separate Claude windows are turned off in Settings.","ja"]}
+{"fn":"localizeError","args":["Separate Claude windows are turned off in Settings.","tr"]}
+{"fn":"localizeError","args":["Separate Claude windows are turned off in Settings.","en"]}
+{"fn":"localizeError","args":["Ayrı Claude pencereleri Ayarlar’da kapalı.","ko"]}
+{"fn":"localizeError","args":["Ayrı Claude pencereleri Ayarlar’da kapalı.","tr"]}
+{"fn":"localizeError","args":["Ayrı Claude pencereleri Ayarlar’da kapalı.","en"]}
+{"fn":"localizeError","args":["Separate Claude windows need macOS or Linux.","zh-Hans"]}
+{"fn":"localizeError","args":["Separate Claude windows need macOS or Linux.","tr"]}
+{"fn":"localizeError","args":["Separate Claude windows need macOS or Linux.","en"]}
+{"fn":"localizeError","args":["Ayrı Claude pencereleri macOS veya Linux gerektirir.","zh-Hant"]}
+{"fn":"localizeError","args":["Ayrı Claude pencereleri macOS veya Linux gerektirir.","tr"]}
+{"fn":"localizeError","args":["Ayrı Claude pencereleri macOS veya Linux gerektirir.","en"]}
+{"fn":"localizeError","args":["This account is already open in the Claude app. Switch the Claude app to another account first.","ru"]}
+{"fn":"localizeError","args":["This account is already open in the Claude app. Switch the Claude app to another account first.","tr"]}
+{"fn":"localizeError","args":["This account is already open in the Claude app. Switch the Claude app to another account first.","en"]}
+{"fn":"localizeError","args":["Bu hesap zaten Claude uygulamasında açık. Önce Claude uygulamasını başka bir hesaba geçir.","uk"]}
+{"fn":"localizeError","args":["Bu hesap zaten Claude uygulamasında açık. Önce Claude uygulamasını başka bir hesaba geçir.","tr"]}
+{"fn":"localizeError","args":["Bu hesap zaten Claude uygulamasında açık. Önce Claude uygulamasını başka bir hesaba geçir.","en"]}
+{"fn":"localizeError","args":["Claude did not open the separate window. Try again.","pl"]}
+{"fn":"localizeError","args":["Claude did not open the separate window. Try again.","tr"]}
+{"fn":"localizeError","args":["Claude did not open the separate window. Try again.","en"]}
+{"fn":"localizeError","args":["Claude ayrı pencereyi açmadı. Yeniden dene.","nl"]}
+{"fn":"localizeError","args":["Claude ayrı pencereyi açmadı. Yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Claude ayrı pencereyi açmadı. Yeniden dene.","en"]}
+{"fn":"localizeError","args":["The separate window is still open. Claude may be asking about work left running there.","en"]}
+{"fn":"localizeError","args":["The separate window is still open. Claude may be asking about work left running there.","tr"]}
+{"fn":"localizeError","args":["The separate window is still open. Claude may be asking about work left running there.","en"]}
+{"fn":"localizeError","args":["Ayrı pencere hâlâ açık. Claude orada çalışan işler için soru soruyor olabilir.","tr"]}
+{"fn":"localizeError","args":["Ayrı pencere hâlâ açık. Claude orada çalışan işler için soru soruyor olabilir.","tr"]}
+{"fn":"localizeError","args":["Ayrı pencere hâlâ açık. Claude orada çalışan işler için soru soruyor olabilir.","en"]}
+{"fn":"localizeError","args":["Invalid menu bar title.","de"]}
+{"fn":"localizeError","args":["Invalid menu bar title.","tr"]}
+{"fn":"localizeError","args":["Invalid menu bar title.","en"]}
+{"fn":"localizeError","args":["Menü çubuğu seçimi geçersiz.","fr"]}
+{"fn":"localizeError","args":["Menü çubuğu seçimi geçersiz.","tr"]}
+{"fn":"localizeError","args":["Menü çubuğu seçimi geçersiz.","en"]}
+{"fn":"localizeError","args":["Select existing Relay accounts once each.","es"]}
+{"fn":"localizeError","args":["Select existing Relay accounts once each.","tr"]}
+{"fn":"localizeError","args":["Select existing Relay accounts once each.","en"]}
+{"fn":"localizeError","args":["Yalnızca var olan Relay hesaplarını seç; her birini bir kez.","pt-BR"]}
+{"fn":"localizeError","args":["Yalnızca var olan Relay hesaplarını seç; her birini bir kez.","tr"]}
+{"fn":"localizeError","args":["Yalnızca var olan Relay hesaplarını seç; her birini bir kez.","en"]}
+{"fn":"localizeError","args":["Switch to this Desktop account before syncing its history.","it"]}
+{"fn":"localizeError","args":["Switch to this Desktop account before syncing its history.","tr"]}
+{"fn":"localizeError","args":["Switch to this Desktop account before syncing its history.","en"]}
+{"fn":"localizeError","args":["Geçmişini birleştirmeden önce Claude uygulamasında bu hesaba geç.","ja"]}
+{"fn":"localizeError","args":["Geçmişini birleştirmeden önce Claude uygulamasında bu hesaba geç.","tr"]}
+{"fn":"localizeError","args":["Geçmişini birleştirmeden önce Claude uygulamasında bu hesaba geç.","en"]}
+{"fn":"localizeError","args":["Invalid Desktop history tracking data.","ko"]}
+{"fn":"localizeError","args":["Invalid Desktop history tracking data.","tr"]}
+{"fn":"localizeError","args":["Invalid Desktop history tracking data.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasının geçmiş takip verisi geçersiz.","zh-Hans"]}
+{"fn":"localizeError","args":["Claude uygulamasının geçmiş takip verisi geçersiz.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasının geçmiş takip verisi geçersiz.","en"]}
+{"fn":"localizeError","args":["Automatic Desktop switch was cancelled because its conditions changed.","zh-Hant"]}
+{"fn":"localizeError","args":["Automatic Desktop switch was cancelled because its conditions changed.","tr"]}
+{"fn":"localizeError","args":["Automatic Desktop switch was cancelled because its conditions changed.","en"]}
+{"fn":"localizeError","args":["Koşullar değiştiği için otomatik geçiş iptal edildi.","ru"]}
+{"fn":"localizeError","args":["Koşullar değiştiği için otomatik geçiş iptal edildi.","tr"]}
+{"fn":"localizeError","args":["Koşullar değiştiği için otomatik geçiş iptal edildi.","en"]}
+{"fn":"localizeError","args":["Claude opened during the Desktop switch. Restore its backup after closing Claude.","uk"]}
+{"fn":"localizeError","args":["Claude opened during the Desktop switch. Restore its backup after closing Claude.","tr"]}
+{"fn":"localizeError","args":["Claude opened during the Desktop switch. Restore its backup after closing Claude.","en"]}
+{"fn":"localizeError","args":["Geçiş sırasında Claude uygulaması açıldı. Uygulamayı kapattıktan sonra yedeği geri yükle.","pl"]}
+{"fn":"localizeError","args":["Geçiş sırasında Claude uygulaması açıldı. Uygulamayı kapattıktan sonra yedeği geri yükle.","tr"]}
+{"fn":"localizeError","args":["Geçiş sırasında Claude uygulaması açıldı. Uygulamayı kapattıktan sonra yedeği geri yükle.","en"]}
+{"fn":"localizeError","args":["This profile is connected to a different Claude account. Choose the matching Desktop account.","nl"]}
+{"fn":"localizeError","args":["This profile is connected to a different Claude account. Choose the matching Desktop account.","tr"]}
+{"fn":"localizeError","args":["This profile is connected to a different Claude account. Choose the matching Desktop account.","en"]}
+{"fn":"localizeError","args":["Bu profil farklı bir Claude hesabına bağlı. Claude uygulamasında eşleşen hesabı seç.","en"]}
+{"fn":"localizeError","args":["Bu profil farklı bir Claude hesabına bağlı. Claude uygulamasında eşleşen hesabı seç.","tr"]}
+{"fn":"localizeError","args":["Bu profil farklı bir Claude hesabına bağlı. Claude uygulamasında eşleşen hesabı seç.","en"]}
+{"fn":"localizeError","args":["This profile is connected to a different Claude organization. Choose its matching Code workspace.","tr"]}
+{"fn":"localizeError","args":["This profile is connected to a different Claude organization. Choose its matching Code workspace.","tr"]}
+{"fn":"localizeError","args":["This profile is connected to a different Claude organization. Choose its matching Code workspace.","en"]}
+{"fn":"localizeError","args":["Bu profil farklı bir Claude kuruluşuna bağlı. Eşleşen Code çalışma alanını seç.","de"]}
+{"fn":"localizeError","args":["Bu profil farklı bir Claude kuruluşuna bağlı. Eşleşen Code çalışma alanını seç.","tr"]}
+{"fn":"localizeError","args":["Bu profil farklı bir Claude kuruluşuna bağlı. Eşleşen Code çalışma alanını seç.","en"]}
+{"fn":"localizeError","args":["Desktop account changed during setup. Try again.","fr"]}
+{"fn":"localizeError","args":["Desktop account changed during setup. Try again.","tr"]}
+{"fn":"localizeError","args":["Desktop account changed during setup. Try again.","en"]}
+{"fn":"localizeError","args":["Kurulum sırasında Claude uygulamasındaki hesap değişti. Tekrar dene.","es"]}
+{"fn":"localizeError","args":["Kurulum sırasında Claude uygulamasındaki hesap değişti. Tekrar dene.","tr"]}
+{"fn":"localizeError","args":["Kurulum sırasında Claude uygulamasındaki hesap değişti. Tekrar dene.","en"]}
+{"fn":"localizeError","args":["This Desktop profile is already connected.","pt-BR"]}
+{"fn":"localizeError","args":["This Desktop profile is already connected.","tr"]}
+{"fn":"localizeError","args":["This Desktop profile is already connected.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bu hesap zaten bağlı.","it"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bu hesap zaten bağlı.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bu hesap zaten bağlı.","en"]}
+{"fn":"localizeError","args":["Saved Desktop sign-in is missing. Connect this account again.","ja"]}
+{"fn":"localizeError","args":["Saved Desktop sign-in is missing. Connect this account again.","tr"]}
+{"fn":"localizeError","args":["Saved Desktop sign-in is missing. Connect this account again.","en"]}
+{"fn":"localizeError","args":["Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.","ko"]}
+{"fn":"localizeError","args":["Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.","tr"]}
+{"fn":"localizeError","args":["Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.","en"]}
+{"fn":"localizeError","args":["Invalid saved Desktop sign-in.","zh-Hans"]}
+{"fn":"localizeError","args":["Invalid saved Desktop sign-in.","tr"]}
+{"fn":"localizeError","args":["Invalid saved Desktop sign-in.","en"]}
+{"fn":"localizeError","args":["Kayıtlı Claude uygulaması girişi geçersiz.","zh-Hant"]}
+{"fn":"localizeError","args":["Kayıtlı Claude uygulaması girişi geçersiz.","tr"]}
+{"fn":"localizeError","args":["Kayıtlı Claude uygulaması girişi geçersiz.","en"]}
+{"fn":"localizeError","args":["Claude is still running. No files were changed.","ru"]}
+{"fn":"localizeError","args":["Claude is still running. No files were changed.","tr"]}
+{"fn":"localizeError","args":["Claude is still running. No files were changed.","en"]}
+{"fn":"localizeError","args":["Claude uygulaması hâlâ açık. Dosyalar değiştirilmedi.","uk"]}
+{"fn":"localizeError","args":["Claude uygulaması hâlâ açık. Dosyalar değiştirilmedi.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması hâlâ açık. Dosyalar değiştirilmedi.","en"]}
+{"fn":"localizeError","args":["Desktop recovery backup is missing.","pl"]}
+{"fn":"localizeError","args":["Desktop recovery backup is missing.","tr"]}
+{"fn":"localizeError","args":["Desktop recovery backup is missing.","en"]}
+{"fn":"localizeError","args":["Kurtarma yedeği bulunamadı.","nl"]}
+{"fn":"localizeError","args":["Kurtarma yedeği bulunamadı.","tr"]}
+{"fn":"localizeError","args":["Kurtarma yedeği bulunamadı.","en"]}
+{"fn":"localizeError","args":["Invalid Desktop backup.","en"]}
+{"fn":"localizeError","args":["Invalid Desktop backup.","tr"]}
+{"fn":"localizeError","args":["Invalid Desktop backup.","en"]}
+{"fn":"localizeError","args":["Claude uygulaması yedeği geçersiz.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması yedeği geçersiz.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması yedeği geçersiz.","en"]}
+{"fn":"localizeError","args":["Invalid recovery path.","de"]}
+{"fn":"localizeError","args":["Invalid recovery path.","tr"]}
+{"fn":"localizeError","args":["Invalid recovery path.","en"]}
+{"fn":"localizeError","args":["Kurtarma dosya yolu geçersiz.","fr"]}
+{"fn":"localizeError","args":["Kurtarma dosya yolu geçersiz.","tr"]}
+{"fn":"localizeError","args":["Kurtarma dosya yolu geçersiz.","en"]}
+{"fn":"localizeError","args":["Invalid recovery data.","es"]}
+{"fn":"localizeError","args":["Invalid recovery data.","tr"]}
+{"fn":"localizeError","args":["Invalid recovery data.","en"]}
+{"fn":"localizeError","args":["Kurtarma verisi geçersiz.","pt-BR"]}
+{"fn":"localizeError","args":["Kurtarma verisi geçersiz.","tr"]}
+{"fn":"localizeError","args":["Kurtarma verisi geçersiz.","en"]}
+{"fn":"localizeError","args":["Invalid Desktop path.","it"]}
+{"fn":"localizeError","args":["Invalid Desktop path.","tr"]}
+{"fn":"localizeError","args":["Invalid Desktop path.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bir dosya yolu geçersiz.","ja"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bir dosya yolu geçersiz.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bir dosya yolu geçersiz.","en"]}
+{"fn":"localizeError","args":["Desktop data cannot contain symbolic links.","ko"]}
+{"fn":"localizeError","args":["Desktop data cannot contain symbolic links.","tr"]}
+{"fn":"localizeError","args":["Desktop data cannot contain symbolic links.","en"]}
+{"fn":"localizeError","args":["Claude uygulaması verisinde sembolik bağlantı kullanılamaz.","zh-Hans"]}
+{"fn":"localizeError","args":["Claude uygulaması verisinde sembolik bağlantı kullanılamaz.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması verisinde sembolik bağlantı kullanılamaz.","en"]}
+{"fn":"localizeError","args":["Unsupported Desktop file size or type.","zh-Hant"]}
+{"fn":"localizeError","args":["Unsupported Desktop file size or type.","tr"]}
+{"fn":"localizeError","args":["Unsupported Desktop file size or type.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bir dosyanın boyutu ya da türü desteklenmiyor.","ru"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bir dosyanın boyutu ya da türü desteklenmiyor.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bir dosyanın boyutu ya da türü desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["Unsupported Desktop data format.","uk"]}
+{"fn":"localizeError","args":["Unsupported Desktop data format.","tr"]}
+{"fn":"localizeError","args":["Unsupported Desktop data format.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasının veri biçimi desteklenmiyor.","pl"]}
+{"fn":"localizeError","args":["Claude uygulamasının veri biçimi desteklenmiyor.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasının veri biçimi desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["Unrecognized Code session format. No Desktop files changed.","nl"]}
+{"fn":"localizeError","args":["Unrecognized Code session format. No Desktop files changed.","tr"]}
+{"fn":"localizeError","args":["Unrecognized Code session format. No Desktop files changed.","en"]}
+{"fn":"localizeError","args":["Code oturum biçimi tanınmadı. Claude uygulaması dosyaları değiştirilmedi.","en"]}
+{"fn":"localizeError","args":["Code oturum biçimi tanınmadı. Claude uygulaması dosyaları değiştirilmedi.","tr"]}
+{"fn":"localizeError","args":["Code oturum biçimi tanınmadı. Claude uygulaması dosyaları değiştirilmedi.","en"]}
+{"fn":"localizeError","args":["Unrecognized project format.","tr"]}
+{"fn":"localizeError","args":["Unrecognized project format.","tr"]}
+{"fn":"localizeError","args":["Unrecognized project format.","en"]}
+{"fn":"localizeError","args":["Proje biçimi tanınmadı.","de"]}
+{"fn":"localizeError","args":["Proje biçimi tanınmadı.","tr"]}
+{"fn":"localizeError","args":["Proje biçimi tanınmadı.","en"]}
+{"fn":"localizeError","args":["Unrecognized project record.","fr"]}
+{"fn":"localizeError","args":["Unrecognized project record.","tr"]}
+{"fn":"localizeError","args":["Unrecognized project record.","en"]}
+{"fn":"localizeError","args":["Proje kaydı tanınmadı.","es"]}
+{"fn":"localizeError","args":["Proje kaydı tanınmadı.","tr"]}
+{"fn":"localizeError","args":["Proje kaydı tanınmadı.","en"]}
+{"fn":"localizeError","args":["Desktop recovery is required before switching.","pt-BR"]}
+{"fn":"localizeError","args":["Desktop recovery is required before switching.","tr"]}
+{"fn":"localizeError","args":["Desktop recovery is required before switching.","en"]}
+{"fn":"localizeError","args":["Geçişten önce yedeğin geri yüklenmesi gerekiyor.","it"]}
+{"fn":"localizeError","args":["Geçişten önce yedeğin geri yüklenmesi gerekiyor.","tr"]}
+{"fn":"localizeError","args":["Geçişten önce yedeğin geri yüklenmesi gerekiyor.","en"]}
+{"fn":"localizeError","args":["Claude Desktop data could not be read. No files were changed.","ja"]}
+{"fn":"localizeError","args":["Claude Desktop data could not be read. No files were changed.","tr"]}
+{"fn":"localizeError","args":["Claude Desktop data could not be read. No files were changed.","en"]}
+{"fn":"localizeError","args":["Claude uygulaması verisi okunamadı. Dosyalar değiştirilmedi.","ko"]}
+{"fn":"localizeError","args":["Claude uygulaması verisi okunamadı. Dosyalar değiştirilmedi.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması verisi okunamadı. Dosyalar değiştirilmedi.","en"]}
+{"fn":"localizeError","args":["System encryption is unavailable.","zh-Hans"]}
+{"fn":"localizeError","args":["System encryption is unavailable.","tr"]}
+{"fn":"localizeError","args":["System encryption is unavailable.","en"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor.","zh-Hant"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor.","tr"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor.","en"]}
+{"fn":"localizeError","args":["Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.","ru"]}
+{"fn":"localizeError","args":["Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.","tr"]}
+{"fn":"localizeError","args":["Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.","en"]}
+{"fn":"localizeError","args":["Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.","uk"]}
+{"fn":"localizeError","args":["Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.","tr"]}
+{"fn":"localizeError","args":["Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.","en"]}
+{"fn":"localizeError","args":["This is a UI preview. Open the Relay desktop application to manage real accounts.","pl"]}
+{"fn":"localizeError","args":["This is a UI preview. Open the Relay desktop application to manage real accounts.","tr"]}
+{"fn":"localizeError","args":["This is a UI preview. Open the Relay desktop application to manage real accounts.","en"]}
+{"fn":"localizeError","args":["Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.","nl"]}
+{"fn":"localizeError","args":["Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.","tr"]}
+{"fn":"localizeError","args":["Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.","en"]}
+{"fn":"localizeError","args":["You can add up to 50 accounts.","en"]}
+{"fn":"localizeError","args":["You can add up to 50 accounts.","tr"]}
+{"fn":"localizeError","args":["You can add up to 50 accounts.","en"]}
+{"fn":"localizeError","args":["En fazla 50 hesap eklenebilir.","tr"]}
+{"fn":"localizeError","args":["En fazla 50 hesap eklenebilir.","tr"]}
+{"fn":"localizeError","args":["En fazla 50 hesap eklenebilir.","en"]}
+{"fn":"localizeError","args":["Finish one of the pending usage sign-ins first.","de"]}
+{"fn":"localizeError","args":["Finish one of the pending usage sign-ins first.","tr"]}
+{"fn":"localizeError","args":["Finish one of the pending usage sign-ins first.","en"]}
+{"fn":"localizeError","args":["Önce yarım kalan limit okuma girişlerinden birini tamamla.","fr"]}
+{"fn":"localizeError","args":["Önce yarım kalan limit okuma girişlerinden birini tamamla.","tr"]}
+{"fn":"localizeError","args":["Önce yarım kalan limit okuma girişlerinden birini tamamla.","en"]}
+{"fn":"localizeError","args":["Stop the running session for this account first.","es"]}
+{"fn":"localizeError","args":["Stop the running session for this account first.","tr"]}
+{"fn":"localizeError","args":["Stop the running session for this account first.","en"]}
+{"fn":"localizeError","args":["Bu hesapta çalışan oturumu önce durdur.","pt-BR"]}
+{"fn":"localizeError","args":["Bu hesapta çalışan oturumu önce durdur.","tr"]}
+{"fn":"localizeError","args":["Bu hesapta çalışan oturumu önce durdur.","en"]}
+{"fn":"localizeError","args":["The usage sign-in did not finish. Try again and approve it in the browser.","it"]}
+{"fn":"localizeError","args":["The usage sign-in did not finish. Try again and approve it in the browser.","tr"]}
+{"fn":"localizeError","args":["The usage sign-in did not finish. Try again and approve it in the browser.","en"]}
+{"fn":"localizeError","args":["Limit okuma girişi tamamlanmadı. Yeniden dene ve tarayıcıda onayla.","ja"]}
+{"fn":"localizeError","args":["Limit okuma girişi tamamlanmadı. Yeniden dene ve tarayıcıda onayla.","tr"]}
+{"fn":"localizeError","args":["Limit okuma girişi tamamlanmadı. Yeniden dene ve tarayıcıda onayla.","en"]}
+{"fn":"localizeError","args":["The browser signed in with another Claude account; this profile belongs to its Claude app account. Switch to the right account on claude.ai or use “Open in Relay window”, then renew the sign-in.","ko"]}
+{"fn":"localizeError","args":["The browser signed in with another Claude account; this profile belongs to its Claude app account. Switch to the right account on claude.ai or use “Open in Relay window”, then renew the sign-in.","tr"]}
+{"fn":"localizeError","args":["The browser signed in with another Claude account; this profile belongs to its Claude app account. Switch to the right account on claude.ai or use “Open in Relay window”, then renew the sign-in.","en"]}
+{"fn":"localizeError","args":["Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.","zh-Hans"]}
+{"fn":"localizeError","args":["Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.","tr"]}
+{"fn":"localizeError","args":["Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.","en"]}
+{"fn":"localizeError","args":["This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.","zh-Hant"]}
+{"fn":"localizeError","args":["This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.","tr"]}
+{"fn":"localizeError","args":["This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.","en"]}
+{"fn":"localizeError","args":["Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.","ru"]}
+{"fn":"localizeError","args":["Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.","tr"]}
+{"fn":"localizeError","args":["Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.","en"]}
+{"fn":"localizeError","args":["The sign-in timed out. Start it again.","uk"]}
+{"fn":"localizeError","args":["The sign-in timed out. Start it again.","tr"]}
+{"fn":"localizeError","args":["The sign-in timed out. Start it again.","en"]}
+{"fn":"localizeError","args":["Giriş süresi doldu. Girişi yeniden başlat.","pl"]}
+{"fn":"localizeError","args":["Giriş süresi doldu. Girişi yeniden başlat.","tr"]}
+{"fn":"localizeError","args":["Giriş süresi doldu. Girişi yeniden başlat.","en"]}
+{"fn":"localizeError","args":["The usage sign-in could not be verified. Renew the usage sign-in.","nl"]}
+{"fn":"localizeError","args":["The usage sign-in could not be verified. Renew the usage sign-in.","tr"]}
+{"fn":"localizeError","args":["The usage sign-in could not be verified. Renew the usage sign-in.","en"]}
+{"fn":"localizeError","args":["Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.","en"]}
+{"fn":"localizeError","args":["Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.","tr"]}
+{"fn":"localizeError","args":["Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.","en"]}
+{"fn":"localizeError","args":["Could not start the usage sign-in. Check Claude Code CLI in Settings.","tr"]}
+{"fn":"localizeError","args":["Could not start the usage sign-in. Check Claude Code CLI in Settings.","tr"]}
+{"fn":"localizeError","args":["Could not start the usage sign-in. Check Claude Code CLI in Settings.","en"]}
+{"fn":"localizeError","args":["Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.","de"]}
+{"fn":"localizeError","args":["Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.","tr"]}
+{"fn":"localizeError","args":["Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.","en"]}
+{"fn":"localizeError","args":["The browser approval came through, but the account could not be verified. Refresh limits; if it persists, renew the usage sign-in.","fr"]}
+{"fn":"localizeError","args":["The browser approval came through, but the account could not be verified. Refresh limits; if it persists, renew the usage sign-in.","tr"]}
+{"fn":"localizeError","args":["The browser approval came through, but the account could not be verified. Refresh limits; if it persists, renew the usage sign-in.","en"]}
+{"fn":"localizeError","args":["Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.","es"]}
+{"fn":"localizeError","args":["Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.","tr"]}
+{"fn":"localizeError","args":["Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.","en"]}
+{"fn":"localizeError","args":["The account could not be verified. Refresh limits; if it persists, renew the usage sign-in.","pt-BR"]}
+{"fn":"localizeError","args":["The account could not be verified. Refresh limits; if it persists, renew the usage sign-in.","tr"]}
+{"fn":"localizeError","args":["The account could not be verified. Refresh limits; if it persists, renew the usage sign-in.","en"]}
+{"fn":"localizeError","args":["Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.","it"]}
+{"fn":"localizeError","args":["Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.","tr"]}
+{"fn":"localizeError","args":["Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.","en"]}
+{"fn":"localizeError","args":["The sign-in page isn’t ready yet or has expired. Start the sign-in again.","ja"]}
+{"fn":"localizeError","args":["The sign-in page isn’t ready yet or has expired. Start the sign-in again.","tr"]}
+{"fn":"localizeError","args":["The sign-in page isn’t ready yet or has expired. Start the sign-in again.","en"]}
+{"fn":"localizeError","args":["Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.","ko"]}
+{"fn":"localizeError","args":["Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.","tr"]}
+{"fn":"localizeError","args":["Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.","en"]}
+{"fn":"localizeError","args":["This sign-in attempt is no longer valid.","zh-Hans"]}
+{"fn":"localizeError","args":["This sign-in attempt is no longer valid.","tr"]}
+{"fn":"localizeError","args":["This sign-in attempt is no longer valid.","en"]}
+{"fn":"localizeError","args":["Bu giriş denemesi artık geçerli değil.","zh-Hant"]}
+{"fn":"localizeError","args":["Bu giriş denemesi artık geçerli değil.","tr"]}
+{"fn":"localizeError","args":["Bu giriş denemesi artık geçerli değil.","en"]}
+{"fn":"localizeError","args":["This sign-in attempt is not waiting for a code.","ru"]}
+{"fn":"localizeError","args":["This sign-in attempt is not waiting for a code.","tr"]}
+{"fn":"localizeError","args":["This sign-in attempt is not waiting for a code.","en"]}
+{"fn":"localizeError","args":["Bu giriş işlemi kod beklemiyor.","uk"]}
+{"fn":"localizeError","args":["Bu giriş işlemi kod beklemiyor.","tr"]}
+{"fn":"localizeError","args":["Bu giriş işlemi kod beklemiyor.","en"]}
+{"fn":"localizeError","args":["Paste the single-line code from the browser.","pl"]}
+{"fn":"localizeError","args":["Paste the single-line code from the browser.","tr"]}
+{"fn":"localizeError","args":["Paste the single-line code from the browser.","en"]}
+{"fn":"localizeError","args":["Tarayıcının verdiği tek satırlık kodu yapıştır.","nl"]}
+{"fn":"localizeError","args":["Tarayıcının verdiği tek satırlık kodu yapıştır.","tr"]}
+{"fn":"localizeError","args":["Tarayıcının verdiği tek satırlık kodu yapıştır.","en"]}
+{"fn":"localizeError","args":["This Desktop account is already saved in another profile.","en"]}
+{"fn":"localizeError","args":["This Desktop account is already saved in another profile.","tr"]}
+{"fn":"localizeError","args":["This Desktop account is already saved in another profile.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bu hesap başka bir profilde kayıtlı.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bu hesap başka bir profilde kayıtlı.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki bu hesap başka bir profilde kayıtlı.","en"]}
+{"fn":"localizeError","args":["Open Claude Desktop, sign in and open the Code tab first.","de"]}
+{"fn":"localizeError","args":["Open Claude Desktop, sign in and open the Code tab first.","tr"]}
+{"fn":"localizeError","args":["Open Claude Desktop, sign in and open the Code tab first.","en"]}
+{"fn":"localizeError","args":["Önce Claude uygulamasında giriş yap ve Code sekmesini aç.","fr"]}
+{"fn":"localizeError","args":["Önce Claude uygulamasında giriş yap ve Code sekmesini aç.","tr"]}
+{"fn":"localizeError","args":["Önce Claude uygulamasında giriş yap ve Code sekmesini aç.","en"]}
+{"fn":"localizeError","args":["Save the current Desktop account into a profile before adding another account.","es"]}
+{"fn":"localizeError","args":["Save the current Desktop account into a profile before adding another account.","tr"]}
+{"fn":"localizeError","args":["Save the current Desktop account into a profile before adding another account.","en"]}
+{"fn":"localizeError","args":["Önce Claude uygulamasında açık hesabı bir profile kaydet.","pt-BR"]}
+{"fn":"localizeError","args":["Önce Claude uygulamasında açık hesabı bir profile kaydet.","tr"]}
+{"fn":"localizeError","args":["Önce Claude uygulamasında açık hesabı bir profile kaydet.","en"]}
+{"fn":"localizeError","args":["Save the current Desktop account before switching.","it"]}
+{"fn":"localizeError","args":["Save the current Desktop account before switching.","tr"]}
+{"fn":"localizeError","args":["Save the current Desktop account before switching.","en"]}
+{"fn":"localizeError","args":["Geçişten önce Claude uygulamasında açık hesabı kaydet.","ja"]}
+{"fn":"localizeError","args":["Geçişten önce Claude uygulamasında açık hesabı kaydet.","tr"]}
+{"fn":"localizeError","args":["Geçişten önce Claude uygulamasında açık hesabı kaydet.","en"]}
+{"fn":"localizeError","args":["Finish or cancel the current Desktop sign-in first.","ko"]}
+{"fn":"localizeError","args":["Finish or cancel the current Desktop sign-in first.","tr"]}
+{"fn":"localizeError","args":["Finish or cancel the current Desktop sign-in first.","en"]}
+{"fn":"localizeError","args":["Önce devam eden Claude uygulaması girişini tamamla veya iptal et.","zh-Hans"]}
+{"fn":"localizeError","args":["Önce devam eden Claude uygulaması girişini tamamla veya iptal et.","tr"]}
+{"fn":"localizeError","args":["Önce devam eden Claude uygulaması girişini tamamla veya iptal et.","en"]}
+{"fn":"localizeError","args":["A Desktop operation is already in progress.","zh-Hant"]}
+{"fn":"localizeError","args":["A Desktop operation is already in progress.","tr"]}
+{"fn":"localizeError","args":["A Desktop operation is already in progress.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasında bir işlem sürüyor.","ru"]}
+{"fn":"localizeError","args":["Claude uygulamasında bir işlem sürüyor.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasında bir işlem sürüyor.","en"]}
+{"fn":"localizeError","args":["Claude Desktop was not found on this platform.","uk"]}
+{"fn":"localizeError","args":["Claude Desktop was not found on this platform.","tr"]}
+{"fn":"localizeError","args":["Claude Desktop was not found on this platform.","en"]}
+{"fn":"localizeError","args":["Bu platformda Claude uygulaması bulunamadı.","pl"]}
+{"fn":"localizeError","args":["Bu platformda Claude uygulaması bulunamadı.","tr"]}
+{"fn":"localizeError","args":["Bu platformda Claude uygulaması bulunamadı.","en"]}
+{"fn":"localizeError","args":["Restore the interrupted Desktop switch first.","nl"]}
+{"fn":"localizeError","args":["Restore the interrupted Desktop switch first.","tr"]}
+{"fn":"localizeError","args":["Restore the interrupted Desktop switch first.","en"]}
+{"fn":"localizeError","args":["Önce yarım kalan geçişi geri yükle.","en"]}
+{"fn":"localizeError","args":["Önce yarım kalan geçişi geri yükle.","tr"]}
+{"fn":"localizeError","args":["Önce yarım kalan geçişi geri yükle.","en"]}
+{"fn":"localizeError","args":["Connect this account in Claude Desktop first.","tr"]}
+{"fn":"localizeError","args":["Connect this account in Claude Desktop first.","tr"]}
+{"fn":"localizeError","args":["Connect this account in Claude Desktop first.","en"]}
+{"fn":"localizeError","args":["Önce bu hesabı Claude uygulamasında bağla.","de"]}
+{"fn":"localizeError","args":["Önce bu hesabı Claude uygulamasında bağla.","tr"]}
+{"fn":"localizeError","args":["Önce bu hesabı Claude uygulamasında bağla.","en"]}
+{"fn":"localizeError","args":["Claude Desktop is not installed.","fr"]}
+{"fn":"localizeError","args":["Claude Desktop is not installed.","tr"]}
+{"fn":"localizeError","args":["Claude Desktop is not installed.","en"]}
+{"fn":"localizeError","args":["Claude uygulaması kurulu değil.","es"]}
+{"fn":"localizeError","args":["Claude uygulaması kurulu değil.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması kurulu değil.","en"]}
+{"fn":"localizeError","args":["This profile belongs to another Desktop account. Create a new profile.","pt-BR"]}
+{"fn":"localizeError","args":["This profile belongs to another Desktop account. Create a new profile.","tr"]}
+{"fn":"localizeError","args":["This profile belongs to another Desktop account. Create a new profile.","en"]}
+{"fn":"localizeError","args":["Bu profil Claude uygulamasındaki başka bir hesaba ait. Yeni bir profil oluştur.","it"]}
+{"fn":"localizeError","args":["Bu profil Claude uygulamasındaki başka bir hesaba ait. Yeni bir profil oluştur.","tr"]}
+{"fn":"localizeError","args":["Bu profil Claude uygulamasındaki başka bir hesaba ait. Yeni bir profil oluştur.","en"]}
+{"fn":"localizeError","args":["Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.","ja"]}
+{"fn":"localizeError","args":["Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.","tr"]}
+{"fn":"localizeError","args":["Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.","en"]}
+{"fn":"localizeError","args":["Claude uygulaması kapanmadı. Açık çalışmanı bitirip uygulamayı kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.","ko"]}
+{"fn":"localizeError","args":["Claude uygulaması kapanmadı. Açık çalışmanı bitirip uygulamayı kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.","tr"]}
+{"fn":"localizeError","args":["Claude uygulaması kapanmadı. Açık çalışmanı bitirip uygulamayı kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.","en"]}
+{"fn":"localizeError","args":["System encryption is unavailable. Desktop sign-in was not saved.","zh-Hans"]}
+{"fn":"localizeError","args":["System encryption is unavailable. Desktop sign-in was not saved.","tr"]}
+{"fn":"localizeError","args":["System encryption is unavailable. Desktop sign-in was not saved.","en"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.","zh-Hant"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.","tr"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.","en"]}
+{"fn":"localizeError","args":["Wait for the account connection refresh to finish.","ru"]}
+{"fn":"localizeError","args":["Wait for the account connection refresh to finish.","tr"]}
+{"fn":"localizeError","args":["Wait for the account connection refresh to finish.","en"]}
+{"fn":"localizeError","args":["Limit okuma girişinin yenilenmesi bitene kadar bekle.","uk"]}
+{"fn":"localizeError","args":["Limit okuma girişinin yenilenmesi bitene kadar bekle.","tr"]}
+{"fn":"localizeError","args":["Limit okuma girişinin yenilenmesi bitene kadar bekle.","en"]}
+{"fn":"localizeError","args":["Finish the Desktop handoff before signing in.","pl"]}
+{"fn":"localizeError","args":["Finish the Desktop handoff before signing in.","tr"]}
+{"fn":"localizeError","args":["Finish the Desktop handoff before signing in.","en"]}
+{"fn":"localizeError","args":["Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.","nl"]}
+{"fn":"localizeError","args":["Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.","tr"]}
+{"fn":"localizeError","args":["Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.","en"]}
+{"fn":"localizeError","args":["Finish the Desktop handoff before starting another Desktop operation.","en"]}
+{"fn":"localizeError","args":["Finish the Desktop handoff before starting another Desktop operation.","tr"]}
+{"fn":"localizeError","args":["Finish the Desktop handoff before starting another Desktop operation.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.","en"]}
+{"fn":"localizeError","args":["Invalid IPC source.","de"]}
+{"fn":"localizeError","args":["Invalid IPC source.","tr"]}
+{"fn":"localizeError","args":["Invalid IPC source.","en"]}
+{"fn":"localizeError","args":["Geçersiz IPC kaynağı.","fr"]}
+{"fn":"localizeError","args":["Geçersiz IPC kaynağı.","tr"]}
+{"fn":"localizeError","args":["Geçersiz IPC kaynağı.","en"]}
+{"fn":"localizeError","args":["The active Desktop account must be known before automatic preparation.","es"]}
+{"fn":"localizeError","args":["The active Desktop account must be known before automatic preparation.","tr"]}
+{"fn":"localizeError","args":["The active Desktop account must be known before automatic preparation.","en"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce Claude uygulamasında açık hesap bilinmeli.","pt-BR"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce Claude uygulamasında açık hesap bilinmeli.","tr"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce Claude uygulamasında açık hesap bilinmeli.","en"]}
+{"fn":"localizeError","args":["Desktop account changed before automatic preparation.","it"]}
+{"fn":"localizeError","args":["Desktop account changed before automatic preparation.","tr"]}
+{"fn":"localizeError","args":["Desktop account changed before automatic preparation.","en"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce Claude uygulamasındaki hesap değişti.","ja"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce Claude uygulamasındaki hesap değişti.","tr"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce Claude uygulamasındaki hesap değişti.","en"]}
+{"fn":"localizeError","args":["Automatic preparation is no longer authorized.","ko"]}
+{"fn":"localizeError","args":["Automatic preparation is no longer authorized.","tr"]}
+{"fn":"localizeError","args":["Automatic preparation is no longer authorized.","en"]}
+{"fn":"localizeError","args":["Otomatik hazırlığa artık izin yok.","zh-Hans"]}
+{"fn":"localizeError","args":["Otomatik hazırlığa artık izin yok.","tr"]}
+{"fn":"localizeError","args":["Otomatik hazırlığa artık izin yok.","en"]}
+{"fn":"localizeError","args":["The selected Desktop account changed before automatic preparation.","zh-Hant"]}
+{"fn":"localizeError","args":["The selected Desktop account changed before automatic preparation.","tr"]}
+{"fn":"localizeError","args":["The selected Desktop account changed before automatic preparation.","en"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce seçilen hesap değişti.","ru"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce seçilen hesap değişti.","tr"]}
+{"fn":"localizeError","args":["Otomatik hazırlıktan önce seçilen hesap değişti.","en"]}
+{"fn":"localizeError","args":["Automatic Desktop switch was cancelled before restart.","uk"]}
+{"fn":"localizeError","args":["Automatic Desktop switch was cancelled before restart.","tr"]}
+{"fn":"localizeError","args":["Automatic Desktop switch was cancelled before restart.","en"]}
+{"fn":"localizeError","args":["Otomatik geçiş, yeniden başlatmadan önce iptal edildi.","pl"]}
+{"fn":"localizeError","args":["Otomatik geçiş, yeniden başlatmadan önce iptal edildi.","tr"]}
+{"fn":"localizeError","args":["Otomatik geçiş, yeniden başlatmadan önce iptal edildi.","en"]}
+{"fn":"localizeError","args":["Missing Code record.","nl"]}
+{"fn":"localizeError","args":["Missing Code record.","tr"]}
+{"fn":"localizeError","args":["Missing Code record.","en"]}
+{"fn":"localizeError","args":["Code kaydı bulunamadı.","en"]}
+{"fn":"localizeError","args":["Code kaydı bulunamadı.","tr"]}
+{"fn":"localizeError","args":["Code kaydı bulunamadı.","en"]}
+{"fn":"localizeError","args":["The process list could not be read.","tr"]}
+{"fn":"localizeError","args":["The process list could not be read.","tr"]}
+{"fn":"localizeError","args":["The process list could not be read.","en"]}
+{"fn":"localizeError","args":["İşlem listesi okunamadı.","de"]}
+{"fn":"localizeError","args":["İşlem listesi okunamadı.","tr"]}
+{"fn":"localizeError","args":["İşlem listesi okunamadı.","en"]}
+{"fn":"localizeError","args":["Invalid CLI authentication status.","fr"]}
+{"fn":"localizeError","args":["Invalid CLI authentication status.","tr"]}
+{"fn":"localizeError","args":["Invalid CLI authentication status.","en"]}
+{"fn":"localizeError","args":["Claude CLI giriş durumu geçersiz.","es"]}
+{"fn":"localizeError","args":["Claude CLI giriş durumu geçersiz.","tr"]}
+{"fn":"localizeError","args":["Claude CLI giriş durumu geçersiz.","en"]}
+{"fn":"localizeError","args":["Check that the right account is open in the Claude app.","pt-BR"]}
+{"fn":"localizeError","args":["Check that the right account is open in the Claude app.","tr"]}
+{"fn":"localizeError","args":["Check that the right account is open in the Claude app.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasında doğru hesabın açık olduğunu doğrula.","it"]}
+{"fn":"localizeError","args":["Claude uygulamasında doğru hesabın açık olduğunu doğrula.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasında doğru hesabın açık olduğunu doğrula.","en"]}
+{"fn":"localizeError","args":["Sending to the Claude app is not supported on this platform or CLI version.","ja"]}
+{"fn":"localizeError","args":["Sending to the Claude app is not supported on this platform or CLI version.","tr"]}
+{"fn":"localizeError","args":["Sending to the Claude app is not supported on this platform or CLI version.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.","ko"]}
+{"fn":"localizeError","args":["Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["Continue with the chosen account in Relay first, then send that session to the Claude app.","zh-Hans"]}
+{"fn":"localizeError","args":["Continue with the chosen account in Relay first, then send that session to the Claude app.","tr"]}
+{"fn":"localizeError","args":["Continue with the chosen account in Relay first, then send that session to the Claude app.","en"]}
+{"fn":"localizeError","args":["Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.","zh-Hant"]}
+{"fn":"localizeError","args":["Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.","tr"]}
+{"fn":"localizeError","args":["Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.","en"]}
+{"fn":"localizeError","args":["Finish or cancel this account’s usage sign-in first.","ru"]}
+{"fn":"localizeError","args":["Finish or cancel this account’s usage sign-in first.","tr"]}
+{"fn":"localizeError","args":["Finish or cancel this account’s usage sign-in first.","en"]}
+{"fn":"localizeError","args":["Önce bu hesabın limit okuma girişini tamamla ya da iptal et.","uk"]}
+{"fn":"localizeError","args":["Önce bu hesabın limit okuma girişini tamamla ya da iptal et.","tr"]}
+{"fn":"localizeError","args":["Önce bu hesabın limit okuma girişini tamamla ya da iptal et.","en"]}
+{"fn":"localizeError","args":["Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.","pl"]}
+{"fn":"localizeError","args":["Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.","tr"]}
+{"fn":"localizeError","args":["Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.","en"]}
+{"fn":"localizeError","args":["Proje klasörü bulunamadı. Klasörü yeniden seç.","nl"]}
+{"fn":"localizeError","args":["Proje klasörü bulunamadı. Klasörü yeniden seç.","tr"]}
+{"fn":"localizeError","args":["Proje klasörü bulunamadı. Klasörü yeniden seç.","en"]}
+{"fn":"localizeError","args":["Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.","en"]}
+{"fn":"localizeError","args":["Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.","tr"]}
+{"fn":"localizeError","args":["Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.","en"]}
+{"fn":"localizeError","args":["Switch Claude Desktop to a saved account first.","tr"]}
+{"fn":"localizeError","args":["Switch Claude Desktop to a saved account first.","tr"]}
+{"fn":"localizeError","args":["Switch Claude Desktop to a saved account first.","en"]}
+{"fn":"localizeError","args":["Claude uygulamasını önce kayıtlı bir hesaba geçir.","de"]}
+{"fn":"localizeError","args":["Claude uygulamasını önce kayıtlı bir hesaba geçir.","tr"]}
+{"fn":"localizeError","args":["Claude uygulamasını önce kayıtlı bir hesaba geçir.","en"]}
+{"fn":"localizeError","args":["The Claude browser extension is not supported here.","fr"]}
+{"fn":"localizeError","args":["The Claude browser extension is not supported here.","tr"]}
+{"fn":"localizeError","args":["The Claude browser extension is not supported here.","en"]}
+{"fn":"localizeError","args":["Claude tarayıcı eklentisi burada desteklenmiyor.","es"]}
+{"fn":"localizeError","args":["Claude tarayıcı eklentisi burada desteklenmiyor.","tr"]}
+{"fn":"localizeError","args":["Claude tarayıcı eklentisi burada desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["Hesap bulunamadı.","pt-BR"]}
+{"fn":"localizeError","args":["Hesap bulunamadı.","tr"]}
+{"fn":"localizeError","args":["Hesap bulunamadı.","en"]}
+{"fn":"localizeError","args":["Terminal bulunamadı.","it"]}
+{"fn":"localizeError","args":["Terminal bulunamadı.","tr"]}
+{"fn":"localizeError","args":["Terminal bulunamadı.","en"]}
+{"fn":"localizeError","args":["Önce çalışan oturumu durdur.","ja"]}
+{"fn":"localizeError","args":["Önce çalışan oturumu durdur.","tr"]}
+{"fn":"localizeError","args":["Önce çalışan oturumu durdur.","en"]}
+{"fn":"localizeError","args":["En fazla 20 canlı terminal açılabilir.","ko"]}
+{"fn":"localizeError","args":["En fazla 20 canlı terminal açılabilir.","tr"]}
+{"fn":"localizeError","args":["En fazla 20 canlı terminal açılabilir.","en"]}
+{"fn":"localizeError","args":["Switch the Claude app to another account before removing this one.","zh-Hans"]}
+{"fn":"localizeError","args":["Switch the Claude app to another account before removing this one.","tr"]}
+{"fn":"localizeError","args":["Switch the Claude app to another account before removing this one.","en"]}
+{"fn":"localizeError","args":["Bu hesabı kaldırmadan önce Claude uygulamasında başka bir hesaba geç.","zh-Hant"]}
+{"fn":"localizeError","args":["Bu hesabı kaldırmadan önce Claude uygulamasında başka bir hesaba geç.","tr"]}
+{"fn":"localizeError","args":["Bu hesabı kaldırmadan önce Claude uygulamasında başka bir hesaba geç.","en"]}
+{"fn":"localizeError","args":["Finish or cancel this account’s Claude app sign-in before removing it.","ru"]}
+{"fn":"localizeError","args":["Finish or cancel this account’s Claude app sign-in before removing it.","tr"]}
+{"fn":"localizeError","args":["Finish or cancel this account’s Claude app sign-in before removing it.","en"]}
+{"fn":"localizeError","args":["Bu hesabı kaldırmadan önce Claude uygulaması girişini tamamla ya da iptal et.","uk"]}
+{"fn":"localizeError","args":["Bu hesabı kaldırmadan önce Claude uygulaması girişini tamamla ya da iptal et.","tr"]}
+{"fn":"localizeError","args":["Bu hesabı kaldırmadan önce Claude uygulaması girişini tamamla ya da iptal et.","en"]}
+{"fn":"localizeError","args":["Claude Code is running with this account.","pl"]}
+{"fn":"localizeError","args":["Claude Code is running with this account.","tr"]}
+{"fn":"localizeError","args":["Claude Code is running with this account.","en"]}
+{"fn":"localizeError","args":["Claude Code bu hesapla çalışıyor.","nl"]}
+{"fn":"localizeError","args":["Claude Code bu hesapla çalışıyor.","tr"]}
+{"fn":"localizeError","args":["Claude Code bu hesapla çalışıyor.","en"]}
+{"fn":"localizeError","args":["Another process is signing this account in or renewing its connection.","en"]}
+{"fn":"localizeError","args":["Another process is signing this account in or renewing its connection.","tr"]}
+{"fn":"localizeError","args":["Another process is signing this account in or renewing its connection.","en"]}
+{"fn":"localizeError","args":["Başka bir işlem bu hesabın girişini yapıyor ya da bağlantısını yeniliyor.","tr"]}
+{"fn":"localizeError","args":["Başka bir işlem bu hesabın girişini yapıyor ya da bağlantısını yeniliyor.","tr"]}
+{"fn":"localizeError","args":["Başka bir işlem bu hesabın girişini yapıyor ya da bağlantısını yeniliyor.","en"]}
+{"fn":"localizeError","args":["Save this account’s Claude app sign-in first.","de"]}
+{"fn":"localizeError","args":["Save this account’s Claude app sign-in first.","tr"]}
+{"fn":"localizeError","args":["Save this account’s Claude app sign-in first.","en"]}
+{"fn":"localizeError","args":["Önce bu hesabın Claude uygulaması girişini kaydet.","fr"]}
+{"fn":"localizeError","args":["Önce bu hesabın Claude uygulaması girişini kaydet.","tr"]}
+{"fn":"localizeError","args":["Önce bu hesabın Claude uygulaması girişini kaydet.","en"]}
+{"fn":"localizeError","args":["The Claude Code version could not be read. Check the executable.","es"]}
+{"fn":"localizeError","args":["The Claude Code version could not be read. Check the executable.","tr"]}
+{"fn":"localizeError","args":["The Claude Code version could not be read. Check the executable.","en"]}
+{"fn":"localizeError","args":["Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.","pt-BR"]}
+{"fn":"localizeError","args":["Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.","tr"]}
+{"fn":"localizeError","args":["Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.","en"]}
+{"fn":"localizeError","args":["No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay.","it"]}
+{"fn":"localizeError","args":["No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay.","tr"]}
+{"fn":"localizeError","args":["No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay.","en"]}
+{"fn":"localizeError","args":["Sistem anahtarlığı bulunamadı (Secret Service ya da KWallet), bu yüzden Claude uygulaması girişleri kaydedilemiyor. gnome-keyring ya da KWallet’i kurup kilidini aç, sonra Relay’i yeniden başlat.","ja"]}
+{"fn":"localizeError","args":["Sistem anahtarlığı bulunamadı (Secret Service ya da KWallet), bu yüzden Claude uygulaması girişleri kaydedilemiyor. gnome-keyring ya da KWallet’i kurup kilidini aç, sonra Relay’i yeniden başlat.","tr"]}
+{"fn":"localizeError","args":["Sistem anahtarlığı bulunamadı (Secret Service ya da KWallet), bu yüzden Claude uygulaması girişleri kaydedilemiyor. gnome-keyring ya da KWallet’i kurup kilidini aç, sonra Relay’i yeniden başlat.","en"]}
+{"fn":"localizeError","args":["System encryption is unavailable, so Claude app sign-ins cannot be saved.","ko"]}
+{"fn":"localizeError","args":["System encryption is unavailable, so Claude app sign-ins cannot be saved.","tr"]}
+{"fn":"localizeError","args":["System encryption is unavailable, so Claude app sign-ins cannot be saved.","en"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor, bu yüzden Claude uygulaması girişleri kaydedilemiyor.","zh-Hans"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor, bu yüzden Claude uygulaması girişleri kaydedilemiyor.","tr"]}
+{"fn":"localizeError","args":["İşletim sistemi şifrelemesi kullanılamıyor, bu yüzden Claude uygulaması girişleri kaydedilemiyor.","en"]}
+{"fn":"localizeError","args":["Relay’s account list was written by a newer version. Update this copy of Relay before changing it.","zh-Hant"]}
+{"fn":"localizeError","args":["Relay’s account list was written by a newer version. Update this copy of Relay before changing it.","tr"]}
+{"fn":"localizeError","args":["Relay’s account list was written by a newer version. Update this copy of Relay before changing it.","en"]}
+{"fn":"localizeError","args":["Relay’in hesap listesini daha yeni bir sürüm yazmış. Değiştirmeden önce bu Relay kopyasını güncelle.","ru"]}
+{"fn":"localizeError","args":["Relay’in hesap listesini daha yeni bir sürüm yazmış. Değiştirmeden önce bu Relay kopyasını güncelle.","tr"]}
+{"fn":"localizeError","args":["Relay’in hesap listesini daha yeni bir sürüm yazmış. Değiştirmeden önce bu Relay kopyasını güncelle.","en"]}
+{"fn":"localizeError","args":["Relay’s account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.","uk"]}
+{"fn":"localizeError","args":["Relay’s account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.","tr"]}
+{"fn":"localizeError","args":["Relay’s account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.","en"]}
+{"fn":"localizeError","args":["Relay’in hesap listesini Relay 0.11 ya da daha eski bir sürüm yazmış. Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.","pl"]}
+{"fn":"localizeError","args":["Relay’in hesap listesini Relay 0.11 ya da daha eski bir sürüm yazmış. Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.","tr"]}
+{"fn":"localizeError","args":["Relay’in hesap listesini Relay 0.11 ya da daha eski bir sürüm yazmış. Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.","en"]}
+{"fn":"localizeError","args":["None of the old saved sign-in files could be opened, so nothing was moved. Relay tries again at its next start.","nl"]}
+{"fn":"localizeError","args":["None of the old saved sign-in files could be opened, so nothing was moved. Relay tries again at its next start.","tr"]}
+{"fn":"localizeError","args":["None of the old saved sign-in files could be opened, so nothing was moved. Relay tries again at its next start.","en"]}
+{"fn":"localizeError","args":["Eski kayıtlı giriş dosyalarının hiçbiri açılamadı, bu yüzden hiçbir şey taşınmadı. Relay bir sonraki açılışta yeniden dener.","en"]}
+{"fn":"localizeError","args":["Eski kayıtlı giriş dosyalarının hiçbiri açılamadı, bu yüzden hiçbir şey taşınmadı. Relay bir sonraki açılışta yeniden dener.","tr"]}
+{"fn":"localizeError","args":["Eski kayıtlı giriş dosyalarının hiçbiri açılamadı, bu yüzden hiçbir şey taşınmadı. Relay bir sonraki açılışta yeniden dener.","en"]}
+{"fn":"localizeError","args":["The recovery backup named in journal.json could not be opened, so the saved sign-ins were not moved to the new format.","tr"]}
+{"fn":"localizeError","args":["The recovery backup named in journal.json could not be opened, so the saved sign-ins were not moved to the new format.","tr"]}
+{"fn":"localizeError","args":["The recovery backup named in journal.json could not be opened, so the saved sign-ins were not moved to the new format.","en"]}
+{"fn":"localizeError","args":["journal.json’daki kurtarma yedeği açılamadı, bu yüzden kayıtlı girişler yeni biçime taşınmadı.","de"]}
+{"fn":"localizeError","args":["journal.json’daki kurtarma yedeği açılamadı, bu yüzden kayıtlı girişler yeni biçime taşınmadı.","tr"]}
+{"fn":"localizeError","args":["journal.json’daki kurtarma yedeği açılamadı, bu yüzden kayıtlı girişler yeni biçime taşınmadı.","en"]}
+{"fn":"localizeError","args":["Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.","fr"]}
+{"fn":"localizeError","args":["Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.","tr"]}
+{"fn":"localizeError","args":["Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.","en"]}
+{"fn":"localizeError","args":["Relay eski kayıtlı girişleri bu sefer açamadı (macOS anahtarlarına erişim izni vermedi). Hiçbir şey taşınmadı; Relay bir sonraki açılışta yeniden dener.","es"]}
+{"fn":"localizeError","args":["Relay eski kayıtlı girişleri bu sefer açamadı (macOS anahtarlarına erişim izni vermedi). Hiçbir şey taşınmadı; Relay bir sonraki açılışta yeniden dener.","tr"]}
+{"fn":"localizeError","args":["Relay eski kayıtlı girişleri bu sefer açamadı (macOS anahtarlarına erişim izni vermedi). Hiçbir şey taşınmadı; Relay bir sonraki açılışta yeniden dener.","en"]}
+{"fn":"localizeError","args":["The data folder cannot be a symbolic link.","pt-BR"]}
+{"fn":"localizeError","args":["The data folder cannot be a symbolic link.","tr"]}
+{"fn":"localizeError","args":["The data folder cannot be a symbolic link.","en"]}
+{"fn":"localizeError","args":["Veri klasörü sembolik bağlantı olamaz.","it"]}
+{"fn":"localizeError","args":["Veri klasörü sembolik bağlantı olamaz.","tr"]}
+{"fn":"localizeError","args":["Veri klasörü sembolik bağlantı olamaz.","en"]}
+{"fn":"localizeError","args":["Invalid settings file.","ja"]}
+{"fn":"localizeError","args":["Invalid settings file.","tr"]}
+{"fn":"localizeError","args":["Invalid settings file.","en"]}
+{"fn":"localizeError","args":["Geçersiz ayar dosyası.","ko"]}
+{"fn":"localizeError","args":["Geçersiz ayar dosyası.","tr"]}
+{"fn":"localizeError","args":["Geçersiz ayar dosyası.","en"]}
+{"fn":"localizeError","args":["Account not found.","zh-Hans"]}
+{"fn":"localizeError","args":["Account not found.","tr"]}
+{"fn":"localizeError","args":["Account not found.","en"]}
+{"fn":"localizeError","args":["Another Relay process (in a terminal) is using this account. Try again when it ends.","zh-Hant"]}
+{"fn":"localizeError","args":["Another Relay process (in a terminal) is using this account. Try again when it ends.","tr"]}
+{"fn":"localizeError","args":["Another Relay process (in a terminal) is using this account. Try again when it ends.","en"]}
+{"fn":"localizeError","args":["Bu hesap şu an başka bir Relay işleminde (terminalde) kullanılıyor; o bitince yeniden dene.","ru"]}
+{"fn":"localizeError","args":["Bu hesap şu an başka bir Relay işleminde (terminalde) kullanılıyor; o bitince yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Bu hesap şu an başka bir Relay işleminde (terminalde) kullanılıyor; o bitince yeniden dene.","en"]}
+{"fn":"localizeError","args":["The session path is outside the profile folder.","uk"]}
+{"fn":"localizeError","args":["The session path is outside the profile folder.","tr"]}
+{"fn":"localizeError","args":["The session path is outside the profile folder.","en"]}
+{"fn":"localizeError","args":["Oturum yolu profil klasörünün dışında.","pl"]}
+{"fn":"localizeError","args":["Oturum yolu profil klasörünün dışında.","tr"]}
+{"fn":"localizeError","args":["Oturum yolu profil klasörünün dışında.","en"]}
+{"fn":"localizeError","args":["Symbolic links are not supported in sessions.","nl"]}
+{"fn":"localizeError","args":["Symbolic links are not supported in sessions.","tr"]}
+{"fn":"localizeError","args":["Symbolic links are not supported in sessions.","en"]}
+{"fn":"localizeError","args":["Oturumlarda sembolik bağlantılar desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["Oturumlarda sembolik bağlantılar desteklenmiyor.","tr"]}
+{"fn":"localizeError","args":["Oturumlarda sembolik bağlantılar desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["The session exceeds the preview limit.","tr"]}
+{"fn":"localizeError","args":["The session exceeds the preview limit.","tr"]}
+{"fn":"localizeError","args":["The session exceeds the preview limit.","en"]}
+{"fn":"localizeError","args":["Oturum önizleme sınırını aşıyor.","de"]}
+{"fn":"localizeError","args":["Oturum önizleme sınırını aşıyor.","tr"]}
+{"fn":"localizeError","args":["Oturum önizleme sınırını aşıyor.","en"]}
+{"fn":"localizeError","args":["This session exceeds the transfer limit.","fr"]}
+{"fn":"localizeError","args":["This session exceeds the transfer limit.","tr"]}
+{"fn":"localizeError","args":["This session exceeds the transfer limit.","en"]}
+{"fn":"localizeError","args":["Bu oturum aktarım sınırını aşıyor.","es"]}
+{"fn":"localizeError","args":["Bu oturum aktarım sınırını aşıyor.","tr"]}
+{"fn":"localizeError","args":["Bu oturum aktarım sınırını aşıyor.","en"]}
+{"fn":"localizeError","args":["The session is still being written. Close the running session first.","pt-BR"]}
+{"fn":"localizeError","args":["The session is still being written. Close the running session first.","tr"]}
+{"fn":"localizeError","args":["The session is still being written. Close the running session first.","en"]}
+{"fn":"localizeError","args":["Oturum hâlâ yazılıyor. Önce çalışan oturumu kapat.","it"]}
+{"fn":"localizeError","args":["Oturum hâlâ yazılıyor. Önce çalışan oturumu kapat.","tr"]}
+{"fn":"localizeError","args":["Oturum hâlâ yazılıyor. Önce çalışan oturumu kapat.","en"]}
+{"fn":"localizeError","args":["The session has a missing or damaged record. Close the source terminal and try again.","ja"]}
+{"fn":"localizeError","args":["The session has a missing or damaged record. Close the source terminal and try again.","tr"]}
+{"fn":"localizeError","args":["The session has a missing or damaged record. Close the source terminal and try again.","en"]}
+{"fn":"localizeError","args":["Oturumda eksik veya bozuk bir kayıt var. Kaynak terminali kapatıp tekrar dene.","ko"]}
+{"fn":"localizeError","args":["Oturumda eksik veya bozuk bir kayıt var. Kaynak terminali kapatıp tekrar dene.","tr"]}
+{"fn":"localizeError","args":["Oturumda eksik veya bozuk bir kayıt var. Kaynak terminali kapatıp tekrar dene.","en"]}
+{"fn":"localizeError","args":["The session record format is not supported.","zh-Hans"]}
+{"fn":"localizeError","args":["The session record format is not supported.","tr"]}
+{"fn":"localizeError","args":["The session record format is not supported.","en"]}
+{"fn":"localizeError","args":["Oturum kayıt biçimi desteklenmiyor.","zh-Hant"]}
+{"fn":"localizeError","args":["Oturum kayıt biçimi desteklenmiyor.","tr"]}
+{"fn":"localizeError","args":["Oturum kayıt biçimi desteklenmiyor.","en"]}
+{"fn":"localizeError","args":["The file holds a different session ID. The transfer stopped.","ru"]}
+{"fn":"localizeError","args":["The file holds a different session ID. The transfer stopped.","tr"]}
+{"fn":"localizeError","args":["The file holds a different session ID. The transfer stopped.","en"]}
+{"fn":"localizeError","args":["Dosyada farklı bir oturum kimliği bulundu. Aktarım durduruldu.","uk"]}
+{"fn":"localizeError","args":["Dosyada farklı bir oturum kimliği bulundu. Aktarım durduruldu.","tr"]}
+{"fn":"localizeError","args":["Dosyada farklı bir oturum kimliği bulundu. Aktarım durduruldu.","en"]}
+{"fn":"localizeError","args":["An empty session cannot be transferred.","pl"]}
+{"fn":"localizeError","args":["An empty session cannot be transferred.","tr"]}
+{"fn":"localizeError","args":["An empty session cannot be transferred.","en"]}
+{"fn":"localizeError","args":["Boş oturum aktarılamaz.","nl"]}
+{"fn":"localizeError","args":["Boş oturum aktarılamaz.","tr"]}
+{"fn":"localizeError","args":["Boş oturum aktarılamaz.","en"]}
+{"fn":"localizeError","args":["The target session folder is invalid.","en"]}
+{"fn":"localizeError","args":["The target session folder is invalid.","tr"]}
+{"fn":"localizeError","args":["The target session folder is invalid.","en"]}
+{"fn":"localizeError","args":["Hedef oturum klasörü geçersiz.","tr"]}
+{"fn":"localizeError","args":["Hedef oturum klasörü geçersiz.","tr"]}
+{"fn":"localizeError","args":["Hedef oturum klasörü geçersiz.","en"]}
+{"fn":"localizeError","args":["This account is not a Claude account; it connects through its own provider.","de"]}
+{"fn":"localizeError","args":["This account is not a Claude account; it connects through its own provider.","tr"]}
+{"fn":"localizeError","args":["This account is not a Claude account; it connects through its own provider.","en"]}
+{"fn":"localizeError","args":["Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.","fr"]}
+{"fn":"localizeError","args":["Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.","tr"]}
+{"fn":"localizeError","args":["Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.","en"]}
+{"fn":"localizeError","args":["This account is on hold. Remove the hold on Accounts, or select another account.","es"]}
+{"fn":"localizeError","args":["This account is on hold. Remove the hold on Accounts, or select another account.","tr"]}
+{"fn":"localizeError","args":["This account is on hold. Remove the hold on Accounts, or select another account.","en"]}
+{"fn":"localizeError","args":["Relay cannot find the project folder. Select it again.","pt-BR"]}
+{"fn":"localizeError","args":["Relay cannot find the project folder. Select it again.","tr"]}
+{"fn":"localizeError","args":["Relay cannot find the project folder. Select it again.","en"]}
+{"fn":"localizeError","args":["Stop this project’s running session on the Live tab first.","it"]}
+{"fn":"localizeError","args":["Stop this project’s running session on the Live tab first.","tr"]}
+{"fn":"localizeError","args":["Stop this project’s running session on the Live tab first.","en"]}
+{"fn":"localizeError","args":["An imported session needs the target account confirmed.","ja"]}
+{"fn":"localizeError","args":["An imported session needs the target account confirmed.","tr"]}
+{"fn":"localizeError","args":["An imported session needs the target account confirmed.","en"]}
+{"fn":"localizeError","args":["İçe aktarılan oturum için hedef hesap onayı gerekiyor.","ko"]}
+{"fn":"localizeError","args":["İçe aktarılan oturum için hedef hesap onayı gerekiyor.","tr"]}
+{"fn":"localizeError","args":["İçe aktarılan oturum için hedef hesap onayı gerekiyor.","en"]}
+{"fn":"localizeError","args":["These accounts are not in the same sharing group. Work sessions can move only to accounts in the same group.","zh-Hans"]}
+{"fn":"localizeError","args":["These accounts are not in the same sharing group. Work sessions can move only to accounts in the same group.","tr"]}
+{"fn":"localizeError","args":["These accounts are not in the same sharing group. Work sessions can move only to accounts in the same group.","en"]}
+{"fn":"localizeError","args":["Bu hesaplar aynı paylaşım grubunda değil. Şirket oturumları yalnızca aynı gruptaki hesaplara aktarılabilir.","zh-Hant"]}
+{"fn":"localizeError","args":["Bu hesaplar aynı paylaşım grubunda değil. Şirket oturumları yalnızca aynı gruptaki hesaplara aktarılabilir.","tr"]}
+{"fn":"localizeError","args":["Bu hesaplar aynı paylaşım grubunda değil. Şirket oturumları yalnızca aynı gruptaki hesaplara aktarılabilir.","en"]}
+{"fn":"localizeError","args":["Only work sessions can change accounts.","ru"]}
+{"fn":"localizeError","args":["Only work sessions can change accounts.","tr"]}
+{"fn":"localizeError","args":["Only work sessions can change accounts.","en"]}
+{"fn":"localizeError","args":["Yalnızca çalışma oturumlarında hesap değiştirilebilir.","uk"]}
+{"fn":"localizeError","args":["Yalnızca çalışma oturumlarında hesap değiştirilebilir.","tr"]}
+{"fn":"localizeError","args":["Yalnızca çalışma oturumlarında hesap değiştirilebilir.","en"]}
+{"fn":"localizeError","args":["The accounts must be in the same sharing group.","pl"]}
+{"fn":"localizeError","args":["The accounts must be in the same sharing group.","tr"]}
+{"fn":"localizeError","args":["The accounts must be in the same sharing group.","en"]}
+{"fn":"localizeError","args":["Hesaplar aynı paylaşım grubunda olmalı.","nl"]}
+{"fn":"localizeError","args":["Hesaplar aynı paylaşım grubunda olmalı.","tr"]}
+{"fn":"localizeError","args":["Hesaplar aynı paylaşım grubunda olmalı.","en"]}
+{"fn":"localizeError","args":["The target account is on hold. Remove the hold first.","en"]}
+{"fn":"localizeError","args":["The target account is on hold. Remove the hold first.","tr"]}
+{"fn":"localizeError","args":["The target account is on hold. Remove the hold first.","en"]}
+{"fn":"localizeError","args":["Hedef hesap beklemede. Önce beklemeyi kaldır.","tr"]}
+{"fn":"localizeError","args":["Hedef hesap beklemede. Önce beklemeyi kaldır.","tr"]}
+{"fn":"localizeError","args":["Hedef hesap beklemede. Önce beklemeyi kaldır.","en"]}
+{"fn":"localizeError","args":["Sign in to the target account. The current work was not stopped.","de"]}
+{"fn":"localizeError","args":["Sign in to the target account. The current work was not stopped.","tr"]}
+{"fn":"localizeError","args":["Sign in to the target account. The current work was not stopped.","en"]}
+{"fn":"localizeError","args":["Hedef hesaba giriş yap. Mevcut çalışma durdurulmadı.","fr"]}
+{"fn":"localizeError","args":["Hedef hesaba giriş yap. Mevcut çalışma durdurulmadı.","tr"]}
+{"fn":"localizeError","args":["Hedef hesaba giriş yap. Mevcut çalışma durdurulmadı.","en"]}
+{"fn":"localizeError","args":["Session not found. Refresh the catalog.","es"]}
+{"fn":"localizeError","args":["Session not found. Refresh the catalog.","tr"]}
+{"fn":"localizeError","args":["Session not found. Refresh the catalog.","en"]}
+{"fn":"localizeError","args":["Oturum bulunamadı. Kataloğu yenile.","pt-BR"]}
+{"fn":"localizeError","args":["Oturum bulunamadı. Kataloğu yenile.","tr"]}
+{"fn":"localizeError","args":["Oturum bulunamadı. Kataloğu yenile.","en"]}
+{"fn":"localizeError","args":["This account has a sign-in in progress or this project has a live session. Stop it on the Live tab first.","it"]}
+{"fn":"localizeError","args":["This account has a sign-in in progress or this project has a live session. Stop it on the Live tab first.","tr"]}
+{"fn":"localizeError","args":["This account has a sign-in in progress or this project has a live session. Stop it on the Live tab first.","en"]}
+{"fn":"localizeError","args":["Bu hesapta giriş işlemi veya bu projede canlı bir oturum var. Önce Canlı çalışma sekmesinden durdur.","ja"]}
+{"fn":"localizeError","args":["Bu hesapta giriş işlemi veya bu projede canlı bir oturum var. Önce Canlı çalışma sekmesinden durdur.","tr"]}
+{"fn":"localizeError","args":["Bu hesapta giriş işlemi veya bu projede canlı bir oturum var. Önce Canlı çalışma sekmesinden durdur.","en"]}
+{"fn":"localizeError","args":["You can open up to 20 live terminals.","ko"]}
+{"fn":"localizeError","args":["You can open up to 20 live terminals.","tr"]}
+{"fn":"localizeError","args":["You can open up to 20 live terminals.","en"]}
+{"fn":"localizeError","args":["Another Relay process is renewing this account’s connection. Try again in a moment.","zh-Hans"]}
+{"fn":"localizeError","args":["Another Relay process is renewing this account’s connection. Try again in a moment.","tr"]}
+{"fn":"localizeError","args":["Another Relay process is renewing this account’s connection. Try again in a moment.","en"]}
+{"fn":"localizeError","args":["Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.","zh-Hant"]}
+{"fn":"localizeError","args":["Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.","tr"]}
+{"fn":"localizeError","args":["Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.","en"]}
+{"fn":"localizeError","args":["Stop the running session first.","ru"]}
+{"fn":"localizeError","args":["Stop the running session first.","tr"]}
+{"fn":"localizeError","args":["Stop the running session first.","en"]}
+{"fn":"localizeError","args":["Terminal not found.","uk"]}
+{"fn":"localizeError","args":["Terminal not found.","tr"]}
+{"fn":"localizeError","args":["Terminal not found.","en"]}
+{"fn":"localizeError","args":["This profile needs a sign-in with a Claude subscription.","pl"]}
+{"fn":"localizeError","args":["This profile needs a sign-in with a Claude subscription.","tr"]}
+{"fn":"localizeError","args":["This profile needs a sign-in with a Claude subscription.","en"]}
+{"fn":"localizeError","args":["Bu profil Claude aboneliği ile giriş gerektiriyor.","nl"]}
+{"fn":"localizeError","args":["Bu profil Claude aboneliği ile giriş gerektiriyor.","tr"]}
+{"fn":"localizeError","args":["Bu profil Claude aboneliği ile giriş gerektiriyor.","en"]}
+{"fn":"localizeError","args":["The process has not closed yet. The transfer did not start.","en"]}
+{"fn":"localizeError","args":["The process has not closed yet. The transfer did not start.","tr"]}
+{"fn":"localizeError","args":["The process has not closed yet. The transfer did not start.","en"]}
+{"fn":"localizeError","args":["Sign in with this account first.","tr"]}
+{"fn":"localizeError","args":["Sign in with this account first.","tr"]}
+{"fn":"localizeError","args":["Sign in with this account first.","en"]}
+{"fn":"localizeError","args":["This overflow upstream no longer exists.","de"]}
+{"fn":"localizeError","args":["This overflow upstream no longer exists.","tr"]}
+{"fn":"localizeError","args":["This overflow upstream no longer exists.","en"]}
+{"fn":"localizeError","args":["Enter this overflow upstream’s API key first.","fr"]}
+{"fn":"localizeError","args":["Enter this overflow upstream’s API key first.","tr"]}
+{"fn":"localizeError","args":["Enter this overflow upstream’s API key first.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" was not found.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" was not found.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" was not found.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" was not found.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" was not found.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" was not found.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Unlock the login keychain and try again.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Unlock the login keychain and try again.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Unlock the login keychain and try again.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Unlock the login keychain and try again.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Unlock the login keychain and try again.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Unlock the login keychain and try again.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" does not hold a vault key.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" does not hold a vault key.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" does not hold a vault key.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" does not hold a vault key.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" does not hold a vault key.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" does not hold a vault key.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. The Keychain item \"Relay Vault Key\" was not found. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. Something\nmultiline.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. Something\nmultiline.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. Something\nmultiline.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. Something\nmultiline.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. Something\nmultiline.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read, so saved Claude app sign-ins cannot be opened. Something\nmultiline.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Invalid settings file.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Invalid settings file.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Invalid settings file.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Invalid settings file.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Invalid settings file.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. Invalid settings file.","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. weird\ndetail","en"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. weird\ndetail","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. weird\ndetail","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. weird\ndetail","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. weird\ndetail","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"Relay Vault Key\" could not be read. weird\ndetail","xx"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: Account not found.","en"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: Account not found.","tr"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: Account not found.","ru"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: Account not found.","pl"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: Account not found.","ja"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: Account not found.","xx"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: ","en"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: ","tr"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: ","ru"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: ","pl"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: ","ja"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: ","xx"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: x\ny","en"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: x\ny","tr"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: x\ny","ru"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: x\ny","pl"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: x\ny","ja"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins could not be read: x\ny","xx"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format 3). Update Relay.","en"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format 3). Update Relay.","tr"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format 3). Update Relay.","ru"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format 3). Update Relay.","pl"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format 3). Update Relay.","ja"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format x). Update Relay.","en"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format x). Update Relay.","tr"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format x). Update Relay.","ru"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format x). Update Relay.","pl"]}
+{"fn":"localizeError","args":["Relay’s saved sign-ins were written by a newer version (format x). Update Relay.","ja"]}
+{"fn":"localizeError","args":["1 saved sign-in file could not be opened and was set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","en"]}
+{"fn":"localizeError","args":["1 saved sign-in file could not be opened and was set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","tr"]}
+{"fn":"localizeError","args":["1 saved sign-in file could not be opened and was set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","ru"]}
+{"fn":"localizeError","args":["1 saved sign-in file could not be opened and was set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","pl"]}
+{"fn":"localizeError","args":["1 saved sign-in file could not be opened and was set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","ja"]}
+{"fn":"localizeError","args":["2 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","en"]}
+{"fn":"localizeError","args":["2 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","tr"]}
+{"fn":"localizeError","args":["2 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","ru"]}
+{"fn":"localizeError","args":["2 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","pl"]}
+{"fn":"localizeError","args":["2 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","ja"]}
+{"fn":"localizeError","args":["21 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","en"]}
+{"fn":"localizeError","args":["21 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","tr"]}
+{"fn":"localizeError","args":["21 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","ru"]}
+{"fn":"localizeError","args":["21 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","pl"]}
+{"fn":"localizeError","args":["21 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.","ja"]}
+{"fn":"localizeError","args":["Something else broke.","en"]}
+{"fn":"localizeError","args":["Something else broke.","tr"]}
+{"fn":"localizeError","args":["Something else broke.","ru"]}
+{"fn":"localizeError","args":["Something else broke.","pl"]}
+{"fn":"localizeError","args":["Something else broke.","ja"]}
+{"fn":"localizeError","args":["Something else broke.","xx"]}
+{"fn":"localizeError","args":["","en"]}
+{"fn":"localizeError","args":["","tr"]}
+{"fn":"localizeError","args":["","ru"]}
+{"fn":"localizeError","args":["","pl"]}
+{"fn":"localizeError","args":["","ja"]}
+{"fn":"localizeError","args":["","xx"]}
+{"fn":"localizeError","args":[" Account not found.","en"]}
+{"fn":"localizeError","args":[" Account not found.","tr"]}
+{"fn":"localizeError","args":[" Account not found.","ru"]}
+{"fn":"localizeError","args":[" Account not found.","pl"]}
+{"fn":"localizeError","args":[" Account not found.","ja"]}
+{"fn":"localizeError","args":[" Account not found.","xx"]}
+{"fn":"localizeError","args":["Account not found. ","en"]}
+{"fn":"localizeError","args":["Account not found. ","tr"]}
+{"fn":"localizeError","args":["Account not found. ","ru"]}
+{"fn":"localizeError","args":["Account not found. ","pl"]}
+{"fn":"localizeError","args":["Account not found. ","ja"]}
+{"fn":"localizeError","args":["Account not found. ","xx"]}
+{"fn":"localizeError","args":["The Keychain item \"\" was not found.","en"]}
+{"fn":"localizeError","args":["The Keychain item \"\" was not found.","tr"]}
+{"fn":"localizeError","args":["The Keychain item \"\" was not found.","ru"]}
+{"fn":"localizeError","args":["The Keychain item \"\" was not found.","pl"]}
+{"fn":"localizeError","args":["The Keychain item \"\" was not found.","ja"]}
+{"fn":"localizeError","args":["The Keychain item \"\" was not found.","xx"]}

@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["tokens", "--account", "Personal"]
+status.code = 0
+fs.sandbox = true

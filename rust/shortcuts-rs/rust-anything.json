@@ -1,0 +1,102 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/shortcuts.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "shortcuts-rs",
+  "exports": [
+    {
+      "name": "shortcutFor",
+      "file": "shared/shortcuts.ts",
+      "line": 19,
+      "params": [
+        {
+          "name": "choice",
+          "ts_type": "Partial<Record<(\"openPanel\" | \"switchToSuggested\"), string>> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "action",
+          "ts_type": "(\"openPanel\" | \"switchToSuggested\")",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "normalizeAccelerator",
+      "file": "shared/shortcuts.ts",
+      "line": 103,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "acceleratorFromKeys",
+      "file": "shared/shortcuts.ts",
+      "line": 161,
+      "params": [
+        {
+          "name": "press",
+          "ts_type": "KeyPress",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "platform",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "formatAccelerator",
+      "file": "shared/shortcuts.ts",
+      "line": 208,
+      "params": [
+        {
+          "name": "accelerator",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "platform",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

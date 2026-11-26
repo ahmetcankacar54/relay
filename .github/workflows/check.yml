@@ -84,9 +84,10 @@ jobs:
       - run: npm run typecheck
       - name: Widget strings match the catalogs
         run: node --import tsx scripts/i18n/widget-strings.ts --check
+      - name: Rust catalogs match the catalogs
+        run: node --import tsx scripts/i18n/export-catalogs.ts --check
       - run: npm test
       - run: npm run build
-      - run: npm run build:cli
       - name: Desktop IPC and PTY integration
         if: runner.os == 'macOS'
         run: npm run test:desktop
@@ -123,3 +124,86 @@ jobs:
       - name: Boot smoke of the packaged app.asar
         if: runner.os != 'macOS'
         run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}npm run test:boot -- --packaged
+  # The Rust workspace (Cargo.toml): the core, the gateway, the catalogs and the CLI.
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # The toolchain rust-toolchain.toml pins, so a new stable's lints never fail an old commit.
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+  # The Rust CLI and gateway against what the TS originals did (rust/README.md), and the files
+  # both sides write opened by the other (scripts/parity/golden.ts). The recordings were made on
+  # macOS and replay only there; elsewhere `cargo test` in the job above covers the CLI.
+  parity:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Its own root: caching ~/.cargo/bin would restore stale rustup proxies over the toolchain's.
+      - name: Cache rust-anything
+        id: rust-anything
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.rust-anything
+          key: rust-anything-4.2.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Install rust-anything
+        if: steps.rust-anything.outputs.cache-hit != 'true'
+        run: cargo install rust-anything --locked --version 4.2.0 --root ~/.rust-anything
+      - run: echo "$HOME/.rust-anything/bin" >> "$GITHUB_PATH"
+      - run: cargo build -p relay-cli --release --features parity
+      - name: CLI replay
+        run: rust-anything app replay . --build "node scripts/parity/fixture-run.mjs target/release/relay"
+      - name: Gateway replay
+        run: rust-anything app replay rust/gateway --build "node ../../scripts/parity/gateway-run.mjs ../../target/release/relay"
+      - name: The TS opens its committed golden files
+        run: node --import tsx scripts/parity/golden.ts --verify crates/relay-core/tests/golden
+      - name: Rust opens the TS golden files
+        run: cargo test -p relay-core --test golden --test golden_leveldb
+      - name: The TS opens the files Rust writes
+        run: |
+          cargo test -p relay-core --test golden -- --ignored write_golden --exact
+          cargo test -p relay-core --test golden_leveldb -- --ignored write_golden_leveldb --exact
+          node --import tsx scripts/parity/golden.ts --verify crates/relay-core/tests/golden/out
+      # Each shared/ unit's napi port against what the TS returned when it was recorded. One target
+      # folder for all of them (rust-cache keeps it), and no LTO: link time, not what is compared.
+      - name: Unit parity (rust/<unit>-rs)
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/units
+          CARGO_PROFILE_RELEASE_LTO: "false"
+        run: |
+          node scripts/parity/cases.mjs unpack
+          failed=""
+          for crate in rust/*-rs; do
+            echo "::group::$crate"
+            { rust-anything build "$crate" && rust-anything diff "$crate"; } || failed="$failed $crate"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "::error::unit parity failed:$failed"; exit 1; fi
+      - name: Keep the replay reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: parity-reports
+          path: |
+            rust/app-cases/replay-report.md
+            rust/gateway/rust/app-cases/replay-report.md
+          retention-days: 7

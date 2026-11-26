@@ -1,0 +1,13 @@
+{
+  "passphrase": "correct horse battery",
+  "scrypt": {
+    "logN": 10,
+    "r": 8,
+    "p": 1
+  },
+  "accounts": [
+    "Personal",
+    "Work",
+    "Codex"
+  ]
+}

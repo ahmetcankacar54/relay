@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["rename", "Work", "héllo wörld"]
+env.add.RELAY_PARITY_SCENARIO = "newer-state"
+status.code = 5
+fs.sandbox = true

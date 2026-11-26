@@ -1,0 +1,17 @@
+{
+  "unit": "shared/remote-notify.ts",
+  "files": 1,
+  "fingerprint": "4e934b4b8dc1150f",
+  "coverage": {
+    "lines": 50,
+    "reached": 50,
+    "files": [
+      {
+        "file": "shared/remote-notify.ts",
+        "lines": 50,
+        "reached": 50,
+        "missed": ""
+      }
+    ]
+  }
+}

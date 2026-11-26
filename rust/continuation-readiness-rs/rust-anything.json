@@ -1,0 +1,54 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/continuation-readiness.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "continuation-readiness-rs",
+  "exports": [
+    {
+      "name": "continuationTargetReadinessReason",
+      "file": "shared/continuation-readiness.ts",
+      "line": 56,
+      "params": [
+        {
+          "name": "source",
+          "ts_type": "Account | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "target",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "RelaySettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "(| \"source-not-enrolled\"\n  | \"identity-not-enrolled\"\n  | \"duplicate-identity\"\n  | \"history-boundary\"\n  | \"quota-not-fresh\"\n  | \"five-hour-unavailable\"\n  | \"quota-window-invalid\"\n  | \"target-quota-unavailable\"\n  | \"target-cooldown\") | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

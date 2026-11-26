@@ -1,0 +1,4 @@
+data: {"id":"chatcmpl_fixture_0001","object":"chat.completion.chunk","created":1795686075,"model":"gpt-5","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello from the fixture."}}],"usage":{"prompt_tokens":15,"completion_tokens":6,"total_tokens":21}}
+
+data: [DONE]
+

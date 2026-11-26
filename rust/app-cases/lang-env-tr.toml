@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["list"]
+env.add.RELAY_PARITY_ENV_RELAY_LANG = "tr"
+status.code = 0
+fs.sandbox = true

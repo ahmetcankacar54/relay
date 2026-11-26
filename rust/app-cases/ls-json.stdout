@@ -1,0 +1,37 @@
+[
+  {
+    "id": "[..]",
+    "name": "Personal",
+    "kind": "personal",
+    "group": "personal",
+    "active": true,
+    "desktop": {
+      "linked": true,
+      "email": "personal@example.com"
+    },
+    "limits": "connected"
+  },
+  {
+    "id": "[..]",
+    "name": "Work",
+    "kind": "work",
+    "group": "work:Acme",
+    "active": false,
+    "desktop": {
+      "linked": true,
+      "email": "work@acme.example"
+    },
+    "limits": "connected"
+  },
+  {
+    "id": "[..]",
+    "name": "Codex",
+    "kind": "personal",
+    "group": "personal",
+    "active": false,
+    "desktop": {
+      "linked": false
+    },
+    "limits": "connected"
+  }
+]

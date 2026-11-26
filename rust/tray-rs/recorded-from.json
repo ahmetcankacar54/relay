@@ -1,0 +1,197 @@
+{
+  "unit": "shared/tray.ts",
+  "files": 1,
+  "fingerprint": "a5fac3075696bccb",
+  "coverage": {
+    "lines": 44734,
+    "reached": 44107,
+    "files": [
+      {
+        "file": "shared/account-state.ts",
+        "lines": 70,
+        "reached": 37,
+        "missed": "22-27, 30-38, 41-50, 68-73, 76-77"
+      },
+      {
+        "file": "shared/continuation-target-ranking.ts",
+        "lines": 156,
+        "reached": 72,
+        "missed": "14-16, 29-53, 61-65, 79-87, 95-100, 103-106, 139-170"
+      },
+      {
+        "file": "shared/history-policy.ts",
+        "lines": 28,
+        "reached": 7,
+        "missed": "8-18, 21-30"
+      },
+      {
+        "file": "shared/i18n/catalogs/de.ts",
+        "lines": 2762,
+        "reached": 2762,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/en.ts",
+        "lines": 2759,
+        "reached": 2759,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/es.ts",
+        "lines": 2760,
+        "reached": 2760,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/fr.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/it.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/ja.ts",
+        "lines": 2759,
+        "reached": 2759,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/ko.ts",
+        "lines": 2758,
+        "reached": 2758,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/nl.ts",
+        "lines": 2760,
+        "reached": 2760,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/pl.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/pt-BR.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/ru.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/tr.ts",
+        "lines": 2754,
+        "reached": 2754,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/uk.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/zh-Hans.ts",
+        "lines": 2760,
+        "reached": 2760,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/catalogs/zh-Hant.ts",
+        "lines": 2761,
+        "reached": 2761,
+        "missed": ""
+      },
+      {
+        "file": "shared/i18n/locales.ts",
+        "lines": 90,
+        "reached": 70,
+        "missed": "71-81, 85-86, 90-96"
+      },
+      {
+        "file": "shared/i18n/translate.ts",
+        "lines": 87,
+        "reached": 68,
+        "missed": "23-24, 37-39, 59-60, 67-74, 95-98"
+      },
+      {
+        "file": "shared/mascot.ts",
+        "lines": 108,
+        "reached": 62,
+        "missed": "65-66, 70-105, 109-116"
+      },
+      {
+        "file": "shared/number-format.ts",
+        "lines": 49,
+        "reached": 27,
+        "missed": "9-18, 32, 43-53"
+      },
+      {
+        "file": "shared/percent.ts",
+        "lines": 36,
+        "reached": 31,
+        "missed": "37-41"
+      },
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 57,
+        "missed": "41-43, 46-47, 52-79, 86-96, 99-101, 104-105, 107-115, 117-129"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/quota-windows.ts",
+        "lines": 154,
+        "reached": 76,
+        "missed": "11-15, 18-22, 25-31, 39-41, 45-47, 66-67, 77-91, 98-110, 127-137, 152-165"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/tr-dative.ts",
+        "lines": 104,
+        "reached": 62,
+        "missed": "38-45, 48-52, 61-89"
+      },
+      {
+        "file": "shared/tray.ts",
+        "lines": 587,
+        "reached": 583,
+        "missed": "303-304, 570-571"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      },
+      {
+        "file": "shared/usage.ts",
+        "lines": 124,
+        "reached": 67,
+        "missed": "64-82, 84-85, 92-127"
+      }
+    ]
+  }
+}

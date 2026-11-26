@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["statusline", "héllo wörld", "now"]
+status.code = 2
+fs.sandbox = true

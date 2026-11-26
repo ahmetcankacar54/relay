@@ -1,0 +1,17 @@
+{
+  "unit": "shared/time-zones.ts",
+  "files": 1,
+  "fingerprint": "c0b2b91878d0bee7",
+  "coverage": {
+    "lines": 182,
+    "reached": 180,
+    "files": [
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 180,
+        "missed": "123-124"
+      }
+    ]
+  }
+}

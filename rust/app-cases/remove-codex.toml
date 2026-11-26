@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["remove", "Codex", "--yes"]
+status.code = 0
+fs.sandbox = true

@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["doctor", "--lang", "tr"]
+status.code = 5
+fs.sandbox = true

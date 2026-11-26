@@ -1,0 +1,28 @@
+Usage: relay <command> [options]
+
+Commands:
+  relay status                          The Claude app, the open account and Relay’s state
+  relay list                            Saved accounts
+  relay add <name>                      Save the Claude app sign-in, or sign in with a new account
+  relay switch <name>                   Quit the Claude app and reopen it signed in as <name>
+  relay remove <name>                   Forget a saved account
+  relay rename <name> <new>             Rename an account
+  relay recover                         Restore the backup of an interrupted switch
+  relay history [<name>]                Code history sharing; history mode …, history sync
+  relay connect <name>                  Sign in to read the account’s usage, or renew it
+  relay usage [<name>]                  How much of the 5-hour and weekly limits is used
+  relay run <name> [-- …]               Run Claude Code as <name>
+  relay tokens                          Daily token usage recorded by Relay.app
+  relay proxy [start|status|env]        Local gateway that spreads requests over the accounts (--port, --host)
+  relay statusline [install|uninstall]  Account and limits in Claude Code’s status line
+  relay doctor                          Check the setup
+  relay reset-vault                     Start the sign-in vault over when its Keychain key is lost
+
+Options:
+  --yes, -y        Go ahead without asking
+  --json           JSON output for read commands
+  --lang <code>    Language: en, tr, de, fr, es, pt-BR, it, ja, ko, zh-Hans, zh-Hant, ru, uk, pl, nl
+  --no-color       No colors
+  --version, -v    Version
+
+Note: commands that quit the Claude app (switch, add, recover, history sync) also stop its Code sessions.

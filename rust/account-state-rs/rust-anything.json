@@ -1,0 +1,156 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/account-state.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "account-state-rs",
+  "exports": [
+    {
+      "name": "displayedIssue",
+      "file": "shared/account-state.ts",
+      "line": 7,
+      "params": [
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "(| \"connect-cli\"\n  | \"credentials-missing\"\n  | \"keychain-locked\"\n  | \"renewal-required\"\n  | \"expired\"\n  | \"scope\"\n  | \"identity-mismatch\"\n  | \"rate-limited\"\n  | \"unavailable\"\n  | \"unsupported\") | \"renewal-required\" | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "readsThroughApp",
+      "file": "shared/account-state.ts",
+      "line": 21,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "cliNeedsReconnect",
+      "file": "shared/account-state.ts",
+      "line": 29,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "usage",
+          "ts_type": "AccountUsage",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "duplicateCliAccount",
+      "file": "shared/account-state.ts",
+      "line": 40,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "Account[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "desktopCliMismatch",
+      "file": "shared/account-state.ts",
+      "line": 52,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "desktopCliWorkspaceMismatch",
+      "file": "shared/account-state.ts",
+      "line": 67,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "Account",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "pendingAuth",
+      "file": "shared/account-state.ts",
+      "line": 75,
+      "params": [
+        {
+          "name": "flow",
+          "ts_type": "AuthFlow",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

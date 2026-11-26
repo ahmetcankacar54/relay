@@ -1,0 +1,21 @@
+[workspace]
+resolver = "3"
+members = ["crates/relay-core", "crates/relay-gateway", "crates/relay-i18n", "crates/relay-cli"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+publish = false
+rust-version = "1.85"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"

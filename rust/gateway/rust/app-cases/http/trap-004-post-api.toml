@@ -1,0 +1,10 @@
+[request]
+method = "POST"
+path = "/api/h%C3%A9llo%20w%C3%B6rld"
+body = ""
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

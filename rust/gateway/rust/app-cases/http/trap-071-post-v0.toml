@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/v0/management/h%C3%A9llo%20w%C3%B6rld"
+body = "{nope"
+
+[request.headers]
+content-type = "application/json"
+x-relay-key = "relay-fixture-client-key-0123456789abcdef"
+
+[response]
+status = 400
+
+[response.headers]
+content-type = "application/json"

@@ -1,0 +1,22 @@
+{
+  "desktop": {
+    "installed": false,
+    "running": false,
+    "account": {
+      "id": "[..]",
+      "name": "Personal",
+      "orgId": "[..]",
+      "accountUuid": "[..]"
+    },
+    "pendingSignIn": {
+      "name": "Pending",
+      "since": "[..]"
+    },
+    "recoveryRequired": false
+  },
+  "relay": {
+    "appRunning": false,
+    "vault": "ready",
+    "historyMode": "all"
+  }
+}

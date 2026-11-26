@@ -4,8 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+// Every language, as the app registers them: the snapshot's labels are translated.
+import "../shared/i18n/catalogs/all";
 import {
-  STATUSLINE_FILE,
   STATUSLINE_STALE_MS,
   renderStatusline,
   type StatuslineSnapshot,
@@ -26,9 +27,6 @@ import {
   relayCliCandidates,
 } from "../electron/core/relay-cli-path";
 import { RELAY_CLI_INSTALL, RELAY_CLI_PACKAGE } from "../shared/cli-package";
-import { readStatuslineSnapshot, statuslineText } from "../cli/src/statusline";
-import { runCli } from "../cli/src/main";
-import type { CliIO } from "../cli/src/io";
 import type { Account, AccountUsage } from "../shared/types";
 
 const NOW = Date.parse("2026-11-23T12:00:00Z");
@@ -223,7 +221,7 @@ test("an old snapshot says how old it is", () => {
   );
 });
 
-test("colors only when asked: percentages by how full, the name bold", (t) => {
+test("painted, the percentages are colored by how full and the name is bold", () => {
   const colored = renderStatusline({
     snapshot: snapshot(),
     input: {},
@@ -235,120 +233,6 @@ test("colors only when asked: percentages by how full, the name bold", (t) => {
     colored,
     "<bold>Vertex</bold> · 5 h <green>42%</green> · week <green>18%</green> · <dim>renews 14:00</dim>",
   );
-  const home = temp(t);
-  fs.writeFileSync(
-    path.join(home, STATUSLINE_FILE),
-    JSON.stringify(snapshot()),
-  );
-  const run = {
-    stdin: "",
-    env: { RELAY_HOME: home, CLAUDE_CONFIG_DIR: "" },
-    home,
-    now: NOW,
-  };
-  assert.doesNotMatch(
-    statuslineText(snapshot(), { ...run, color: false }),
-    /\x1b\[/,
-  );
-  assert.match(
-    statuslineText(snapshot(), { ...run, color: true }),
-    /\x1b\[1mVertex\x1b\[22m/,
-  );
-});
-
-test("the CLI reads the snapshot and Claude Code's .claude.json, and answers well under 100 ms", (t) => {
-  const home = temp(t);
-  const data = path.join(home, "relay");
-  fs.mkdirSync(data);
-  fs.writeFileSync(
-    path.join(data, STATUSLINE_FILE),
-    JSON.stringify(snapshot()),
-  );
-  // A large .claude.json, as Claude Code's grows with its project history.
-  const projects = Object.fromEntries(
-    Array.from({ length: 2000 }, (_, i) => [
-      `/work/p${i}`,
-      { history: ["x".repeat(100)] },
-    ]),
-  );
-  fs.writeFileSync(
-    path.join(home, ".claude.json"),
-    JSON.stringify({
-      projects,
-      oauthAccount: {
-        accountUuid: person.accountUuid.toUpperCase(),
-        organizationUuid: person.orgId,
-      },
-    }),
-  );
-  const env = { RELAY_HOME: data };
-  const stdin = JSON.stringify({
-    session_id: "s1",
-    model: { id: "claude-x", display_name: "X" },
-    workspace: { current_dir: home },
-  });
-  const once = () => {
-    const snap = readStatuslineSnapshot(env, home);
-    assert.ok(snap);
-    return statuslineText(snap, { stdin, env, home, now: NOW, color: false });
-  };
-  assert.equal(once(), "Vertex · 5 h 42% · week 18% · renews 14:00");
-  const runs = 20;
-  const started = performance.now();
-  for (let i = 0; i < runs; i++) once();
-  const each = (performance.now() - started) / runs;
-  assert.ok(each < 100, `${each.toFixed(1)} ms per line`);
-});
-
-test("the snapshot is found in the app's data folder on each platform", (t) => {
-  const home = temp(t);
-  const write = (dir: string) => {
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(
-      path.join(dir, STATUSLINE_FILE),
-      JSON.stringify(snapshot()),
-    );
-  };
-  write(path.join(home, "Library", "Application Support", "Relay"));
-  assert.ok(readStatuslineSnapshot({}, home, "darwin"));
-  assert.equal(readStatuslineSnapshot({}, home, "linux"), undefined);
-  write(path.join(home, ".config", "Relay"));
-  assert.ok(readStatuslineSnapshot({}, home, "linux"));
-  // XDG_CONFIG_HOME counts only as a POSIX absolute path; a Windows host's temp folder is not one.
-  if (process.platform !== "win32") {
-    write(path.join(home, "xdg", "Relay"));
-    assert.ok(
-      readStatuslineSnapshot(
-        { XDG_CONFIG_HOME: path.join(home, "xdg") },
-        home,
-        "linux",
-      ),
-    );
-    assert.equal(
-      readStatuslineSnapshot(
-        { XDG_CONFIG_HOME: path.join(home, "none") },
-        home,
-        "linux",
-      ),
-      undefined,
-    );
-  }
-  write(path.join(home, "Roaming", "Relay"));
-  assert.ok(
-    readStatuslineSnapshot(
-      { APPDATA: path.join(home, "Roaming") },
-      home,
-      "win32",
-    ),
-  );
-  // Another layout, or a file that is not one, reads as no snapshot.
-  fs.writeFileSync(
-    path.join(home, ".config", "Relay", STATUSLINE_FILE),
-    JSON.stringify({ ...snapshot(), version: 99 }),
-  );
-  assert.equal(readStatuslineSnapshot({}, home, "linux"), undefined);
-  fs.writeFileSync(path.join(home, ".config", "Relay", STATUSLINE_FILE), "{");
-  assert.equal(readStatuslineSnapshot({}, home, "linux"), undefined);
 });
 
 test("Relay.app's snapshot: Claude accounts with current limits, gateway sessions and translated labels", () => {
@@ -624,22 +508,36 @@ test("the npm package Settings offers is cli/package.json's", () => {
   assert.equal(RELAY_CLI_INSTALL, `npm i -g ${pkg.name}`);
 });
 
-/** An npm global install of the relay CLI under `prefix`: the package, and the bin link to its launcher. */
-function npmInstall(prefix: string, bin = path.join(prefix, "bin")) {
+/** An npm global install of the relay CLI under `prefix`: the package, and the bin link to its launcher (0.1.x: `dist/relay.js`). */
+function npmInstall(prefix: string, legacy = false) {
   const launcher = path.join(
     prefix,
     "lib",
     "node_modules",
     "@ahmetcankacar",
     "relay",
-    "dist",
-    "relay.js",
+    ...(legacy ? ["dist", "relay.js"] : ["launcher.js"]),
   );
   fs.mkdirSync(path.dirname(launcher), { recursive: true });
   fs.writeFileSync(launcher, "#!/usr/bin/env node\n", { mode: 0o755 });
+  const bin = path.join(prefix, "bin");
   fs.mkdirSync(bin, { recursive: true });
   fs.symlinkSync(launcher, path.join(bin, "relay"));
   return path.join(bin, "relay");
+}
+
+/** The prebuilt binary npm installs for this package's launcher, under `nodeModules`, for a Mac. */
+function prebuilt(nodeModules: string) {
+  const binary = path.join(
+    nodeModules,
+    "@ahmetcankacar",
+    `relay-darwin-${process.arch}`,
+    "bin",
+    "relay",
+  );
+  fs.mkdirSync(path.dirname(binary), { recursive: true });
+  fs.writeFileSync(binary, "binary", { mode: 0o755 });
+  return binary;
 }
 
 test(
@@ -692,9 +590,28 @@ test(
       ),
       onPath,
     );
-    // Off the PATH, in an nvm version's bin folder (newest first).
+    // With its prebuilt binary beside the package (nested, or hoisted next to it), the status
+    // line runs that and starts no Node.
+    const pkg = path.join(
+      home,
+      "prefix",
+      "lib",
+      "node_modules",
+      "@ahmetcankacar",
+      "relay",
+    );
+    const nested = prebuilt(path.join(pkg, "node_modules"));
+    assert.equal(await find({ PATH: path.dirname(onPath) }, never), nested);
+    fs.rmSync(path.join(pkg, "node_modules"), { recursive: true });
+    const hoisted = prebuilt(path.join(home, "prefix", "lib", "node_modules"));
+    assert.equal(await find({ PATH: path.dirname(onPath) }, never), hoisted);
+    fs.rmSync(path.dirname(path.dirname(hoisted)), { recursive: true });
+    assert.equal(await find({ PATH: path.dirname(onPath) }, never), onPath);
+    // Off the PATH, in an nvm version's bin folder (newest first); the older one holds a 0.1.x
+    // install, whose launcher was dist/relay.js.
     const nvm = npmInstall(
       path.join(home, ".nvm", "versions", "node", "v22.12.0"),
+      true,
     );
     const newer = npmInstall(
       path.join(home, ".nvm", "versions", "node", "v24.1.0"),
@@ -750,95 +667,4 @@ test("on Windows the usual folder is npm's in %APPDATA%", () => {
     "C:\\Windows\\relay",
     "C:\\Users\\ada\\AppData\\Roaming\\npm\\relay",
   ]);
-});
-
-function memoryIO(env: Record<string, string>, stdin = "") {
-  const out: string[] = [];
-  const err: string[] = [];
-  const io: CliIO = {
-    stdout: (line) => out.push(line),
-    stderr: (line) => err.push(line),
-    isTTY: false,
-    prompt: async () => undefined,
-    readInput: async () => stdin,
-    env: { LANG: "en_US.UTF-8", ...env },
-    cwd: os.tmpdir(),
-    now: () => NOW,
-    pid: process.pid,
-    onSignal: () => {},
-  };
-  return { io, out, err };
-}
-
-test("relay statusline install, uninstall and the line itself, on any platform", async (t) => {
-  const dir = temp(t);
-  const data = path.join(dir, "Relay");
-  const self = path.join(
-    dir,
-    "lib",
-    "node_modules",
-    "@ahmetcankacar",
-    "relay",
-    "dist",
-    "relay.js",
-  );
-  const deps = {
-    transcriptRoot: path.join(dir, ".claude"),
-    platform: "linux" as const,
-    selfPath: self,
-  };
-  let m = memoryIO({ RELAY_HOME: data });
-  assert.equal(await runCli(["statusline"], m.io, deps), 0);
-  assert.match(m.out.join("\n"), /Open Relay\.app once/);
-  m = memoryIO({ RELAY_HOME: data });
-  assert.equal(await runCli(["statusline", "install"], m.io, deps), 0);
-  assert.match(m.out.join("\n"), /now shows Relay/);
-  // The CLI writes itself by absolute paths: this Node, then its launcher.
-  assert.equal(
-    JSON.parse(
-      fs.readFileSync(path.join(dir, ".claude", "settings.json"), "utf8"),
-    ).statusLine.command,
-    statuslineCommand([process.execPath, self]),
-  );
-  fs.mkdirSync(data, { recursive: true });
-  fs.writeFileSync(
-    path.join(data, STATUSLINE_FILE),
-    JSON.stringify(snapshot()),
-  );
-  m = memoryIO({ RELAY_HOME: data }, JSON.stringify({ session_id: "s1" }));
-  assert.equal(await runCli(["statusline"], m.io, deps), 0);
-  assert.deepEqual(m.out, ["Vertex · 5 h 42% · week 18% · renews 14:00"]);
-  m = memoryIO({ RELAY_HOME: data, LANG: "tr_TR.UTF-8" });
-  assert.equal(await runCli(["statusline", "uninstall"], m.io, deps), 0);
-  assert.match(m.out.join("\n"), /durum satırından çıkarıldı/);
-  m = memoryIO({ RELAY_HOME: data });
-  assert.equal(await runCli(["statusline", "remove"], m.io, deps), 2);
-  assert.match(m.err.join("\n"), /relay statusline \[install\|uninstall\]/);
-  m = memoryIO({ RELAY_HOME: data });
-  assert.equal(await runCli(["statusline", "--json"], m.io, deps), 2);
-});
-
-test("off macOS, commands that open the vault say they are macOS only", async (t) => {
-  const dir = temp(t);
-  for (const argv of [
-    ["switch", "Vertex"],
-    ["add", "Vertex"],
-    ["recover"],
-    ["reset-vault"],
-    ["history", "sync"],
-  ]) {
-    const m = memoryIO({
-      RELAY_HOME: path.join(dir, "Relay"),
-      RELAY_CLAUDE_DIR: path.join(dir, "Claude"),
-    });
-    assert.equal(
-      await runCli(argv, m.io, {
-        platform: "win32",
-        relayAppVersion: async () => undefined,
-      }),
-      5,
-      argv.join(" "),
-    );
-    assert.match(m.err.join("\n"), /works on macOS only/, argv.join(" "));
-  }
 });

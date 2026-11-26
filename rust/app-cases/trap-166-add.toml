@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["add", "日本語", "--yes"]
+status.code = 1
+fs.sandbox = true

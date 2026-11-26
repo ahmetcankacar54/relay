@@ -1,0 +1,167 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/usage-rollups.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "usage-rollups-rs",
+  "exports": [
+    {
+      "name": "emptyRollups",
+      "file": "shared/usage-rollups.ts",
+      "line": 39,
+      "params": [],
+      "returns": "UsageRollups",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "hourKey",
+      "file": "shared/usage-rollups.ts",
+      "line": 47,
+      "params": [
+        {
+          "name": "time",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "validWindow",
+      "file": "shared/usage-rollups.ts",
+      "line": 52,
+      "params": [
+        {
+          "name": "sample",
+          "ts_type": "UsageSample",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "sameReset",
+      "file": "shared/usage-rollups.ts",
+      "line": 60,
+      "params": [
+        {
+          "name": "a",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "b",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "foldSample",
+      "file": "shared/usage-rollups.ts",
+      "line": 161,
+      "params": [
+        {
+          "name": "r",
+          "ts_type": "UsageRollups",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "s",
+          "ts_type": "UsageSample",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "UsageRollups",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "foldSamples",
+      "file": "shared/usage-rollups.ts",
+      "line": 239,
+      "params": [
+        {
+          "name": "samples",
+          "ts_type": "readonly UsageSample[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "UsageRollups",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "catchUp",
+      "file": "shared/usage-rollups.ts",
+      "line": 252,
+      "params": [
+        {
+          "name": "r",
+          "ts_type": "UsageRollups",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "samples",
+          "ts_type": "readonly UsageSample[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "UsageRollups",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

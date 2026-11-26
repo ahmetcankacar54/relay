@@ -1,0 +1,13 @@
+[request]
+method = "POST"
+path = "/api/hello"
+body = """
+日本語 テキスト\r
+line two\r
+"""
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

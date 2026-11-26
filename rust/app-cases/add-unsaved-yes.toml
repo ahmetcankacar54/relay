@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["add", "New", "--yes"]
+env.add.RELAY_PARITY_SCENARIO = "unsaved"
+status.code = 1
+fs.sandbox = true

@@ -1,0 +1,15 @@
+[request]
+method = "POST"
+path = "/v1/responses"
+body = '{"model": "gpt-5-codex", "input": "Hi"}'
+
+[request.headers]
+authorization = "Bearer relay-fixture-client-key-0123456789abcdef"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json"
+x-request-id = "req_fixture_openai"

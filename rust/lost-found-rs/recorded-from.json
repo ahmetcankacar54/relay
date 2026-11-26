@@ -1,0 +1,65 @@
+{
+  "unit": "shared/lost-found.ts",
+  "files": 1,
+  "fingerprint": "737a74f6be3e4633",
+  "coverage": {
+    "lines": 2986,
+    "reached": 2557,
+    "files": [
+      {
+        "file": "shared/desktop-account.ts",
+        "lines": 22,
+        "reached": 22,
+        "missed": ""
+      },
+      {
+        "file": "shared/lost-found.ts",
+        "lines": 856,
+        "reached": 825,
+        "missed": "277-281, 283, 287-302, 320-325, 655-657"
+      },
+      {
+        "file": "shared/plan-prices.ts",
+        "lines": 13,
+        "reached": 13,
+        "missed": ""
+      },
+      {
+        "file": "shared/planning.ts",
+        "lines": 128,
+        "reached": 89,
+        "missed": "56, 86-96, 99-101, 104-105, 107-115, 117-129"
+      },
+      {
+        "file": "shared/proxy-types.ts",
+        "lines": 214,
+        "reached": 211,
+        "missed": "229-231"
+      },
+      {
+        "file": "shared/time-zones.ts",
+        "lines": 182,
+        "reached": 60,
+        "missed": "58-72, 75-77, 80-102, 106-115, 117-128, 131-140, 142-146, 149-163, 166-194"
+      },
+      {
+        "file": "shared/types.ts",
+        "lines": 1218,
+        "reached": 1218,
+        "missed": ""
+      },
+      {
+        "file": "shared/usage-rollups.ts",
+        "lines": 256,
+        "reached": 76,
+        "missed": "40-44, 48-49, 53-58, 67-69, 72-87, 89-132, 134-149, 162-172, 182-190, 193-197, 200-236, 240-244, 253-273"
+      },
+      {
+        "file": "shared/usage-statistics.ts",
+        "lines": 97,
+        "reached": 43,
+        "missed": "19-21, 23-26, 56-77, 80-104"
+      }
+    ]
+  }
+}

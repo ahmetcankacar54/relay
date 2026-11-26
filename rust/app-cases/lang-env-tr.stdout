@@ -1,0 +1,4 @@
+   Ad        Sağlayıcı  Tür        Claude uygulaması     Limit okuma
+*  Personal  CLAUDE     kişisel    personal@example.com  var
+   Work      CLAUDE     iş · Acme  work@acme.example     var
+   Codex     CODEX      kişisel    —                     var

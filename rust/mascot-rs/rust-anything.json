@@ -1,0 +1,126 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/mascot.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "mascot-rs",
+  "exports": [
+    {
+      "name": "activeReading",
+      "file": "shared/mascot.ts",
+      "line": 35,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "MascotInput",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "AccountUsage | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "mascotRest",
+      "file": "shared/mascot.ts",
+      "line": 50,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "MascotInput",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "\"closed\" | \"unknown\" | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "activeFull",
+      "file": "shared/mascot.ts",
+      "line": 64,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "MascotInput",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "mascotPose",
+      "file": "shared/mascot.ts",
+      "line": 69,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "MascotInput",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "(\"alert\" | \"away\" | \"warming\" | \"sleeping\" | \"full\" | \"hungry\" | \"idle\")",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "headFor",
+      "file": "shared/mascot.ts",
+      "line": 108,
+      "params": [
+        {
+          "name": "pose",
+          "ts_type": "(\"alert\" | \"away\" | \"warming\" | \"sleeping\" | \"full\" | \"hungry\" | \"idle\")",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(\"idle\" | \"hungry\" | \"sleep\" | \"alert\")",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

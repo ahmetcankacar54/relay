@@ -1,0 +1,30 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/meters.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "meters-rs",
+  "exports": [
+    {
+      "name": "enabledMeters",
+      "file": "shared/meters.ts",
+      "line": 104,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "{\n  meters?: readonly (typeof METER_PROVIDERS)[number][];\n}",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof METER_PROVIDERS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

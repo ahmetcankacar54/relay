@@ -1,0 +1,7 @@
+{
+  "plain": "relay-golden",
+  "appName": "Relay Golden",
+  "platform": "darwin",
+  "electron": "44.11.5",
+  "password": "mock_password"
+}

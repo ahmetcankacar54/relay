@@ -1,0 +1,28 @@
+Kullanım: relay <komut> [seçenekler]
+
+Komutlar:
+  relay status                          Claude uygulamasının, açık hesabın ve Relay’in durumu
+  relay list                            Kayıtlı hesaplar
+  relay add <name>                      Claude uygulamasındaki girişi kaydet ya da yeni bir hesapla giriş yap
+  relay switch <name>                   Claude uygulamasını kapatıp <name> hesabıyla yeniden aç
+  relay remove <name>                   Kayıtlı bir hesabı unut
+  relay rename <name> <new>             Bir hesabın adını değiştir
+  relay recover                         Yarıda kalan geçişin yedeğini geri yükle
+  relay history [<name>]                Code geçmişi paylaşımı; history mode …, history sync
+  relay connect <name>                  Hesabın limit okuma girişini yap ya da yenile
+  relay usage [<name>]                  5 saatlik ve haftalık limitlerin ne kadarı kullanıldı
+  relay run <name> [-- …]               Claude Code’u <name> hesabıyla çalıştır
+  relay tokens                          Relay.app’in tuttuğu günlük token kullanımı
+  relay proxy [start|status|env]        Hesapları sırayla kullanan yerel ağ geçidi (--port, --host)
+  relay statusline [install|uninstall]  Claude Code durum satırında hesap ve limitler
+  relay doctor                          Kurulumu denetle
+  relay reset-vault                     Anahtarlık’taki anahtar kaybolduysa kayıtlı girişlerin kasasını sıfırla
+
+Seçenekler:
+  --yes, -y        Onay sormadan devam et
+  --json           Okuma komutlarında JSON çıktı
+  --lang <code>    Dil: en, tr, de, fr, es, pt-BR, it, ja, ko, zh-Hans, zh-Hant, ru, uk, pl, nl
+  --no-color       Renksiz çıktı
+  --version, -v    Sürüm
+
+Not: Claude uygulamasını kapatan komutlar (switch, add, recover, history sync) uygulamadaki Code oturumlarını da durdurur.

@@ -1,0 +1,102 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/relay-link.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "relay-link-rs",
+  "exports": [
+    {
+      "name": "relaySwitchLink",
+      "file": "shared/relay-link.ts",
+      "line": 13,
+      "params": [
+        {
+          "name": "accountId",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "parseRelayLink",
+      "file": "shared/relay-link.ts",
+      "line": 22,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "readonly { id: string }[]",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "({ kind: \"open\" } | { kind: \"switch\"; accountId: string }) | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "relayLinkArgument",
+      "file": "shared/relay-link.ts",
+      "line": 56,
+      "params": [
+        {
+          "name": "argv",
+          "ts_type": "readonly string[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "linkedSwitchAccount",
+      "file": "shared/relay-link.ts",
+      "line": 64,
+      "params": [
+        {
+          "name": "accountId",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "readonly ({ id: string })[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "activeId",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "({ id: string }) | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

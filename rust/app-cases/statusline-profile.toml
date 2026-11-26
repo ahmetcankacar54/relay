@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["statusline"]
+env.add.RELAY_PARITY_ENV_CLAUDE_CONFIG_DIR = "{relay}/profiles/22222222-2222-4222-8222-222222222222"
+status.code = 0
+fs.sandbox = true

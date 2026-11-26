@@ -1,0 +1,222 @@
+{"fn":"browserApps","args":["linux"]}
+{"fn":"browserApps","args":["darwin"]}
+{"fn":"browserApps","args":["win32"]}
+{"fn":"browserApps","args":[""]}
+{"fn":"browserApps","args":["Linux"]}
+{"fn":"browserApps","args":[{"$undefined":true}]}
+{"fn":"browserApps","args":[]}
+{"fn":"writesBrowser","args":["restart"]}
+{"fn":"writesBrowser","args":["closed"]}
+{"fn":"writesBrowser","args":["guide"]}
+{"fn":"writesBrowser","args":["off"]}
+{"fn":"writesBrowser","args":["Restart"]}
+{"fn":"writesBrowser","args":[""]}
+{"fn":"writesBrowser","args":[{"$undefined":true}]}
+{"fn":"writesBrowser","args":[null]}
+{"fn":"writesBrowser","args":[1]}
+{"fn":"writesBrowser","args":[{}]}
+{"fn":"localStateProfiles","args":[{"profile":{"profiles_order":["Profile 1","Default"],"info_cache":{"Default":{"name":"Kişisel"},"Profile 1":{"name":"  Studio "},"Guest Profile":{"name":"Guest","is_guest":true},"System Profile":{"name":"System"},"Profile 2":{"name":"Temp","is_ephemeral":true},"../evil":{"name":"x"}}}}]}
+{"fn":"localStateProfiles","args":[{"$undefined":true}]}
+{"fn":"localStateProfiles","args":[null]}
+{"fn":"localStateProfiles","args":[{"profile":{}}]}
+{"fn":"localStateProfiles","args":[[]]}
+{"fn":"localStateProfiles","args":["x"]}
+{"fn":"localStateProfiles","args":[{"profile":[]}]}
+{"fn":"localStateProfiles","args":[{"profile":{"info_cache":[]}}]}
+{"fn":"localStateProfiles","args":[{"profile":{"info_cache":{"Default":{}}}}]}
+{"fn":"localStateProfiles","args":[{"profile":{"profiles_order":"Default","info_cache":{"Default":{"name":5},"Profile 3":null,"Profile 4":"x","Profile 5":[]}}}]}
+{"fn":"localStateProfiles","args":[{"profile":{"profiles_order":[1,null,"Missing","Profile 9","Default","Default"],"info_cache":{"Profile 9":{"name":"Nine"},"Default":{"name":"   "},"Profile 7":{"name":"Seven","is_omitted_from_profile_list":true},"Profile 8":{"name":"Eight","is_guest":"true","is_ephemeral":1}}}}]}
+{"fn":"localStateProfiles","args":[{"profile":{"info_cache":{"1":{"name":"one"},"2":{"name":"two"},"b":{"name":"b"},"01":{"name":"zero-one"},"a":{"name":"a"}}}}]}
+{"fn":"localStateProfiles","args":[{"profile":{"info_cache":{"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx":{"name":"long64"},"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy":{"name":"long65"},"-dash":{"name":"d"}," sp":{"name":"s"},"a b.c_d-e":{"name":"ok"},"Profileé":{"name":"acc"},"":{"name":"empty"}}}}]}
+{"fn":"localStateProfiles","args":[{"profile":{"info_cache":{"Default":{"name":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"},"P1":{"name":" ﻿ trimmed 　"},"P2":{"name":""},"P3":{"name":"x"},"P4":{"name":"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"},"P6":{"name":"  ᠎"}}}}]}
+{"fn":"chooseInstance","args":["x",{"$undefined":true}]}
+{"fn":"chooseInstance","args":["x",{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":["ab",{"$undefined":true}]}
+{"fn":"chooseInstance","args":["ab",{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":["",{"$undefined":true}]}
+{"fn":"chooseInstance","args":["",{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[{"0":"zero","length":1},{"$undefined":true}]}
+{"fn":"chooseInstance","args":[{"0":"zero","length":1},{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[{"length":1},{"$undefined":true}]}
+{"fn":"chooseInstance","args":[{"length":1},{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[{"length":2},{"$undefined":true}]}
+{"fn":"chooseInstance","args":[{"length":2},{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[5,{"$undefined":true}]}
+{"fn":"chooseInstance","args":[5,{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[null,{"$undefined":true}]}
+{"fn":"chooseInstance","args":[null,{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[{"$undefined":true},{"$undefined":true}]}
+{"fn":"chooseInstance","args":[{"$undefined":true},{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":["x",{"$undefined":true}]}
+{"fn":"pickInstance","args":["x",{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":["ab",{"$undefined":true}]}
+{"fn":"pickInstance","args":["ab",{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":["",{"$undefined":true}]}
+{"fn":"pickInstance","args":["",{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[{"0":"zero","length":1},{"$undefined":true}]}
+{"fn":"pickInstance","args":[{"0":"zero","length":1},{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[{"length":2},{"$undefined":true}]}
+{"fn":"pickInstance","args":[{"length":2},{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[5,{"$undefined":true}]}
+{"fn":"pickInstance","args":[5,{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[null,{"$undefined":true}]}
+{"fn":"pickInstance","args":[null,{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[{"$undefined":true},{"$undefined":true}]}
+{"fn":"pickInstance","args":[{"$undefined":true},{"app":"chrome","profile":"Default"}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":1}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":5}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":4}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":0}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":"1"}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":true}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":1}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":5.5}}]}
+{"fn":"startupRestores","args":[{"session":{"restore_on_startup":null}}]}
+{"fn":"startupRestores","args":[{"session":{}}]}
+{"fn":"startupRestores","args":[{"$undefined":true}]}
+{"fn":"startupRestores","args":[null]}
+{"fn":"startupRestores","args":[{"session":null}]}
+{"fn":"startupRestores","args":[{"session":[]}]}
+{"fn":"startupRestores","args":[[]]}
+{"fn":"startupRestores","args":[{}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],null]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],null]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[],null]}
+{"fn":"chooseInstance","args":[[],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],null]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],null]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],null]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],null]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],null]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],null]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"$undefined":true}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],null]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"chooseInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],null]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],null]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[],null]}
+{"fn":"pickInstance","args":[[],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],null]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true},{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],null]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"edge","profile":"Profile 1","name":"C","opened":false,"usedAt":100},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200},{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],null]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"arc","profile":"Profile 2","name":"E","opened":true,"usedAt":200},{"app":"arc","profile":"Default","name":"D","opened":true,"usedAt":200}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],null]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0},{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],null]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"dia","profile":"Default","name":"F","opened":true,"usedAt":0}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],null]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"comet","profile":"Default","name":"G","opened":true,"usedAt":-5},{"app":"brave","profile":"Default","name":"A","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"$undefined":true}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],null]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"chrome","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"edge","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"Default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"arc","profile":"Profile 2"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true,"extra":"kept","usedAt":1.5},{"app":"chrome","profile":"Default","name":"B","opened":true}],{"app":"brave","profile":"default"}]}
+{"fn":"pickInstance","args":[[{"app":"brave","profile":"Default","name":"A","opened":true}]]}

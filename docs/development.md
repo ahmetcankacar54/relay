@@ -115,16 +115,24 @@ adapts the menu-bar icon to light and dark appearances.
   next renewal in Claude Code's status line. Relay writes
   `<userData>/statusline.json` on every limit read, gateway answer and token
   tick; the command reads only that file, Claude Code's stdin and
-  `.claude.json`, from a bundle of its own (`cli/dist/relay-statusline.js`), so
-  it answers in a few tens of milliseconds. `relay statusline install` (or
-  Settings → Advanced) sets `statusLine` in `~/.claude/settings.json` to an
-  absolute command (the CLI writes Node and its own launcher; the app writes
+  `.claude.json`, on a fast path the Rust binary (`crates/relay-cli`) takes
+  before any other start-up, so it answers in a few milliseconds.
+  `relay statusline install` (or Settings → Advanced) sets `statusLine` in
+  `~/.claude/settings.json` to an absolute command (the CLI writes its own
+  binary's path; the app writes
   the `relay` that `electron/core/relay-cli-path.ts` finds on PATH, in the
   usual npm/Homebrew/Volta/pnpm/nvm folders, else through `$SHELL -ilc` with a
   2 s deadline) and keeps any earlier one in
   `<userData>/claude-statusline-previous.json` until `uninstall` puts it back.
   Without an installed relay the Settings switch stays off and offers
   `npm i -g @ahmetcankacar/relay` to copy.
+- The CLI is the Rust `relay` binary (`crates/relay-cli`). npm ships it as
+  `@ahmetcankacar/relay`, a small Node launcher (`cli/launcher.js`) with one
+  optional dependency per platform (`cli/npm/platforms/*`) holding the binary;
+  `node scripts/build-cli-packages.mjs` builds and stages them in
+  `cli/npm/dist/`, and a `cli-v<version>` tag publishes them
+  (`.github/workflows/cli-release.yml`) with the bare binaries as archives on
+  that GitHub release.
 
 ## Linux
 

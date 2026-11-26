@@ -1,0 +1,96 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/percent.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "percent-rs",
+  "exports": [
+    {
+      "name": "formatPercent",
+      "file": "shared/percent.ts",
+      "line": 12,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "number | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "percentUsed",
+      "file": "shared/percent.ts",
+      "line": 26,
+      "params": [
+        {
+          "name": "usedPercent",
+          "ts_type": "number | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "usedWord",
+      "file": "shared/percent.ts",
+      "line": 33,
+      "params": [
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "formatUsed",
+      "file": "shared/percent.ts",
+      "line": 36,
+      "params": [
+        {
+          "name": "usedPercent",
+          "ts_type": "number | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "language",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

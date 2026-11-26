@@ -1,0 +1,17 @@
+{
+  "unit": "shared/model-prices.ts",
+  "files": 1,
+  "fingerprint": "c9506ab244f29a50",
+  "coverage": {
+    "lines": 164,
+    "reached": 164,
+    "files": [
+      {
+        "file": "shared/model-prices.ts",
+        "lines": 164,
+        "reached": 164,
+        "missed": ""
+      }
+    ]
+  }
+}

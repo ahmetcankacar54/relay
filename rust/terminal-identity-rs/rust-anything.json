@@ -1,0 +1,61 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/terminal-identity.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "terminal-identity-rs",
+  "exports": [
+    {
+      "name": "terminalIdentities",
+      "file": "shared/terminal-identity.ts",
+      "line": 84,
+      "params": [
+        {
+          "name": "account",
+          "ts_type": "{\n  desktop?: { accountUuid: string; orgId: string };\n  auth?: { accountUuid?: string; orgId?: string };\n}",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "TerminalIdentity[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "sameIdentity",
+      "file": "shared/terminal-identity.ts",
+      "line": 102,
+      "params": [
+        {
+          "name": "a",
+          "ts_type": "TerminalIdentity",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "b",
+          "ts_type": "TerminalIdentity",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "terminalLine",
+      "file": "shared/terminal-identity.ts",
+      "line": 114,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

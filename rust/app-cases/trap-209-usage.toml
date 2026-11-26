@@ -1,0 +1,5 @@
+bin.name = "relay"
+args = ["usage", "👍🏽 thumbs"]
+env.add.RELAY_PARITY_SCENARIO = "profile-lock"
+status.code = 2
+fs.sandbox = true

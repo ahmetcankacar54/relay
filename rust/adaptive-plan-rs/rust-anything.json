@@ -1,0 +1,132 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/adaptive-plan.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "adaptive-plan-rs",
+  "exports": [
+    {
+      "name": "plannedRate",
+      "file": "shared/adaptive-plan.ts",
+      "line": 132,
+      "params": [
+        {
+          "name": "tempo",
+          "ts_type": "Tempo",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "spans",
+          "ts_type": "Span[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "paceFactor",
+      "file": "shared/adaptive-plan.ts",
+      "line": 157,
+      "params": [
+        {
+          "name": "observed",
+          "ts_type": "number | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "planned",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "todaysPace",
+      "file": "shared/adaptive-plan.ts",
+      "line": 182,
+      "params": [
+        {
+          "name": "arg0",
+          "ts_type": "{\n  samples: UsageSample[];\n  accounts: Account[];\n  tempo: Tempo;\n  settings: PlanningSettings;\n  from: number;\n  to: number;\n}",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Pace",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "nextStartCandidates",
+      "file": "shared/adaptive-plan.ts",
+      "line": 238,
+      "params": [
+        {
+          "name": "a",
+          "ts_type": "SimAccount",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "from",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "to",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "replanStarts",
+      "file": "shared/adaptive-plan.ts",
+      "line": 264,
+      "params": [
+        {
+          "name": "input",
+          "ts_type": "ReplanInput",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Replan | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

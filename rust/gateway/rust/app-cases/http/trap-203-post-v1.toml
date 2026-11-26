@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/v1/e%CC%81"
+body = '{"model": "gpt-5-codex", "input": "Hi", "stream": true}'
+
+[request.headers]
+authorization = "Bearer relay-fixture-client-key-0123456789abcdef"
+content-type = "application/json"
+
+[response]
+status = 404
+
+[response.headers]
+content-type = "application/json"

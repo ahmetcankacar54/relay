@@ -1,16 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import http from "node:http";
 import type net from "node:net";
-import path from "node:path";
 import { ProxyServer } from "../electron/core/proxy/proxy-server";
-import { Store } from "../electron/core/store";
 import type { Account, AccountUsage } from "../shared/types";
-import { cliFixture } from "./cli-fixture";
 
 const HOUR = 3_600_000;
-const macOnly = { skip: process.platform !== "darwin" && "macOS only: the relay CLI refuses other systems" };
 
 test("requests that arrive together read an account's sign-in once and report it missing once", async () => {
   const now = Date.now();
@@ -66,73 +61,4 @@ test("requests that arrive together read an account's sign-in once and report it
       upstream.close(() => resolve());
     });
   }
-});
-
-/** A Codex and an Antigravity account signed in through the app, with a Codex ChatGPT sign-in saved. */
-async function providerAccounts(t: any) {
-  const f = await cliFixture(t);
-  const store = new Store(f.home);
-  const codex = store.create({ name: "Codex", kind: "personal", provider: "codex" });
-  store.create({ name: "Google", kind: "personal", provider: "antigravity" });
-  store.update((state) => {
-    for (const account of state.accounts)
-      account.auth = { loggedIn: true, checkedAt: new Date().toISOString(), subscription: "plus" } as Account["auth"];
-  });
-  const profile = path.join(f.home, "profiles", codex.id);
-  fs.mkdirSync(profile, { recursive: true });
-  fs.writeFileSync(
-    path.join(profile, "provider-credential.json"),
-    JSON.stringify({ kind: "chatgpt", accessToken: "codex-test-token", expiresAt: Date.now() + HOUR }),
-    { mode: 0o600 },
-  );
-  const asked: string[] = [];
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
-    asked.push(`${String(url)} ${(init?.headers as Record<string, string>)?.Authorization ?? ""}`);
-    return new Response(
-      JSON.stringify({
-        plan_type: "pro",
-        rate_limit: {
-          primary_window: { used_percent: 12, limit_window_seconds: 18_000, reset_after_seconds: 3_600 },
-          secondary_window: { used_percent: 40, limit_window_seconds: 604_800, reset_after_seconds: 86_400 },
-        },
-      }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
-  }) as typeof fetch;
-  t.after(() => {
-    globalThis.fetch = realFetch;
-  });
-  return { f, codex, asked };
-}
-
-test("relay usage reads a Codex account's limits as the app does, and sends Antigravity to the app", macOnly, async (t) => {
-  const { f, codex, asked } = await providerAccounts(t);
-  assert.equal(await f.run("usage", "--json"), 0);
-  const rows = JSON.parse(f.out());
-  const codexRow = rows.find((row: { name: string }) => row.name === "Codex");
-  assert.equal(codexRow.status, "ready");
-  assert.equal(codexRow.fiveHour.usedPercent, 12);
-  assert.equal(codexRow.sevenDay.usedPercent, 40);
-  assert.equal(rows.find((row: { name: string }) => row.name === "Google").issue, "unsupported");
-  assert.deepEqual(asked, ["https://chatgpt.com/backend-api/wham/usage Bearer codex-test-token"]);
-  // The plan the answer names is the app's to save: relay only reads.
-  assert.equal(f.store().account(codex.id).auth?.subscription, "plus");
-
-  f.clear();
-  assert.equal(await f.run("usage", "--lang", "en"), 0);
-  assert.match(f.out(), /Codex\s+12% used/);
-  assert.match(f.out(), /Google\s+Antigravity limits are read in the Relay app only/);
-  assert.doesNotMatch(f.out(), /relay connect/, "relay connect signs in Claude accounts only");
-  assert.ok(!(f.out() + f.err()).includes("codex-test-token"));
-});
-
-test("a Codex or Antigravity account without a sign-in is sent to the app, not to relay connect", macOnly, async (t) => {
-  const { f } = await providerAccounts(t);
-  f.store().update((state) => {
-    for (const account of state.accounts) delete account.auth;
-  });
-  assert.equal(await f.run("usage", "--lang", "en"), 0);
-  assert.match(f.out(), /Codex\s+not signed in: sign in again in the Relay app/);
-  assert.doesNotMatch(f.out(), /relay connect/);
 });

@@ -1,0 +1,17 @@
+{
+  "unit": "shared/cli-version.ts",
+  "files": 1,
+  "fingerprint": "f3d17733e1bb1b6a",
+  "coverage": {
+    "lines": 28,
+    "reached": 28,
+    "files": [
+      {
+        "file": "shared/cli-version.ts",
+        "lines": 28,
+        "reached": 28,
+        "missed": ""
+      }
+    ]
+  }
+}

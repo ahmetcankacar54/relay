@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["switch", "2222", "--yes"]
+status.code = 1
+fs.sandbox = true

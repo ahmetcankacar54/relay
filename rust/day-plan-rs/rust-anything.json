@@ -1,0 +1,184 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/day-plan.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "day-plan-rs",
+  "exports": [
+    {
+      "name": "planContext",
+      "file": "shared/day-plan.ts",
+      "line": 57,
+      "params": [
+        {
+          "name": "accounts",
+          "ts_type": "Account[]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "tempo",
+          "ts_type": "Tempo",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "PlanContext",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "cyclePhases",
+      "file": "shared/day-plan.ts",
+      "line": 71,
+      "params": [
+        {
+          "name": "fixed",
+          "ts_type": "(number | undefined)[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "number[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "clearPlanCache",
+      "file": "shared/day-plan.ts",
+      "line": 144,
+      "params": [],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "planCacheStats",
+      "file": "shared/day-plan.ts",
+      "line": 150,
+      "params": [],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "dayPlan",
+      "file": "shared/day-plan.ts",
+      "line": 234,
+      "params": [
+        {
+          "name": "date",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "context",
+          "ts_type": "PlanContext",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "liveResets",
+          "ts_type": "Record<string, number | undefined>",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "DayPlan",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "shouldHaveWindow",
+      "file": "shared/day-plan.ts",
+      "line": 308,
+      "params": [
+        {
+          "name": "accountId",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "context",
+          "ts_type": "PlanContext",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "nextPlannedStart",
+      "file": "shared/day-plan.ts",
+      "line": 323,
+      "params": [
+        {
+          "name": "accountId",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "now",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "settings",
+          "ts_type": "PlanningSettings",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "context",
+          "ts_type": "PlanContext",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

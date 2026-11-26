@@ -1,0 +1,109 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/i18n/translate.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "translate-rs",
+  "exports": [
+    {
+      "name": "registerCatalog",
+      "file": "shared/i18n/translate.ts",
+      "line": 16,
+      "params": [
+        {
+          "name": "locale",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "catalog",
+          "ts_type": "Record<keyof typeof en, string>",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "setPseudo",
+      "file": "shared/i18n/translate.ts",
+      "line": 22,
+      "params": [
+        {
+          "name": "enabled",
+          "ts_type": "boolean",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "formatRich",
+      "file": "shared/i18n/translate.ts",
+      "line": 66,
+      "params": [
+        {
+          "name": "locale",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "id",
+          "ts_type": "keyof typeof en",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "values",
+          "ts_type": "Record<string, unknown>",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "loadCatalog",
+      "file": "shared/i18n/translate.ts",
+      "line": 94,
+      "params": [
+        {
+          "name": "locale",
+          "ts_type": "(typeof LOCALES)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": true,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "tFor",
+      "file": "shared/i18n/translate.ts",
+      "line": 53,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

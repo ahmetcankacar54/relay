@@ -1,0 +1,657 @@
+{
+  "range": 90,
+  "days": [
+    {
+      "date": "2026-08-29",
+      "byRow": {}
+    },
+    {
+      "date": "2026-08-30",
+      "byRow": {}
+    },
+    {
+      "date": "2026-08-31",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-01",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-02",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-03",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-04",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-05",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-06",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-07",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-08",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-09",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-10",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-11",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-12",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-13",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-14",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-15",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-16",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-17",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-18",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-19",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-20",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-21",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-22",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-23",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-24",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-25",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-26",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-27",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-28",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-29",
+      "byRow": {}
+    },
+    {
+      "date": "2026-09-30",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-01",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-02",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-03",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-04",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-05",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-06",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-07",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-08",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-09",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-10",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-11",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-12",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-13",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-14",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-15",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-16",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-17",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-18",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-19",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-20",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-21",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-22",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-23",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-24",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-25",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-26",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-27",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-28",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-29",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-30",
+      "byRow": {}
+    },
+    {
+      "date": "2026-10-31",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-01",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-02",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-03",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-04",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-05",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-06",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-07",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-08",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-09",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-10",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-11",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-12",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-13",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-14",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-15",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-16",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-17",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-18",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-19",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-20",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-21",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-22",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-23",
+      "byRow": {
+        "[..]": {
+          "input": 800,
+          "output": 2100,
+          "cacheWrite": 3000,
+          "cacheRead": 64000,
+          "responses": 5,
+          "cost": 2.6,
+          "unpriced": 0,
+          "estimated": false
+        },
+        "unknown": {
+          "input": 90,
+          "output": 120,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "responses": 1,
+          "cost": 0.01,
+          "unpriced": 0,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "date": "2026-11-24",
+      "byRow": {}
+    },
+    {
+      "date": "2026-11-25",
+      "byRow": {
+        "[..]": {
+          "input": 2500,
+          "output": 6100,
+          "cacheWrite": 12000,
+          "cacheRead": 340000,
+          "responses": 15,
+          "cost": 1.89,
+          "unpriced": 0,
+          "estimated": false
+        },
+        "[..]": {
+          "input": 400,
+          "output": 900,
+          "cacheWrite": 1000,
+          "cacheRead": 20000,
+          "responses": 2,
+          "cost": 0.81,
+          "unpriced": 0,
+          "estimated": true
+        }
+      }
+    },
+    {
+      "date": "2026-11-26",
+      "byRow": {
+        "[..]": {
+          "input": 1200,
+          "output": 3400,
+          "cacheWrite": 5000,
+          "cacheRead": 120000,
+          "responses": 9,
+          "cost": 4.25,
+          "unpriced": 0,
+          "estimated": false
+        },
+        "terminal": {
+          "input": 300,
+          "output": 800,
+          "cacheWrite": 0,
+          "cacheRead": 9000,
+          "responses": 2,
+          "cost": 0.37,
+          "unpriced": 0,
+          "estimated": false
+        }
+      }
+    }
+  ],
+  "rows": [
+    {
+      "key": "[..]",
+      "kind": "account",
+      "accountId": "[..]",
+      "name": "Work",
+      "estimated": false,
+      "totals": {
+        "input": 2500,
+        "output": 6100,
+        "cacheWrite": 12000,
+        "cacheRead": 340000,
+        "responses": 15,
+        "cost": 1.89,
+        "unpriced": 0
+      }
+    },
+    {
+      "key": "[..]",
+      "kind": "account",
+      "accountId": "[..]",
+      "name": "Personal",
+      "estimated": true,
+      "totals": {
+        "input": 2400,
+        "output": 6400,
+        "cacheWrite": 9000,
+        "cacheRead": 204000,
+        "responses": 16,
+        "cost": 7.66,
+        "unpriced": 0
+      }
+    },
+    {
+      "key": "unknown",
+      "kind": "unknown",
+      "estimated": false,
+      "totals": {
+        "input": 90,
+        "output": 120,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "responses": 1,
+        "cost": 0.01,
+        "unpriced": 0
+      }
+    },
+    {
+      "key": "terminal",
+      "kind": "terminal",
+      "estimated": false,
+      "totals": {
+        "input": 300,
+        "output": 800,
+        "cacheWrite": 0,
+        "cacheRead": 9000,
+        "responses": 2,
+        "cost": 0.37,
+        "unpriced": 0
+      }
+    }
+  ],
+  "totals": {
+    "input": 5290,
+    "output": 13420,
+    "cacheWrite": 21000,
+    "cacheRead": 553000,
+    "responses": 34,
+    "cost": 9.93,
+    "unpriced": 0
+  },
+  "models": [
+    {
+      "model": "claude-sonnet-4-5",
+      "totals": {
+        "input": 2800,
+        "output": 6900,
+        "cacheWrite": 12000,
+        "cacheRead": 349000,
+        "responses": 17,
+        "cost": 2.26,
+        "unpriced": 0
+      }
+    },
+    {
+      "model": "claude-opus-5-5",
+      "totals": {
+        "input": 2400,
+        "output": 6400,
+        "cacheWrite": 9000,
+        "cacheRead": 204000,
+        "responses": 16,
+        "cost": 7.66,
+        "unpriced": 0
+      }
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "totals": {
+        "input": 90,
+        "output": 120,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "responses": 1,
+        "cost": 0.01,
+        "unpriced": 0
+      }
+    }
+  ],
+  "progress": {
+    "percent": 100,
+    "complete": true
+  },
+  "exactSince": "2026-10-01",
+  "today": {
+    "date": "2026-11-26",
+    "totals": {
+      "input": 1500,
+      "output": 4200,
+      "cacheWrite": 5000,
+      "cacheRead": 129000,
+      "responses": 11,
+      "cost": 4.62,
+      "unpriced": 0
+    },
+    "slots": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "currentSlot": 50,
+    "change": null,
+    "yesterdayAverage": null
+  },
+  "unpricedModels": [],
+  "pricesChecked": "2026-11-11"
+}

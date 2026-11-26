@@ -1,0 +1,295 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/ahmetcan/Documents/GitHub/cc-switch",
+  "unit": "shared/feature-risk.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "feature-risk-rs",
+  "exports": [
+    {
+      "name": "needsRiskAck",
+      "file": "shared/feature-risk.ts",
+      "line": 194,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "{ riskAcknowledged?: Partial<Record<(typeof FEATURE_RISK_IDS)[number], number>> }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "id",
+          "ts_type": "(typeof FEATURE_RISK_IDS)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "pendingRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 203,
+      "params": [
+        {
+          "name": "settings",
+          "ts_type": "{ riskAcknowledged?: Partial<Record<(typeof FEATURE_RISK_IDS)[number], number>> }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "ids",
+          "ts_type": "readonly (typeof FEATURE_RISK_IDS)[number][]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "acknowledgeRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 213,
+      "params": [
+        {
+          "name": "acks",
+          "ts_type": "Partial<Record<(typeof FEATURE_RISK_IDS)[number], number>> | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "ids",
+          "ts_type": "readonly (typeof FEATURE_RISK_IDS)[number][]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Partial<Record<(typeof FEATURE_RISK_IDS)[number], number>>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "gatewayRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 244,
+      "params": [
+        {
+          "name": "config",
+          "ts_type": "{\n    host: string;\n    excludedAccountIds?: readonly string[];\n    boundClients?: readonly (\"claude-code\" | \"codex\" | \"omp\")[];\n  }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "readonly PoolAccount[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "proxyPatchRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 265,
+      "params": [
+        {
+          "name": "config",
+          "ts_type": "{\n    enabled: boolean;\n    host: string;\n    excludedAccountIds?: readonly string[];\n  }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "patch",
+          "ts_type": "{ host?: string; excludedAccountIds?: readonly string[] }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "accounts",
+          "ts_type": "readonly PoolAccount[]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "clientRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 288,
+      "params": [
+        {
+          "name": "id",
+          "ts_type": "(\"claude-code\" | \"codex\" | \"omp\")",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "antigravityAccountRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 294,
+      "params": [
+        {
+          "name": "gatewayOn",
+          "ts_type": "boolean",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "planningRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 300,
+      "params": [
+        {
+          "name": "before",
+          "ts_type": "{ autoStart: boolean }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "patch",
+          "ts_type": "{ autoStart?: boolean }",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "meterRisk",
+      "file": "shared/feature-risk.ts",
+      "line": 307,
+      "params": [
+        {
+          "name": "provider",
+          "ts_type": "(typeof METER_PROVIDERS)[number]",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "meterRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 311,
+      "params": [
+        {
+          "name": "before",
+          "ts_type": "readonly (typeof METER_PROVIDERS)[number][] | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "after",
+          "ts_type": "readonly (typeof METER_PROVIDERS)[number][] | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "enabledRisks",
+      "file": "shared/feature-risk.ts",
+      "line": 337,
+      "params": [
+        {
+          "name": "state",
+          "ts_type": "FeaturesInUse",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(typeof FEATURE_RISK_IDS)[number][]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "turnOffSteps",
+      "file": "shared/feature-risk.ts",
+      "line": 365,
+      "params": [
+        {
+          "name": "pending",
+          "ts_type": "readonly (typeof FEATURE_RISK_IDS)[number][]",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "state",
+          "ts_type": "FeaturesInUse",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(| { kind: \"unbind\"; client: (\"claude-code\" | \"codex\" | \"omp\") }\n  | { kind: \"gateway-off\" }\n  | { kind: \"gateway-host\"; host: string }\n  | { kind: \"exclude\"; accountIds: string[] }\n  | { kind: \"early-start-off\" }\n  | { kind: \"remove-account\"; accountId: string }\n  /** The meters to keep on: the others are turned off in one settings change. */\n  | { kind: \"meters\"; keep: (typeof METER_PROVIDERS)[number][] })[]",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "RiskNotAcknowledged",
+      "file": "shared/feature-risk.ts",
+      "line": 409,
+      "reason": "class: extends another class, public parameter properties"
+    },
+    {
+      "name": "requireRiskAck",
+      "file": "shared/feature-risk.ts",
+      "line": 423,
+      "reason": "takes or returns a function"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/v1/e%CC%81"
+body = '{"model": "claude-sonnet-4-5", "max_tokens": 16, "messages": [{"role": "user", "content": "Hi"}]}'
+
+[request.headers]
+content-type = "application/json"
+x-api-key = "sk-ant-nope"
+
+[response]
+status = 401
+
+[response.headers]
+content-type = "application/json"

@@ -1,0 +1,4 @@
+bin.name = "relay"
+args = ["proxy", "héllo wörld", "--host", "8.8.8.8"]
+status.code = 2
+fs.sandbox = true
