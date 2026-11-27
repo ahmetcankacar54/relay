@@ -6,8 +6,8 @@ use std::io::{self, Write};
 use std::sync::Arc;
 
 use relay_core::desktop_launch::{
-    ClaudeLogFiles, LaunchProgress, PageOutcome, PageWaitDeps, START_MS, launch_progress,
-    log_since, mark_log, page_booted, wait_for_page, watch_claude_launch,
+    ClaudeLogFiles, LaunchProgress, PageOutcome, PageWaitDeps, START_MS, claude_quitting,
+    launch_progress, log_since, mark_log, page_booted, wait_for_page, watch_claude_launch,
 };
 use relay_core::desktop_processes::ProcessError;
 
@@ -234,4 +234,18 @@ fn a_watch_reads_only_what_claude_logged_after_it_began() {
     assert_eq!(watch.wait(30_000), PageOutcome::Loaded);
     let (_other, empty) = log_dir();
     assert!(watch_claude_launch(&empty, Arc::new(|| Ok(true))).is_none());
+}
+
+#[test]
+fn claude_cleaning_up_to_quit_is_told_from_a_quit_it_prevented_or_never_began() {
+    // Claude 7.37's lines when the quit menu item runs: it prevents the first quit, cleans up,
+    // then quits for real.
+    let quitting = "2026-11-28 01:06:30 [info] beforeQuit: handler fired, going down\n\
+        2026-11-28 01:06:30 [info] beforeQuit: handler is not yet run, preventing quit and cleaning things up\n\
+        2026-11-28 01:06:30 [info] Starting onQuitCleanup, hiding windows\n";
+    assert!(claude_quitting(quitting));
+    assert!(!claude_quitting(
+        "2026-11-28 01:06:30 [info] beforeQuit: handler fired, going down\n"
+    ));
+    assert!(!claude_quitting(""));
 }

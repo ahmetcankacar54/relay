@@ -112,6 +112,8 @@ pub static LOGIN_ROWS: LazyLock<Vec<LoginRow>> = LazyLock::new(|| {
     for name in [
         "__Host-sessionBinding",
         "__Host-sessionBindingGrace",
+        // claude.ai's third binding cookie (seen 2026-11-27); like its siblings, the account's.
+        "__Host-sessionBindingMiss",
         "__Host-ant_trusted_device",
         "activitySessionId",
     ] {

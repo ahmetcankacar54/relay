@@ -305,6 +305,21 @@ fn a_login_like_claude_ai_cookie_that_is_not_listed_is_reported_by_name_never_by
 }
 
 #[test]
+fn claude_ais_binding_miss_cookie_is_part_of_the_login_not_an_unknown_layout() {
+    let p = plain("A");
+    let db = Connection::open(p.folder.join("Cookies")).unwrap();
+    add(&db, &cookie("claude.ai", "__Host-sessionBindingMiss"), "A");
+    drop(db);
+    let snap = SqliteCookieStorage.read(&p.dir).unwrap();
+    assert!(snap.unlisted.is_empty(), "{:?}", snap.unlisted);
+    assert!(
+        snap.rows
+            .iter()
+            .any(|row| text(row.get("name")) == "__Host-sessionBindingMiss")
+    );
+}
+
+#[test]
 fn write_puts_the_saved_login_in_place_leaves_every_other_row_byte_identical_and_drops_the_sites_device_bound_session_row()
  {
     let a = plain("A");

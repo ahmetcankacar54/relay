@@ -19,8 +19,8 @@ use crate::desktop_instances::{
     own_pid, process_rows,
 };
 use crate::desktop_launch::{
-    ClaudeSignOut, LaunchWatch, claude_log_here, claude_sign_outs, claude_signed_out,
-    watch_claude_launch,
+    ClaudeSignOut, LaunchWatch, claude_log_here, claude_quitting, claude_sign_outs,
+    claude_signed_out, log_end, log_since, watch_claude_launch,
 };
 use crate::desktop_processes::{
     ClaudeListing, ClaudeLiveness, LivenessDeps, ProcessError, assert_process_listing, kill_term,
@@ -626,6 +626,41 @@ pub fn node_desktop_host(options: NodeHostOptions) -> NodeDesktopHost {
 
 const QUIT_FAILED: &str = "Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.";
 
+const QUIT_POLL_MS: u64 = 250;
+/// How long a quit that Claude has not started on is waited for: 10 s.
+const QUIT_WAIT_POLLS: u64 = 40;
+/// How long a quit is waited for once Claude's log shows its quit cleanup: past the slowest seen
+/// (75 s), never forever.
+pub const QUIT_CLEANUP_MS: u64 = 120_000;
+
+/// Polls until Claude is gone, 10 s as Claude asks about running work and the user answers. Once
+/// Claude's log shows it cleaning up to quit (`quitting`), which it never comes back from, the
+/// wait goes on to QUIT_CLEANUP_MS: stopping earlier left a switch refused while Claude still
+/// closed on its own a minute later, with no Claude and no switch. `answer` runs after 2 s and
+/// 5 s. Whether Claude closed.
+pub fn wait_for_quit(
+    gone: &mut dyn FnMut() -> DesktopResult<bool>,
+    quitting: &mut dyn FnMut() -> bool,
+    answer: &mut dyn FnMut(),
+    sleep: &dyn Fn(u64),
+) -> DesktopResult<bool> {
+    let limit = QUIT_CLEANUP_MS / QUIT_POLL_MS;
+    for poll in 0.. {
+        if gone()? {
+            return Ok(true);
+        }
+        // Still open after 2 s, and again 3 s later: Claude may be asking before it quits.
+        if poll == 8 || poll == 20 {
+            answer();
+        }
+        if poll >= QUIT_WAIT_POLLS && (poll >= limit || !quitting()) {
+            return Ok(false);
+        }
+        sleep(QUIT_POLL_MS);
+    }
+    Ok(false)
+}
+
 impl NodeDesktopHost {
     fn pids(&self) -> DesktopResult<Vec<i64>> {
         Ok(self.liveness.pids()?)
@@ -697,6 +732,8 @@ impl DesktopHost for NodeDesktopHost {
         if active.is_empty() {
             return Ok(());
         }
+        // Where Claude's log ends before it is asked, so its quit cleanup can be told apart.
+        let log = claude_log_here().and_then(|files| log_end(&files).map(|end| (files, end)));
         match Platform::current() {
             Platform::MacOs => {
                 if self.quit_mac(answer_guard)?.is_some() {
@@ -731,20 +768,29 @@ impl DesktopHost for NodeDesktopHost {
                 }
             }
         }
-        for i in 0..40 {
-            if self.pids()?.is_empty() {
-                return Ok(());
-            }
-            // Still open after 2 s, and again 3 s later: Claude may be asking before it quits.
-            if let Some(guard) = answer_guard
-                && (i == 8 || i == 20)
-            {
-                // Unanswered: the quit fails below as it would without an answer.
-                let _ = guard();
-            }
-            sleep_ms(250);
+        let mut seen = false;
+        let closed = wait_for_quit(
+            &mut || Ok(self.pids()?.is_empty()),
+            &mut || {
+                seen = seen
+                    || log.as_ref().is_some_and(|(files, end)| {
+                        log_since(files, *end).is_ok_and(|text| claude_quitting(&text))
+                    });
+                seen
+            },
+            // Unanswered: the quit fails below as it would without an answer.
+            &mut || {
+                if let Some(guard) = answer_guard {
+                    let _ = guard();
+                }
+            },
+            &sleep_ms,
+        )?;
+        if closed {
+            Ok(())
+        } else {
+            Err(QUIT_FAILED.into())
         }
-        Err(QUIT_FAILED.into())
     }
 
     fn launch(&self, options: Option<LaunchOptions>) -> DesktopResult<()> {

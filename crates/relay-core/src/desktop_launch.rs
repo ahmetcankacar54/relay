@@ -156,6 +156,21 @@ pub fn log_since(files: &ClaudeLogFiles, offset: u64) -> io::Result<String> {
     Ok(rest + &read_range(&files.current, 0, end)?)
 }
 
+/// Claude's line once it has committed to quitting: its windows are hidden and its quit cleanup
+/// runs. The cleanup flushes telemetry over the network and can take over a minute when that is
+/// slow (75 s seen), while Claude never comes back from it.
+const QUITTING: &str = "] Starting onQuitCleanup";
+
+/// Whether `text`, Claude's log since a quit was asked, shows Claude cleaning up to quit.
+pub fn claude_quitting(text: &str) -> bool {
+    text.contains(QUITTING)
+}
+
+/// Where Claude's log ends now; None when it cannot be read.
+pub fn log_end(files: &ClaudeLogFiles) -> Option<u64> {
+    size_of(&files.current)
+}
+
 /// What `wait_for_page` reads.
 pub trait PageWaitDeps {
     /// The log since the watch began; a failed read counts as nothing new.
