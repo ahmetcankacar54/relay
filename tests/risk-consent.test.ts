@@ -1,7 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -24,7 +22,6 @@ import {
 } from "../shared/feature-risk";
 import { isExternalLink } from "../shared/external-links";
 import { en } from "../shared/i18n/catalogs/en";
-import { settingsPatchSchema, settingsSchema } from "../electron/core/store";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { I18nContext } from "../src/data/i18n";
 import { RiskConsentBody, featuresInUse } from "../src/components/RiskConsent";
@@ -277,59 +274,6 @@ test("main refuses a risky feature without its acceptance and words the refusal 
   assert.throws(
     () => requireRiskAck(accepted, ["tailscale-bind"], message),
     /accept tailscale-bind/,
-  );
-});
-
-test("main gates every risky switch, and only acknowledge-risk records an acceptance", () => {
-  const main = mainSource();
-  const preload = readFileSync(
-    new URL("../electron/preload.ts", import.meta.url),
-    "utf8",
-  );
-  // A handler's source: from its name to the next handler.
-  const handler = (name: string) =>
-    new RegExp(`handle\\("${name}"[\\s\\S]*?(?=\\n  handle\\()`).exec(
-      main,
-    )?.[0] ?? "";
-  for (const [name, gate] of [
-    ["proxy-toggle", /requireRisk\(gatewayRisks\(/],
-    ["proxy-configure", /requireRisk\(proxyPatchRisks\(/],
-    ["proxy-bind-client", /requireRisk\(clientRisks\(/],
-    ["antigravity-oauth-start", /requireRisk\(antigravityAccountRisks\(/],
-    ["create-account", /requireRisk\(antigravityAccountRisks\(/],
-    ["update-planning", /requireRisk\(planningRisks\(/],
-  ] as const)
-    assert.match(handler(name), gate, name);
-  assert.match(main, /handle\("acknowledge-risk"/);
-  assert.match(preload, /ipcRenderer\.invoke\("relay:acknowledge-risk"/);
-  // The settings patch cannot accept a risk behind the dialog's back.
-  assert.equal(
-    settingsPatchSchema.safeParse({ riskAcknowledged: { "gateway-claude": 1 } })
-      .success,
-    false,
-  );
-});
-
-test("a registry from before the risk notes has accepted none, and an unknown risk is refused", () => {
-  const { riskAcknowledged: _, ...old } = {
-    ...DEFAULT_SETTINGS,
-    planning: { ...DEFAULT_SETTINGS.planning },
-  };
-  assert.deepEqual(settingsSchema.parse(old).riskAcknowledged, {});
-  assert.deepEqual(
-    settingsSchema.parse({ ...old, riskAcknowledged: { "omp-binding": 1 } })
-      .riskAcknowledged,
-    { "omp-binding": 1 },
-  );
-  assert.equal(
-    settingsSchema.safeParse({ ...old, riskAcknowledged: { "made-up": 1 } })
-      .success,
-    false,
-  );
-  assert.equal(
-    settingsSchema.safeParse({ ...old, riskAcknowledged: { "omp-binding": 0 } })
-      .success,
-    false,
   );
 });
 

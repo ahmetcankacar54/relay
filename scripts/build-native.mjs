@@ -2,10 +2,13 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const helpers = ["desktop-automation"];
-/** The widget extension's bundle in dist-electron; electron-builder copies it to Contents/PlugIns. */
+/** Where the helper and the widget extension are built; scripts/stable-signing.mjs takes them from here. */
+export const NATIVE_DIR = fileURLToPath(new URL("../dist-native", import.meta.url));
+/** The widget extension's bundle in NATIVE_DIR; stable-signing.mjs copies it to Contents/PlugIns. */
 export const WIDGET_APPEX = "RelayWidget.appex";
 
 /**
@@ -62,9 +65,9 @@ async function toolIdentity(file) {
 /**
  * Keep byte-identical native code for unchanged source/toolchain inputs. A fresh
  * Swift link can generate a new Mach-O UUID, changing an ad-hoc Keychain identity
- * even when only Relay's JavaScript changed. This does not modify Keychain ACLs,
- * TCC consent or code-signing requirements. The final app is signed by the normal
- * electron-builder pipeline; updated native code still needs a stable certificate
+ * even when only Relay's own code changed. This does not modify Keychain ACLs,
+ * TCC consent or code-signing requirements. The final app is signed by
+ * scripts/stable-signing.mjs; updated native code still needs a stable certificate
  * identity to retain trust across versions.
  */
 export async function buildNativeHelpers() {
@@ -73,9 +76,9 @@ export async function buildNativeHelpers() {
   execFileSync(process.execPath, ["--import", "tsx", path.resolve("scripts/i18n/widget-strings.ts")], {
     stdio: "inherit",
   });
-  const widgetStrings = path.resolve("electron/native/widget/WidgetStrings.swift");
-  const outDir = path.resolve("dist-electron");
-  // Keep compiler module/cache files out of the packaged dist-electron glob.
+  const widgetStrings = path.resolve("native/widget/WidgetStrings.swift");
+  const outDir = NATIVE_DIR;
+  // Compiler module/cache files stay out of the build output.
   const cacheDir = path.resolve("output/.native-build");
   await fs.mkdir(cacheDir, { recursive: true, mode: 0o700 });
   const swift = execFileSync("/usr/bin/xcrun", ["--find", "swiftc"], {
@@ -107,14 +110,14 @@ export async function buildNativeHelpers() {
   const { version } = JSON.parse(await fs.readFile("package.json", "utf8"));
   const appex = path.join(outDir, WIDGET_APPEX);
   // The panda heads, one per mood (scripts/widget-pandas.ts), in a stable order for the build number.
-  const pandaDir = path.resolve("electron/native/widget/pandas");
+  const pandaDir = path.resolve("native/widget/pandas");
   const pandas = (await fs.readdir(pandaDir)).filter((name) => name.endsWith(".png")).sort();
   const products = [
     ...helpers.map((name) => {
       const plistFile = path.join(cacheDir, `${name}.plist`);
       return {
         name,
-        source: path.resolve("electron/native", `${name}.swift`),
+        source: path.resolve("native", `${name}.swift`),
         output: path.join(outDir, name),
         plist: helperPlist(name),
         plistFile,
@@ -134,13 +137,13 @@ export async function buildNativeHelpers() {
     {
       // Desktop widgets and containerBackground need macOS 14; on 13 Relay has no widget.
       name: "widget",
-      source: path.resolve("electron/native/widget/RelayWidget.swift"),
+      source: path.resolve("native/widget/RelayWidget.swift"),
       extraSources: [widgetStrings],
       output: path.join(appex, "Contents/MacOS/RelayWidget"),
       plist: widgetPlist(
         version,
         widgetBuild(
-          await fs.readFile(path.resolve("electron/native/widget/RelayWidget.swift")),
+          await fs.readFile(path.resolve("native/widget/RelayWidget.swift")),
           await fs.readFile(widgetStrings),
           ...(await Promise.all(pandas.flatMap((name) => [Buffer.from(name), fs.readFile(path.join(pandaDir, name))]))),
         ),
@@ -160,40 +163,6 @@ export async function buildNativeHelpers() {
         "-e",
         "-Xlinker",
         "_NSExtensionMain",
-      ],
-    },
-    {
-      name: "widget-center",
-      source: path.resolve("electron/native/widget-center.swift"),
-      header: path.resolve("electron/native/node_api_subset.h"),
-      output: path.join(outDir, "widget-center.node"),
-      targets,
-      // A Node-API addon: napi_* resolve from the Electron process that loads it.
-      args: [
-        "-emit-library",
-        "-import-objc-header",
-        path.resolve("electron/native/node_api_subset.h"),
-        "-Xlinker",
-        "-undefined",
-        "-Xlinker",
-        "dynamic_lookup",
-      ],
-    },
-    {
-      name: "window-space",
-      source: path.resolve("electron/native/window-space.swift"),
-      header: path.resolve("electron/native/node_api_subset.h"),
-      output: path.join(outDir, "window-space.node"),
-      targets,
-      // A Node-API addon, built like widget-center.
-      args: [
-        "-emit-library",
-        "-import-objc-header",
-        path.resolve("electron/native/node_api_subset.h"),
-        "-Xlinker",
-        "-undefined",
-        "-Xlinker",
-        "dynamic_lookup",
       ],
     },
   ];
@@ -226,10 +195,9 @@ export async function buildNativeHelpers() {
     }
     await fs.mkdir(path.dirname(output), { recursive: true });
     const sourceHash = sha256(
-      Buffer.concat([
-        ...(await Promise.all([source, ...(product.extraSources ?? [])].map((file) => fs.readFile(file)))),
-        ...(product.header ? [await fs.readFile(product.header)] : []),
-      ]),
+      Buffer.concat(
+        await Promise.all([source, ...(product.extraSources ?? [])].map((file) => fs.readFile(file))),
+      ),
     );
     const inputHash = sha256(
       JSON.stringify({
@@ -279,16 +247,15 @@ export async function buildNativeHelpers() {
       });
       if (
         sha256(
-          Buffer.concat([
-            ...(await Promise.all([source, ...(product.extraSources ?? [])].map((file) => fs.readFile(file)))),
-            ...(product.header ? [await fs.readFile(product.header)] : []),
-          ]),
+          Buffer.concat(
+            await Promise.all([source, ...(product.extraSources ?? [])].map((file) => fs.readFile(file))),
+          ),
         ) !== sourceHash
       )
         throw new Error(`Native source changed during compilation: ${name}`);
       // Standard local signing also binds the embedded plist in development.
       // The linker signature otherwise uses the temporary output's filename.
-      // electron-builder replaces this with the final app's signing identity.
+      // scripts/stable-signing.mjs replaces this with the final app's signing identity.
       execFileSync(
         "/usr/bin/codesign",
         [
@@ -318,3 +285,9 @@ export async function buildNativeHelpers() {
   }
   return results;
 }
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  buildNativeHelpers().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

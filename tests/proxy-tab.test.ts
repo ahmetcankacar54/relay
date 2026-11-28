@@ -1,16 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
-import { readFileSync } from "node:fs";
 import { testT } from "./i18n";
 import {
   claudeCodeSnippet,
   clientHost,
   codexSnippet,
+  compactCount,
   gatewayUrl,
   isLoopbackHost,
   maskKey,
+  moveInOrder,
   parsePort,
+  quotaAtRisk,
   resetLabel,
   validHost,
 } from "../src/lib/proxy-ui";
@@ -63,14 +64,13 @@ test("a reset reads as time left, in both languages", () => {
   assert.equal(resetLabel(3 * 1440 + 125, en), "3 d 2 h");
 });
 
-test("main, the preload and the desktop snapshot carry the gateway; quitting stops it", () => {
-  const main = mainSource();
-  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  for (const name of ["proxy-status", "proxy-toggle", "proxy-configure", "proxy-regenerate-key", "proxy-bind-client", "proxy-unbind-client"]) {
-    assert.match(main, new RegExp(`handle\\("${name}"`), name);
-    assert.match(preload, new RegExp(`ipcRenderer\\.invoke\\("relay:${name}"`), name);
-  }
-  assert.match(main, /proxyStatus: proxyStatus\(\)/);
-  assert.match(main, /settings\.proxy\?\.enabled\)\s*void serializeProxy\(startProxy\)/);
-  assert.match(main, /app\.on\("will-quit", \(\) => \{[\s\S]*?proxyServer\?\.stop\(\)/);
+test("quota at risk: a weekly window resetting within two days with a quarter or more left", () => {
+  assert.deepEqual(quotaAtRisk({ weeklyPercent: 60, weeklyResetMinutes: 600 }), { percent: 40, minutes: 600 });
+  assert.equal(quotaAtRisk({ weeklyPercent: 90, weeklyResetMinutes: 600 }), undefined);
+  assert.equal(quotaAtRisk({ weeklyPercent: 10, weeklyResetMinutes: 5 * 1_440 }), undefined);
+  assert.equal(quotaAtRisk({}), undefined);
+  assert.deepEqual(moveInOrder(["a", "b", "c"], "b", -1), ["b", "a", "c"]);
+  assert.deepEqual(moveInOrder(["a", "b"], "a", -1), ["a", "b"]);
+  assert.equal(compactCount(412_000, "tr-TR"), "412K");
+  assert.equal(compactCount(1_250_000, "tr-TR"), "1,3M");
 });

@@ -47,6 +47,10 @@ npm küçük bir başlatıcı ve isteğe bağlı bağımlılık olarak platformu
 sürümünden `relay-<sürüm>-<hedef>.tar.gz` dosyasını (Windows'ta `.zip`) indirin, açın ve `relay`'i
 PATH'inize koyun.
 
+Relay.app 1.0 ve sonrası aynı ikiliyi `Relay.app/Contents/Resources/bin/relay` konumunda taşır;
+Homebrew cask'ı (`brew install --cask ahmetcankacar54/tap/relay`) onu `relay` adıyla PATH'inize
+ekler. Uygulamayı Homebrew ile kurduysanız ayrıca bir şey kurmanız gerekmez.
+
 ## İlk hesap
 
 Claude Desktop'u açın, giriş yapın ve Code sekmesini bir kez açın. Sonra o hesabı kaydedin:

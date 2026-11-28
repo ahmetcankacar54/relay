@@ -1,16 +1,8 @@
-//! Cross-language golden files (plan Phase 1 (b)). `scripts/parity/golden.ts` writes the files in
-//! `tests/golden/` from the TS; these tests open them. `write_golden` (ignored) writes Rust's own
-//! into `tests/golden/out/` for `golden.ts --verify` to open with the TS:
-//!
-//! ```text
-//! node --import tsx scripts/parity/golden.ts
-//! cargo test -p relay-core -- --ignored write_golden
-//! node --import tsx scripts/parity/golden.ts --verify crates/relay-core/tests/golden/out
-//! ```
-//!
-//! `state/state.json` and `backup.relaybackup` are checked at the byte level and through the Rust
-//! Store and backup ports; `write_golden` writes the TS registry as the Rust Store rewrites it and
-//! a backup made and sealed by Rust.
+//! Cross-language golden files (plan Phase 1 (b)), written from the TS by
+//! `scripts/parity/golden.ts` before the Tauri cutover deleted it (`git log -1 --format=%h --
+//! scripts/parity/golden.ts` names the deleting commit; `git show <commit>^:scripts/parity/golden.ts`
+//! shows it). These tests open them with the Rust code: `state/state.json` and `backup.relaybackup`
+//! are checked at the byte level and through the Rust Store and backup ports.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,18 +11,13 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use relay_core::backup::{
-    BackupContext, BackupHost, BackupSource, ClaudeCodeSignIns, ScryptParams, collect_backup,
-    open_backup, read_backup_header, seal_backup,
-};
-use relay_core::desktop_files::{json_bytes, read_bytes, write_bytes};
-use relay_core::process_lock::{LockBy, LockDeps, LockInfo, ProcessLock};
-use relay_core::profile_lock::{ProfileLockHolder, ProfileLockKind, acquire_profile_lock};
-use relay_core::shared::proxy_types::default_proxy_config;
-use relay_core::shared::types::{AccountKind, AccountProvider, CreateAccount};
+use relay_core::backup::{open_backup, read_backup_header};
+use relay_core::desktop_files::{json_bytes, read_bytes};
+use relay_core::process_lock::{LockBy, LockInfo};
+use relay_core::profile_lock::{ProfileLockHolder, ProfileLockKind};
 use relay_core::store::{STATE_SCHEMA, Store, StoreOptions};
 use relay_core::vault_crypto::Sealer;
-use relay_core::vault_migration::{VaultState, mark_vault_format, vault_state};
+use relay_core::vault_migration::{VaultState, vault_state};
 use serde_json::{Map, Value, json};
 
 fn golden() -> PathBuf {
@@ -189,7 +176,7 @@ fn backup_golden() {
 }
 
 /// The TS registry opens in the Rust Store as schema 8 with its accounts, and a Rust write of it
-/// reads back through the same schema (golden.ts `--verify` opens it with the TS Store).
+/// reads back through the same schema.
 #[test]
 fn a_ts_state_json_opens_in_the_rust_store_and_its_rust_rewrite_reads_back() {
     let root = tempfile::tempdir().unwrap();
@@ -213,138 +200,4 @@ fn a_ts_state_json_opens_in_the_rust_store_and_its_rust_rewrite_reads_back() {
     assert_eq!(reopened.accounts, before.accounts);
     assert_eq!(reopened.settings, before.settings);
     assert_eq!(reopened.schema, Some(STATE_SCHEMA));
-}
-
-/// Writes Rust's side into `tests/golden/out/` for `golden.ts --verify`.
-#[test]
-#[ignore]
-fn write_golden() {
-    let out = golden().join("out");
-    let _ = fs::remove_dir_all(&out);
-    fs::create_dir_all(&out).unwrap();
-    let sealer = sealer();
-
-    let text = fs::read_to_string(golden().join("sealed.txt")).unwrap();
-    fs::write(out.join("sealed.bin"), sealer.seal(&text)).unwrap();
-
-    let vault = out.join("desktop-vault");
-    for (relative, text) in vault_texts() {
-        write_bytes(
-            &vault,
-            &relative,
-            Some(&sealer.seal(text.as_str().unwrap())),
-        )
-        .unwrap();
-    }
-    mark_vault_format(&vault).unwrap();
-
-    let work = tempfile::tempdir().unwrap();
-    let lock = ProcessLock::with_deps(
-        work.path().join("state.lock"),
-        LockBy::App,
-        LockDeps {
-            now: Some(Box::new(|| {
-                relay_core::fs_util::parse_iso_ms(LOCK_STARTED_AT).unwrap()
-            })),
-            ..LockDeps::default()
-        },
-    );
-    lock.try_acquire(LOCK_KIND).unwrap();
-    fs::create_dir_all(out.join("locks")).unwrap();
-    fs::copy(lock.file(), out.join("locks/state.lock")).unwrap();
-    lock.release();
-
-    let locks = work.path().join("profile-locks");
-    let mut guard = acquire_profile_lock(&locks, PROFILE_ACCOUNT, ProfileLockKind::Shared).unwrap();
-    let file = profile_lock_file(&locks);
-    let target = out.join("locks/profile").join(PROFILE_ACCOUNT);
-    fs::create_dir_all(&target).unwrap();
-    fs::copy(&file, target.join(file.file_name().unwrap())).unwrap();
-    guard.release();
-
-    // The TS registry, read by the Rust Store and written back by it.
-    let store_dir = tempfile::tempdir().unwrap();
-    fs::copy(
-        golden().join("state/state.json"),
-        store_dir.path().join("state.json"),
-    )
-    .unwrap();
-    let store = Store::open(store_dir.path(), StoreOptions::cli()).unwrap();
-    store.update(|_| {}).unwrap();
-    fs::create_dir_all(out.join("state")).unwrap();
-    fs::copy(&store.file, out.join("state/state.json")).unwrap();
-
-    // A backup of the golden accounts, made and sealed by Rust.
-    let expected: Value =
-        serde_json::from_slice(&fs::read(golden().join("backup-expected.json")).unwrap()).unwrap();
-    let params: ScryptParams = serde_json::from_value(expected["scrypt"].clone()).unwrap();
-    let data = tempfile::tempdir().unwrap();
-    let fresh = Store::open(
-        data.path(),
-        StoreOptions {
-            backup_on_open: false,
-            ..StoreOptions::default()
-        },
-    )
-    .unwrap();
-    for (name, kind, group, provider) in [
-        ("Personal", AccountKind::Personal, None, None),
-        ("Work", AccountKind::Work, Some("Acme"), None),
-        (
-            "Codex",
-            AccountKind::Personal,
-            None,
-            Some(AccountProvider::Codex),
-        ),
-    ] {
-        fresh
-            .create(&CreateAccount {
-                name: name.into(),
-                kind,
-                group: group.map(str::to_string),
-                provider,
-            })
-            .unwrap();
-    }
-    let state = fresh.state();
-    let gateway = default_proxy_config();
-    let no_keychain = NoKeychain;
-    let now = || relay_core::fs_util::parse_iso_ms("2026-11-26T00:00:00.000Z").unwrap();
-    let payload = collect_backup(
-        &BackupSource {
-            settings: &state.settings,
-            accounts: &state.accounts,
-            gateway: &gateway,
-        },
-        false,
-        &BackupContext {
-            host: BackupHost {
-                data: data.path(),
-                sealer: &sealer,
-                claude_code: &no_keychain,
-            },
-            relay_version: "0.29.0".into(),
-            platform: "darwin".into(),
-            now: &now,
-        },
-    )
-    .unwrap();
-    let passphrase = expected["passphrase"].as_str().unwrap();
-    fs::write(
-        out.join("backup.relaybackup"),
-        seal_backup(&payload, passphrase, params).unwrap(),
-    )
-    .unwrap();
-}
-
-/// A computer without Claude Code sign-ins.
-struct NoKeychain;
-
-impl ClaudeCodeSignIns for NoKeychain {
-    fn read(&self, _: &Path) -> Result<Option<String>, String> {
-        Ok(None)
-    }
-    fn write(&self, _: &Path, _: &str) -> Result<(), String> {
-        Ok(())
-    }
 }

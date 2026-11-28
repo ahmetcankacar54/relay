@@ -253,7 +253,7 @@ const BACKEND_ERRORS: ReadonlyArray<readonly [backend: string, id: MessageId]> =
   ["journal.json’daki kurtarma yedeği açılamadı, bu yüzden kayıtlı girişler yeni biçime taşınmadı.", "errors.relayCannotOpenTheRecoveryBackup"],
   ["Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.", "errors.relayCannotOpenItsOldSaved"],
   ["Relay eski kayıtlı girişleri bu sefer açamadı (macOS anahtarlarına erişim izni vermedi). Hiçbir şey taşınmadı; Relay bir sonraki açılışta yeniden dener.", "errors.relayCannotOpenItsOldSaved"],
-  // Core errors thrown in English since the i18n migration (electron/core, main), then their former Turkish text.
+  // Core errors thrown in English since the i18n migration (crates/relay-core, relay-app), then their former Turkish text.
   ["The data folder cannot be a symbolic link.", "errors.theDataFolderCannotBeA"],
   ["Veri klasörü sembolik bağlantı olamaz.", "errors.theDataFolderCannotBeA"],
   ["Invalid settings file.", "errors.invalidSettingsFile"],
@@ -324,7 +324,7 @@ interface Pattern {
   params(m: RegExpExecArray, language: Locale): Params;
 }
 const patterns: Pattern[] = [
-  // electron/core/vault-key.ts (VaultKeyError) and vault-migration.ts, around the Keychain item.
+  // crates/relay-core vault_key (VaultKeyError) and vault_migration, around the Keychain item.
   { match: /^The Keychain item "([^"]+)" was not found\.$/, id: "errors.keychainItemNotFound", params: (m) => ({ item: m[1] }) },
   {
     match: /^The Keychain item "([^"]+)" could not be read\. Unlock the login keychain and try again\.$/,

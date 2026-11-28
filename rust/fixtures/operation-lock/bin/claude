@@ -1,0 +1,12 @@
+#!/bin/sh
+# The Claude Code CLI as Relay's parity fixture needs it; never the real one.
+case "$1 $2" in
+  "--version "*) echo "2.1.300 (Claude Code)"; exit 0 ;;
+  "auth status")
+    if [ -f "$CLAUDE_CONFIG_DIR/fixture-auth-status.json" ]; then cat "$CLAUDE_CONFIG_DIR/fixture-auth-status.json"; exit 0; fi
+    echo '{"loggedIn":false}'; exit 1 ;;
+  "auth login"|"auth logout") exit 0 ;;
+esac
+echo "claude (parity fixture): $*"
+echo "profile: $(basename "$CLAUDE_CONFIG_DIR")"
+exit 0

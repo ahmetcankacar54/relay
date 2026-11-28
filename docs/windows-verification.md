@@ -7,13 +7,15 @@ in CI (see [What CI already covers](#what-ci-already-covers)).
 
 Run it on a real Windows 11 x64 PC, or a full Windows 11 x64 virtual machine
 (Hyper-V, VMware, Parallels). Wine and CrossOver do not count: Relay depends on
-DPAPI, the Windows login items, the NSIS installer and the real Claude app.
+WebView2, DPAPI, the Windows login items, the NSIS installer and the real Claude app.
 
 ## Before you start
 
 You need:
 
 - Windows 11 x64, 23H2 or later, with a normal (non-administrator) user account.
+  WebView2 comes with Windows 11; on Windows 10 the installer fetches it when it
+  is missing.
 - The Claude app for Windows from claude.ai/download, signed in to nothing yet,
   or signed out.
 - Two Claude accounts you own (two emails). Pro or Max, so the limits show.
@@ -28,14 +30,13 @@ Write down for the report: the Windows version (`winver`), the Claude app versio
 
 | What | Where |
 | --- | --- |
-| Relay (installed) | `%LOCALAPPDATA%\Programs\Relay` unless you chose another folder |
+| Relay (installed) | `%LOCALAPPDATA%\Relay` unless you chose another folder |
 | Relay's data | `%APPDATA%\Relay` |
 | Main-process errors | `%APPDATA%\Relay\logs\main-errors.log` |
 | Usage-reading problems | `%APPDATA%\Relay\usage-issues.json` |
 | Switch, draft and update events | `%APPDATA%\Relay\draft-events.json` |
 | Gateway requests | `%APPDATA%\Relay\gateway-requests.jsonl` |
-| Crash dumps (never uploaded) | `%APPDATA%\Relay\Crashpad` |
-| Update downloads | `%LOCALAPPDATA%\relay-workspace-updater` |
+| Update downloads | `%APPDATA%\Relay\updates` |
 | Claude app | `%LOCALAPPDATA%\AnthropicClaude` or `%LOCALAPPDATA%\Programs\Claude` |
 | Claude app's data | `%APPDATA%\Claude` |
 
@@ -59,7 +60,9 @@ Mark each one **pass**, **fail** or **not run** in the report.
 
 Expected: the installer finishes without an error; Relay is in the Start menu and
 in Settings → Apps → Installed apps; it starts when the installer's last page asks
-it to.
+it to. When `<previous>` is a 0.x release, installing the release under test over
+it (step 9) removes the 0.x entry from Installed apps and keeps `%APPDATA%\Relay`:
+only one Relay is listed afterwards.
 
 Logs: the installer has none of its own; on a failure, take a screenshot of the
 error.
@@ -80,7 +83,8 @@ Expected:
 - Starting Relay a second time while it runs brings the same window forward; no
   second window, no second tray icon.
 
-Logs: `main-errors.log`; on a crash, the newest file in `Crashpad`.
+Logs: `main-errors.log`; on a crash, the Application Error entry for `Relay.exe`
+in Event Viewer → Windows Logs → Application.
 
 ### 3. Add the first account (Claude app sign-in)
 
@@ -184,10 +188,14 @@ Expected: Relay finds the release under test, downloads it, and installs it only
 after you approve. Relay restarts on the new version (Settings shows it) with the
 accounts and settings from before. Relay checks the installer against the
 release's `SHA256SUMS.txt` and its Ed25519 signature `SHA256SUMS.txt.sig`; a
-release without a valid signature is refused and nothing installs.
+release without a valid signature is refused and nothing installs. From a 0.x
+`<previous>`, its built-in updater (still served by the release's `latest.yml`)
+runs the 1.0 installer with its wizard: finish it with **Run Relay** checked; the
+0.x entry leaves Installed apps and the accounts stay.
 
 Logs: `draft-events.json` (update events), the download in
-`%LOCALAPPDATA%\relay-workspace-updater`, `main-errors.log`.
+`%APPDATA%\Relay\updates` (a 0.x Relay downloads to
+`%LOCALAPPDATA%\relay-workspace-updater`), `main-errors.log`.
 
 ### 10. Diagnostics export
 
@@ -208,8 +216,8 @@ Attach this zip to the report.
 
 Expected:
 
-- The reset leaves `%APPDATA%\Relay` empty (apart from files Chromium recreates
-  while Relay runs), Relay starts as on a first run, and the Claude app stays
+- The reset leaves `%APPDATA%\Relay` empty (apart from files Relay recreates
+  while it runs), Relay starts as on a first run, and the Claude app stays
   signed in to the account that was open.
 - The uninstaller removes the program folder, the Start menu entry and the
   Startup apps entry. The Claude app still opens, signed in.
@@ -238,7 +246,7 @@ All of these must hold:
 1. Steps 1 to 10 pass on a real Windows 11 x64 machine or full VM, on a release
    built by the Release workflow (not a local build), reported through the form.
    Step 11's uninstall part passes; its reset part passes once the build has it.
-2. No step left a new line in `main-errors.log` or a crash dump.
+2. No step left a new line in `main-errors.log` or a crash in Event Viewer.
 3. The boot smoke passes on `windows-latest` in the Check workflow for that commit.
 4. Bugs found during the run are fixed and the failing steps run again.
 
@@ -250,14 +258,13 @@ this file. Windows 10 stays "should work" until the checklist passes there too.
 ## What CI already covers
 
 The Check workflow (`.github/workflows/check.yml`) runs on `windows-latest` and
-`ubuntu-latest` as well as macOS: typecheck, all unit tests, the build, and an
-unsigned package. On Windows and Linux it also runs the boot smoke,
-`npm run test:boot` (`scripts/smoke-boot.mjs`), twice: on the build in
-`dist-electron`, then on the packaged `app.asar` electron-builder produced. The
-smoke starts Relay with a fresh profile in a temporary folder, waits until its
-window answers over IPC with an empty account list, quits it the normal way and
-fails unless the process ends by itself with exit code 0, nothing in
-`main-errors.log` and no crash dump.
+`ubuntu-latest` as well as macOS: typecheck, the UI tests, `cargo test --workspace`,
+the build, and an unsigned package. On Windows and Linux it also runs the boot
+smoke, `npm run test:boot` (`scripts/smoke-boot.mjs`), on `target/debug/relay-app`
+built with `cargo build -p relay-app --features smoke`. The smoke starts Relay with
+a fresh profile in a temporary folder, waits until its main page has loaded the
+app's state, lets it quit by itself and fails unless the process ends with exit
+code 0 within 120 s and nothing in `main-errors.log`.
 
 It does not cover anything that needs the Claude app, an account, the network,
 the installer, SmartScreen, DPAPI with a real user profile, login items or

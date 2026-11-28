@@ -11,7 +11,7 @@ ve de un vistazo cada límite de 5 horas y semanal, y deja que una pasarela loca
 [![Última versión](https://img.shields.io/github/v/release/ahmetcankacar54/relay?style=flat-square&label=versi%C3%B3n&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases/latest)
 [![Descargas](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=descargas&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
-[![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#instalación)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-000000?style=flat-square&logo=apple&logoColor=white)](#instalación)
 [![Linux · Windows](https://img.shields.io/badge/-Linux%20compatible%20%C2%B7%20Windows%20experimental-2f6feb?style=flat-square)](#plataformas)
 [![15 idiomas](https://img.shields.io/badge/idiomas-15-6b645e?style=flat-square)](#15-idiomas)
 [![MIT](https://img.shields.io/badge/licencia-MIT-6b645e?style=flat-square)](LICENSE)
@@ -49,12 +49,14 @@ Relay es gratuito, de código abierto (MIT), funciona por completo en tu Mac y n
 
 | Plataforma | Descarga | Notas |
 | --- | --- | --- |
-| **macOS 13+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | La plataforma principal: panel de la barra de menús, widget, cambio automático. |
-| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Cambio manual, límites, cuentas, pasarela. Experimental: aún no probado en una máquina real. |
-| **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Funciona con el Claude Desktop oficial para Linux. |
+| **macOS 14+** (Apple silicon) | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | La plataforma principal: panel de la barra de menús, widget, cambio automático. |
+| **Windows 10/11** (x64) | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | Cambio manual, límites, cuentas, pasarela. Necesita WebView2 (incluido en Windows 11). Experimental: aún no probado en una máquina real. |
+| **Linux** (x64) | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Funciona con el Claude Desktop oficial para Linux. Necesita webkit2gtk-4.1 (Ubuntu 22.04 o posterior). |
 | **CLI** (macOS) | `npm i -g @ahmetcankacar/relay` | `relay switch`, `relay usage`, `relay run` … consulta la [guía de la CLI](cli/README.md). |
 
 Cada versión incluye un `SHA256SUMS.txt` y se actualiza sola desde GitHub Releases.
+
+Relay 1.0 es una app nativa hecha con Tauri: un núcleo en Rust bajo la misma interfaz de React. Una instalación de Relay 0.x (la app de Electron) se actualiza sola a la 1.0 sin moverse de sitio y conserva todas las cuentas y ajustes; en Windows, el nuevo instalador también quita la entrada de la versión anterior de Aplicaciones instaladas. La CLI `relay` también es un binario nativo: npm instala un pequeño lanzador con el binario de tu plataforma, y Relay.app lleva el mismo (`Relay.app/Contents/Resources/bin/relay`, que el cask de Homebrew pone en tu PATH).
 
 > [!IMPORTANT]
 > **Relay está firmado con el certificado propio del autor, pero Apple no lo ha notarizado.** La primera vez que lo abras, macOS lo bloqueará una vez:
@@ -162,7 +164,7 @@ English, Türkçe, Deutsch, Français, Español, Português (Brasil), Italiano, 
 
 macOS es la plataforma principal. La versión para Windows todavía no se ha probado en una máquina real; los informes son bienvenidos.
 
-**Uso de recursos:** en reposo en la barra de menús, Relay usa alrededor del 0,1 % de CPU y unos 395 MB de memoria entre todos sus procesos (435 MB como máximo), alrededor del 2 % de CPU con su ventana abierta en primer plano, y no muestra ningún aviso del Llavero (Mac con Apple silicon; [cómo se mide](docs/development.md#resource-use)).
+**Uso de recursos:** en reposo en la barra de menús, Relay se mantiene por debajo del 1 % de CPU y de 250 MB de memoria entre todos sus procesos, y no muestra ningún aviso del Llavero ([cómo se mide](docs/development.md#resource-use)).
 
 ## Privacidad y seguridad
 
@@ -170,7 +172,7 @@ macOS es la plataforma principal. La versión para Windows todavía no se ha pro
 - **Con quién se comunica:** con los servicios que tus cuentas ya usan —`claude.ai`, `api.anthropic.com` (uso y perfil), `chatgpt.com` / `api.openai.com` (Codex), `cloudcode-pa.googleapis.com` (Antigravity)—, con `api.github.com` para sus propias actualizaciones y con `github.com` para descargar un asistente de versión fija (CLIProxyAPI, con su SHA-256 comprobado) la primera vez que Relay lo necesita para una cuenta de Antigravity, y de nuevo cuando una actualización fija una versión nueva.
 - **Las credenciales** nunca llegan a la interfaz. Las sesiones guardadas de la app de Claude se cifran con una clave guardada en el Llavero de macOS (Keychain), o en Secret Service o KWallet en Linux. Los archivos que contienen la clave de la pasarela se escriben para que solo tú puedas leerlos.
 - **Los archivos de la app de Claude** solo se modifican mientras está cerrada, tras una copia de seguridad cifrada y un registro de escritura.
-- **App reforzada:** ventanas de renderizado en sandbox, sin herramientas de desarrollo en las versiones publicadas, solo las propias páginas de Relay pueden llamar a la app, y una política de seguridad de contenido estricta.
+- **App reforzada:** sin herramientas de desarrollo en las versiones publicadas, solo las propias páginas de Relay pueden llamar a la app, y una política de seguridad de contenido estricta.
 
 ¿Encontraste un problema? Infórmalo en privado; consulta [SECURITY.md](SECURITY.md).
 
@@ -227,13 +229,14 @@ Cierra Relay desde la barra de menús, mueve `Relay.app` a la Papelera y elimina
 
 ## Compilar desde el código fuente
 
-Requisitos: Node.js 22.12+ y, en macOS, las Xcode Command Line Tools.
+Requisitos: Node.js 22.12+, Rust (con rustup; `rust-toolchain.toml` elige la versión) y, en macOS, las Xcode Command Line Tools. Para ejecutar Relay hace falta macOS 14+, Windows 10/11 con WebView2 o Linux con webkit2gtk-4.1.
 
 ```sh
 npm ci
-npm run dev        # Electron + Vite
+npm run dev        # la app de Tauri con la interfaz de Vite, que se recarga al editar
 npm run dev:ui     # vista previa en el navegador con cuentas de ejemplo (?demo=50 para cincuenta)
-npm test           # más de 3000 pruebas
+npm test           # pruebas de la interfaz
+cargo test --workspace   # pruebas del núcleo en Rust, la app y la CLI
 npm run dist:mac:local   # compilación local firmada (consulta docs/macos-local-signing.md)
 ```
 

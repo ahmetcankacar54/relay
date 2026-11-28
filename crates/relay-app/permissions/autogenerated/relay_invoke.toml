@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-relay-invoke"
+description = "Enables the relay_invoke command without any pre-configured scope."
+commands.allow = ["relay_invoke"]
+
+[[permission]]
+identifier = "deny-relay-invoke"
+description = "Denies the relay_invoke command without any pre-configured scope."
+commands.deny = ["relay_invoke"]

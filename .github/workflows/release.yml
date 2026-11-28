@@ -1,11 +1,13 @@
 name: Release
 
-# A version tag builds the Windows and Linux assets and attaches them, with their SHA256SUMS.txt
-# (signed when the RELAY_UPDATE_SIGNING_KEY secret is set), to a DRAFT release. The signed macOS
-# DMGs need the local certificate, so they are added from the Mac with `npm run release`, which
-# re-signs the combined checksums and publishes. See docs/development.md, "Releasing".
-# A beta tag (vX.Y.Z-beta.N, scripts/release-channel.mjs) makes a pre-release draft, and
-# electron-builder writes its updater files as beta.yml and beta-linux.yml.
+# A version tag builds the Windows and Linux installers of the Tauri app (crates/relay-app,
+# scripts/tauri-build.mjs) and the relay CLI archives for those platforms
+# (scripts/build-cli-packages.mjs), and attaches them, with their SHA256SUMS.txt (signed when the
+# RELAY_UPDATE_SIGNING_KEY secret is set), to a DRAFT release. The signed macOS DMGs and CLI
+# archives need the local certificate, so they are added from the Mac with `npm run release`,
+# which re-signs the combined checksums and publishes. See docs/development.md, "Releasing".
+# A beta tag (vX.Y.Z-beta.N, scripts/release-channel.mjs) makes a pre-release draft, and its
+# updater files are beta.yml and beta-linux.yml.
 on:
   push:
     tags:
@@ -14,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (e.g. v0.29.0 or v0.30.0-beta.1)'
+        description: 'Tag to build (e.g. v1.0.0 or v1.1.0-beta.1)'
         required: true
         type: string
 
@@ -36,19 +38,21 @@ jobs:
         include:
           - os: windows-latest
             name: windows
-            target: --win nsis
+            cli: --target x86_64-pc-windows-msvc
             files: |
               release/*.exe
-              release/*.exe.blockmap
               release/latest.yml
               release/beta.yml
+              release/relay-*.zip
           - os: ubuntu-latest
             name: linux
-            target: --linux AppImage
+            # Both Linux targets build in cross's older images, for a lower glibc floor.
+            cli: --target x86_64-unknown-linux-gnu --target aarch64-unknown-linux-gnu --cross
             files: |
               release/*.AppImage
               release/latest-linux.yml
               release/beta-linux.yml
+              release/relay-*.tar.gz
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -67,15 +71,35 @@ jobs:
           ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
 
+      # The installers carry the names, and get the latest.yml / latest-linux.yml, that a 0.x
+      # install's electron-updater looks for (scripts/tauri-build.mjs, electron-update-yml.mjs).
+      - name: Check the app version
+        run: |
+          conf=$(node -p "require('./crates/relay-app/tauri.conf.json').version")
+          if [ "v$conf" != "$TAG" ]; then
+            echo "crates/relay-app/tauri.conf.json is at $conf, not ${TAG#v}." >&2
+            exit 1
+          fi
+
+      - name: Tauri's Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libdbus-1-dev pkg-config
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
 
-      # The gateway runs as the Rust `relay` binary (relay __gateway), packaged with the app.
+      # The app, and the relay CLI it carries in its resources.
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: 1.97.1
+
+      - name: Install cross
+        if: runner.os == 'Linux'
+        run: cargo install cross --locked --version 0.2.5
 
       - run: npm ci
 
@@ -84,17 +108,22 @@ jobs:
           npm run typecheck
           npm test
 
+      # No certificate on these runners: the installer and AppImage are unsigned; updates are
+      # trusted through the signed SHA256SUMS.txt instead. Writes release/Relay-Setup-<v>-x64.exe
+      # and latest.yml, or release/Relay-<v>-x86_64.AppImage and latest-linux.yml (beta.yml,
+      # beta-linux.yml).
       - name: Build ${{ matrix.name }} assets
-        run: |
-          npm run build
-          # electron-builder's afterPack hook copies it into the app (scripts/relay-binary.mjs).
-          node scripts/relay-binary.mjs --arch x64
-          npx electron-builder ${{ matrix.target }} --x64 --publish never
-          node scripts/smoke-gateway.mjs
+        run: node scripts/tauri-build.mjs --output release
         env:
-          # No certificate on these runners: the installer and AppImage are unsigned; updates
-          # are trusted through the signed SHA256SUMS.txt instead.
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # linuxdeploy, an AppImage itself, then runs without FUSE.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+
+      # relay-<version>-<target>.tar.gz (.zip on Windows): the CLI alone, for `curl | tar`
+      # installs. Beside the installers, so every asset uploads from one folder.
+      - name: Build the CLI archives
+        run: |
+          node scripts/build-cli-packages.mjs ${{ matrix.cli }}
+          cp cli/npm/dist/relay-*.tar.gz cli/npm/dist/relay-*.zip release/ 2>/dev/null || true
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

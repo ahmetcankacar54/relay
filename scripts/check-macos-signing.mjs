@@ -63,11 +63,8 @@ if (!appFlags.split(",").includes("runtime"))
   throw new Error("The app is not signed with the hardened runtime.");
 
 const helpers = ["desktop-automation"].map((name) => {
-  const file = path.join(
-    contents,
-    "Resources/app.asar.unpacked/dist-electron",
-    name,
-  );
+  // Beside the app's own executable (scripts/stable-signing.mjs HELPER_RELATIVE).
+  const file = path.join(contents, "MacOS", name);
   execFileSync("/usr/bin/codesign", ["--verify", "--strict", file], {
     stdio: ["ignore", "pipe", "pipe"],
   });

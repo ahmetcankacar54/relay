@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Gathers a release's files into release/share/<version>/ and writes SHA256SUMS.txt, so the
-// GitHub release carries what Relay's own updater reads:
+// GitHub release carries what Relay's updaters read:
 //   macOS   Relay-<v>-arm64.dmg (+ x64) and SHA256SUMS.txt   (Relay's own updater)
-//   Windows Relay-Setup-<v>-x64.exe, its .blockmap, latest.yml        (electron-updater)
-//   Linux   Relay-<v>-x86_64.AppImage, latest-linux.yml               (electron-updater)
+//   Windows Relay-Setup-<v>-x64.exe, latest.yml               (Relay 0.x's electron-updater)
+//   Linux   Relay-<v>-x86_64.AppImage, latest-linux.yml       (Relay 0.x's electron-updater)
 // (beta.yml and beta-linux.yml instead for a beta, X.Y.Z-beta.N: scripts/release-channel.mjs)
 // plus INSTALL.txt from docs/share/install-notes.md. Build first: the DMG with
 //   node scripts/stable-signing.mjs --dmg --arch arm64 --output release/share/<v>
-// and Windows/Linux with electron-builder into release/share/<v>-win and <v>-linux.
+// and Windows/Linux with node scripts/tauri-build.mjs --output release/share/<v>-win (-linux).
 // Usage: node scripts/release-assets.mjs <version>; prints the files to upload.
 import fs from "node:fs";
 import path from "node:path";
@@ -28,7 +28,6 @@ const wanted = [
   { file: from(version, `Relay-${version}-arm64.dmg`), required: true },
   { file: from(version, `Relay-${version}-x64.dmg`), required: false },
   { file: from(`${version}-win`, `Relay-Setup-${version}-x64.exe`), required: true },
-  { file: from(`${version}-win`, `Relay-Setup-${version}-x64.exe.blockmap`), required: false },
   { file: from(`${version}-win`, windowsYml), required: true },
   { file: from(`${version}-linux`, `Relay-${version}-x86_64.AppImage`), required: true },
   { file: from(`${version}-linux`, linuxYml), required: true },

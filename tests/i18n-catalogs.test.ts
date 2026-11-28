@@ -104,15 +104,20 @@ test("a rich message that fails in its language reads in English", () => {
 });
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-function sources(dir: string, out: string[] = []) {
+function sources(dir: string, extension: RegExp, out: string[] = []) {
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) sources(full, out);
-    else if (/\.(ts|tsx)$/.test(name)) out.push(full);
+    if (statSync(full).isDirectory()) sources(full, extension, out);
+    else if (extension.test(name)) out.push(full);
   }
   return out;
 }
-const code = ["src", "shared", "electron"].flatMap((d) => sources(path.join(ROOT, d)));
+const code = ["src", "shared"].flatMap((d) => sources(path.join(ROOT, d), /\.(ts|tsx)$/));
+/** The backend: the Rust crates' sources (their tests may quote Turkish on purpose). */
+const backend = readdirSync(path.join(ROOT, "crates")).flatMap((crate) => {
+  const dir = path.join(ROOT, "crates", crate, "src");
+  return statSync(dir, { throwIfNoEntry: false })?.isDirectory() ? sources(dir, /\.rs$/) : [];
+});
 
 test("no inline Turkish/English pairs or language forks are left", () => {
   const pair = /\bt\(\s*["`][^"`]*["`]\s*,\s*["`]/;
@@ -131,14 +136,12 @@ test("no inline Turkish/English pairs or language forks are left", () => {
 });
 
 test("backend errors are thrown in English", () => {
-  const turkish = /throw new Error\(\s*["`][^"`]*[çğıöşüÇĞİÖŞÜ]/;
-  const found = code
-    .filter((f) => f.includes(`${path.sep}electron${path.sep}`))
-    .flatMap((file) =>
-      readFileSync(file, "utf8")
-        .split("\n")
-        .flatMap((line, i) => (turkish.test(line) ? [`${path.relative(ROOT, file)}:${i + 1}`] : [])),
-    );
+  const turkish = /(Err\(|anyhow!\(|bail!\(|format!\()\s*"[^"]*[çğıöşüÇĞİÖŞÜ]/;
+  const found = backend.flatMap((file) =>
+    readFileSync(file, "utf8")
+      .split("\n")
+      .flatMap((line, i) => (turkish.test(line) ? [`${path.relative(ROOT, file)}:${i + 1}`] : [])),
+  );
   assert.deepEqual(found, []);
 });
 

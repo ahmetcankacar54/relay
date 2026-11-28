@@ -1,4 +1,4 @@
-// Writes electron/native/widget/WidgetStrings.swift from the catalogs' `widget.*` ids, so the
+// Writes native/widget/WidgetStrings.swift from the catalogs' `widget.*` ids, so the
 // widget's gallery names and fallbacks speak every language Relay does.
 // Run: node --import tsx scripts/i18n/widget-strings.ts [--check]
 import { readFileSync, writeFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { CATALOGS } from "../../shared/i18n/catalogs/all";
 import { LOCALES } from "../../shared/i18n/locales";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
-const out = path.join(ROOT, "electron/native/widget/WidgetStrings.swift");
+const out = path.join(ROOT, "native/widget/WidgetStrings.swift");
 const swift = (s: string) => JSON.stringify(s).replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => `\\u{${h}}`);
 const ids = Object.keys(CATALOGS.en).filter((id) => id.startsWith("widget.")).sort();
 const lines = [

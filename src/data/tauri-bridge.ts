@@ -1,10 +1,9 @@
-// The Tauri shell's window bridge: the same RelayAPI the Electron preload exposes, over the two
-// Tauri commands `relay_invoke` and `relay_send` and the app's push events. Every method keeps
-// its Electron channel name (electron/preload.ts, electron/switch-preload.ts).
+// The window bridge: RelayAPI over the two Tauri commands `relay_invoke` and `relay_send` and
+// the app's push events. Every method has its `relay:<name>` channel (crates/relay-app ipc).
 //
-// Push events carry the Electron `webContents.send` arguments as one JSON array payload:
+// Push events carry their arguments as one JSON array payload:
 // `emit_to(label, "relay:navigate", [page, intent])`, `emit_to(label, "relay:changed", [])`.
-// A window listens for its own label only, as `webContents.send` reaches one window: a plain
+// A window listens for its own label only, as each event is for one window: a plain
 // `listen` would also hear events emitted to the other windows.
 import { invoke } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -27,7 +26,7 @@ type SendMethod =
   "setPanelHeight" | "closePanel" | "terminalWrite" | "terminalResize";
 export type InvokeMethod = Exclude<keyof RelayAPI, ListenerMethod | SendMethod>;
 
-/** Request and reply calls: `ipcRenderer.invoke` in Electron, `relay_invoke` here. */
+/** Request and reply calls, through `relay_invoke`. */
 export const CHANNELS = {
   inspectContinuation: "relay:inspect-continuation",
   armContinuation: "relay:arm-continuation",
@@ -149,7 +148,7 @@ export const CHANNELS = {
   stop: "relay:stop",
 } as const satisfies Record<InvokeMethod, string>;
 
-/** Fire-and-forget calls: `ipcRenderer.send` in Electron, `relay_send` here. */
+/** Fire-and-forget calls, through `relay_send`. */
 export const SEND_CHANNELS = {
   setPanelHeight: "relay:panel-size",
   closePanel: "relay:panel-close",
@@ -157,7 +156,7 @@ export const SEND_CHANNELS = {
   terminalResize: "relay:resize",
 } as const satisfies Record<SendMethod, string>;
 
-/** Push events from the app: `ipcRenderer.on` in Electron, `listen` here. */
+/** Push events from the app, through `listen`. */
 export const EVENT_CHANNELS = {
   onNavigate: "relay:navigate",
   onSwitchRequest: "relay:switch-request",
@@ -175,7 +174,7 @@ export const inTauri = (): boolean =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /**
- * A failed call rejects with the Error Electron's `ipcRenderer.invoke` gives, so
+ * A failed call rejects with an Error prefixed "Error invoking remote method", so
  * `errorMessage` (src/data/error-message.ts) and every caller read it the same way.
  */
 function remoteError(channel: string, error: unknown): Error {
@@ -191,9 +190,9 @@ function remoteError(channel: string, error: unknown): Error {
 }
 
 /**
- * Settles once every listener subscribed so far is registered. Electron's `ipcRenderer.on` is
- * synchronous, so the UI subscribes and then asks (the switch window's `onScene` then `ready`);
- * Tauri's `listen` is not, so each call waits for the subscriptions made before it.
+ * Settles once every listener subscribed so far is registered. The UI subscribes and then asks
+ * (the switch window's `onScene` then `ready`), but Tauri's `listen` is asynchronous, so each
+ * call waits for the subscriptions made before it.
  */
 let listening: Promise<unknown> = Promise.resolve();
 
@@ -206,7 +205,7 @@ function invokeChannel<T>(channel: string, args: unknown[]): Promise<T> {
 }
 
 function sendChannel(channel: string, args: unknown[]): void {
-  // Electron's send has no reply; a refused send is only worth a log line.
+  // A send has no reply; a refused send is only worth a log line.
   void listening
     .then(() => invoke("relay_send", { channel, args }))
     .catch((error: unknown) => console.error(error));

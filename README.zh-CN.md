@@ -11,7 +11,7 @@
 [![最新版本](https://img.shields.io/github/v/release/ahmetcankacar54/relay?style=flat-square&label=%E7%89%88%E6%9C%AC&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases/latest)
 [![下载量](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%E4%B8%8B%E8%BD%BD&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
-[![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#安装)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-000000?style=flat-square&logo=apple&logoColor=white)](#安装)
 [![Linux · Windows](https://img.shields.io/badge/-Linux%20%E6%94%AF%E6%8C%81%20%C2%B7%20Windows%20%E5%AE%9E%E9%AA%8C%E6%80%A7-2f6feb?style=flat-square)](#平台)
 [![15 种语言](https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-15-6b645e?style=flat-square)](#15-种语言)
 [![MIT](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-6b645e?style=flat-square)](LICENSE)
@@ -49,12 +49,14 @@ Relay 免费、开源（MIT），完全在你的 Mac 上运行，除了你本来
 
 | 平台 | 下载 | 说明 |
 | --- | --- | --- |
-| **macOS 13+**（Apple silicon） | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | 主要平台：菜单栏面板、小组件、自动切换。 |
-| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手动切换、限额、账号、网关。实验性：尚未在真实机器上测试。 |
-| **Linux**（x64） | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | 配合官方 Claude Desktop for Linux 使用。 |
+| **macOS 14+**（Apple silicon） | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | 主要平台：菜单栏面板、小组件、自动切换。 |
+| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手动切换、限额、账号、网关。需要 WebView2（Windows 11 已内置）。实验性：尚未在真实机器上测试。 |
+| **Linux**（x64） | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | 配合官方 Claude Desktop for Linux 使用。需要 webkit2gtk-4.1（Ubuntu 22.04 或更高版本）。 |
 | **CLI**（macOS） | `npm i -g @ahmetcankacar/relay` | `relay switch`、`relay usage`、`relay run` … 见 [CLI 指南](cli/README.md)。 |
 
 每个版本都附带 `SHA256SUMS.txt`，并通过 GitHub Releases 自动更新。
+
+Relay 1.0 是用 Tauri 构建的原生应用：同样的 React 界面之下是 Rust 核心。Relay 0.x（Electron 版）会原地自动更新到 1.0，所有账号和设置都会保留；在 Windows 上，新的安装程序还会从“已安装的应用”中移除旧版本的条目。`relay` CLI 同样是原生二进制文件：npm 会安装一个小型启动器和适合你平台的二进制文件，Relay.app 里也带有同一个（`Relay.app/Contents/Resources/bin/relay`，Homebrew cask 会把它加入 PATH）。
 
 > [!IMPORTANT]
 > **Relay 使用作者自己的证书签名，但未经 Apple 公证。** 第一次打开时，macOS 会拦截一次：
@@ -162,7 +164,7 @@ English、Türkçe、Deutsch、Français、Español、Português (Brasil)、Ital
 
 macOS 是主要平台。Windows 版本尚未在真机上测试过；欢迎反馈。
 
-**资源占用：**在菜单栏中空闲时，Relay 的所有进程合计占用约 0.1% 的 CPU、约 395 MB 内存（最多 435 MB）；窗口在前台打开时约占 2% 的 CPU；且不会弹出钥匙串授权提示（Apple 芯片 Mac；[测量方法](docs/development.md#resource-use)）。
+**资源占用：**在菜单栏中空闲时，Relay 的所有进程合计 CPU 占用控制在 1% 以下、内存控制在 250 MB 以下，且不会弹出钥匙串授权提示（[测量方法](docs/development.md#resource-use)）。
 
 ## 隐私与安全
 
@@ -170,7 +172,7 @@ macOS 是主要平台。Windows 版本尚未在真机上测试过；欢迎反馈
 - **它会连接的地方：** 你的账号本来就在使用的服务——`claude.ai`、`api.anthropic.com`（用量和个人资料）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）——用于自身更新的 `api.github.com`，以及 `github.com`：在 Relay 首次为 Antigravity 账号需要时，以及更新固定了新版本时，下载一个固定版本、经 SHA-256 校验的辅助工具（CLIProxyAPI）。
 - **凭据** 永远不会到达界面。已保存的 Claude 应用登录使用保存在 macOS 钥匙串（Keychain）中的密钥加密（Linux 上为 Secret Service 或 KWallet）。保存网关密钥的文件写入时设为仅你本人可读。
 - **Claude 应用的文件** 只会在应用关闭时修改，且事先会做加密备份并记录写入日志。
-- **加固的应用：** 渲染窗口运行在沙盒中，发布版本不含开发者工具，只有 Relay 自己的页面能调用应用，并启用严格的内容安全策略。
+- **加固的应用：** 发布版本不含开发者工具，只有 Relay 自己的页面能调用应用，并启用严格的内容安全策略。
 
 发现问题？请私下报告——见 [SECURITY.md](SECURITY.md)。
 
@@ -227,13 +229,14 @@ Relay 目前尚未经过 Apple 公证。每个版本按照[安装](#安装)中�
 
 ## 从源码构建
 
-要求：Node.js 22.12+；在 macOS 上还需要 Xcode Command Line Tools。
+要求：Node.js 22.12+、Rust（通过 rustup 安装，版本由 `rust-toolchain.toml` 决定）；在 macOS 上还需要 Xcode Command Line Tools。运行 Relay 需要 macOS 14+、带 WebView2 的 Windows 10/11，或带 webkit2gtk-4.1 的 Linux。
 
 ```sh
 npm ci
-npm run dev        # Electron + Vite
+npm run dev        # 使用 Vite 界面的 Tauri 应用，编辑后自动重新加载
 npm run dev:ui     # 使用示例账号的浏览器预览（?demo=50 生成五十个）
-npm test           # 3000+ 个测试
+npm test           # 界面测试
+cargo test --workspace   # Rust 核心、应用和 CLI 的测试
 npm run dist:mac:local   # 签名的本地构建（见 docs/macos-local-signing.md）
 ```
 

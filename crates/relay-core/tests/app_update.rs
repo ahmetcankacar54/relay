@@ -1055,11 +1055,14 @@ fn windows_and_linux_the_driver_downloads_and_verifies_the_installer_and_install
         .join("0.16.0")
         .join("Relay-Setup-0.16.0-x64.exe");
     assert_eq!(fs::read(&installer).unwrap(), b"installer bytes");
-    // Windows: the installer runs silently, detached; Relay quits after.
+    // Windows: the installer runs silently, detached, and reopens Relay; Relay quits after.
     driver.install().unwrap();
     assert_eq!(
         *release.launched.lock().unwrap(),
-        vec![(installer, vec!["/S".to_owned()])]
+        vec![(
+            installer,
+            ["/S", "/UPDATE", "/R"].map(str::to_owned).to_vec()
+        )]
     );
     // A second check keeps the verified download.
     let (result, _) = check(&release.stable());
@@ -1239,24 +1242,20 @@ fn windows_and_linux_an_installer_the_signed_sums_do_not_vouch_for_is_deleted_ne
 }
 
 #[test]
-fn the_installer_names_the_updater_expects_are_package_jsons_artifact_names() {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../package.json");
-    let pkg: Value = serde_json::from_slice(&fs::read(manifest).unwrap()).unwrap();
-    let name = |template: &Value, ext: &str| {
-        template
-            .as_str()
-            .unwrap()
-            .replace("${version}", "1.2.3")
-            .replace("${ext}", ext)
+fn the_installer_names_the_updater_expects_are_the_release_scripts_names() {
+    // scripts/electron-update-yml.mjs names the installers a release publishes (and the
+    // latest.yml Relay 0.x reads); the updater must look for exactly those.
+    let script =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/electron-update-yml.mjs");
+    let script = fs::read_to_string(script).unwrap();
+    let name = |platform: &str| {
+        let start = format!("if (platform === \"{platform}\") return `");
+        let from = script.find(&start).expect("installerName branch") + start.len();
+        let end = script[from..].find('`').expect("closing backtick");
+        script[from..from + end].replace("${version}", "1.2.3")
     };
-    assert_eq!(
-        installer_name(Platform::Windows, "1.2.3"),
-        name(&pkg["build"]["win"]["artifactName"], "exe")
-    );
-    assert_eq!(
-        installer_name(Platform::Linux, "1.2.3"),
-        name(&pkg["build"]["linux"]["artifactName"], "AppImage")
-    );
+    assert_eq!(installer_name(Platform::Windows, "1.2.3"), name("win32"));
+    assert_eq!(installer_name(Platform::Linux, "1.2.3"), name("linux"));
     // The macOS updater picks the DMG for the running architecture: Apple silicon and Intel.
     let assets: Vec<ReleaseAsset> = ["arm64", "x64"]
         .iter()

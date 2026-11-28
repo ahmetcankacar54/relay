@@ -2,7 +2,7 @@
 //! Relay writes into Claude Code's status line. A Mac app started from the Dock gets a bare
 //! PATH, so the usual install folders are searched too: npm's global folder, Homebrew, Volta,
 //! pnpm and every nvm version. Only then is the user's login shell asked, with a deadline. The
-//! CLI the app bundles next to its executable is `bundled_relay_cli`.
+//! CLI the app bundles in its resources is `bundled_relay_cli`.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -358,13 +358,15 @@ pub fn find_relay_cli(options: FindRelayCliOptions) -> Option<PathBuf> {
         .map(|s| relay_cli_binary(&s, platform, arch))
 }
 
-/// The relay CLI the app ships beside its own executable (`Relay.app/Contents/MacOS/relay`,
-/// `relay.exe` next to `Relay.exe`); None in a development run or when it is missing.
+/// The relay CLI the app ships in its resources, `bin/relay` (`bin/relay.exe` on Windows):
+/// `Relay.app/Contents/Resources/bin/relay` on macOS, as Relay 0.29 had it. Never beside the
+/// executable: macOS and Windows file systems ignore case, so `relay` there is `Relay` itself.
+/// None in a development run or when it is missing.
 pub fn bundled_relay_cli(paths: &dyn AppPaths) -> Option<PathBuf> {
     if !paths.is_packaged() {
         return None;
     }
     let name = if cfg!(windows) { "relay.exe" } else { "relay" };
-    let file = paths.exe_path().parent()?.join(name);
+    let file = paths.resources_dir().join("bin").join(name);
     file.is_file().then_some(file)
 }

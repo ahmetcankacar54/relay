@@ -23,7 +23,7 @@ export function shortcutFor(
   return choice?.[action] ?? DEFAULT_SHORTCUTS[action];
 }
 
-/** Modifiers in the order Relay writes them, with the spellings Electron also accepts. */
+/** Modifiers in the order Relay writes them, with the spellings accelerators also accept. */
 const MODIFIERS: Record<string, string> = {
   commandorcontrol: "CommandOrControl",
   cmdorctrl: "CommandOrControl",
@@ -46,7 +46,7 @@ const MODIFIER_ORDER = [
   "Super",
 ];
 
-/** Named keys, by their lower-case spelling, as Electron spells them. */
+/** Named keys, by their lower-case spelling, as accelerators spell them. */
 const NAMED_KEYS: Record<string, string> = Object.fromEntries(
   [
     "Space",
@@ -95,7 +95,7 @@ function keyName(text: string) {
 }
 
 /**
- * `text` as one Electron accelerator in Relay's spelling (modifiers in a fixed order, then one
+ * `text` as one accelerator in Relay's spelling (modifiers in a fixed order, then one
  * key), or undefined when it is not one Relay registers. A global shortcut takes the keys from
  * every app, so it needs ⌘, Ctrl, Alt or Super unless its key is a function key: Shift alone
  * would take a capital letter from typing.

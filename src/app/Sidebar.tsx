@@ -103,7 +103,7 @@ function NavItem({
           : undefined
       }
       className={cn(
-        "relative flex items-center rounded-md text-sm whitespace-nowrap text-sidebar-muted outline-none hover:bg-foreground/5 hover:text-sidebar-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [-webkit-app-region:no-drag]",
+        "relative flex items-center rounded-md text-sm whitespace-nowrap text-sidebar-muted outline-none hover:bg-foreground/5 hover:text-sidebar-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
         compact
           ? "size-10 justify-center"
           : "h-8 w-full justify-start gap-2.5 px-2.5 text-left",
@@ -178,7 +178,7 @@ function ResizeHandle({
       aria-valuemax={SIDEBAR.max}
       aria-valuenow={shown}
       tabIndex={0}
-      className="group/handle absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize outline-none [-webkit-app-region:no-drag] focus-visible:bg-ring/30"
+      className="group/handle absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize outline-none focus-visible:bg-ring/30"
       onPointerDown={(e) => {
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -288,7 +288,7 @@ export function Sidebar({
       title={macWording(relay?.data?.diagnostics?.platform) ? `${toggleLabel} (⌃⌘S)` : toggleLabel}
       aria-expanded={!collapsed}
       onClick={onToggle}
-      className="text-sidebar-muted [-webkit-app-region:no-drag] hover:text-sidebar-foreground"
+      className="text-sidebar-muted hover:text-sidebar-foreground"
     >
       <SidebarIcon className="size-4.5" />
     </Button>
@@ -302,8 +302,12 @@ export function Sidebar({
       style={compact ? undefined : { width }}
     >
       {/* The traffic lights sit in this strip, which also drags the window; the toggle sits beside them. */}
-      <div data-tauri-drag-region="deep" className="relative h-13 w-full shrink-0 [-webkit-app-region:drag]">
-        {!compact && toggle && <div className="absolute top-2.75 left-17.5">{toggle}</div>}
+      <div data-tauri-drag-region="deep" className="relative h-13 w-full shrink-0">
+        {!compact && toggle && (
+          <div data-tauri-drag-region="false" className="absolute top-2.75 left-17.5">
+            {toggle}
+          </div>
+        )}
       </div>
       <nav
         aria-label={t("sidebar.pages")}
@@ -352,7 +356,7 @@ export function Sidebar({
       {summary && !compact && (
         <div
           data-slot="account-card"
-          className="relative mt-8 mb-1.5 w-full rounded-lg border bg-card/80 p-2.5 text-xs [-webkit-app-region:no-drag]"
+          className="relative mt-8 mb-1.5 w-full rounded-lg border bg-card/80 p-2.5 text-xs"
         >
           {panda}
           <button

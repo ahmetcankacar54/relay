@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Ed25519 signatures over a release's SHA256SUMS.txt. Windows and Linux updates come through
- * electron-updater, whose latest.yml only carries a SHA-512 served from the same place as the
- * installer; the signature is the anchor that host cannot forge. Relay embeds the public key
- * (electron/core/update-signing-key.ts) and installs an update only when the signed sums list it.
+ * Ed25519 signatures over a release's SHA256SUMS.txt. Relay 0.x on Windows and Linux updates
+ * through electron-updater, whose latest.yml only carries a SHA-512 served from the same place as
+ * the installer; the signature is the anchor that host cannot forge. Relay embeds the public key
+ * (crates/relay-core/src/update_signing_key.rs) and installs an update only when the signed sums
+ * list it.
  *
  * The private key never enters the repository. It is read from, in order:
  *   RELAY_UPDATE_SIGNING_KEY       the PEM itself (CI secrets)
@@ -43,7 +44,7 @@ export const DEFAULT_KEY_FILE = path.join(
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const EMBEDDED_KEY_FILE = path.join(
   root,
-  "electron/core/update-signing-key.ts",
+  "crates/relay-core/src/update_signing_key.rs",
 );
 
 /** The configured private key file. */
@@ -91,7 +92,7 @@ export function createSigningKey(file = signingKeyFile()) {
   return privateKey;
 }
 
-/** The public half as SPKI DER, base64: the form electron/core/update-signing-key.ts embeds. */
+/** The public half as SPKI DER, base64: the form crates/relay-core update_signing_key.rs embeds. */
 export function publicKeyBase64(key) {
   return createPublicKey(key)
     .export({ type: "spki", format: "der" })
@@ -131,7 +132,7 @@ export function verifySums(text, signature, publicBase64) {
 export function embeddedPublicKey(file = EMBEDDED_KEY_FILE) {
   const match = fs
     .readFileSync(file, "utf8")
-    .match(/UPDATE_SIGNING_PUBLIC_KEY\s*=\s*"([A-Za-z0-9+/=]+)"/);
+    .match(/UPDATE_SIGNING_PUBLIC_KEY[^=]*=\s*"([A-Za-z0-9+/=]+)"/);
   if (!match) throw new Error(`No UPDATE_SIGNING_PUBLIC_KEY in ${file}.`);
   return match[1];
 }
@@ -316,7 +317,7 @@ function main(args) {
       `${existed ? "Using the existing" : "Created the"} private key ${file} (keep it secret, back it up).`,
     );
     console.log(
-      `Public key (embed in electron/core/update-signing-key.ts): ${publicBase64}`,
+      `Public key (embed in crates/relay-core/src/update_signing_key.rs): ${publicBase64}`,
     );
     console.log(`Fingerprint: ${publicKeyFingerprint(publicBase64)}`);
     return;

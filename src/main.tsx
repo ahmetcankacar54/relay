@@ -8,13 +8,8 @@ import { api } from "./data/useRelay";
 import { pauseMotionWithoutAttention } from "./lib/motion";
 import "./styles/theme.css";
 pauseMotionWithoutAttention();
-// The main window on macOS has a vibrant sidebar (electron/main.ts, crates/relay-app); the
-// browser preview has none.
-// Phase 6: drop the window.relay fallback
-if (
-  (/\bElectron\//.test(navigator.userAgent) && navigator.userAgent.includes("Macintosh")) ||
-  (inTauri() && navigator.platform.startsWith("Mac"))
-)
+// The main window on macOS has a vibrant sidebar (crates/relay-app); the browser preview has none.
+if (inTauri() && navigator.platform.startsWith("Mac"))
   document.documentElement.dataset.vibrancy = "";
 const root = createRoot(document.getElementById("root")!);
 // Development only: review sheets for the mascot artwork and the lost and found's pins.

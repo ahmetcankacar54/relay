@@ -1,6 +1,5 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
 import { act, createElement, type ReactElement } from "react";
 import { LostFound, describe, weekLabel } from "../src/pages/usage/LostFound";
 import { resetCollectionForTests } from "../src/data/lost-found-collection";
@@ -343,13 +342,4 @@ test("with nothing found yet the panda says when the first pin will turn up", as
   } finally {
     await view.done();
   }
-});
-
-test("the preload exposes the collection and the main process answers it", async () => {
-  const fs = await import("node:fs/promises");
-  const preload = await fs.readFile(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  const main = mainSource();
-  assert.match(preload, /lostFoundCollection: \(\) =>\s*ipcRenderer\.invoke\("relay:lost-found-collection"\)/);
-  assert.match(main, /handle\("lost-found-collection", \(\) =>\s*lostFoundCollection\(lostFoundSource\(\)\)/);
-  assert.doesNotMatch(main + preload, /relay:lost-found"|handle\("lost-found"/);
 });

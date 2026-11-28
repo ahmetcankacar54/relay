@@ -11,7 +11,7 @@ export default defineConfig(
     ignores: [
       "node_modules/",
       "dist/",
-      "dist-electron/",
+      "dist-native/",
       "release/",
       "output/",
       "cli/npm/dist/",

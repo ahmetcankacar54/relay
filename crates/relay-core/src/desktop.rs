@@ -198,8 +198,8 @@ use crate::config_sync::{ConfigSyncOptions, sync_profile_config};
 use crate::desktop_files::{
     AUTH_KEYS, COOKIE_FILES, CarriedConversation, DESKTOP_PREFERENCES, HistoryPlanOptions,
     JsonObject, OutsideSource, Scope, Writes, directories, identity, is_uuid, json_bytes,
-    plan_history_detailed, plan_permission_preferences, read_bytes, read_object, scope_path,
-    write_bytes,
+    pane_layout, pane_layout_sessions, plan_history_detailed, plan_pane_layout,
+    plan_permission_preferences, read_bytes, read_object, scope_path, write_bytes,
 };
 use crate::desktop_history::summarize_history;
 use crate::desktop_launch::PageOutcome;
@@ -367,6 +367,10 @@ pub struct DesktopHooks {
     /// How long Relay waits, before it quits Claude, for a sign-in to reach the cookie file.
     pub session_settle_ms: i64,
     pub session_poll_ms: u64,
+    /// How long, after a switch started Claude, Relay waits for Claude's page to empty the split
+    /// view it had (it does once it knows the account), and how often it looks.
+    pub layout_clear_ms: i64,
+    pub layout_poll_ms: u64,
     /// When, after a switch started Claude, Relay looks whether Claude signed the account out.
     pub sign_in_verify_ms: Vec<u64>,
     pub on_sign_in_rejected: Option<AccountHook>,
@@ -398,6 +402,8 @@ impl Default for DesktopHooks {
             session_ends: Arc::new(session_ends_ms),
             session_settle_ms: 40_000,
             session_poll_ms: 2_000,
+            layout_clear_ms: 20_000,
+            layout_poll_ms: 500,
             sign_in_verify_ms: vec![8_000, 20_000],
             on_sign_in_rejected: None,
             extension_offline: Arc::new(default_offline),
@@ -1328,6 +1334,9 @@ impl DesktopManager {
             let saved = self.read_login(&desktop.account_uuid)?;
             // The Claude app account the switch left, once the swap is written.
             let mut left: Option<String> = None;
+            // The split view Claude showed for the account left; its page empties it on the
+            // first start under another account.
+            let mut layout: Option<Value> = None;
             let mut change = || -> DesktopResult<()> {
                 assert_closed_switch()?;
                 let current = self.save_current(&self.root, false)?;
@@ -1350,6 +1359,9 @@ impl DesktopManager {
                     if let Some(current) = &current {
                         self.permission_preferences(&mut changes, current, &target);
                     }
+                    layout = read_object(&self.root, DESKTOP_PREFERENCES)
+                        .ok()
+                        .and_then(|config| pane_layout(config.as_ref()));
                     changes.insert("config.json".into(), Some(json_bytes(&config)));
                     for file in COOKIE_FILES {
                         changes.insert(file.into(), saved.cookie(file));
@@ -1386,6 +1398,9 @@ impl DesktopManager {
                 )?;
             }
             switched = Some(target.clone());
+            if let Some(layout) = layout.as_ref().filter(|_| !options.closed_only) {
+                self.restore_pane_layout(layout, &desktop);
+            }
             // After Claude is back, still inside the lock: profile files never need Claude closed.
             if let Some(left) = &left {
                 self.config_sync_step(left, &target);
@@ -2397,6 +2412,74 @@ impl DesktopManager {
             self.diag("claude-quic-off", json!({ "learned": true }));
         }
         Ok(())
+    }
+
+    /// Puts back the split view a switch left behind. Claude's page empties it the first time it
+    /// starts under another account and keeps it when it starts again on the same one, so once
+    /// it has emptied it, Claude is quit, the view is written back with the sessions this
+    /// account has (history transfer gives them the same ids), and Claude starts once more. A
+    /// view the page kept, or whose front session this account lacks, is left alone; nothing
+    /// here fails the switch.
+    fn restore_pane_layout(&self, layout: &Value, desktop: &AccountDesktop) {
+        let sessions = pane_layout_sessions(layout).len();
+        let hooks = self.hooks();
+        let until = self.now() + hooks.layout_clear_ms;
+        let config = loop {
+            let config = read_object(&self.root, DESKTOP_PREFERENCES).ok().flatten();
+            if pane_layout(config.as_ref()).is_none() {
+                break config;
+            }
+            if self.now() >= until {
+                self.diag(
+                    "pane-layout",
+                    json!({ "result": "kept", "sessions": sessions }),
+                );
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(hooks.layout_poll_ms));
+        };
+        let Ok(folder) = scope_path("claude-code-sessions", &scope_of(desktop)) else {
+            return;
+        };
+        let folder = self.root.join(folder);
+        let has_session =
+            |id: &str| !id.contains(['/', '\\']) && folder.join(format!("{id}.json")).is_file();
+        if plan_pane_layout(config.as_ref(), layout, &has_session).is_none() {
+            self.diag(
+                "pane-layout",
+                json!({ "result": "missing", "sessions": sessions }),
+            );
+            return;
+        }
+        if self.host.quit(None).is_err() {
+            self.diag(
+                "pane-layout",
+                json!({ "result": "quit-failed", "sessions": sessions }),
+            );
+            return;
+        }
+        // Planned again with Claude closed: it writes its preferences on the way out.
+        let next = read_object(&self.root, DESKTOP_PREFERENCES)
+            .ok()
+            .flatten()
+            .and_then(|config| plan_pane_layout(Some(&config), layout, &has_session));
+        let restored = next
+            .as_ref()
+            .and_then(|next| pane_layout(Some(next)))
+            .map_or(0, |layout| pane_layout_sessions(&layout).len());
+        let written = next.map_or(Ok(()), |next| {
+            write_bytes(&self.root, DESKTOP_PREFERENCES, Some(&json_bytes(&next)))
+        });
+        // Claude starts again whatever was written.
+        let relaunched = self.relaunch();
+        self.diag(
+            "pane-layout",
+            json!({
+                "result": if restored > 0 && written.is_ok() && relaunched.is_ok() { "restored" } else { "failed" },
+                "sessions": sessions,
+                "restored": restored,
+            }),
+        );
     }
 
     /// One launch, without HTTP/3 when `quic_off`; the watch then says how its page did. None

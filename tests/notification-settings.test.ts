@@ -12,7 +12,6 @@ import {
   DEFAULT_NOTIFICATIONS,
   notificationSettings,
 } from "../shared/notifications";
-import { settingsPatchSchema, settingsSchema } from "../electron/core/store";
 import {
   DEFAULT_SETTINGS,
   type RelaySettings,
@@ -71,27 +70,6 @@ test("a registry without the group reads every notification as on, ready again f
     { ...DEFAULT_NOTIFICATIONS, limitWeekly: false },
   );
   assert.equal(DEFAULT_NOTIFICATIONS.limitReset, "in-use");
-});
-
-test("the saved settings and a patch take the group and refuse unknown types", () => {
-  const notifications = { limitFiveHour: false, limitReset: "all" as const };
-  assert.deepEqual(
-    settingsSchema.parse({ ...DEFAULT_SETTINGS, notifications }).notifications,
-    notifications,
-  );
-  assert.equal(
-    "notifications" in settingsSchema.parse(DEFAULT_SETTINGS),
-    false,
-  );
-  assert.deepEqual(settingsPatchSchema.parse({ notifications }), {
-    notifications,
-  });
-  assert.throws(() =>
-    settingsPatchSchema.parse({ notifications: { limitReset: "sometimes" } }),
-  );
-  assert.throws(() =>
-    settingsPatchSchema.parse({ notifications: { gateway: false } }),
-  );
 });
 
 test("every notification type sits in one Notifications group in Settings → General", () => {

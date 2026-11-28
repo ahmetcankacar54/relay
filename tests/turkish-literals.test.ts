@@ -5,7 +5,7 @@ import path from "node:path";
 import ts from "typescript";
 
 /**
- * The main process and shared code show the user only catalog messages: a Turkish string literal
+ * Shared code shows the user only catalog messages: a Turkish string literal
  * there is a message an English reader would see untranslated. Comments are not literals and are
  * not scanned; the catalogs are where every language lives. What remains is listed with its reason.
  */
@@ -103,11 +103,9 @@ function turkishLiterals(file: string) {
   return found;
 }
 
-const files = ["electron", "shared"]
-  .flatMap((dir) => sources(dir))
-  .map((f) => f.split(path.sep).join("/"));
+const files = sources("shared").map((f) => f.split(path.sep).join("/"));
 
-test("electron and shared hold no Turkish string literals outside the catalogs and the allow-list", () => {
+test("shared holds no Turkish string literals outside the catalogs and the allow-list", () => {
   const found: string[] = [];
   for (const file of files) {
     if (file in ALLOWED_FILES) continue;

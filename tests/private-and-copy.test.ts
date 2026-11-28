@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
 import fs from "node:fs";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -82,12 +81,7 @@ test("the places that show an account's e-mail blur it", () => {
     assert.match(read(path), pattern, path);
 });
 
-test("Copy goes through main: the window's clipboard API is refused in Relay's windows", () => {
-  const main = mainSource();
-  assert.match(main, /setPermissionCheckHandler\(\(\) => false\)/);
-  assert.match(main, /handle\("copy-text", \(text\) => \{\s*clipboard\.writeText\(z\.string\(\)\.max\(16_384\)\.parse\(text\)\);/);
-  const preload = fs.readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  assert.match(preload, /copyText: \(text\) => ipcRenderer\.invoke\("relay:copy-text", text\)/);
+test("Copy goes through the backend: the window's clipboard API is not used", () => {
   const proxy = fs.readFileSync(new URL("../src/pages/proxy/hooks.ts", import.meta.url), "utf8");
   assert.match(proxy, /api\.copyText\(text\)/);
   assert.doesNotMatch(proxy, /navigator\.clipboard/);

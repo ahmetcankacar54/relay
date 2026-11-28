@@ -1,62 +1,103 @@
 #!/usr/bin/env node
-// Runs one relay command against a fresh parity fixture (scripts/parity/fixture-home.ts), so every
-// recorded case starts from the same world however the cases before it changed theirs:
-//   node scripts/parity/fixture-run.mjs <relay.js or binary> [args...]
-// The fixture is built in a new temp folder, the command runs in the sandbox (sandbox.mjs) with
-// stdin, stdout and stderr passed through, and the folder is deleted after; the exit code is the
-// command's. The command gets a clean environment: the fixture's, TZ=UTC, a system PATH, the
-// parity clock (RELAY_PARITY_NOW, clock.mjs), and
-// - RELAY_PARITY_SCENARIO: the fixture's variations (fixture-home.ts SCENARIOS);
+// Runs one relay command against a fresh parity fixture, so every recorded case starts from the
+// same world however the cases before it changed theirs:
+//   node scripts/parity/fixture-run.mjs <relay binary> [args...]
+// The fixture is a frozen snapshot (rust/fixtures/<scenario>/, see rust/README.md) copied into a
+// new temp folder; the command runs in the sandbox (sandbox.mjs) with stdin, stdout and stderr
+// passed through, and the folder is deleted after; the exit code is the command's. The command
+// gets a clean environment: the fixture's, TZ=UTC, a system PATH, the parity clock
+// (RELAY_PARITY_NOW, read by the `parity` cargo feature), and
+// - RELAY_PARITY_SCENARIO: the fixture's variation, one of rust/fixtures/<scenario>.json;
 // - RELAY_PARITY_ENV_<NAME>=<value>: <NAME> set to <value> ("" unsets it), where `{root}`,
 //   `{home}` and `{relay}` are the fixture's folder, home folder and Relay data folder.
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { register } from "tsx/esm/api";
 import { sandboxed } from "./sandbox.mjs";
 
-/** The instant every recorded run starts at, unless RELAY_PARITY_NOW names another. */
+/** The instant every recorded run starts at: the one the snapshots were frozen at. */
 export const PARITY_NOW = "2026-11-26T09:41:15.000Z";
-const CLOCK = new URL("./clock.mjs", import.meta.url).href;
+const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "rust", "fixtures");
 const PASS = "RELAY_PARITY_ENV_";
 
-/** The command line that runs `target`: a script through this Node with the parity clock, anything else as it is. */
-export function targetCommand(target) {
-  const resolved = path.resolve(target);
-  return /\.[cm]?js$/.test(resolved)
-    ? [process.execPath, "--import", CLOCK, resolved]
-    : [resolved];
+/**
+ * The snapshot of `scenario` (a comma-separated list, as the recordings name it): `default` for
+ * none, else the names sorted and joined with `+`.
+ */
+function snapshotName(scenario) {
+  const names = [
+    ...new Set(
+      (scenario ?? "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  ].sort();
+  return names.length ? names.join("+") : "default";
 }
 
 /**
- * A fresh fixture under the temp folder and the clean environment that points relay at it. This
- * process takes the parity clock first; the fixture's times are relative to the parity instant
- * itself, the one the command's clock starts at, so the command never sees them shifted by how
- * long the fixture took to build.
+ * Copies the frozen snapshot `name` into `root`. The snapshots hold three placeholders for what
+ * only a live fixture knows: `@ROOT@` (the fixture folder) in the files the manifest marks
+ * `substitute`, `"@PID@"` (the live holder of a busy lock: this process) in those files and in
+ * file names, and `@CRED-<account id>@` in the fake keychain's item names (Claude Code's
+ * credential service, named after the profile folder's path).
  */
-export async function fixtureEnvironment(scenario, options = {}) {
-  process.env.RELAY_PARITY_NOW ??= PARITY_NOW;
-  await import(CLOCK);
-  register();
-  const { buildFixtureHome, parseScenarios } =
-    await import("./fixture-home.ts");
+function thaw(name, root) {
+  const manifestFile = path.join(FIXTURES, `${name}.json`);
+  if (!fs.existsSync(manifestFile))
+    throw new Error(`No frozen parity fixture "${name}" in rust/fixtures.`);
+  const { env, entries } = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  const pid = String(process.pid);
+  const credential = (id) => {
+    const profile = path.resolve(root, "relay", "profiles", id).normalize("NFC");
+    const hash = crypto.createHash("sha256").update(profile).digest("hex");
+    return `Claude Code-credentials-${hash.slice(0, 8)}`.replace(/[^A-Za-z0-9]/g, "_");
+  };
+  const live = (stored) =>
+    stored
+      .replaceAll("@PID@", pid)
+      .replace(/@CRED-([^@/]+)@/g, (_, id) => credential(id));
+  for (const entry of entries) {
+    const target = path.join(root, live(entry.path));
+    if (entry.dir) {
+      fs.mkdirSync(target, { mode: 0o700 });
+      continue;
+    }
+    let bytes = fs.readFileSync(path.join(FIXTURES, name, entry.path));
+    if (entry.substitute)
+      bytes = Buffer.from(
+        bytes
+          .toString("utf8")
+          .replaceAll("@ROOT@", root)
+          .replaceAll('"@PID@"', pid),
+      );
+    fs.writeFileSync(target, bytes, { mode: entry.mode });
+  }
+  // Modes last: the umask narrowed them on creation, and a folder must stay writable until full.
+  for (const entry of entries.toReversed())
+    fs.chmodSync(path.join(root, live(entry.path)), entry.mode);
+  return Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [key, value.replaceAll("@ROOT@", root)]),
+  );
+}
+
+/** A fresh fixture under the temp folder and the clean environment that points relay at it. */
+export function fixtureEnvironment(scenario) {
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "relay-parity-")),
   );
-  const fixture = await buildFixtureHome(root, {
-    ...options,
-    scenarios: parseScenarios(scenario),
-    now: Date.parse(process.env.RELAY_PARITY_NOW),
-  });
+  const fixture = thaw(snapshotName(scenario), root);
   const tmp = path.join(root, "tmp");
   fs.mkdirSync(tmp, { mode: 0o700 });
   const env = {
     PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
     TZ: "UTC",
     TMPDIR: tmp,
-    RELAY_PARITY_NOW: process.env.RELAY_PARITY_NOW,
+    RELAY_PARITY_NOW: PARITY_NOW,
     ...fixture,
   };
   for (const [name, value] of Object.entries(process.env)) {
@@ -102,12 +143,10 @@ if (
     );
     process.exit(2);
   }
-  const { root, env } = await fixtureEnvironment(
-    process.env.RELAY_PARITY_SCENARIO,
-  );
+  const { root, env } = fixtureEnvironment(process.env.RELAY_PARITY_SCENARIO);
   let code;
   try {
-    code = await run(sandboxed([...targetCommand(target), ...args]), env);
+    code = await run(sandboxed([path.resolve(target), ...args]), env);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

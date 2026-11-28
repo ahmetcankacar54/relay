@@ -407,7 +407,10 @@ impl UpdateDriver for WinLinuxUpdateDriver {
             return Err(UpdateError::new("No update is ready to install."));
         };
         if self.deps.platform == Platform::Windows {
-            (self.deps.launch)(&installer, &["/S".to_owned()]).map_err(UpdateError)?;
+            // Tauri's NSIS template: /UPDATE keeps the user's shortcut choices and skips the
+            // WebView2 step; /R reopens Relay once the silent install is done.
+            let args = ["/S", "/UPDATE", "/R"].map(str::to_owned);
+            (self.deps.launch)(&installer, &args).map_err(UpdateError)?;
         } else {
             let target = self.replace_appimage(&installer)?;
             (self.deps.relaunch)(&target);

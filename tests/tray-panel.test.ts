@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { trayTitle, trayTooltip, type TraySnapshot } from "../shared/tray";
-import { PANEL_WIDTH, clampPanelHeight, panelPosition } from "../shared/tray-panel";
 import type { Account, AccountUsage } from "../shared/types";
 import "./i18n";
 
@@ -48,17 +47,4 @@ test("the tooltip says what the title's number is", () => {
     trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW + 3_600_000),
     "Relay — A · usage data is out of date, read 2 h ago",
   );
-});
-
-test("the panel opens under the icon and stays on screen", () => {
-  const work = { x: 0, y: 25, width: 1440, height: 875 };
-  const size = { width: PANEL_WIDTH, height: 500 };
-  assert.deepEqual(panelPosition({ x: 700, y: 0, width: 30, height: 24 }, work, size), { x: 535, y: 28 });
-  assert.deepEqual(panelPosition({ x: 1420, y: 0, width: 30, height: 24 }, work, size), { x: 1072, y: 28 });
-  assert.deepEqual(panelPosition({ x: 2, y: 0, width: 30, height: 24 }, work, size), { x: 8, y: 28 });
-  assert.equal(clampPanelHeight(50, 875), 200);
-  assert.equal(clampPanelHeight(2000, 875), 859);
-  assert.equal(clampPanelHeight(512.4, 875), 513);
-  // The panel reports its exact, fractional height; rounding it down left the document scrollable.
-  assert.equal(clampPanelHeight(477.28125, 875), 478);
 });

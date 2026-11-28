@@ -1,6 +1,6 @@
 //! The pre-v2 vault seal (Electron safeStorage). macOS is checked against real Electron bytes
 //! (`scripts/parity/safe-storage-golden.cjs`, mock keychain, committed); Windows and Linux against
-//! vectors built here in Chromium's OSCrypt layout, and in CI against a blob Electron writes in
+//! vectors built here in Chromium's OSCrypt layout, and in CI against a blob Electron 44 writes in
 //! the same job (`system_golden_from_env`), since their keys never leave the machine.
 
 use std::cell::RefCell;

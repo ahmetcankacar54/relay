@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/relay-core", "crates/relay-gateway", "crates/relay-i18n", "crates/relay-cli"]
+members = ["crates/relay-core", "crates/relay-gateway", "crates/relay-i18n", "crates/relay-cli", "crates/relay-app"]
 
 [workspace.package]
 edition = "2024"

@@ -1,0 +1,21 @@
+#!/bin/sh
+dir="$(dirname "$0")"
+echo "$*" >> "$dir/argv.log"
+svc=""; prev=""
+for a in "$@"; do if [ "$prev" = "-s" ]; then svc="$a"; fi; prev="$a"; done
+key="$(printf '%s' "$svc" | tr -c 'A-Za-z0-9' '_')"
+if [ "$1" = "-i" ]; then
+  input="$(cat)"
+  printf '%s\n' "$input" >> "$dir/stdin.log"
+  value="$(printf '%s\n' "$input" | grep add-generic-password | sed -E 's/.* -w ([^ ]+).*/\1/' | head -1)"
+  if [ ! -f "$dir/item-Relay_Vault_Key" ] && [ -n "$value" ]; then printf '%s' "$value" > "$dir/item-Relay_Vault_Key"; fi
+  exit 0
+fi
+if [ "$1" = "find-generic-password" ]; then
+  [ -f "$dir/force-exit" ] && exit "$(cat "$dir/force-exit")"
+  if [ "$key" = "Relay_Vault_Key" ] && [ -f "$dir/race" ] && [ ! -f "$dir/race-done" ]; then touch "$dir/race-done"; cp "$dir/race" "$dir/item-Relay_Vault_Key"; exit 44; fi
+  [ -f "$dir/item-$key" ] || exit 44
+  cat "$dir/item-$key"; echo
+  exit 0
+fi
+exit 9

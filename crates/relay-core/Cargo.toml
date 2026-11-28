@@ -48,6 +48,8 @@ webpki-roots = "1.0.12"
 workspace = true
 
 [dev-dependencies]
+# The recorded cases (tests/recorded_cases) hold JS numbers: read them to the exact double.
+serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
 tempfile = "3.27.0"
 
 [target."cfg(windows)".dependencies]

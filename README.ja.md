@@ -11,7 +11,7 @@ Claude Desktop をアカウント間で切り替え、どのアカウントで�
 [![最新リリース](https://img.shields.io/github/v/release/ahmetcankacar54/relay?style=flat-square&label=%E3%83%AA%E3%83%AA%E3%83%BC%E3%82%B9&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases/latest)
 [![ダウンロード](https://img.shields.io/github/downloads/ahmetcankacar54/relay/total?style=flat-square&label=%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89&color=ea580c)](https://github.com/ahmetcankacar54/relay/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/ahmetcankacar54/relay/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/ahmetcankacar54/relay/actions/workflows/check.yml)
-[![macOS](https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&logo=apple&logoColor=white)](#インストール)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-000000?style=flat-square&logo=apple&logoColor=white)](#インストール)
 [![Linux · Windows](https://img.shields.io/badge/-Linux%20%E5%AF%BE%E5%BF%9C%20%C2%B7%20Windows%20%E8%A9%A6%E9%A8%93%E7%9A%84-2f6feb?style=flat-square)](#プラットフォーム)
 [![15の言語](https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-15-6b645e?style=flat-square)](#15の言語)
 [![MIT](https://img.shields.io/badge/%E3%83%A9%E3%82%A4%E3%82%BB%E3%83%B3%E3%82%B9-MIT-6b645e?style=flat-square)](LICENSE)
@@ -49,12 +49,14 @@ Relay は無料のオープンソース（MIT）で、すべて Mac 上で動作
 
 | プラットフォーム | ダウンロード | 備考 |
 | --- | --- | --- |
-| **macOS 13+**（Apple silicon） | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | メインのプラットフォームです。メニューバーのパネル、ウィジェット、自動切り替え。 |
-| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手動での切り替え、上限、アカウント、ゲートウェイ。試験的：実機ではまだテストされていません。 |
-| **Linux**（x64） | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Linux 版の公式 Claude Desktop で動作します。 |
+| **macOS 14+**（Apple silicon） | [`Relay-<version>-arm64.dmg`](https://github.com/ahmetcankacar54/relay/releases/latest) | メインのプラットフォームです。メニューバーのパネル、ウィジェット、自動切り替え。 |
+| **Windows 10/11**（x64） | [`Relay-Setup-<version>-x64.exe`](https://github.com/ahmetcankacar54/relay/releases/latest) | 手動での切り替え、上限、アカウント、ゲートウェイ。WebView2 が必要です（Windows 11 には標準搭載）。試験的：実機ではまだテストされていません。 |
+| **Linux**（x64） | [`Relay-<version>-x86_64.AppImage`](https://github.com/ahmetcankacar54/relay/releases/latest) | Linux 版の公式 Claude Desktop で動作します。webkit2gtk-4.1 が必要です（Ubuntu 22.04 以降）。 |
 | **CLI**（macOS） | `npm i -g @ahmetcankacar/relay` | `relay switch`、`relay usage`、`relay run` … 詳しくは [CLI ガイド](cli/README.md)（英語）をご覧ください。 |
 
 すべてのリリースに `SHA256SUMS.txt` が含まれ、Relay は GitHub Releases から自動で更新されます。
+
+Relay 1.0 は Tauri で作られたネイティブアプリです。同じ React の画面の下で Rust のコアが動きます。Relay 0.x（Electron 版）はその場で 1.0 に自動更新され、アカウントと設定はすべてそのまま残ります。Windows では、新しいインストーラーが旧バージョンの項目を「インストールされているアプリ」から削除します。`relay` CLI もネイティブのバイナリです。npm は小さなランチャーと、お使いのプラットフォーム用のバイナリをインストールします。Relay.app にも同じものが入っており（`Relay.app/Contents/Resources/bin/relay`）、Homebrew の cask がこれを PATH に追加します。
 
 > [!IMPORTANT]
 > **Relay は作者自身の証明書で署名されていますが、Apple による公証（notarization）は受けていません。** 初めて開くとき、macOS が一度だけブロックします。
@@ -162,7 +164,7 @@ English、Türkçe、Deutsch、Français、Español、Português (Brasil)、Ital
 
 macOS がメインのプラットフォームです。Windows 版はまだ実機でテストされていません。報告を歓迎します。
 
-**リソース使用量:** メニューバーで待機中の Relay は、全プロセス合計で CPU 約 0.1%、メモリ約 395 MB（最大 435 MB）を使います。ウィンドウを前面に開いていても CPU は約 2% で、Keychain の許可ダイアログも出しません（Apple シリコン Mac、[測定方法](docs/development.md#resource-use)）。
+**リソース使用量:** メニューバーで待機中の Relay は、全プロセス合計で CPU 1% 未満、メモリ 250 MB 未満に抑えられ、Keychain の許可ダイアログも出しません（[測定方法](docs/development.md#resource-use)）。
 
 ## プライバシーとセキュリティ
 
@@ -170,7 +172,7 @@ macOS がメインのプラットフォームです。Windows 版はまだ実機
 - **通信先:** アカウントがすでに使っているサービス — `claude.ai`、`api.anthropic.com`（使用量とプロフィール）、`chatgpt.com` / `api.openai.com`（Codex）、`cloudcode-pa.googleapis.com`（Antigravity）—、Relay 自身の更新のための `api.github.com`、そしてバージョン固定で SHA-256 を検証する補助ツール（CLIProxyAPI）を、Antigravity アカウントのために初めて必要になったときと、アップデートで新しいバージョンが固定されたときにダウンロードするための `github.com` です。
 - **認証情報** が UI に渡ることはありません。保存された Claude アプリのサインインは、macOS の Keychain（Linux では Secret Service または KWallet）に保管された鍵で暗号化されます。ゲートウェイのキーを含むファイルは、本人だけが読める権限で書き込まれます。
 - **Claude アプリのファイル** は、アプリが閉じている間に、暗号化バックアップと書き込みジャーナルを取った後でのみ変更されます。
-- **堅牢化されたアプリ:** レンダラーウィンドウはサンドボックス化され、リリース版には開発者ツールがなく、アプリを呼び出せるのは Relay 自身のページだけで、厳格なコンテンツセキュリティポリシーが適用されています。
+- **堅牢化されたアプリ:** リリース版には開発者ツールがなく、アプリを呼び出せるのは Relay 自身のページだけで、厳格なコンテンツセキュリティポリシーが適用されています。
 
 問題を見つけた場合は、非公開で報告してください。詳しくは [SECURITY.md](SECURITY.md) をご覧ください。
 
@@ -227,14 +229,15 @@ Relay はまだ Apple の公証を受けていません。バージョンごと�
 
 ## ソースからビルド
 
-必要なもの: Node.js 22.12+、macOS では Xcode Command Line Tools。
+必要なもの: Node.js 22.12+、Rust（rustup 経由。バージョンは `rust-toolchain.toml` が決めます）、macOS では Xcode Command Line Tools。Relay の実行には macOS 14+、WebView2 のある Windows 10/11、または webkit2gtk-4.1 のある Linux が必要です。
 
 ```sh
 npm ci
-npm run dev        # Electron + Vite
-npm run dev:ui     # browser preview with sample accounts (?demo=50 for fifty)
-npm test           # 3,000+ tests
-npm run dist:mac:local   # signed local build (see docs/macos-local-signing.md)
+npm run dev        # Vite の UI を使う Tauri アプリ（編集すると再読み込み）
+npm run dev:ui     # サンプルアカウントでのブラウザープレビュー（?demo=50 で50件）
+npm test           # UI のテスト
+cargo test --workspace   # Rust のコア、アプリ、CLI のテスト
+npm run dist:mac:local   # 署名付きのローカルビルド（docs/macos-local-signing.md を参照）
 ```
 
 切り替え、履歴の統合、使用量の読み取りの仕組みや、署名、Linux 固有の事項は [docs/development.md](docs/development.md)（英語）にまとめています。バグ報告、翻訳、プルリクエストなど、貢献を歓迎します。文言は [docs/ux/glossary.md](docs/ux/glossary.md) に従い、UI の文字列はすべて [`shared/i18n/catalogs`](shared/i18n/catalogs) にあります。

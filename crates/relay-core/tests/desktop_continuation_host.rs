@@ -1,7 +1,7 @@
 //! Port of `tests/desktop-continuation-host.test.ts`.
 //!
-//! The "the Swift …" cases scan `electron/native/desktop-automation.swift`'s source text; the
-//! helper stays Swift and is not part of this port, so they are left to the TS suite.
+//! The "the Swift …" cases scan `native/desktop-automation.swift`'s source text; the helper
+//! stays Swift and is not part of this port, so they stay TS (tests/desktop-automation-swift.test.ts).
 
 use std::sync::{Arc, Mutex};
 

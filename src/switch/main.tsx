@@ -15,8 +15,7 @@ document.documentElement.dataset.density = "compact";
 function SwitchWindow() {
   const [view, setView] = useState<SwitchSceneView>();
   useEffect(() => {
-    // Phase 6: drop the window.relay fallback
-    const api = window.relaySwitch ?? (inTauri() ? tauriSwitchApi() : undefined);
+    const api = inTauri() ? tauriSwitchApi() : undefined;
     if (!api) return;
     const off = api.onScene((next) => {
       // The error screen speaks the language main draws the scene in.

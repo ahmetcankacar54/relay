@@ -1,10 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mainSource } from "./helpers/main-source";
 import { localizeError } from "../src/messages";
 import "./i18n";
 
-// The backend errors, word for word (electron/core/desktop.ts and desktop-host.ts). The lookup is
+// The backend errors, word for word (crates/relay-core desktop errors). The lookup is
 // keyed by this text, so it must keep matching while the display names the sign-in as the app does.
 const backend = {
   missing: "Saved Desktop sign-in is missing. Connect this account again.",
@@ -82,20 +81,6 @@ test("the errors main's IPC handlers throw read in both languages", () => {
   for (const [backend, tr, en] of cases) {
     assert.equal(localizeError(backend, "tr"), tr, backend);
     assert.equal(localizeError(backend, "en"), en, backend);
-  }
-});
-
-test("every error main.ts throws with a fixed message has both languages", () => {
-  const main = mainSource();
-  const thrown = [
-    ...main.matchAll(/new Error\(\s*"([^"]+)",?\s*\)/g),
-  ].map((m) => m[1]);
-  assert.ok(thrown.length >= 5, String(thrown.length));
-  for (const message of thrown) {
-    const tr = localizeError(message, "tr");
-    const en = localizeError(message, "en");
-    assert.ok(tr !== message || en !== message, message);
-    assert.doesNotMatch(`${tr} ${en}`, /Desktop/, message);
   }
 });
 

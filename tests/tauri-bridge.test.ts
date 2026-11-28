@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { mock, test } from "node:test";
-import ts from "typescript";
 import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { errorMessage } from "../src/data/error-message";
 import {
@@ -17,61 +15,7 @@ import {
 // The Tauri API reads `window.__TAURI_INTERNALS__`; Node's global object stands in for the window.
 Object.assign(globalThis, { window: globalThis });
 
-type Kind = "invoke" | "send" | "on";
 type Call = { cmd: string; args: Record<string, unknown> };
-
-/** Each preload method's IPC kind and channel, read from the preload source. */
-function preloadTable(
-  file: string,
-): Map<string, { kind: Kind; channel: string }> {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(new URL(`../${file}`, import.meta.url), "utf8"),
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const table = new Map<string, { kind: Kind; channel: string }>();
-  const firstCall = (
-    node: ts.Node,
-  ): { kind: Kind; channel: string } | undefined => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "ipcRenderer" &&
-      node.arguments[0] &&
-      ts.isStringLiteral(node.arguments[0])
-    )
-      return {
-        kind: node.expression.name.text as Kind,
-        channel: node.arguments[0].text,
-      };
-    return ts.forEachChild(node, firstCall);
-  };
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "api" &&
-      node.initializer &&
-      ts.isObjectLiteralExpression(node.initializer)
-    ) {
-      for (const property of node.initializer.properties) {
-        const call = firstCall(property);
-        assert.ok(
-          property.name && ts.isIdentifier(property.name) && call,
-          property.getText(),
-        );
-        table.set(property.name.text, call);
-      }
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return table;
-}
 
 /** A fake Tauri runtime for the `main` webview: records every IPC call; listens settle on demand. */
 function fakeTauri(
@@ -120,32 +64,18 @@ function fakeTauri(
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-test("every preload method keeps its channel and its kind of call", () => {
-  const preload = preloadTable("electron/preload.ts");
-  const bridge = new Map<string, { kind: Kind; channel: string }>();
-  for (const [method, channel] of Object.entries(CHANNELS))
-    bridge.set(method, { kind: "invoke", channel });
-  for (const [method, channel] of Object.entries(SEND_CHANNELS))
-    bridge.set(method, { kind: "send", channel });
-  for (const [method, channel] of Object.entries(EVENT_CHANNELS))
-    bridge.set(method, { kind: "on", channel });
-  assert.equal(preload.size, 128);
-  assert.deepEqual(Object.fromEntries(bridge), Object.fromEntries(preload));
-  // The built API has exactly those methods.
-  assert.deepEqual(
-    Object.keys(tauriRelayApi()).sort(),
-    [...preload.keys()].sort(),
-  );
-
-  const switchPreload = preloadTable("electron/switch-preload.ts");
-  assert.deepEqual(Object.fromEntries(switchPreload), {
-    onScene: { kind: "on", channel: "relay:switch-scene" },
-    ready: { kind: "send", channel: "relay:switch-ready" },
-  });
-  assert.deepEqual(
-    Object.keys(tauriSwitchApi()).sort(),
-    [...switchPreload.keys()].sort(),
-  );
+// The table against the app's handlers is checked in crates/relay-app/tests/channels.rs.
+test("every bridge method has one channel and one kind of call, and the built APIs have exactly those methods", () => {
+  const tables = [CHANNELS, SEND_CHANNELS, EVENT_CHANNELS].map(Object.keys);
+  const methods = tables.flat();
+  assert.equal(methods.length, 128);
+  assert.equal(new Set(methods).size, methods.length, "a method in two tables");
+  for (const channel of [CHANNELS, SEND_CHANNELS, EVENT_CHANNELS].flatMap(
+    Object.values,
+  ))
+    assert.match(channel, /^relay:[a-z0-9-]+$/);
+  assert.deepEqual(Object.keys(tauriRelayApi()).sort(), methods.sort());
+  assert.deepEqual(Object.keys(tauriSwitchApi()).sort(), ["onScene", "ready"]);
 });
 
 test("a call goes through relay_invoke with its channel and arguments, and returns the reply", async () => {

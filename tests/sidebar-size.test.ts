@@ -25,7 +25,7 @@ test("the saved size is read back, and anything else gives the initial size", ()
 });
 
 test("the rail is wide enough for the traffic lights", () => {
-  // macOS draws three 12 px buttons 20 px apart from the given x (electron/main.ts uses 16).
+  // macOS draws three 12 px buttons 20 px apart from the given x (crates/relay-app/src/windows/main.rs uses 16).
   const lightsEnd = 16 + 12 + 2 * 20;
   assert.ok(SIDEBAR.rail - lightsEnd >= 16, "a 16 px margin after the last button");
 });
@@ -47,13 +47,25 @@ test("the sidebar shortcut changes nothing while a narrow window forces the rail
   assert.match(shell, /onToggle=\{narrow \? undefined : toggleSidebar\}/);
 });
 
-test("overlays and toolbar badges are outside the window's drag region", () => {
+test("toolbar controls and badges are outside the window's drag region", () => {
   const read = (file: string) => readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
-  // A dialog or sheet covers the window with a no-drag overlay, so the toolbar's drag region under
-  // it takes no clicks; menus, selects and popovers that open over the toolbar are no-drag too.
-  for (const file of ["components/ui/dialog.tsx", "components/ui/sheet.tsx"])
-    assert.equal(read(file).match(/\[-webkit-app-region:no-drag\]/g)?.length, 2, file);
-  for (const file of ["components/ui/popover.tsx", "components/ui/dropdown-menu.tsx", "components/ui/select.tsx"])
-    assert.match(read(file), /\[-webkit-app-region:no-drag\]/, file);
-  assert.match(read("app/PageHeader.tsx"), /\[-webkit-app-region:no-drag\]">\{badge\}/);
+  // Tauri drags from an element marked data-tauri-drag-region; "deep" reaches its descendants
+  // until one says "false". Dialogs, sheets, menus and popovers render in portals outside it.
+  const header = read("app/PageHeader.tsx");
+  assert.match(header, /data-tauri-drag-region="deep"/);
+  for (const slot of ["{back}", "{badge}", "{actions}"]) {
+    const at = header.indexOf(slot);
+    const opening = header.lastIndexOf("<div", at);
+    assert.match(header.slice(opening, at), /data-tauri-drag-region="false"/, slot);
+  }
+  for (const file of [
+    "components/ui/dialog.tsx",
+    "components/ui/sheet.tsx",
+    "components/ui/popover.tsx",
+    "components/ui/dropdown-menu.tsx",
+    "components/ui/select.tsx",
+  ]) {
+    assert.match(read(file), /Portal/, file);
+    assert.doesNotMatch(read(file), /data-tauri-drag-region|-webkit-app-region/, file);
+  }
 });

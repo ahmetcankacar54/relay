@@ -31,7 +31,7 @@ const ROWS: {
 
 /**
  * Settings → Switching: what a switch carries from the account being left into the Claude Code
- * profile of the one switched to (electron/core/config-sync.ts). All off until the user opts in.
+ * profile of the one switched to (crates/relay-core config_sync). All off until the user opts in.
  */
 export function ConfigSyncPreference({
   settings,

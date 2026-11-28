@@ -9,7 +9,7 @@
  */
 import { execFileSync, spawnSync } from "node:child_process";
 
-const ROOTS = ["src", "electron", "shared", "tests", "scripts", "e2e"];
+const ROOTS = ["src", "shared", "tests", "scripts", "e2e"];
 const FORMATTED = /\.(?:[cm]?[jt]sx?|css|json)$/;
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
