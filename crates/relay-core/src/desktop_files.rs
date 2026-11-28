@@ -552,6 +552,111 @@ pub fn plan_permission_preferences(
     Ok(Some(out))
 }
 
+/// Claude's split view under `preferences.epitaxyPrefs`: the Code session in front
+/// (`state.lastPrimaryCodeSession`) and those beside it (`state.extraPanesByMode[mode]`, each
+/// `{ref: {kind, id}, pos}`), any number of them. The page empties it the first time it starts on
+/// another account and keeps it when it starts again on the same one (seen 2026-11-28).
+pub const PANE_STORE: &str = "desktop-frame.paneStore.v1";
+
+fn pane_store(config: Option<&JsonObject>) -> Option<&Value> {
+    config?
+        .get("preferences")?
+        .get("epitaxyPrefs")?
+        .get(PANE_STORE)
+}
+
+fn pane_ref_id(item: &Value) -> Option<&str> {
+    let reference = item.get("ref")?;
+    (reference.get("kind")?.as_str()? == "code")
+        .then(|| reference.get("id")?.as_str())
+        .flatten()
+}
+
+/// The split view `config` shows, when it shows any Code session; the value as Claude stored it.
+pub fn pane_layout(config: Option<&JsonObject>) -> Option<Value> {
+    let store = pane_store(config)?;
+    let state = store.get("state")?;
+    let primary = state
+        .get("lastPrimaryCodeSession")
+        .and_then(|p| p.get("id"))
+        .and_then(Value::as_str)
+        .is_some();
+    let beside = state
+        .get("extraPanesByMode")
+        .and_then(Value::as_object)
+        .is_some_and(|modes| {
+            modes
+                .values()
+                .any(|panes| panes.as_array().is_some_and(|p| !p.is_empty()))
+        });
+    (primary || beside).then(|| store.clone())
+}
+
+/// `config` with the split view `layout` written back, after Claude emptied it on starting under
+/// another account. Only the sessions `has_session` finds (the account switched to has them)
+/// stay; the one in front must be among them, or nothing is written. None as well when `config`
+/// already shows a split view, or holds no preferences to write into.
+pub fn plan_pane_layout(
+    config: Option<&JsonObject>,
+    layout: &Value,
+    has_session: &dyn Fn(&str) -> bool,
+) -> Option<JsonObject> {
+    let config = config?;
+    if pane_layout(Some(config)).is_some() {
+        return None;
+    }
+    let prefs = config
+        .get("preferences")?
+        .get("epitaxyPrefs")?
+        .as_object()?;
+    let mut layout = layout.clone();
+    let state = layout.get_mut("state")?.as_object_mut()?;
+    let primary = state
+        .get("lastPrimaryCodeSession")
+        .and_then(|p| p.get("id"))
+        .and_then(Value::as_str)?;
+    if !has_session(primary) {
+        return None;
+    }
+    if let Some(modes) = state
+        .get_mut("extraPanesByMode")
+        .and_then(Value::as_object_mut)
+    {
+        for panes in modes.values_mut() {
+            if let Some(panes) = panes.as_array_mut() {
+                panes.retain(|pane| pane_ref_id(pane).is_some_and(has_session));
+            }
+        }
+    }
+    let mut prefs = prefs.clone();
+    prefs.insert(PANE_STORE.into(), layout);
+    let mut preferences = config.get("preferences")?.as_object()?.clone();
+    preferences.insert("epitaxyPrefs".into(), Value::Object(prefs));
+    let mut out = config.clone();
+    out.insert("preferences".into(), Value::Object(preferences));
+    Some(out)
+}
+
+/// The Code sessions a split view shows: the one in front first, then those beside it.
+pub fn pane_layout_sessions(layout: &Value) -> Vec<String> {
+    let Some(state) = layout.get("state") else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = state
+        .get("lastPrimaryCodeSession")
+        .and_then(|p| p.get("id"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .into_iter()
+        .collect();
+    if let Some(modes) = state.get("extraPanesByMode").and_then(Value::as_object) {
+        for panes in modes.values().filter_map(Value::as_array) {
+            ids.extend(panes.iter().filter_map(pane_ref_id).map(str::to_owned));
+        }
+    }
+    ids
+}
+
 /// Sessions in another Claude data folder (a separate window's), read as sources even under the
 /// target's own scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
